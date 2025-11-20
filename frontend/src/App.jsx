@@ -1,22 +1,27 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import './app.css';
+import { useState, useEffect } from 'react';
 
 function App() {
-  const [backendStatus, setBackendStatus] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
+  const [backendStatus, setBackendStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
-    fetch('/api/health')
-      .then(res => res.json())
-      .then(data => {
-        setBackendStatus(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Backend connection error:', err);
-        setLoading(false);
-      });
+  useEffect(() => {
+    const checkBackend = () => {
+      fetch('/api/health')
+        .then(res => {
+          if (!res.ok) throw new Error('Backend responded with error');
+          return res.json();
+        })
+        .then(data => {
+          setBackendStatus(data);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error('Backend connection error:', err);
+          setTimeout(checkBackend, 2000);
+        });
+    };
+    
+    setTimeout(checkBackend, 1000);
   }, []);
 
   return (
@@ -45,5 +50,4 @@ function App() {
   );
 }
 
-const root = createRoot(document.getElementById('root'));
-root.render(<App />);
+export default App;
