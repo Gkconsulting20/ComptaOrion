@@ -4,19 +4,26 @@
 ComptaOrion est un ERP (Enterprise Resource Planning) complet et léger, spécialement optimisé pour le marché africain. L'application combine une interface React moderne et responsive avec un backend Express.js robuste.
 
 ## Caractéristiques principales
-- ✅ **Interface en français** - Entièrement traduit pour les utilisateurs francophones
-- 📱 **Mobile-first** - Optimisé pour smartphones avec navigation tactile
+- 💼 **Interface professionnelle** - Design moderne inspiré de QuickBooks
+- 📱 **Responsive** - Sidebar adaptatif, optimisé desktop et mobile
 - 🤖 **IA intégrée** - Assistant intelligent utilisant OpenAI (via Replit AI Integrations)
-- ⚡ **Léger et rapide** - Optimisé pour connexions limitées
-- 🌍 **Adapté à l'Afrique** - Conçu pour les réalités du marché africain
+- 📊 **Tableaux de données** - Tables professionnelles pour tous les modules
+- 💰 **Comptabilité complète** - États financiers, grand livre, réconciliation
+- 🌍 **Adapté à l'Afrique** - FCFA, français, optimisé connexions limitées
 
 ## Modules ERP
-1. **Tableau de bord** 📊 - Vue d'ensemble de l'activité
+1. **Tableau de bord** 📊 - Vue d'ensemble avec métriques clés
 2. **Gestion clients** 👥 - Fichier clients complet
-3. **Facturation** 📄 - Création et suivi des factures
-4. **Gestion de stock** 📦 - Inventaire et mouvements
-5. **Comptabilité** 💰 - Écritures et états financiers
-6. **Assistant IA** 🤖 - Aide intelligente et automatisation
+3. **Gestion fournisseurs** 🏭 - Suivi des fournisseurs et dettes
+4. **Gestion de trésorerie** 💳 - Encaissements, décaissements, solde
+5. **Stock & Inventaire** 📦 - Gestion complète des stocks
+6. **Comptabilité** 📚 - Module complet avec :
+   - États financiers (Bilan, Compte de résultat, Flux de trésorerie)
+   - Grand livre
+   - Écriture de journal
+   - Réconciliation bancaire
+   - Charte de comptes
+7. **Assistant IA** 🤖 - Aide intelligente et automatisation
 
 ## Structure du projet
 ```
@@ -59,12 +66,39 @@ ComptaOrion est un ERP (Enterprise Resource Planning) complet et léger, spécia
 5. **Prêt pour offline** - Architecture préparée pour mode hors ligne futur
 
 ## API Endpoints
+
+### Général
 - `GET /api/health` - Vérification système
 - `GET /api` - Informations API
-- `GET /api/clients` - Module clients
-- `GET /api/factures` - Module facturation
-- `GET /api/stock` - Module stock
-- `GET /api/comptabilite` - Module comptabilité
+
+### Clients
+- `GET /api/clients` - Liste des clients
+- `POST /api/clients` - Créer un client
+
+### Fournisseurs
+- `GET /api/fournisseurs` - Liste des fournisseurs
+- `POST /api/fournisseurs` - Créer un fournisseur
+
+### Trésorerie
+- `GET /api/tresorerie` - État de trésorerie
+- `POST /api/tresorerie/transaction` - Nouvelle transaction
+
+### Stock
+- `GET /api/stock` - Inventaire
+- `POST /api/stock` - Nouvel article
+
+### Comptabilité
+- `GET /api/comptabilite/etats-financiers` - États financiers
+- `GET /api/comptabilite/grand-livre` - Grand livre
+- `GET /api/comptabilite/journal` - Journal
+- `POST /api/comptabilite/journal` - Nouvelle écriture
+- `GET /api/comptabilite/reconciliation` - Réconciliation
+- `GET /api/comptabilite/charte-comptes` - Charte de comptes
+- `POST /api/comptabilite/charte-comptes` - Nouveau compte
+
+### Assistant IA
+- `GET /api/ia/chat` - État de l'assistant
+- `POST /api/ia/chat` - Envoyer un message
 
 ## Intégration IA
 L'application utilise **Replit AI Integrations** pour l'accès à OpenAI :
@@ -100,16 +134,27 @@ Configuré pour déploiement **autoscale** sur Replit :
   - Backend sur 127.0.0.1:3000 (compatibilité IPv4)
   - Workflow de démarrage automatique
   
-- **2025-11-20** : Optimisation pour l'Afrique
-  - Interface traduite en français
-  - Design mobile-first responsive
-  - Navigation tactile optimisée
+- **2025-11-20** : Interface professionnelle QuickBooks-style
+  - Refonte complète avec sidebar fixe + top bar
+  - Design moderne avec couleurs professionnelles (gris foncé, bleu)
+  - Navigation avec sous-menus pour Comptabilité
+  - Nouveau slogan : "Gestion d'entreprise professionnelle"
+  - Suppression module Factures
+  - Ajout modules : Fournisseurs, Trésorerie
+  - Module Comptabilité complet : États financiers, Grand livre, Journal, Réconciliation, Charte de comptes
+  - Tables de données professionnelles
+  - Métriques et KPI sur tableau de bord
+  - Backend avec tous les endpoints nécessaires
   - Intégration OpenAI via Replit AI Integrations
-  - Modules ERP de base configurés
 
 ## Prochaines étapes
-- [ ] Développer les modules clients, factures, stock
-- [ ] Implémenter l'assistant IA
-- [ ] Ajouter support offline/PWA
-- [ ] Optimiser pour bande passante limitée
-- [ ] Ajouter thèmes de couleur personnalisables
+- [ ] Connecter les modules au backend (fetch data, formulaires)
+- [ ] Ajouter base de données pour persistance
+- [ ] Implémenter l'assistant IA avec OpenAI
+- [ ] Créer formulaires pour clients, fournisseurs, transactions
+- [ ] Ajouter filtres et recherche dans les tables
+- [ ] États financiers avec données réelles
+- [ ] Export PDF/Excel des rapports
+- [ ] Support offline/PWA
+- [ ] Notifications et alertes
+- [ ] Multi-utilisateurs et permissions
