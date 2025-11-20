@@ -1,6 +1,7 @@
 modules = ["nodejs-20"]
 [agent]
 expertMode = true
+integrations = ["javascript_openai_ai_integrations:1.0.0"]
 
 [nix]
 channel = "stable-25_05"
@@ -38,10 +39,6 @@ exposeLocalhost = true
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 46047
-externalPort = 3001
 
 [deployment]
 deploymentTarget = "autoscale"
