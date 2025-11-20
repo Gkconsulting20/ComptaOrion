@@ -1,0 +1,18 @@
+{
+  "name": "comptaorion-backend",
+  "version": "1.0.0",
+  "description": "ComptaOrion Backend API",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.js",
+    "dev": "node src/main.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
