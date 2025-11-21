@@ -3,6 +3,7 @@ import { Modal } from '../components/Modal';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
+import { DetailsModal } from '../components/DetailsModal';
 import api from '../api';
 
 export function GestionFournisseurs() {
@@ -20,6 +21,10 @@ export function GestionFournisseurs() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ open: false, type: null, item: null });
   const [form, setForm] = useState({});
+  const [selectedFournisseur, setSelectedFournisseur] = useState(null);
+  const [selectedCommande, setSelectedCommande] = useState(null);
+  const [showFournisseurDetails, setShowFournisseurDetails] = useState(false);
+  const [showCommandeDetails, setShowCommandeDetails] = useState(false);
   const [periode, setPeriode] = useState({
     dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     dateFin: new Date().toISOString().split('T')[0]
@@ -260,6 +265,7 @@ export function GestionFournisseurs() {
                   { key: 'evaluation', label: 'Évaluation', render: (val) => '⭐'.repeat(val || 3) }
                 ]}
                 data={data.fournisseurs}
+                onRowClick={(item) => { setSelectedFournisseur(item); setShowFournisseurDetails(true); }}
                 onEdit={(item) => openModal('fournisseur', item)}
                 onDelete={(item) => handleDelete('fournisseur', item.id)}
               />
@@ -336,6 +342,7 @@ export function GestionFournisseurs() {
               )}
             ]}
             data={data.commandes}
+            onRowClick={(row) => { setSelectedCommande(row); setShowCommandeDetails(true); }}
             actions={false}
           />
         </div>
@@ -627,6 +634,102 @@ export function GestionFournisseurs() {
           )}
         </form>
       </Modal>
+
+      {/* MODAL DE DÉTAILS FOURNISSEUR */}
+      {selectedFournisseur && (
+        <DetailsModal
+          isOpen={showFournisseurDetails}
+          onClose={() => { setShowFournisseurDetails(false); setSelectedFournisseur(null); }}
+          title={`Détails Fournisseur - ${selectedFournisseur.nom}`}
+          sections={[
+            {
+              title: 'Informations Générales',
+              fields: [
+                { label: 'N° Fournisseur', value: selectedFournisseur.numeroFournisseur },
+                { label: 'Nom', value: selectedFournisseur.nom },
+                { label: 'Email', value: selectedFournisseur.email || '-' },
+                { label: 'Téléphone', value: selectedFournisseur.telephone || '-' }
+              ]
+            },
+            {
+              title: 'Adresse',
+              fields: [
+                { label: 'Adresse', value: selectedFournisseur.adresse || '-' },
+                { label: 'Ville', value: selectedFournisseur.ville || '-' },
+                { label: 'Pays', value: selectedFournisseur.pays || '-' }
+              ]
+            },
+            {
+              title: 'Paramètres',
+              fields: [
+                { label: 'Délai Paiement', value: `${selectedFournisseur.delaiPaiement || 30} jours` },
+                { label: 'Évaluation', value: '⭐'.repeat(selectedFournisseur.evaluation || 3) }
+              ]
+            }
+          ]}
+          actions={[
+            {
+              label: '✏️ Modifier',
+              variant: 'info',
+              onClick: () => {
+                setShowFournisseurDetails(false);
+                openModal('fournisseur', selectedFournisseur);
+              }
+            }
+          ]}
+        />
+      )}
+
+      {/* MODAL DE DÉTAILS COMMANDE */}
+      {selectedCommande && (
+        <DetailsModal
+          isOpen={showCommandeDetails}
+          onClose={() => { setShowCommandeDetails(false); setSelectedCommande(null); }}
+          title={`Détails Commande ${selectedCommande.commande?.numeroCommande || ''}`}
+          sections={[
+            {
+              title: 'Informations Générales',
+              fields: [
+                { label: 'N° Commande', value: selectedCommande.commande?.numeroCommande },
+                { label: 'Fournisseur', value: selectedCommande.fournisseur?.nom || '-' },
+                { label: 'Date Commande', value: selectedCommande.commande?.dateCommande?.split('T')[0] },
+                { label: 'Livraison Prévue', value: selectedCommande.commande?.dateLivraisonPrevue?.split('T')[0] || '-' },
+                { label: 'Statut', value: selectedCommande.commande?.statut }
+              ]
+            },
+            {
+              title: 'Totaux',
+              fields: [
+                { label: 'Total HT', value: `${selectedCommande.commande?.totalHT || 0} FCFA` },
+                { label: 'TVA', value: `${selectedCommande.commande?.montantTVA || 0} FCFA` },
+                { label: 'Total TTC', value: `${selectedCommande.commande?.totalTTC || 0} FCFA` }
+              ]
+            }
+          ]}
+          tables={selectedCommande.commande?.items ? [{
+            title: 'Articles',
+            columns: [
+              { key: 'description', label: 'Description' },
+              { key: 'quantite', label: 'Qté', align: 'center' },
+              { key: 'prixUnitaire', label: 'P.U.', align: 'right', render: (val) => `${val || 0} FCFA` },
+              { key: 'total', label: 'Total', align: 'right', render: (val, row) => 
+                `${((row.quantite || 0) * (row.prixUnitaire || 0)).toFixed(2)} FCFA` 
+              }
+            ],
+            data: selectedCommande.commande.items
+          }] : []}
+          actions={[
+            {
+              label: '🧾 Convertir en Facture',
+              variant: 'success',
+              onClick: () => {
+                setShowCommandeDetails(false);
+                convertirEnFacture(selectedCommande);
+              }
+            }
+          ]}
+        />
+      )}
     </div>
   );
 }

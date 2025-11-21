@@ -4,6 +4,7 @@ import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { FormField } from '../components/FormField';
+import { DetailsModal } from '../components/DetailsModal';
 
 export function StockInventaire() {
   const [activeTab, setActiveTab] = useState('parametres');
@@ -18,6 +19,10 @@ export function StockInventaire() {
   
   const [modal, setModal] = useState({ open: false, type: null, item: null });
   const [form, setForm] = useState({});
+  const [selectedProduit, setSelectedProduit] = useState(null);
+  const [selectedMouvement, setSelectedMouvement] = useState(null);
+  const [showProduitDetails, setShowProduitDetails] = useState(false);
+  const [showMouvementDetails, setShowMouvementDetails] = useState(false);
   const [periode, setPeriode] = useState({
     dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     dateFin: new Date().toISOString().split('T')[0]
@@ -216,6 +221,7 @@ export function StockInventaire() {
                   { key: 'prixVente', label: 'Prix', render: (val) => `${val || 0} FCFA` }
                 ]}
                 data={data.produits}
+                onRowClick={(item) => { setSelectedProduit(item); setShowProduitDetails(true); }}
                 onEdit={(item) => openModal('produit', item)}
                 onDelete={(item) => handleDelete('produit', item)}
               />
@@ -281,6 +287,7 @@ export function StockInventaire() {
                 { key: 'reference', label: 'Référence' }
               ]}
               data={data.mouvements}
+              onRowClick={(item) => { setSelectedMouvement(item); setShowMouvementDetails(true); }}
             />
           )}
         </div>
@@ -549,6 +556,75 @@ export function StockInventaire() {
           </div>
         </form>
       </Modal>
+
+      {/* MODAL DE DÉTAILS PRODUIT */}
+      {selectedProduit && (
+        <DetailsModal
+          isOpen={showProduitDetails}
+          onClose={() => { setShowProduitDetails(false); setSelectedProduit(null); }}
+          title={`Détails Produit - ${selectedProduit.nom}`}
+          sections={[
+            {
+              title: 'Informations Générales',
+              fields: [
+                { label: 'Référence', value: selectedProduit.reference },
+                { label: 'Nom', value: selectedProduit.nom },
+                { label: 'Catégorie', value: (() => {
+                  const cat = data.categories.find(c => c.id === selectedProduit.categorieId);
+                  return cat ? cat.nom : 'Non catégorisé';
+                })() },
+                { label: 'Unité Mesure', value: selectedProduit.uniteMesure || 'pièce' }
+              ]
+            },
+            {
+              title: 'Stock & Prix',
+              fields: [
+                { label: 'Stock Actuel', value: `${selectedProduit.quantite || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
+                { label: 'Stock Minimum', value: `${selectedProduit.stockMinimum || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
+                { label: 'Prix Achat', value: `${selectedProduit.prixAchat || 0} FCFA` },
+                { label: 'Prix Vente', value: `${selectedProduit.prixVente || 0} FCFA` },
+                { label: 'Marge', value: `${((selectedProduit.prixVente || 0) - (selectedProduit.prixAchat || 0))} FCFA` }
+              ]
+            }
+          ]}
+          actions={[
+            {
+              label: '✏️ Modifier',
+              variant: 'info',
+              onClick: () => {
+                setShowProduitDetails(false);
+                openModal('produit', selectedProduit);
+              }
+            }
+          ]}
+        />
+      )}
+
+      {/* MODAL DE DÉTAILS MOUVEMENT */}
+      {selectedMouvement && (
+        <DetailsModal
+          isOpen={showMouvementDetails}
+          onClose={() => { setShowMouvementDetails(false); setSelectedMouvement(null); }}
+          title="Détails Mouvement de Stock"
+          sections={[
+            {
+              title: 'Informations',
+              fields: [
+                { label: 'Date', value: new Date(selectedMouvement.createdAt).toLocaleDateString('fr-FR') },
+                { label: 'Type', value: selectedMouvement.type === 'entree' ? '📥 Entrée' : selectedMouvement.type === 'sortie' ? '📤 Sortie' : '🔄 Ajustement' },
+                { label: 'Produit', value: (() => {
+                  const prod = data.produits.find(p => p.id === selectedMouvement.produitId);
+                  return prod ? `${prod.reference} - ${prod.nom}` : `ID ${selectedMouvement.produitId}`;
+                })() },
+                { label: 'Quantité', value: selectedMouvement.quantite },
+                { label: 'Prix Unitaire', value: `${selectedMouvement.prixUnitaire || 0} FCFA` },
+                { label: 'Référence', value: selectedMouvement.reference || '-' },
+                { label: 'Notes', value: selectedMouvement.notes || '-' }
+              ]
+            }
+          ]}
+        />
+      )}
     </div>
   );
 }

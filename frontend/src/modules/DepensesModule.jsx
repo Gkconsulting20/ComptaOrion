@@ -3,6 +3,7 @@ import { Modal } from '../components/Modal';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
+import { DetailsModal } from '../components/DetailsModal';
 import api from '../api';
 
 export function DepensesModule() {
@@ -13,6 +14,7 @@ export function DepensesModule() {
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [showDepenseDetails, setShowDepenseDetails] = useState(false);
   const [editingDepense, setEditingDepense] = useState(null);
   const [selectedDepense, setSelectedDepense] = useState(null);
   const [formData, setFormData] = useState({
@@ -183,7 +185,8 @@ export function DepensesModule() {
 
       <Table 
         columns={columns} 
-        data={depenses} 
+        data={depenses}
+        onRowClick={(depense) => { setSelectedDepense(depense); setShowDepenseDetails(true); }}
         onEdit={handleEdit}
         onDelete={handleDelete}
         actions={true}
@@ -367,6 +370,60 @@ export function DepensesModule() {
           </div>
         )}
       </Modal>
+
+      {/* MODAL DE DÉTAILS DÉPENSE */}
+      {selectedDepense && (
+        <DetailsModal
+          isOpen={showDepenseDetails}
+          onClose={() => { setShowDepenseDetails(false); setSelectedDepense(null); }}
+          title={`Détails Dépense #${selectedDepense.id}`}
+          sections={[
+            {
+              title: 'Informations Générales',
+              fields: [
+                { label: 'ID', value: selectedDepense.id },
+                { label: 'Description', value: selectedDepense.description || '-' },
+                { label: 'Montant', value: `${selectedDepense.montant || 0} FCFA` },
+                { label: 'Date', value: selectedDepense.dateDepense?.split('T')[0] || '-' },
+                { label: 'Statut', value: selectedDepense.statut?.replace('_', ' ') }
+              ]
+            },
+            {
+              title: 'Détails',
+              fields: [
+                { label: 'Employé', value: (() => {
+                  const emp = employes.find(e => e.id === selectedDepense.employeId);
+                  return emp ? emp.nom : 'Non assigné';
+                })() },
+                { label: 'Catégorie', value: (() => {
+                  const cat = categories.find(c => c.id === selectedDepense.categorieId);
+                  return cat ? cat.nom : 'Non catégorisé';
+                })() },
+                { label: 'Récurrente', value: selectedDepense.récurrente ? 'Oui' : 'Non' }
+              ]
+            }
+          ]}
+          actions={[
+            {
+              label: '✏️ Modifier',
+              variant: 'info',
+              onClick: () => {
+                setShowDepenseDetails(false);
+                handleEdit(selectedDepense);
+              }
+            },
+            {
+              label: '✓ Approuver',
+              variant: 'success',
+              onClick: () => {
+                setShowDepenseDetails(false);
+                setShowApprovalModal(true);
+              },
+              disabled: selectedDepense.statut === 'rembourse'
+            }
+          ]}
+        />
+      )}
     </div>
   );
 }

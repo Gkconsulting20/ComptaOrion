@@ -3,6 +3,7 @@ import { Modal } from '../components/Modal';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
+import { DetailsModal } from '../components/DetailsModal';
 import api from '../api';
 
 export function ClientsModule() {
@@ -439,6 +440,60 @@ function DevisTab() {
           </div>
         )}
       </Modal>
+
+      {/* MODAL DE DÉTAILS DEVIS */}
+      {selectedDevis && (
+        <DetailsModal
+          isOpen={showDetailsModal}
+          onClose={() => { setShowDetailsModal(false); setSelectedDevis(null); }}
+          title={`Détails du Devis ${selectedDevis.numeroDevis || ''}`}
+          sections={[
+            {
+              title: 'Informations Générales',
+              fields: [
+                { label: 'N° Devis', value: selectedDevis.numeroDevis },
+                { label: 'Client', value: selectedDevis.client?.nom || '-' },
+                { label: 'Date', value: selectedDevis.dateDevis?.split('T')[0] },
+                { label: 'Validité', value: selectedDevis.dateValidite?.split('T')[0] || '-' },
+                { label: 'Statut', value: selectedDevis.statut }
+              ]
+            },
+            {
+              title: 'Totaux',
+              fields: [
+                { label: 'Total HT', value: `${selectedDevis.totalHT || 0} FCFA` },
+                { label: 'TVA', value: `${selectedDevis.montantTVA || 0} FCFA` },
+                { label: 'Total TTC', value: `${selectedDevis.totalTTC || 0} FCFA` }
+              ]
+            }
+          ]}
+          tables={selectedDevis.items ? [{
+            title: 'Articles / Services',
+            columns: [
+              { key: 'description', label: 'Description' },
+              { key: 'quantite', label: 'Qté', align: 'center' },
+              { key: 'prixUnitaire', label: 'P.U.', align: 'right', render: (val) => `${val || 0} FCFA` },
+              { key: 'remise', label: 'Remise', align: 'right', render: (val) => `${val || 0}%` },
+              { key: 'total', label: 'Total', align: 'right', render: (val, row) => {
+                const montant = row.quantite * row.prixUnitaire;
+                const remise = montant * (row.remise / 100);
+                return `${(montant - remise).toFixed(2)} FCFA`;
+              }}
+            ],
+            data: selectedDevis.items
+          }] : []}
+          actions={selectedDevis.statut !== 'converti' ? [
+            {
+              label: '📄 Convertir en Facture',
+              variant: 'success',
+              onClick: () => {
+                setShowDetailsModal(false);
+                handleConvertToFacture(selectedDevis);
+              }
+            }
+          ] : []}
+        />
+      )}
     </div>
   );
 }
@@ -1378,6 +1433,8 @@ function ParametresTab() {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [showClientDetails, setShowClientDetails] = useState(false);
   const [clientData, setClientData] = useState({
     nom: '',
     email: '',
@@ -1618,7 +1675,8 @@ function ParametresTab() {
 
           <Table 
             columns={columns} 
-            data={clients} 
+            data={clients}
+            onRowClick={(client) => { setSelectedClient(client); setShowClientDetails(true); }}
             actions={true}
             customActions={(client) => (
               <div style={{ display: 'flex', gap: '5px' }}>
@@ -1984,6 +2042,57 @@ function ParametresTab() {
           </div>
         )}
       </Modal>
+
+      {/* MODAL DE DÉTAILS CLIENT */}
+      {selectedClient && (
+        <DetailsModal
+          isOpen={showClientDetails}
+          onClose={() => { setShowClientDetails(false); setSelectedClient(null); }}
+          title={`Détails Client - ${selectedClient.nom}`}
+          sections={[
+            {
+              title: 'Informations Générales',
+              fields: [
+                { label: 'N° Client', value: selectedClient.numeroClient },
+                { label: 'Nom', value: selectedClient.nom },
+                { label: 'Email', value: selectedClient.email || '-' },
+                { label: 'Téléphone', value: selectedClient.telephone || '-' },
+                { label: 'Type', value: selectedClient.type }
+              ]
+            },
+            {
+              title: 'Adresse',
+              fields: [
+                { label: 'Adresse', value: selectedClient.adresse || '-' },
+                { label: 'Ville', value: selectedClient.ville || '-' },
+                { label: 'Pays', value: selectedClient.pays || '-' }
+              ]
+            },
+            {
+              title: 'Paramètres Commerciaux',
+              fields: [
+                { label: 'Compte Comptable', value: (() => {
+                  const compte = comptesComptables.find(c => c.id === selectedClient.compteComptableId);
+                  return compte ? `${compte.numero} - ${compte.nom}` : 'Non configuré';
+                })() },
+                { label: 'Délai Paiement', value: `${selectedClient.delaiPaiement || 30} jours` },
+                { label: 'Limite Crédit', value: `${selectedClient.limiteCredit || 0} FCFA` },
+                { label: 'Catégorie', value: selectedClient.categorieClient || 'Standard' }
+              ]
+            }
+          ]}
+          actions={[
+            {
+              label: '✏️ Modifier',
+              variant: 'info',
+              onClick: () => {
+                setShowClientDetails(false);
+                handleEditClient(selectedClient);
+              }
+            }
+          ]}
+        />
+      )}
     </div>
   );
 }
