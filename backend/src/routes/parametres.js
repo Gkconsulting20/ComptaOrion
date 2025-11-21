@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { entreprises } from '../schema.js';
 import { eq } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -258,6 +259,18 @@ router.put('/entreprise', async (req, res) => {
       .set(updateData)
       .where(eq(entreprises.id, req.entrepriseId))
       .returning();
+
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'UPDATE',
+      table: 'entreprises',
+      recordId: req.entrepriseId,
+      ancienneValeur: existingEntreprise,
+      nouvelleValeur: updated,
+      description: `Paramètres entreprise modifiés: ${updated.nom || updated.raisonSociale}`
+    });
 
     return res.json({ 
       success: true, 

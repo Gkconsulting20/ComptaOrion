@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
 
     const results = await db
       .select({
-        commande: commandes,
+        commande: commandesAchat,
         fournisseur: fournisseurs,
       })
       .from(commandesAchat)

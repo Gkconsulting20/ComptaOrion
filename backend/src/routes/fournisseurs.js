@@ -180,6 +180,17 @@ router.post('/', async (req, res) => {
       })
       .returning();
 
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'CREATE',
+      table: 'fournisseurs',
+      recordId: newFournisseur.id,
+      nouvelleValeur: newFournisseur,
+      description: `Fournisseur créé: ${raisonSociale}`
+    });
+
     return res.status(201).json({
       success: true,
       message: 'Fournisseur créé avec succès',
@@ -301,6 +312,18 @@ router.put('/:id', async (req, res) => {
       )
       .returning();
 
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'UPDATE',
+      table: 'fournisseurs',
+      recordId: parseInt(id),
+      ancienneValeur: existingFournisseur,
+      nouvelleValeur: updated,
+      description: `Fournisseur modifié: ${updated.raisonSociale}`
+    });
+
     return res.json({
       success: true,
       message: 'Fournisseur mis à jour avec succès',
@@ -339,6 +362,17 @@ router.delete('/:id', async (req, res) => {
         message: 'Fournisseur non trouvé'
       });
     }
+
+    // Audit log avant désactivation
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'DELETE',
+      table: 'fournisseurs',
+      recordId: parseInt(id),
+      ancienneValeur: existingFournisseur,
+      description: `Fournisseur désactivé: ${existingFournisseur.raisonSociale}`
+    });
 
     // Désactiver au lieu de supprimer (soft delete)
     const [updated] = await db

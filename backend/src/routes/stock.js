@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { produits, categoriesStock, entrepots, stockParEntrepot, mouvementsStock, alertesStock, inventairesTournants } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -25,6 +26,18 @@ router.post('/categories', async (req, res) => {
       nom,
       description
     }).returning();
+
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'CREATE',
+      table: 'categories_stock',
+      recordId: result[0].id,
+      nouvelleValeur: result[0],
+      description: `Catégorie stock créée: ${nom}`
+    });
+
     res.json(result[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
