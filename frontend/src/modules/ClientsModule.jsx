@@ -345,13 +345,16 @@ function DevisTab() {
   };
 
   const handleConvertToFacture = async (devis) => {
-    if (!confirm('Convertir ce devis en facture ?')) return;
+    if (!confirm(`Convertir le devis ${devis.numeroDevis} en facture ?`)) return;
     try {
+      if (devis.statut !== 'accepte') {
+        await api.put(`/devis/${devis.id}`, { statut: 'accepte' });
+      }
       await api.post(`/devis/${devis.id}/transformer-facture`);
-      alert('Devis converti en facture avec succès!');
+      alert('✅ Devis converti en facture avec succès!');
       loadData();
     } catch (error) {
-      alert('Erreur: ' + error.message);
+      alert('Erreur lors de la conversion: ' + error.message);
     }
   };
 
@@ -433,8 +436,24 @@ function DevisTab() {
       <Table 
         columns={columns} 
         data={devisList.map(d => ({ ...d.devis, client: d.client }))} 
-        onEdit={(devis) => handleConvertToFacture(devis)}
         actions={true}
+        customActions={(devis) => (
+          <div style={{ display: 'flex', gap: '5px' }}>
+            <Button 
+              size="small" 
+              variant="success" 
+              onClick={() => handleConvertToFacture(devis)}
+              disabled={devis.statut === 'converti'}
+            >
+              {devis.statut === 'converti' ? '✓ Converti' : '📄 Convertir en Facture'}
+            </Button>
+            {devis.statut !== 'converti' && (
+              <Button size="small" variant="danger" onClick={() => handleDeleteDevis(devis)}>
+                ❌
+              </Button>
+            )}
+          </div>
+        )}
       />
 
       {/* WIZARD DE CRÉATION DE DEVIS */}
@@ -636,6 +655,18 @@ function FacturesTab() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatut, setFilterStatut] = useState('toutes');
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [factureData, setFactureData] = useState({
+    clientId: '',
+    dateFacture: new Date().toISOString().split('T')[0],
+    dateEcheance: '',
+    items: [{ description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
+    tauxTVA: 18,
+    notesInternes: '',
+    conditionsPaiement: '',
+    statut: 'brouillon',
+  });
 
   useEffect(() => {
     loadData();
@@ -664,6 +695,68 @@ function FacturesTab() {
     } catch (error) {
       alert('Erreur: ' + error.message);
     }
+  };
+
+  const calculateTotals = () => {
+    const totalHT = factureData.items.reduce((sum, item) => {
+      const montantItem = item.quantite * item.prixUnitaire;
+      const montantRemise = montantItem * (item.remise / 100);
+      return sum + (montantItem - montantRemise);
+    }, 0);
+    const montantTVA = totalHT * (factureData.tauxTVA / 100);
+    const totalTTC = totalHT + montantTVA;
+    return { totalHT, montantTVA, totalTTC };
+  };
+
+  const handleSubmitFacture = async () => {
+    try {
+      const totals = calculateTotals();
+      const finalData = {
+        ...factureData,
+        totalHT: totals.totalHT,
+        montantTVA: totals.montantTVA,
+        totalTTC: totals.totalTTC,
+      };
+      await api.post('/factures', finalData);
+      setShowWizard(false);
+      setWizardStep(1);
+      resetFactureForm();
+      loadData();
+      alert('✅ Facture créée avec succès!');
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const addItem = () => {
+    setFactureData({
+      ...factureData,
+      items: [...factureData.items, { description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }]
+    });
+  };
+
+  const removeItem = (index) => {
+    const newItems = factureData.items.filter((_, i) => i !== index);
+    setFactureData({ ...factureData, items: newItems });
+  };
+
+  const updateItem = (index, field, value) => {
+    const newItems = [...factureData.items];
+    newItems[index][field] = value;
+    setFactureData({ ...factureData, items: newItems });
+  };
+
+  const resetFactureForm = () => {
+    setFactureData({
+      clientId: '',
+      dateFacture: new Date().toISOString().split('T')[0],
+      dateEcheance: '',
+      items: [{ description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
+      tauxTVA: 18,
+      notesInternes: '',
+      conditionsPaiement: '',
+      statut: 'brouillon',
+    });
   };
 
   const columns = [
@@ -711,6 +804,9 @@ function FacturesTab() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h3>💰 Liste des Factures</h3>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <Button onClick={() => { resetFactureForm(); setShowWizard(true); setWizardStep(1); }}>
+            + Nouvelle Facture
+          </Button>
           <select 
             value={filterStatut}
             onChange={(e) => setFilterStatut(e.target.value)}
@@ -746,6 +842,220 @@ function FacturesTab() {
           </div>
         )}
       />
+
+      {/* WIZARD DE CRÉATION DE FACTURE */}
+      <Modal
+        isOpen={showWizard}
+        onClose={() => { setShowWizard(false); setWizardStep(1); resetFactureForm(); }}
+        title={`Création de Facture - Étape ${wizardStep} sur 3`}
+        size="xlarge"
+      >
+        {/* ÉTAPE 1: INFORMATIONS CLIENT */}
+        {wizardStep === 1 && (
+          <div>
+            <h4>📋 Informations Client</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '20px' }}>
+              <FormField
+                label="Client"
+                type="select"
+                value={factureData.clientId}
+                onChange={(e) => setFactureData({ ...factureData, clientId: e.target.value })}
+                options={clients.map(c => ({ value: c.id, label: c.nom }))}
+                required
+              />
+              <FormField
+                label="Date Facture"
+                type="date"
+                value={factureData.dateFacture}
+                onChange={(e) => setFactureData({ ...factureData, dateFacture: e.target.value })}
+                required
+              />
+              <FormField
+                label="Date d'Échéance"
+                type="date"
+                value={factureData.dateEcheance}
+                onChange={(e) => setFactureData({ ...factureData, dateEcheance: e.target.value })}
+                required
+              />
+              <FormField
+                label="Conditions de Paiement"
+                type="text"
+                value={factureData.conditionsPaiement}
+                onChange={(e) => setFactureData({ ...factureData, conditionsPaiement: e.target.value })}
+                placeholder="Ex: Paiement à 30 jours"
+              />
+            </div>
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button onClick={() => setWizardStep(2)}>Suivant &gt;</Button>
+            </div>
+          </div>
+        )}
+
+        {/* ÉTAPE 2: ARTICLES/SERVICES */}
+        {wizardStep === 2 && (
+          <div>
+            <h4>📦 Articles et Services</h4>
+            <div style={{ marginTop: '20px' }}>
+              {factureData.items.map((item, index) => (
+                <div key={index} style={{ 
+                  padding: '15px', 
+                  marginBottom: '15px', 
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  border: '1px solid #dee2e6'
+                }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 50px', gap: '10px', alignItems: 'end' }}>
+                    <FormField
+                      label="Description"
+                      type="text"
+                      value={item.description}
+                      onChange={(e) => updateItem(index, 'description', e.target.value)}
+                      placeholder="Description de l'article..."
+                    />
+                    <FormField
+                      label="Qté"
+                      type="number"
+                      value={item.quantite}
+                      onChange={(e) => updateItem(index, 'quantite', parseFloat(e.target.value))}
+                    />
+                    <FormField
+                      label="Prix Unit."
+                      type="number"
+                      value={item.prixUnitaire}
+                      onChange={(e) => updateItem(index, 'prixUnitaire', parseFloat(e.target.value))}
+                    />
+                    <FormField
+                      label="Remise %"
+                      type="number"
+                      value={item.remise}
+                      onChange={(e) => updateItem(index, 'remise', parseFloat(e.target.value))}
+                    />
+                    <FormField
+                      label="Type"
+                      type="select"
+                      value={item.type}
+                      onChange={(e) => updateItem(index, 'type', e.target.value)}
+                      options={[
+                        { value: 'produit', label: 'Produit' },
+                        { value: 'service', label: 'Service' }
+                      ]}
+                    />
+                    <button 
+                      onClick={() => removeItem(index)}
+                      style={{ 
+                        padding: '8px', 
+                        backgroundColor: '#e74c3c', 
+                        color: 'white', 
+                        border: 'none', 
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '16px'
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
+                    Montant: {(item.quantite * item.prixUnitaire * (1 - item.remise / 100)).toFixed(2)} FCFA
+                  </div>
+                </div>
+              ))}
+              
+              <Button variant="secondary" onClick={addItem}>+ Ajouter un article</Button>
+            </div>
+
+            <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
+              <Button variant="secondary" onClick={() => setWizardStep(1)}>
+                &lt; Précédent
+              </Button>
+              <Button onClick={() => setWizardStep(3)}>Suivant &gt;</Button>
+            </div>
+          </div>
+        )}
+
+        {/* ÉTAPE 3: RÉCAPITULATIF */}
+        {wizardStep === 3 && (
+          <div>
+            <h4>✓ Récapitulatif</h4>
+            <div style={{ 
+              padding: '20px', 
+              backgroundColor: '#f8f9fa', 
+              borderRadius: '8px',
+              marginTop: '20px'
+            }}>
+              <div style={{ fontSize: '14px', marginBottom: '5px', color: '#666' }}>Client</div>
+              <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '20px' }}>
+                {clients.find(c => c.id === parseInt(factureData.clientId))?.nom || 'N/A'}
+              </div>
+
+              <div style={{ fontSize: '14px', marginBottom: '10px', color: '#666' }}>Articles/Services</div>
+              <table style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #dee2e6' }}>
+                    <th style={{ textAlign: 'left', padding: '8px' }}>Description</th>
+                    <th style={{ textAlign: 'center', padding: '8px' }}>Qté</th>
+                    <th style={{ textAlign: 'right', padding: '8px' }}>P.U.</th>
+                    <th style={{ textAlign: 'right', padding: '8px' }}>Montant</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {factureData.items.map((item, index) => (
+                    <tr key={index} style={{ borderBottom: '1px solid #dee2e6' }}>
+                      <td style={{ padding: '8px' }}>{item.description}</td>
+                      <td style={{ textAlign: 'center', padding: '8px' }}>{item.quantite}</td>
+                      <td style={{ textAlign: 'right', padding: '8px' }}>{item.prixUnitaire.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', padding: '8px' }}>
+                        {(item.quantite * item.prixUnitaire * (1 - item.remise / 100)).toFixed(2)} FCFA
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '2px solid #dee2e6' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <strong>Total HT:</strong>
+                  <span>{calculateTotals().totalHT.toFixed(2)} FCFA</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <strong>TVA ({factureData.tauxTVA}%):</strong>
+                  <span>{calculateTotals().montantTVA.toFixed(2)} FCFA</span>
+                </div>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  fontSize: '18px', 
+                  fontWeight: 'bold', 
+                  paddingTop: '10px', 
+                  borderTop: '2px solid #dee2e6' 
+                }}>
+                  <strong>Total TTC:</strong>
+                  <span>{calculateTotals().totalTTC.toFixed(2)} FCFA</span>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '20px' }}>
+                <FormField
+                  label="Notes Internes"
+                  type="textarea"
+                  value={factureData.notesInternes}
+                  onChange={(e) => setFactureData({ ...factureData, notesInternes: e.target.value })}
+                  placeholder="Notes visibles uniquement en interne..."
+                />
+              </div>
+            </div>
+
+            <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
+              <Button type="button" variant="secondary" onClick={() => setWizardStep(2)}>
+                &lt; Précédent
+              </Button>
+              <Button variant="success" onClick={handleSubmitFacture}>
+                ✓ Créer la Facture
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
     </div>
   );
