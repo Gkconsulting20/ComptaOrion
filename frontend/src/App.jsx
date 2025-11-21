@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 function App() {
   const [backendStatus, setBackendStatus] = useState(null);
@@ -153,69 +154,205 @@ function App() {
 }
 
 function DashboardView({ backendStatus, loading }) {
+  const [kpis, setKpis] = useState(null);
+  const [ventesData, setVentesData] = useState([]);
+  const [depensesData, setDepensesData] = useState([]);
+  const [periode, setPeriode] = useState('mois');
+  const [typeFiltre, setTypeFiltre] = useState('tous');
+  const [moduleFiltre, setModuleFiltre] = useState('tous');
+  const COLORS = ['#28a745', '#dc3545', '#0066cc', '#ffc107', '#6f42c1', '#17a2b8'];
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const kpisRes = await fetch('/api/dashboard/global');
+        const kpisData = await kpisRes.json();
+        setKpis(kpisData);
+
+        const ventesRes = await fetch('/api/dashboard/ventes-mensuelles');
+        setVentesData(await ventesRes.json());
+
+        const depensesRes = await fetch('/api/dashboard/depenses-categories');
+        setDepensesData(await depensesRes.json());
+      } catch (err) {
+        console.error('Erreur dashboard:', err);
+      }
+    };
+    fetchDashboardData();
+  }, []);
+
+  if (!kpis) return <div className="view-container"><p>Chargement...</p></div>;
+
   return (
     <div className="view-container">
-      <h2 className="view-title">Tableau de bord</h2>
-      
-      <div className="metrics-grid">
-        <div className="metric-card">
-          <div className="metric-icon">💰</div>
-          <div className="metric-content">
-            <h3>Trésorerie</h3>
-            <p className="metric-value">0 FCFA</p>
-            <span className="metric-label">Solde disponible</span>
-          </div>
+      <div className="view-header">
+        <h2 className="view-title">📊 Tableau de Bord Global</h2>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Vue complète de l'entreprise avec KPIs avancés</p>
+      </div>
+
+      <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
+        <div>
+          <label style={{fontSize: '12px', color: '#666', marginRight: '8px'}}>Période:</label>
+          <select value={periode} onChange={(e) => setPeriode(e.target.value)} style={{padding: '6px', borderRadius: '4px', border: '1px solid #ddd'}}>
+            <option value="semaine">Cette semaine</option>
+            <option value="mois">Ce mois</option>
+            <option value="trimestre">Ce trimestre</option>
+            <option value="an">Cette année</option>
+          </select>
         </div>
-        
-        <div className="metric-card">
-          <div className="metric-icon">📊</div>
-          <div className="metric-content">
-            <h3>Revenus</h3>
-            <p className="metric-value">0 FCFA</p>
-            <span className="metric-label">Ce mois</span>
-          </div>
+        <div>
+          <label style={{fontSize: '12px', color: '#666', marginRight: '8px'}}>Type:</label>
+          <select value={typeFiltre} onChange={(e) => setTypeFiltre(e.target.value)} style={{padding: '6px', borderRadius: '4px', border: '1px solid #ddd'}}>
+            <option value="tous">Tous les types</option>
+            <option value="ventes">Ventes</option>
+            <option value="achats">Achats</option>
+            <option value="tresorerie">Trésorerie</option>
+          </select>
         </div>
-        
-        <div className="metric-card">
-          <div className="metric-icon">💸</div>
-          <div className="metric-content">
-            <h3>Dépenses</h3>
-            <p className="metric-value">0 FCFA</p>
-            <span className="metric-label">Ce mois</span>
-          </div>
-        </div>
-        
-        <div className="metric-card">
-          <div className="metric-icon">📈</div>
-          <div className="metric-content">
-            <h3>Bénéfice</h3>
-            <p className="metric-value">0 FCFA</p>
-            <span className="metric-label">Ce mois</span>
-          </div>
+        <div>
+          <label style={{fontSize: '12px', color: '#666', marginRight: '8px'}}>Module:</label>
+          <select value={moduleFiltre} onChange={(e) => setModuleFiltre(e.target.value)} style={{padding: '6px', borderRadius: '4px', border: '1px solid #ddd'}}>
+            <option value="tous">Tous les modules</option>
+            <option value="clients">Clients</option>
+            <option value="fournisseurs">Fournisseurs</option>
+            <option value="stock">Stock</option>
+            <option value="comptabilite">Comptabilité</option>
+          </select>
         </div>
       </div>
 
-      <div className="dashboard-section">
-        <h3>Activités récentes</h3>
-        <div className="empty-state">
-          <p>Aucune activité récente</p>
-          <small>Les transactions apparaîtront ici</small>
+      <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '15px', marginBottom: '30px'}}>
+        <div style={{padding: '20px', backgroundColor: '#d4edda', borderRadius: '8px', border: '1px solid #28a745'}}>
+          <h4 style={{marginTop: 0}}>💰 Ventes du Mois</h4>
+          <p style={{fontSize: '28px', fontWeight: 'bold', color: '#28a745', marginBottom: '5px'}}>
+            {parseFloat(kpis.ventesMois).toLocaleString('fr-FR')} XOF
+          </p>
+          <small style={{color: '#666'}}>Revenus générés</small>
+        </div>
+
+        <div style={{padding: '20px', backgroundColor: '#f8d7da', borderRadius: '8px', border: '1px solid #dc3545'}}>
+          <h4 style={{marginTop: 0}}>💸 Dépenses du Mois</h4>
+          <p style={{fontSize: '28px', fontWeight: 'bold', color: '#dc3545', marginBottom: '5px'}}>
+            {parseFloat(kpis.depensesMois).toLocaleString('fr-FR')} XOF
+          </p>
+          <small style={{color: '#666'}}>Charges engagées</small>
+        </div>
+
+        <div style={{padding: '20px', backgroundColor: '#cce5ff', borderRadius: '8px', border: '1px solid #0066cc'}}>
+          <h4 style={{marginTop: 0}}>📊 Marge Brute</h4>
+          <p style={{fontSize: '28px', fontWeight: 'bold', color: '#0066cc', marginBottom: '5px'}}>
+            {kpis.margeBrute}%
+          </p>
+          <small style={{color: '#666'}}>Rentabilité</small>
+        </div>
+
+        <div style={{padding: '20px', backgroundColor: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107'}}>
+          <h4 style={{marginTop: 0}}>💹 Cashflow</h4>
+          <p style={{fontSize: '28px', fontWeight: 'bold', color: '#ffc107', marginBottom: '5px'}}>
+            {parseFloat(kpis.cashflow).toLocaleString('fr-FR')} XOF
+          </p>
+          <small style={{color: '#666'}}>Flux nets</small>
         </div>
       </div>
 
-      <div className="dashboard-section">
-        <h3>État du système</h3>
-        {loading ? (
-          <p className="status-loading">Vérification de la connexion...</p>
-        ) : backendStatus ? (
-          <div className="status-success">
-            <span className="status-dot"></span>
-            <span>Système opérationnel</span>
+      <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '15px', marginBottom: '30px'}}>
+        <div style={{padding: '15px', backgroundColor: '#e8f4f8', borderRadius: '8px'}}>
+          <h4 style={{marginTop: 0}}>⏰ Délai Paiement Client</h4>
+          <p style={{fontSize: '24px', fontWeight: 'bold', color: '#0066cc'}}>~{kpis.delaiPaiementClient || 0} jours</p>
+          <small style={{color: '#666'}}>Moyenne</small>
+        </div>
+
+        <div style={{padding: '15px', backgroundColor: '#e8f4f8', borderRadius: '8px'}}>
+          <h4 style={{marginTop: 0}}>⏰ Délai Paiement Fournisseur</h4>
+          <p style={{fontSize: '24px', fontWeight: 'bold', color: '#0066cc'}}>~{kpis.delaiPaiementFournisseur || 0} jours</p>
+          <small style={{color: '#666'}}>Moyenne</small>
+        </div>
+
+        <div style={{padding: '15px', backgroundColor: '#ffe8e8', borderRadius: '8px'}}>
+          <h4 style={{marginTop: 0}}>⚠️ Factures en Retard</h4>
+          <p style={{fontSize: '24px', fontWeight: 'bold', color: '#dc3545'}}>{kpis.facturesEnRetard?.nombre || 0}</p>
+          <p style={{fontSize: '14px', color: '#666', marginTop: '5px'}}>{parseFloat(kpis.facturesEnRetard?.montant || 0).toLocaleString('fr-FR')} XOF</p>
+        </div>
+
+        <div style={{padding: '15px', backgroundColor: '#fff3cd', borderRadius: '8px'}}>
+          <h4 style={{marginTop: 0}}>📦 Stock Faible</h4>
+          <p style={{fontSize: '24px', fontWeight: 'bold', color: '#ffc107'}}>{kpis.stockFaible?.nombre || 0} produits</p>
+          <small style={{color: '#666'}}>Sous le minimum</small>
+        </div>
+      </div>
+
+      <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px'}}>
+        <div style={{padding: '20px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #ddd'}}>
+          <h3>📈 Ventes Mensuelles</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={ventesData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="mois" />
+              <YAxis />
+              <Tooltip formatter={(value) => `${parseFloat(value).toLocaleString('fr-FR')} XOF`} />
+              <Legend />
+              <Line type="monotone" dataKey="ventes" stroke="#28a745" strokeWidth={2} dot={{fill: '#28a745', r: 4}} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={{padding: '20px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #ddd'}}>
+          <h3>📊 Répartition Dépenses</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={depensesData.slice(0, 5)}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({total}) => `${total}`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="total"
+              >
+                {depensesData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => `${parseFloat(value).toLocaleString('fr-FR')} XOF`} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div style={{padding: '20px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #ddd'}}>
+        <h3>📊 Comparaison Ventes vs Dépenses</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={[
+            {nom: 'Mois', Ventes: parseFloat(kpis.ventesMois), Dépenses: parseFloat(kpis.depensesMois), Bénéfice: parseFloat(kpis.cashflow)}
+          ]}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="nom" />
+            <YAxis />
+            <Tooltip formatter={(value) => `${parseFloat(value).toLocaleString('fr-FR')} XOF`} />
+            <Legend />
+            <Bar dataKey="Ventes" fill="#28a745" />
+            <Bar dataKey="Dépenses" fill="#dc3545" />
+            <Bar dataKey="Bénéfice" fill="#0066cc" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={{marginTop: '30px', padding: '15px', backgroundColor: '#e8f4f8', borderRadius: '8px'}}>
+        <h3 style={{marginTop: 0}}>📋 Alertes Importantes</h3>
+        {kpis.facturesEnRetard?.nombre > 0 && (
+          <div style={{padding: '10px', backgroundColor: '#ffe8e8', borderRadius: '4px', marginBottom: '10px'}}>
+            ⚠️ <strong>{kpis.facturesEnRetard.nombre} facture(s) en retard</strong> pour un montant de {parseFloat(kpis.facturesEnRetard.montant).toLocaleString('fr-FR')} XOF
           </div>
-        ) : (
-          <div className="status-error">
-            <span className="status-dot"></span>
-            <span>Connexion au serveur échouée</span>
+        )}
+        {kpis.stockFaible?.nombre > 0 && (
+          <div style={{padding: '10px', backgroundColor: '#fff3cd', borderRadius: '4px', marginBottom: '10px'}}>
+            📦 <strong>{kpis.stockFaible.nombre} produit(s) avec stock faible</strong>
+          </div>
+        )}
+        {kpis.facturesEnRetard?.nombre === 0 && kpis.stockFaible?.nombre === 0 && (
+          <div style={{padding: '10px', backgroundColor: '#d4edda', borderRadius: '4px'}}>
+            ✅ Aucune alerte - Système opérationnel
           </div>
         )}
       </div>
