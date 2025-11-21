@@ -68,6 +68,56 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 
 ## Recent Changes (November 21, 2025)
 
+### Logo d'Entreprise & Personnalisation des Factures (21 Nov 2025)
+Ajout d'un système complet de gestion du logo et de personnalisation des factures:
+
+**Fonctionnalités:**
+- Upload de logo d'entreprise (JPEG, PNG, GIF, SVG, max 5MB)
+- Prévisualisation et suppression du logo
+- Personnalisation complète des factures:
+  - Couleur principale (color picker)
+  - Texte de pied de page personnalisé
+  - Mentions légales
+  - Toggle pour afficher/masquer le logo sur les factures
+
+**Schéma Base de Données:**
+- Champs ajoutés à la table `entreprises`:
+  - `logo_url`: URL du logo uploadé
+  - `facture_footer_text`: Texte personnalisé de pied de page
+  - `facture_mentions_legales`: Mentions légales
+  - `facture_couleur_principale`: Couleur principale (#HEX)
+  - `facture_afficher_logo`: Booléen pour afficher/masquer le logo
+
+**API Backend:**
+- `POST /api/upload/logo`: Upload de logo (multipart/form-data)
+- `DELETE /api/upload/logo`: Suppression du logo
+- `PUT /api/parametres/entreprise`: Mise à jour des paramètres enrichie
+- Serveur de fichiers statiques: `/uploads/logos/`
+
+**Sécurité Multi-Tenant:**
+- Authentification requise (JWT) pour toutes les routes d'upload
+- Validation req.entrepriseId sur upload/delete
+- Nommage des fichiers par entreprise: `entreprise-{id}-logo-{timestamp}.ext`
+- Suppression automatique de l'ancien logo lors d'un nouveau upload
+- Validation des types de fichiers (images uniquement)
+- Limite de taille: 5MB par fichier
+- Création automatique du dossier uploads si inexistant
+
+**Interface Frontend:**
+- Section "🎨 Personnalisation des Factures" dans Paramètres > Entreprise
+- Upload avec drag & drop
+- Prévisualisation du logo en temps réel
+- Color picker pour la couleur principale
+- Champs de texte pour footer et mentions légales
+- Toggle checkbox pour activer/désactiver le logo
+
+**Workflow:**
+1. Aller dans Paramètres > Entreprise
+2. Cliquer sur "Modifier"
+3. Scroller vers la section "🎨 Personnalisation des Factures"
+4. Uploader un logo et personnaliser les paramètres
+5. Enregistrer
+
 ### Module Bons de Livraison - Delivery Notes System (21 Nov 2025)
 Ajout d'un système complet de gestion des bons de livraison avec génération à partir des factures:
 
