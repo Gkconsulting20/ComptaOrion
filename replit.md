@@ -50,9 +50,8 @@ ComptaOrion is built with a modular architecture comprising 17 modules organized
     - **🏢 Immobilisations:** Gestion des actifs avec calcul automatique amortissement
     - **📊 Rapports Financiers:** Bilan, Compte de Résultat, Flux de Trésorerie
 6.  **Treasury & Finance:** Bank balances, cash management, reconciliation, and expense management with approval workflows.
-7.  **Human Resources (HR Lite):** Employee management, salary advances, absence tracking, and HR notifications.
-8.  **Configuration & Security:** Currency management, accounting system settings, country-specific parameters, authentication (JWT, RBAC), Row-Level Security (RLS), and a comprehensive audit log.
-9.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI integration.
+7.  **Configuration & Security:** Currency management, accounting system settings, country-specific parameters, authentication (JWT, RBAC), Row-Level Security (RLS), and a comprehensive audit log.
+8.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI integration.
 
 ### Cross-Modular Functionalities
 -   **Automated Accounting:** Every client/supplier transaction automatically generates accounting entries.
@@ -188,5 +187,6 @@ Created comprehensive system settings module (ParametresModule.jsx) with 5 tabs:
 - ✅ Fiscal year configuration
 - ✅ VAT rate management by country
 
-### Module Dépenses - Masked
-The Dépenses (Expenses) module has been temporarily removed from the navigation menu and will be developed later.
+### Modules Removed
+**Employés Module (HR Lite):** Removed from navigation and backend routes. Database tables remain intact for future use.
+**Dépenses Module:** Temporarily removed from navigation menu, will be developed later.

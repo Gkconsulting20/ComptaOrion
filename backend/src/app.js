@@ -17,7 +17,6 @@ import dépensesRoutes from './routes/dépenses.js';
 import immobilisationsRoutes from './routes/immobilisations.js';
 import exportAssetsRoutes from './routes/export-assets.js';
 import comptabiliteRoutes from './routes/comptabilite.js';
-import employesRoutes from './routes/employes.js';
 import tresorerieRoutes from './routes/tresorerie.js';
 import auditLogsRoutes from './routes/audit-logs.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
@@ -87,9 +86,6 @@ app.use('/api/depenses', dépensesRoutes);
 
 // Module Comptabilité Générale
 app.use('/api/comptabilite', comptabiliteRoutes);
-
-// Module Employés (HR Lite)
-app.use('/api/employes', employesRoutes);
 
 // Module Trésorerie
 app.use('/api/tresorerie', tresorerieRoutes);
