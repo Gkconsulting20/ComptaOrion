@@ -6,6 +6,24 @@ import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
 import api from '../api';
 
+// Helper pour afficher correctement les statuts de factures
+const getStatutFactureDisplay = (statut, montantPaye, montantTTC) => {
+  const styles = {
+    brouillon: { bg: '#e9ecef', color: '#495057', label: '📝 Brouillon' },
+    envoyee: { bg: '#fff3cd', color: '#856404', label: '📤 Envoyée' },
+    payee: { bg: '#d4edda', color: '#155724', label: '✅ Payée' },
+    annulee: { bg: '#f8d7da', color: '#721c24', label: '❌ Annulée' },
+    retard: { bg: '#f8d7da', color: '#721c24', label: '⏰ En retard' }
+  };
+
+  // Si envoyée et partiellement payée, afficher "Partiellement payée"
+  if (statut === 'envoyee' && parseFloat(montantPaye || 0) > 0) {
+    return { ...styles.envoyee, label: '💰 Partiellement payée' };
+  }
+
+  return styles[statut] || { bg: '#e9ecef', color: '#495057', label: statut };
+};
+
 export function ClientsModule() {
   const [activeTab, setActiveTab] = useState('parametres');
 
@@ -824,7 +842,21 @@ function FacturesClientTab() {
           { key: 'client', label: 'Client', render: (_, row) => row.client?.nom || 'N/A' },
           { key: 'dateFacture', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
           { key: 'totalTTC', label: 'Montant TTC', render: (val) => `${parseFloat(val).toLocaleString()} FCFA` },
-          { key: 'statut', label: 'Statut' },
+          { key: 'statut', label: 'Statut', render: (_, row) => {
+            const display = getStatutFactureDisplay(row.statut, row.montantPaye, row.totalTTC);
+            return (
+              <span style={{
+                padding: '4px 12px',
+                borderRadius: '12px',
+                fontSize: '12px',
+                backgroundColor: display.bg,
+                color: display.color,
+                fontWeight: '500'
+              }}>
+                {display.label}
+              </span>
+            );
+          }},
         ]}
         data={filteredFactures}
         actions={true}
@@ -2314,15 +2346,21 @@ function EtatsCompteTab() {
                       <td style={{ padding: '12px' }}>{new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{f.totalTTC?.toLocaleString('fr-FR')} FCFA</td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <span style={{ 
-                          padding: '4px 12px', 
-                          borderRadius: '12px', 
-                          fontSize: '12px',
-                          backgroundColor: f.statut === 'payee' ? '#d4edda' : '#fff3cd',
-                          color: f.statut === 'payee' ? '#155724' : '#856404'
-                        }}>
-                          {f.statut === 'payee' ? '✅ Payée' : '⏳ En attente'}
-                        </span>
+                        {(() => {
+                          const display = getStatutFactureDisplay(f.statut, f.montantPaye, f.totalTTC);
+                          return (
+                            <span style={{ 
+                              padding: '4px 12px', 
+                              borderRadius: '12px', 
+                              fontSize: '12px',
+                              backgroundColor: display.bg,
+                              color: display.color,
+                              fontWeight: '500'
+                            }}>
+                              {display.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))}
