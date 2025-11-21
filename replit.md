@@ -187,6 +187,49 @@ Created comprehensive system settings module (ParametresModule.jsx) with 5 tabs:
 - ✅ Fiscal year configuration
 - ✅ VAT rate management by country
 
+### Module Paie & RH - Structure Created (MASQUÉ) 🔒
+**Structure complète créée mais module non visible dans le menu de navigation:**
+
+**Database Schema:**
+- ✅ Table `employes` enrichie avec tous les champs requis:
+  - Informations personnelles: nom, prénom, CNPS, date/lieu de naissance, nationalité, contacts
+  - Type de contrat: CDI, CDD, Journalier, Stagiaire, Consultant
+  - Salaire de base et indemnités régulières (transport, logement, autres)
+  - Avantages en nature (logement, véhicule, autres)
+  - Documents RH (CNI, contrat, CV, autres)
+- ✅ Table `fiches_paie` créée pour l'historique des bulletins de salaire
+  - Calcul automatique: salaire brut, cotisations (CNPS, IPRES), impôt sur revenu, salaire net
+  - Lien avec écriture comptable automatique
+- ✅ Table `avances_salaire` pour les avances sur salaire
+
+**Backend Routes (`/api/paie`):**
+- `/paie/employes` - CRUD employés avec audit log complet
+- `/paie/fiches-paie` - Génération fiches de paie avec:
+  - Calcul automatique salaire brut/net
+  - Comptabilisation automatique (écriture comptable auto-générée)
+  - Gestion des cotisations et retenues
+  - Historique complet des bulletins de salaire
+- `/paie/avances` - Gestion des avances sur salaire
+
+**Frontend (PaieModule.jsx):**
+- ✅ Module complet avec 4 onglets:
+  - 👥 Employés: CRUD avec formulaire complet (tous les champs)
+  - 📄 Fiches de Paie: Génération bulletins avec calcul auto brut/net
+  - 💵 Avances: Gestion avances sur salaire
+  - 📊 Rapports: Statistiques de paie (à développer)
+
+**Fonctionnalités clés:**
+- ✅ Informations personnelles complètes (nom, CNPS, contact)
+- ✅ Types de contrat (CDD, CDI, journalier, stagiaire)
+- ✅ Salaire de base avec indemnités régulières
+- ✅ Avantages en nature
+- ✅ Comptabilisation automatique du salaire (génère écriture comptable)
+- ✅ Historique des fiches de paie
+- ✅ Documents RH (contrat, CNI, CV)
+- ✅ Audit log intégré pour toutes les opérations
+
+**Statut:** Module en pause - structure complète créée mais non activée dans le menu de navigation.
+
 ### Modules Removed
-**Employés Module (HR Lite):** Removed from navigation and backend routes. Database tables remain intact for future use.
-**Dépenses Module:** Temporarily removed from navigation menu, will be developed later.
+**Employés Module (HR Lite):** Supprimé et remplacé par le Module Paie & RH (masqué).
+**Dépenses Module:** Temporairement retiré du menu, à développer plus tard.

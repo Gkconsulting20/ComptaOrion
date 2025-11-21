@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { employes, fichesPaie, avancesSalaire, ecritures, lignesEcriture } from '../schema.js';
+import { employes, fichesPaie, avancesSalaire, ecritures, lignesEcritures } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
@@ -196,7 +196,7 @@ router.post('/fiches-paie', async (req, res) => {
         statut: 'validée',
       }).returning();
 
-      await db.insert(lignesEcriture).values([
+      await db.insert(lignesEcritures).values([
         {
           entrepriseId,
           ecritureId: ecriture.id,

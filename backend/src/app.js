@@ -19,6 +19,7 @@ import exportAssetsRoutes from './routes/export-assets.js';
 import comptabiliteRoutes from './routes/comptabilite.js';
 import tresorerieRoutes from './routes/tresorerie.js';
 import auditLogsRoutes from './routes/audit-logs.js';
+import paieRoutes from './routes/paie.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
@@ -90,6 +91,9 @@ app.use('/api/comptabilite', comptabiliteRoutes);
 // Module Trésorerie
 app.use('/api/tresorerie', tresorerieRoutes);
 app.use('/api/audit-logs', auditLogsRoutes);
+
+// Module Paie & RH (MASQUÉ - structure créée mais non visible dans menu)
+app.use('/api/paie', paieRoutes);
 
 // Module Fournisseurs & Achats
 app.use('/api/fournisseurs', fournisseursRoutes);
