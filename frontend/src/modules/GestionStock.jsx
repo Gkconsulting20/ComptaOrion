@@ -3,7 +3,7 @@ import api from '../api';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 
-export function StockModule() {
+export function GestionStockModule() {
   const [activeTab, setActiveTab] = useState('produits');
   const [produits, setProduits] = useState([]);
   const [loading, setLoading] = useState(true);
