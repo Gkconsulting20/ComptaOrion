@@ -31,7 +31,7 @@ export function Login({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth-security/login', {
+      const response = await fetch('/api/auth-security/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -77,7 +77,7 @@ export function Login({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth/register', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(registerData)
@@ -106,7 +106,7 @@ export function Login({ onLoginSuccess }) {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth-security/forgot-password', {
+      const response = await fetch('/api/auth-security/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
