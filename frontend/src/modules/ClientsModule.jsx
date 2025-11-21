@@ -515,6 +515,8 @@ function BonsLivraisonTab() {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
   const [selectedFacture, setSelectedFacture] = useState(null);
+  const [selectedBL, setSelectedBL] = useState(null);
+  const [showBLDetails, setShowBLDetails] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -597,6 +599,7 @@ function BonsLivraisonTab() {
       <Table
         columns={columns}
         data={bonsList}
+        onRowClick={(bon) => { setSelectedBL(bon); setShowBLDetails(true); }}
         renderActions={(bon) => (
           <div>
             <Button size="small" variant="info">
@@ -672,6 +675,34 @@ function BonsLivraisonTab() {
           </div>
         </Modal>
       )}
+
+      {/* MODAL DÉTAILS BON DE LIVRAISON */}
+      {selectedBL && showBLDetails && (
+        <DetailsModal
+          title={`📦 Bon de Livraison ${selectedBL.numeroBL || ''}`}
+          isOpen={showBLDetails}
+          onClose={() => { setShowBLDetails(false); setSelectedBL(null); }}
+          sections={[
+            {
+              title: 'Informations Générales',
+              fields: [
+                { label: 'Numéro BL', value: selectedBL.numeroBL || '-' },
+                { label: 'Date Livraison', value: selectedBL.dateLivraison ? new Date(selectedBL.dateLivraison).toLocaleDateString('fr-FR') : '-' },
+                { label: 'Client', value: selectedBL.client?.nom || '-' },
+                { label: 'Notes', value: selectedBL.notes || '-' },
+              ]
+            }
+          ]}
+          tables={(selectedBL.items && selectedBL.items.length > 0) ? [{
+            title: 'Articles Livrés',
+            columns: [
+              { key: 'produitId', label: 'ID Produit' },
+              { key: 'quantite', label: 'Quantité', render: (val) => val || 0 }
+            ],
+            data: selectedBL.items
+          }] : []}
+        />
+      )}
     </div>
   );
 }
@@ -686,6 +717,8 @@ function FacturesClientTab() {
   const [filterStatut, setFilterStatut] = useState('toutes');
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
+  const [selectedFacture, setSelectedFacture] = useState(null);
+  const [showFactureDetails, setShowFactureDetails] = useState(false);
   const [factureData, setFactureData] = useState({
     clientId: '',
     dateFacture: new Date().toISOString().split('T')[0],
@@ -834,6 +867,7 @@ function FacturesClientTab() {
           )},
         ]}
         data={filteredFactures}
+        onRowClick={(facture) => { setSelectedFacture(facture); setShowFactureDetails(true); }}
         actions={true}
         customActions={(facture) => (
           <div style={{ display: 'flex', gap: '5px' }}>
@@ -1009,6 +1043,55 @@ function FacturesClientTab() {
           </div>
         )}
       </Modal>
+
+      {/* MODAL DÉTAILS FACTURE */}
+      {selectedFacture && showFactureDetails && (
+        <DetailsModal
+          title={`💵 Facture ${selectedFacture.numeroFacture || ''}`}
+          isOpen={showFactureDetails}
+          onClose={() => { setShowFactureDetails(false); setSelectedFacture(null); }}
+          sections={[
+            {
+              title: 'Informations Client',
+              fields: [
+                { label: 'Client', value: selectedFacture.client?.nom || '-' },
+                { label: 'Email', value: selectedFacture.client?.email || '-' },
+                { label: 'Téléphone', value: selectedFacture.client?.telephone || '-' },
+                { label: 'Adresse', value: selectedFacture.client?.adresse || '-' },
+              ]
+            },
+            {
+              title: 'Détails Facture',
+              fields: [
+                { label: 'Numéro', value: selectedFacture.numeroFacture || '-' },
+                { label: 'Date Émission', value: selectedFacture.dateFacture ? new Date(selectedFacture.dateFacture).toLocaleDateString('fr-FR') : '-' },
+                { label: 'Date Échéance', value: selectedFacture.dateEcheance ? new Date(selectedFacture.dateEcheance).toLocaleDateString('fr-FR') : '-' },
+                { label: 'Statut', value: selectedFacture.statut || '-' },
+              ]
+            },
+            {
+              title: 'Montants',
+              fields: [
+                { label: 'Total HT', value: `${parseFloat(selectedFacture.totalHT || 0).toLocaleString()} FCFA` },
+                { label: 'TVA', value: `${parseFloat(selectedFacture.montantTVA || 0).toLocaleString()} FCFA` },
+                { label: 'Total TTC', value: `${parseFloat(selectedFacture.totalTTC || 0).toLocaleString()} FCFA`, highlight: true },
+                { label: 'Montant Payé', value: `${parseFloat(selectedFacture.montantPaye || 0).toLocaleString()} FCFA` },
+                { label: 'Reste à Payer', value: `${parseFloat((selectedFacture.totalTTC || 0) - (selectedFacture.montantPaye || 0)).toLocaleString()} FCFA` },
+              ]
+            }
+          ]}
+          tables={selectedFacture.items ? [{
+            title: 'Articles / Services',
+            columns: [
+              { key: 'description', label: 'Description' },
+              { key: 'quantite', label: 'Qté', render: (val) => val || 0 },
+              { key: 'prixUnitaire', label: 'Prix Unit.', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+              { key: 'montantHT', label: 'Montant HT', render: (val, row) => `${parseFloat((row.quantite || 0) * (row.prixUnitaire || 0)).toLocaleString()} FCFA` }
+            ],
+            data: selectedFacture.items
+          }] : []}
+        />
+      )}
     </div>
   );
 }

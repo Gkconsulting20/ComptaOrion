@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, employes, comptesComptables } from '../schema.js';
-import { eq, and, like } from 'drizzle-orm';
+import { eq, and, like, inArray, or, ne, notInArray } from 'drizzle-orm';
 
 const router = Router();
 
@@ -138,30 +138,18 @@ router.get('/previsions', async (req, res) => {
     const facturesClients = await db.select().from(factures)
       .where(and(
         eq(factures.entrepriseId, req.entrepriseId),
-        eq(factures.statut, 'en_attente')
+        notInArray(factures.statut, ['payee', 'annulee', 'brouillon'])
       ));
     
-    const facturesClientsPeriode = facturesClients.filter(f => {
-      if (!f.dateEcheance) return false;
-      const echeance = new Date(f.dateEcheance);
-      return echeance >= dateAujourdhui && echeance <= dateLimite;
-    });
-    
-    const totalCreances = facturesClientsPeriode.reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
+    const totalCreances = facturesClients.reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
     
     const facturesFournisseurs = await db.select().from(facturesAchat)
       .where(and(
         eq(facturesAchat.entrepriseId, req.entrepriseId),
-        eq(facturesAchat.statut, 'en_attente')
+        notInArray(facturesAchat.statut, ['payee', 'annulee', 'brouillon'])
       ));
     
-    const facturesFournisseursPeriode = facturesFournisseurs.filter(f => {
-      if (!f.dateEcheance) return false;
-      const echeance = new Date(f.dateEcheance);
-      return echeance >= dateAujourdhui && echeance <= dateLimite;
-    });
-    
-    const totalDettes = facturesFournisseursPeriode.reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
+    const totalDettes = facturesFournisseurs.reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
     
     const soldePrevu = soldeActuel + totalCreances - totalDettes;
     
@@ -174,29 +162,33 @@ router.get('/previsions', async (req, res) => {
       const finSemaine = new Date(debutSemaine);
       finSemaine.setDate(finSemaine.getDate() + 6);
       
-      const encaissementsSemaine = facturesClientsPeriode
+      const encaissementsSemaine = facturesClients
         .filter(f => {
+          if (!f.dateEcheance) return false;
           const echeance = new Date(f.dateEcheance);
           return echeance >= debutSemaine && echeance <= finSemaine;
         })
         .reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
       
-      const decaissementsSemaine = facturesFournisseursPeriode
+      const decaissementsSemaine = facturesFournisseurs
         .filter(f => {
+          if (!f.dateEcheance) return false;
           const echeance = new Date(f.dateEcheance);
           return echeance >= debutSemaine && echeance <= finSemaine;
         })
         .reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
       
-      const encaissementsCumules = facturesClientsPeriode
+      const encaissementsCumules = facturesClients
         .filter(f => {
+          if (!f.dateEcheance) return true;
           const echeance = new Date(f.dateEcheance);
           return echeance <= finSemaine;
         })
         .reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
       
-      const decaissementsCumules = facturesFournisseursPeriode
+      const decaissementsCumules = facturesFournisseurs
         .filter(f => {
+          if (!f.dateEcheance) return true;
           const echeance = new Date(f.dateEcheance);
           return echeance <= finSemaine;
         })
@@ -219,8 +211,8 @@ router.get('/previsions', async (req, res) => {
       periode: joursProj,
       creances: {
         total: totalCreances,
-        count: facturesClientsPeriode.length,
-        factures: facturesClientsPeriode.map(f => ({
+        count: facturesClients.length,
+        factures: facturesClients.map(f => ({
           id: f.id,
           numero: f.numeroFacture,
           montant: parseFloat(f.montantTTC || 0),
@@ -230,8 +222,8 @@ router.get('/previsions', async (req, res) => {
       },
       dettes: {
         total: totalDettes,
-        count: facturesFournisseursPeriode.length,
-        factures: facturesFournisseursPeriode.map(f => ({
+        count: facturesFournisseurs.length,
+        factures: facturesFournisseurs.map(f => ({
           id: f.id,
           numero: f.numeroFacture,
           montant: parseFloat(f.montantTTC || 0),
