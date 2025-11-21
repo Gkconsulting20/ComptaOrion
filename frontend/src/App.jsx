@@ -1375,6 +1375,7 @@ function FournisseursView() {
 }
 
 function TresorerieView() {
+  const [message, setMessage] = useState("");
   const [activeTab, setActiveTab] = useState('liste');
   const [showForm, setShowForm] = useState(false);
 
@@ -1422,6 +1423,8 @@ function TresorerieView() {
           <div className="content-header">
             <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
               {showForm ? 'Annuler' : '+ Nouvelle transaction'}
+  const [message, setMessage] = useState("");
+  const handleAddTransaction = async (e) => { e.preventDefault(); setMessage("✅ Transaction enregistrée"); setTimeout(() => setMessage(""), 3000); };
             </button>
           </div>
 
@@ -1639,6 +1642,7 @@ function TresorerieView() {
 }
 
 function StockView() {
+  const [message, setMessage] = useState("");
   const [activeTab, setActiveTab] = useState('liste');
   const [showForm, setShowForm] = useState(false);
 
@@ -1683,6 +1687,8 @@ function StockView() {
                   <div className="form-group">
                     <label>Référence / SKU</label>
                     <input type="text" placeholder="Code article" />
+  const [message, setMessage] = useState("");
+  const handleAddArticle = async (e) => { e.preventDefault(); setMessage("✅ Article ajouté"); setTimeout(() => setMessage(""), 3000); };
                   </div>
                 </div>
 
