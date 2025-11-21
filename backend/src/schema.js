@@ -201,22 +201,57 @@ export const paiementsFournisseurs = pgTable('paiements_fournisseurs', {
 // MODULE 6: STOCK & INVENTAIRE
 // ==========================================
 
+// Catégories de produits
+export const categoriesStock = pgTable('categories_stock', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  description: text('description'),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Entrepôts / Magasins
+export const entrepots = pgTable('entrepots', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  adresse: text('adresse'),
+  responsable: varchar('responsable', { length: 100 }),
+  telephone: varchar('telephone', { length: 50 }),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 export const produits = pgTable('produits', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   reference: varchar('reference', { length: 100 }).unique(),
   nom: varchar('nom', { length: 255 }).notNull(),
   description: text('description'),
-  categorie: varchar('categorie', { length: 100 }),
+  categoriId: integer('categorie_id').references(() => categoriesStock.id),
   uniteMesure: varchar('unite_mesure', { length: 50 }).default('pièce'),
-  quantite: decimal('quantite', { precision: 15, scale: 3 }).default('0'),
   stockMinimum: decimal('stock_minimum', { precision: 15, scale: 3 }).default('0'),
   prixAchat: decimal('prix_achat', { precision: 15, scale: 2 }).default('0'),
   prixVente: decimal('prix_vente', { precision: 15, scale: 2 }).default('0'),
+  valorisationMethod: varchar('valorisation_method', { length: 20 }).default('FIFO'), // FIFO, CMP
   fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id),
-  emplacement: varchar('emplacement', { length: 255 }),
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Stock par entrepôt (multi-entrepôts)
+export const stockParEntrepot = pgTable('stock_par_entrepot', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id).notNull(),
+  entrepotId: integer('entrepot_id').references(() => entrepots.id).notNull(),
+  quantitePresente: decimal('quantite_presente', { precision: 15, scale: 3 }).default('0'),
+  quantiteReservee: decimal('quantite_reservee', { precision: 15, scale: 3 }).default('0'),
+  quantiteDisponible: decimal('quantite_disponible', { precision: 15, scale: 3 }).default('0'),
+  emplacement: varchar('emplacement', { length: 255 }),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
@@ -224,13 +259,65 @@ export const mouvementsStock = pgTable('mouvements_stock', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   produitId: integer('produit_id').references(() => produits.id).notNull(),
-  type: stockMovementTypeEnum('type').notNull(),
+  entrepotId: integer('entrepot_id').references(() => entrepots.id),
+  type: stockMovementTypeEnum('type').notNull(), // entree, sortie, transfert, ajustement
   quantite: decimal('quantite', { precision: 15, scale: 3 }).notNull(),
   prixUnitaire: decimal('prix_unitaire', { precision: 15, scale: 2 }),
+  entrepotDestinationId: integer('entrepot_destination_id').references(() => entrepots.id),
   reference: varchar('reference', { length: 255 }), // référence commande, facture, etc.
   notes: text('notes'),
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Valorisation du stock (FIFO/CMP)
+export const valorisationsStock = pgTable('valorisations_stock', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id).notNull(),
+  mouvementId: integer('mouvement_id').references(() => mouvementsStock.id),
+  methode: varchar('methode', { length: 20 }).notNull(), // FIFO, CMP
+  coutUnitaire: decimal('cout_unitaire', { precision: 15, scale: 2 }).notNull(),
+  coutTotal: decimal('cout_total', { precision: 15, scale: 2 }).notNull(),
+  quantite: decimal('quantite', { precision: 15, scale: 3 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Inventaires tournants
+export const inventairesTournants = pgTable('inventaires_tournants', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  entrepotId: integer('entrepot_id').references(() => entrepots.id).notNull(),
+  numero: varchar('numero', { length: 100 }).unique(),
+  dateDebut: date('date_debut').notNull(),
+  dateFin: date('date_fin'),
+  statut: varchar('statut', { length: 50 }).default('en_cours'), // en_cours, termine, valide
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const lignInventairesTournants = pgTable('ligne_inventaires_tournants', {
+  id: serial('id').primaryKey(),
+  inventaireId: integer('inventaire_id').references(() => inventairesTournants.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id).notNull(),
+  quantiteSysteme: decimal('quantite_systeme', { precision: 15, scale: 3 }).notNull(),
+  quantiteComptee: decimal('quantite_comptee', { precision: 15, scale: 3 }).notNull(),
+  ecart: decimal('ecart', { precision: 15, scale: 3 }).default('0'),
+});
+
+// Alertes de stock
+export const alertesStock = pgTable('alertes_stock', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id).notNull(),
+  entrepotId: integer('entrepot_id').references(() => entrepots.id),
+  type: varchar('type', { length: 50 }).notNull(), // seuil_min, rupture, surstock
+  quantiteActuelle: decimal('quantite_actuelle', { precision: 15, scale: 3 }).notNull(),
+  seuil: decimal('seuil', { precision: 15, scale: 3 }).notNull(),
+  statut: varchar('statut', { length: 50 }).default('active'),
+  dateAlerte: timestamp('date_alerte').defaultNow(),
+  dateResolution: timestamp('date_resolution'),
 });
 
 // ==========================================
