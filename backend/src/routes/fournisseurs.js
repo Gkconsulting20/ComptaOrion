@@ -1,9 +1,9 @@
 import express from 'express';
 import { db } from '../db.js';
-import { fournisseurs, facturesFournisseurs, paiementsFournisseurs } from '../schema.js';
+import { fournisseurs, facturesAchat, paiementsFournisseurs } from '../schema.js';
 import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
-import { sendEmail } from '../services/emailService.js';
+import emailService from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -435,14 +435,14 @@ router.post('/etat-compte', async (req, res) => {
 
     const facturesList = await db
       .select()
-      .from(facturesFournisseurs)
+      .from(facturesAchat)
       .where(and(
-        eq(facturesFournisseurs.fournisseurId, parseInt(fournisseurId)),
-        eq(facturesFournisseurs.entrepriseId, req.entrepriseId),
-        gte(facturesFournisseurs.dateFacture, dateDebut),
-        lte(facturesFournisseurs.dateFacture, dateFin)
+        eq(facturesAchat.fournisseurId, parseInt(fournisseurId)),
+        eq(facturesAchat.entrepriseId, req.entrepriseId),
+        gte(facturesAchat.dateFacture, dateDebut),
+        lte(facturesAchat.dateFacture, dateFin)
       ))
-      .orderBy(facturesFournisseurs.dateFacture);
+      .orderBy(facturesAchat.dateFacture);
 
     const paiementsList = await db
       .select()
@@ -526,14 +526,14 @@ router.post('/etat-compte/email', async (req, res) => {
 
     const facturesList = await db
       .select()
-      .from(facturesFournisseurs)
+      .from(facturesAchat)
       .where(and(
-        eq(facturesFournisseurs.fournisseurId, parseInt(fournisseurId)),
-        eq(facturesFournisseurs.entrepriseId, req.entrepriseId),
-        gte(facturesFournisseurs.dateFacture, dateDebut),
-        lte(facturesFournisseurs.dateFacture, dateFin)
+        eq(facturesAchat.fournisseurId, parseInt(fournisseurId)),
+        eq(facturesAchat.entrepriseId, req.entrepriseId),
+        gte(facturesAchat.dateFacture, dateDebut),
+        lte(facturesAchat.dateFacture, dateFin)
       ))
-      .orderBy(facturesFournisseurs.dateFacture);
+      .orderBy(facturesAchat.dateFacture);
 
     const paiementsList = await db
       .select()
@@ -647,7 +647,7 @@ router.post('/etat-compte/email', async (req, res) => {
       </div>
     `;
 
-    await sendEmail({
+    await emailService.sendEmail({
       to: fournisseur[0].email,
       subject: `État de Compte - ${fournisseur[0].nom} (${dateDebutFr} au ${dateFinFr})`,
       html: emailHtml

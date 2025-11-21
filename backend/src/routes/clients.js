@@ -3,7 +3,7 @@ import { db } from '../db.js';
 import { clients, factures, paiements } from '../schema.js';
 import { eq, and, desc, sql, gte, lte, between } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
-import { sendEmail } from '../services/emailService.js';
+import emailService from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -751,7 +751,7 @@ router.post('/etat-compte/email', async (req, res) => {
       </div>
     `;
 
-    await sendEmail({
+    await emailService.sendEmail({
       to: client[0].email,
       subject: `État de Compte - ${client[0].nom} (${dateDebutFr} au ${dateFinFr})`,
       html: emailHtml
