@@ -8,9 +8,16 @@ ComptaOrion est une solution ERP (Enterprise Resource Planning) complète et lé
 - ✅ Multi-devise (20+ currencies)
 - ✅ Multi-tenant avec isolation par entrepriseId
 - ✅ RBAC complet (Admin, Manager, Comptable, Employé, Viewer)
-- ✅ Authentification JWT sécurisée
+- ⚠️ Authentification JWT sécurisée (DÉSACTIVÉE EN DEV - CRITIQUE!)
 - ✅ Audit trail complète
 - ✅ API REST complète (70+ endpoints)
+
+## ⚠️ ALERTE SÉCURITÉ CRITIQUE
+**L'authentification est actuellement DÉSACTIVÉE pour faciliter le développement frontend** (backend/src/app.js lignes 46-55).
+- Middleware temporaire injecte entrepriseId=1 et user id=1
+- TOUS les endpoints sont exposés sans authentification
+- ❌ NON PRODUCTION-READY tant que l'authentification n'est pas réactivée
+- TODO URGENT: Implémenter système de login frontend + réactiver authMiddleware
 
 ---
 
@@ -60,6 +67,78 @@ ComptaOrion est une solution ERP (Enterprise Resource Planning) complète et lé
 | **💵 Factures Ventes** | Facturation (FACT-YYYY-NNNN), Paiements, Suivi statut | POST/GET /factures | ✅ |
 
 **Flux:** Client → Devis → Facture → Paiement → Comptabilité auto
+
+---
+
+## 📝 STATUT MODULE CLIENTS (Frontend UI)
+
+### ✅ FONCTIONNALITÉS IMPLÉMENTÉES ET OPÉRATIONNELLES
+
+**ONGLET 1 - CLIENTS:**
+- ✅ CRUD complet (création, lecture, mise à jour, suppression)
+- ✅ Formulaire avec tous champs (nom, email, téléphone, type, catégorie, limite crédit, délai paiement)
+- ✅ Liste avec filtrage et recherche
+- ✅ Endpoints: GET/POST/PUT/DELETE /clients
+
+**ONGLET 2 - DEVIS:**
+- ✅ Wizard en 3 étapes (sélection client → ajout articles → récapitulatif)
+- ✅ Gestion items (description, quantité, prix unitaire, remise %, type produit/service)
+- ✅ Calcul automatique totalHT, TVA (18%), totalTTC
+- ✅ Numérotation automatique DEV-YYYY-#### (backend)
+- ✅ Liste devis avec filtrage par statut (brouillon, envoyé, accepté, refusé)
+- ✅ Conversion devis → facture (POST /devis/:id/transformer-facture)
+- ✅ Endpoints: GET/POST/DELETE /devis
+
+**ONGLET 3 - FACTURES:**
+- ✅ Liste avec filtrage par statut (toutes, brouillon, envoyée, payée, en_retard, annulée)
+- ✅ Numérotation automatique FACT-YYYY-#### (backend)
+- ✅ Affichage totaux et informations client
+- ✅ Annulation de factures (PUT /factures/:id avec statut=annulee)
+- ✅ Endpoints: GET /factures
+
+**ONGLET 4 - PAIEMENTS:**
+- ✅ Alerte factures impayées avec montants et dates échéance
+- ✅ Formulaire multi-mode de paiement:
+  - Mobile Money (Orange, MTN, Moov, Wave) + numéro téléphone
+  - Carte bancaire (4 derniers chiffres + nom titulaire)
+  - Virement (banque + numéro compte)
+  - Espèces
+- ✅ Sélection facture avec calcul montant restant
+- ✅ Endpoint: POST /factures/:id/paiement
+
+**ONGLET 5 - RELANCES:**
+- ⚠️ Interface placeholder "Fonctionnalité à venir" (endpoints backend non implémentés)
+
+### ❌ ENDPOINTS BACKEND MANQUANTS
+
+Les endpoints suivants sont appelés par le frontend UI mais **n'existent pas côté backend**:
+
+1. **GET /paiements** - Liste globale des paiements (utilisé temporairement désactivé)
+2. **GET /factures/:id/pdf** - Génération PDF de factures
+3. **POST /factures/:id/email** - Envoi facture par email
+4. **POST /factures/recurrentes** - Création facturation récurrente
+5. **GET /automations/reminders** - Historique relances automatiques
+6. **POST /automations/reminders/config** - Configuration relances
+7. **POST /automations/reminders/send** - Envoi manuel de relances
+
+**Impact:** Boutons PDF, Email, Récurrence temporairement retirés de l'interface pour éviter confusion utilisateur.
+
+### 🔧 PROCHAINES ÉTAPES RECOMMANDÉES
+
+**Option A - Compléter le Module Clients:**
+1. Implémenter endpoints backend manquants (PDF, Email, Récurrence, Relances)
+2. Réactiver fonctionnalités avancées dans l'UI
+3. Ajouter endpoint GET /paiements pour historique global
+
+**Option B - Passer au module suivant:**
+1. Garder Module Clients avec fonctionnalités core (CRUD + Devis + Factures + Paiements)
+2. Implémenter Module Fournisseurs & Achats
+3. Revenir sur fonctionnalités avancées plus tard
+
+**Option C - Réactiver authentification d'abord:**
+1. Implémenter système de login frontend (formulaire + gestion tokens JWT)
+2. Réactiver authMiddleware backend (app.js lignes 46-55)
+3. Tester accès sécurisé à tous les endpoints
 
 ---
 
