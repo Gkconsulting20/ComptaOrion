@@ -214,6 +214,29 @@ function DashboardView({ backendStatus, loading }) {
 function ClientsView() {
   const [activeTab, setActiveTab] = useState('liste');
   const [showForm, setShowForm] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const handleAddClient = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    try {
+      const response = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(formData))
+      });
+      if (response.ok) {
+        setMessage('✅ Client ajouté avec succès');
+        setShowForm(false);
+        e.target.reset();
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('❌ Erreur lors de l\'ajout');
+      }
+    } catch (error) {
+      setMessage('❌ Erreur: ' + error.message);
+    }
+  };
 
   return (
     <div className="view-container">
@@ -265,14 +288,15 @@ function ClientsView() {
             </button>
           </div>
 
+          {message && <div style={{padding: '10px', marginBottom: '15px', borderRadius: '4px', backgroundColor: message.includes('✅') ? '#d4edda' : '#f8d7da', color: message.includes('✅') ? '#155724' : '#721c24'}}>{message}</div>}
           {showForm && (
             <div className="form-card">
               <h3>Ajouter un client</h3>
-              <form className="professional-form">
+              <form className="professional-form" onSubmit={handleAddClient}>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Nom complet / Raison sociale *</label>
-                    <input type="text" placeholder="Nom du client" required />
+                    <input type="text" name="nom" placeholder="Nom du client" required />
                   </div>
                   <div className="form-group">
                     <label>Type</label>
@@ -495,6 +519,29 @@ function ClientsView() {
 function FournisseursView() {
   const [activeTab, setActiveTab] = useState('liste');
   const [showForm, setShowForm] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const handleAddFournisseur = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    try {
+      const response = await fetch('/api/fournisseurs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(formData))
+      });
+      if (response.ok) {
+        setMessage('✅ Fournisseur ajouté avec succès');
+        setShowForm(false);
+        e.target.reset();
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('❌ Erreur lors de l\'ajout');
+      }
+    } catch (error) {
+      setMessage('❌ Erreur: ' + error.message);
+    }
+  };
 
   return (
     <div className="view-container">
@@ -552,14 +599,15 @@ function FournisseursView() {
             </button>
           </div>
 
+          {message && <div style={{padding: '10px', marginBottom: '15px', borderRadius: '4px', backgroundColor: message.includes('✅') ? '#d4edda' : '#f8d7da', color: message.includes('✅') ? '#155724' : '#721c24'}}>{message}</div>}
           {showForm && (
             <div className="form-card">
               <h3>Ajouter un fournisseur</h3>
-              <form className="professional-form">
+              <form className="professional-form" onSubmit={handleAddFournisseur}>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Raison sociale *</label>
-                    <input type="text" placeholder="Nom du fournisseur" required />
+                    <input type="text" name="raisonSociale" placeholder="Nom du fournisseur" required />
                   </div>
                   <div className="form-group">
                     <label>N° fournisseur</label>
