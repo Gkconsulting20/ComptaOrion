@@ -21,7 +21,7 @@ Key capabilities include support for SYSCOHADA, IFRS, and PCG, multi-currency fu
 - **AI:** OpenAI Integration
 
 ### Design Principles
-- **UI/UX:** QuickBooks-inspired style (fixed Sidebar/Topbar, icons, 100% French localization), mobile-first, adaptive layouts.
+- **UI/UX:** QuickBooks-inspired style (fixed Sidebar/Topbar, icons, 100% French localization), mobile-first, adaptive layouts. Interactive tables with click-to-view details for factures and écritures comptables.
 - **Security:** Row-Level Security (RLS) by `entrepriseId`, modular RBAC, and a complete audit trail.
 - **Multi-tenancy:** Complete isolation per `entrepriseId`.
 
@@ -46,6 +46,7 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 -   **Multi-Currency & Internationalization:** Supports over 20 currencies, 3 accounting systems (SYSCOHADA, IFRS, PCG), and custom country settings.
 -   **Compliance & Audit:** Complete audit trail for all operations, SYSCOHADA compliance, and CSV/Excel export.
 -   **Email Automation (NEW - Nov 2025):** SendGrid integration for automated invoice sending with professional HTML templates, email tracking, and delivery history. Requires SENDGRID_API_KEY secret configuration.
+-   **Interactive Details View (NEW - Nov 2025):** Click on any facture or écriture comptable row to view complete details in a modal with all associated information (client data, line items, totals, accounting lines, etc.).
 
 ## External Dependencies
 
