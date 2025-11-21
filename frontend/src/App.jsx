@@ -17,7 +17,6 @@ const MODULES = [
   { id: 'tresorerie', label: '💰 Trésorerie', icon: '💰' },
   { id: 'stock', label: '📦 Stock', icon: '📦' },
   { id: 'comptabilite', label: '📖 Comptabilité', icon: '📖' },
-  { id: 'depenses', label: '💸 Dépenses', icon: '💸' },
   { id: 'employes', label: '👤 Employés', icon: '👤' },
   { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
 ];
@@ -148,7 +147,6 @@ export default function App() {
       case 'tresorerie': return <TresorerieModule />;
       case 'stock': return <StockInventaire />;
       case 'comptabilite': return <ModuleComptabilite />;
-      case 'depenses': return <DepensesModule />;
       case 'employes': return <EmployesModule />;
       case 'parametres': return <ParametresModule />;
       default: return <Dashboard />;

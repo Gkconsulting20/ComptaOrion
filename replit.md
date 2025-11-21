@@ -131,3 +131,31 @@ GestionFournisseurs.jsx with 6 tabs:
 - Parameters (3 sub-tabs: Suppliers, Taxes, Accounting Codes)
 - Purchase Orders with automatic invoice conversion
 - Receptions, Supplier Invoices, Payments, Reports
+
+### Module Paramètres - Complete Implementation ✅
+Created comprehensive system settings module (ParametresModule.jsx) with 5 tabs:
+
+**Frontend:**
+- 🏢 Entreprise: Complete company information (name, SIRET, address, contacts, fiscal year)
+- 📊 Système Comptable: Visual display of accounting systems (SYSCOHADA, IFRS, PCG) with active indicator
+- 💱 Devises: List of 20+ supported currencies with regions
+- 🌍 Pays & Régions: 30+ countries with default currency and accounting system
+- 💰 Taxes (TVA): VAT rates by country
+
+**Backend Routes (already existing):**
+- `/parametres/entreprise` - GET/PUT company settings with validation
+- `/parametres/devises` - GET list of supported currencies
+- `/parametres/systemes-comptables` - GET list of accounting systems
+- `/parametres/pays` - GET list of countries with settings
+- `/parametres/taux-tva` - GET VAT rates by country
+
+**Key Features:**
+- ✅ Complete company profile management with form validation
+- ✅ Multi-currency support (XOF, XAF, EUR, USD, MAD, etc.)
+- ✅ Multi-accounting system support (SYSCOHADA, IFRS, PCG)
+- ✅ Country-specific configurations (30+ countries across Africa, Europe, Americas)
+- ✅ Fiscal year configuration
+- ✅ VAT rate management by country
+
+### Module Dépenses - Masked
+The Dépenses (Expenses) module has been temporarily removed from the navigation menu and will be developed later.
