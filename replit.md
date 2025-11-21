@@ -101,3 +101,9 @@ Created a complete SaaS administration module for managing ComptaOrion's commerc
 - Trial/Active/Suspended/Inactive status management
 - Regional sales team assignment
 - Complete sales funnel analytics
+
+**Security & RBAC:**
+- Routes protégées par JWT + vérification de rôle admin (`saasAdminOnly` middleware)
+- Données globales (non isolées par entrepriseId) accessibles uniquement aux super-admins
+- Middleware RBAC empêche l'accès aux utilisateurs standards
+- Requêtes dashboard optimisées avec CTEs pour éviter la multiplication de lignes et garantir l'exactitude des KPIs
