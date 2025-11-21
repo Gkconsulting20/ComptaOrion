@@ -473,6 +473,7 @@ export const comptesBancaires = pgTable('comptes_bancaires', {
   soldeInitial: decimal('solde_initial', { precision: 15, scale: 2 }).default('0'),
   soldeActuel: decimal('solde_actuel', { precision: 15, scale: 2 }).default('0'),
   type: varchar('type', { length: 50 }).default('banque'), // banque, caisse, mobile money
+  compteComptableId: integer('compte_comptable_id').references(() => comptesComptables.id),
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

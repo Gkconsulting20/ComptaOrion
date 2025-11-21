@@ -13,6 +13,8 @@ export function TresorerieModule() {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
   const [formData, setFormData] = useState({});
+  const [comptesComptables, setComptesComptables] = useState([]);
+  const [editingCompte, setEditingCompte] = useState(null);
   
   const ENTREPRISE_ID = parseInt(localStorage.getItem('entrepriseId')) || 1;
 
@@ -21,7 +23,8 @@ export function TresorerieModule() {
     { id: 'comptes', label: 'Comptes Bancaires', icon: '🏦' },
     { id: 'transactions', label: 'Transactions', icon: '💸' },
     { id: 'previsions', label: 'Prévisions', icon: '📈' },
-    { id: 'rapprochement', label: 'Rapprochement', icon: '✅' }
+    { id: 'rapprochement', label: 'Rapprochement', icon: '✅' },
+    { id: 'parametres', label: 'Paramètres', icon: '⚙️' }
   ];
 
   useEffect(() => {
@@ -53,6 +56,9 @@ export function TresorerieModule() {
         await loadPrevisions();
       } else if (activeTab === 'rapprochement') {
         await loadTransactions();
+      } else if (activeTab === 'parametres') {
+        await loadComptes();
+        await loadComptesComptables();
       }
     } catch (error) {
       console.error('Erreur chargement:', error);
@@ -109,6 +115,47 @@ export function TresorerieModule() {
     } catch (err) {
       setError(err.message || 'Erreur lors du chargement des prévisions');
       setPrevisions(null);
+    }
+  };
+
+  const loadComptesComptables = async () => {
+    try {
+      const data = await api.get(`/tresorerie/comptes-comptables/${ENTREPRISE_ID}`);
+      setComptesComptables(data);
+    } catch (err) {
+      console.error('Erreur chargement comptes comptables:', err);
+    }
+  };
+
+  const handleCreateCompte = async () => {
+    try {
+      await api.post(`/tresorerie/comptes/${ENTREPRISE_ID}/create`, formData);
+      closeModal();
+      loadComptes();
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la création du compte');
+    }
+  };
+
+  const handleUpdateCompte = async () => {
+    try {
+      await api.put(`/tresorerie/comptes/${ENTREPRISE_ID}/${editingCompte.id}`, formData);
+      closeModal();
+      setEditingCompte(null);
+      loadComptes();
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la modification du compte');
+    }
+  };
+
+  const handleDeleteCompte = async (id) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce compte ?')) return;
+    
+    try {
+      await api.delete(`/tresorerie/comptes/${ENTREPRISE_ID}/${id}`);
+      loadComptes();
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la suppression du compte');
     }
   };
 
@@ -517,6 +564,337 @@ export function TresorerieModule() {
     );
   };
 
+  const renderParametres = () => (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3 style={{ margin: 0 }}>Gestion des Comptes Bancaires</h3>
+        <button
+          onClick={() => {
+            setEditingCompte(null);
+            setFormData({ nomCompte: '', numeroCompte: '', banque: '', soldeInitial: '0', type: 'banque', compteComptableId: '', actif: true });
+            setShowModal(true);
+          }}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#667eea',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          + Nouveau Compte
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ padding: '12px', marginBottom: '20px', backgroundColor: '#ffebee', color: '#e74c3c', borderRadius: '6px', border: '1px solid #e74c3c' }}>
+          ❌ {error}
+        </div>
+      )}
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+        <thead>
+          <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Nom du Compte</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>N° Compte</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Banque</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Compte Comptable</th>
+            <th style={{ padding: '12px', textAlign: 'right' }}>Solde Initial</th>
+            <th style={{ padding: '12px', textAlign: 'center' }}>Statut</th>
+            <th style={{ padding: '12px', textAlign: 'center' }}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {comptes.map(compte => {
+            const compteComptable = comptesComptables.find(c => c.id === compte.compteComptableId);
+            return (
+              <tr key={compte.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                <td style={{ padding: '12px', fontWeight: 'bold' }}>{compte.nomCompte}</td>
+                <td style={{ padding: '12px' }}>{compte.numeroCompte || '-'}</td>
+                <td style={{ padding: '12px' }}>{compte.banque || '-'}</td>
+                <td style={{ padding: '12px' }}>
+                  <span style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    backgroundColor: compte.type === 'banque' ? '#e3f2fd' : compte.type === 'caisse' ? '#fff3e0' : '#e8f5e9',
+                    color: compte.type === 'banque' ? '#1976d2' : compte.type === 'caisse' ? '#f57c00' : '#388e3c',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}>
+                    {compte.type}
+                  </span>
+                </td>
+                <td style={{ padding: '12px' }}>
+                  {compteComptable ? `${compteComptable.numero} - ${compteComptable.nom}` : '-'}
+                </td>
+                <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
+                  {parseFloat(compte.soldeInitial || 0).toLocaleString()} XOF
+                </td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>
+                  <span style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    backgroundColor: compte.actif ? '#e8f5e9' : '#ffebee',
+                    color: compte.actif ? '#388e3c' : '#d32f2f',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}>
+                    {compte.actif ? 'Actif' : 'Inactif'}
+                  </span>
+                </td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>
+                  <button
+                    onClick={() => {
+                      setEditingCompte(compte);
+                      setFormData({
+                        nomCompte: compte.nomCompte,
+                        numeroCompte: compte.numeroCompte || '',
+                        banque: compte.banque || '',
+                        type: compte.type,
+                        compteComptableId: compte.compteComptableId || '',
+                        actif: compte.actif
+                      });
+                      setShowModal(true);
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: '#667eea',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      marginRight: '8px'
+                    }}
+                  >
+                    ✏️ Modifier
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCompte(compte.id)}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: '#e74c3c',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px'
+                    }}
+                  >
+                    🗑️ Supprimer
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+          {comptes.length === 0 && (
+            <tr>
+              <td colSpan="8" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                Aucun compte bancaire créé. Cliquez sur "+ Nouveau Compte" pour commencer.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {showModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '10px',
+            padding: '30px',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '20px' }}>
+              {editingCompte ? '✏️ Modifier le compte' : '➕ Nouveau compte'}
+            </h3>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Nom du compte *</label>
+              <input
+                type="text"
+                value={formData.nomCompte || ''}
+                onChange={(e) => setFormData({ ...formData, nomCompte: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+                placeholder="Ex: Compte Principal BGFI"
+              />
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Numéro de compte</label>
+              <input
+                type="text"
+                value={formData.numeroCompte || ''}
+                onChange={(e) => setFormData({ ...formData, numeroCompte: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+                placeholder="Ex: CI01234567890123456789"
+              />
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Banque</label>
+              <input
+                type="text"
+                value={formData.banque || ''}
+                onChange={(e) => setFormData({ ...formData, banque: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+                placeholder="Ex: BGFI Bank"
+              />
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Type *</label>
+              <select
+                value={formData.type || 'banque'}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              >
+                <option value="banque">Banque</option>
+                <option value="caisse">Caisse</option>
+                <option value="mobile_money">Mobile Money</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Compte comptable (Classe 5)</label>
+              <select
+                value={formData.compteComptableId || ''}
+                onChange={(e) => setFormData({ ...formData, compteComptableId: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              >
+                <option value="">-- Sélectionner un compte comptable --</option>
+                {comptesComptables.map(compte => (
+                  <option key={compte.id} value={compte.id}>
+                    {compte.numero} - {compte.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {!editingCompte && (
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Solde initial</label>
+                <input
+                  type="number"
+                  value={formData.soldeInitial || '0'}
+                  onChange={(e) => setFormData({ ...formData, soldeInitial: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                  step="0.01"
+                />
+              </div>
+            )}
+
+            {editingCompte && (
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.actif}
+                    onChange={(e) => setFormData({ ...formData, actif: e.target.checked })}
+                    style={{ marginRight: '8px' }}
+                  />
+                  <span style={{ fontWeight: 'bold' }}>Compte actif</span>
+                </label>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button
+                onClick={() => {
+                  if (editingCompte) {
+                    handleUpdateCompte();
+                  } else {
+                    handleCreateCompte();
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: '#27ae60',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                {editingCompte ? '💾 Enregistrer' : '➕ Créer'}
+              </button>
+              <button
+                onClick={closeModal}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: '#95a5a6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                ❌ Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const renderRapprochement = () => {
     const transactionsNonRapprochees = transactions.filter(t => !t.rapproche);
     
@@ -624,6 +1002,7 @@ export function TresorerieModule() {
         {activeTab === 'transactions' && renderTransactions()}
         {activeTab === 'previsions' && renderPrevisions()}
         {activeTab === 'rapprochement' && renderRapprochement()}
+        {activeTab === 'parametres' && renderParametres()}
       </div>
     </div>
   );

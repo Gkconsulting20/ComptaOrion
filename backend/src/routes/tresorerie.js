@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, employes } from '../schema.js';
-import { eq, and } from 'drizzle-orm';
+import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, employes, comptesComptables } from '../schema.js';
+import { eq, and, like } from 'drizzle-orm';
 
 const router = Router();
 
@@ -251,6 +251,150 @@ router.get('/previsions/:entrepriseId', async (req, res) => {
     });
   } catch (err) {
     console.error('Erreur prévisions:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST créer un compte bancaire
+router.post('/comptes/:entrepriseId/create', async (req, res) => {
+  try {
+    const { entrepriseId } = req.params;
+    const { nomCompte, numeroCompte, banque, soldeInitial, type, compteComptableId } = req.body;
+
+    if (compteComptableId) {
+      const compteExists = await db.select().from(comptesComptables)
+        .where(and(
+          eq(comptesComptables.id, parseInt(compteComptableId)),
+          eq(comptesComptables.entrepriseId, parseInt(entrepriseId))
+        ))
+        .limit(1);
+      
+      if (compteExists.length === 0) {
+        return res.status(400).json({ 
+          error: 'Le compte comptable sélectionné n\'appartient pas à votre entreprise' 
+        });
+      }
+    }
+
+    const newCompte = await db.insert(comptesBancaires).values({
+      entrepriseId: parseInt(entrepriseId),
+      nomCompte,
+      numeroCompte,
+      banque,
+      soldeInitial: soldeInitial || '0',
+      soldeActuel: soldeInitial || '0',
+      type: type || 'banque',
+      compteComptableId: compteComptableId ? parseInt(compteComptableId) : null,
+      actif: true
+    }).returning();
+
+    res.json(newCompte[0]);
+  } catch (err) {
+    console.error('Erreur création compte bancaire:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT modifier un compte bancaire
+router.put('/comptes/:entrepriseId/:id', async (req, res) => {
+  try {
+    const { entrepriseId, id } = req.params;
+    const { nomCompte, numeroCompte, banque, type, compteComptableId, actif } = req.body;
+
+    if (compteComptableId) {
+      const compteExists = await db.select().from(comptesComptables)
+        .where(and(
+          eq(comptesComptables.id, parseInt(compteComptableId)),
+          eq(comptesComptables.entrepriseId, parseInt(entrepriseId))
+        ))
+        .limit(1);
+      
+      if (compteExists.length === 0) {
+        return res.status(400).json({ 
+          error: 'Le compte comptable sélectionné n\'appartient pas à votre entreprise' 
+        });
+      }
+    }
+
+    const updated = await db.update(comptesBancaires)
+      .set({
+        nomCompte,
+        numeroCompte,
+        banque,
+        type,
+        compteComptableId: compteComptableId ? parseInt(compteComptableId) : null,
+        actif,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(comptesBancaires.id, parseInt(id)),
+        eq(comptesBancaires.entrepriseId, parseInt(entrepriseId))
+      ))
+      .returning();
+
+    if (updated.length === 0) {
+      return res.status(404).json({ error: 'Compte bancaire introuvable ou non autorisé' });
+    }
+
+    res.json(updated[0]);
+  } catch (err) {
+    console.error('Erreur modification compte bancaire:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE supprimer un compte bancaire
+router.delete('/comptes/:entrepriseId/:id', async (req, res) => {
+  try {
+    const { entrepriseId, id } = req.params;
+
+    const compte = await db.select().from(comptesBancaires)
+      .where(and(
+        eq(comptesBancaires.id, parseInt(id)),
+        eq(comptesBancaires.entrepriseId, parseInt(entrepriseId))
+      ))
+      .limit(1);
+
+    if (compte.length === 0) {
+      return res.status(404).json({ error: 'Compte bancaire introuvable ou non autorisé' });
+    }
+
+    const transactions = await db.select().from(transactionsTresorerie)
+      .where(eq(transactionsTresorerie.compteBancaireId, parseInt(id)))
+      .limit(1);
+
+    if (transactions.length > 0) {
+      return res.status(400).json({ 
+        error: 'Impossible de supprimer ce compte car il contient des transactions. Désactivez-le plutôt.' 
+      });
+    }
+
+    await db.delete(comptesBancaires)
+      .where(and(
+        eq(comptesBancaires.id, parseInt(id)),
+        eq(comptesBancaires.entrepriseId, parseInt(entrepriseId))
+      ));
+    
+    res.json({ message: 'Compte supprimé avec succès' });
+  } catch (err) {
+    console.error('Erreur suppression compte bancaire:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET comptes comptables classe 5 (trésorerie)
+router.get('/comptes-comptables/:entrepriseId', async (req, res) => {
+  try {
+    const { entrepriseId } = req.params;
+    const comptes = await db.select().from(comptesComptables)
+      .where(and(
+        eq(comptesComptables.entrepriseId, parseInt(entrepriseId)),
+        like(comptesComptables.numero, '5%')
+      ));
+    
+    res.json(comptes);
+  } catch (err) {
+    console.error('Erreur récupération comptes comptables:', err);
     res.status(500).json({ error: err.message });
   }
 });
