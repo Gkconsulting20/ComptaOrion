@@ -15,6 +15,8 @@ import authSecurityRoutes from './routes/auth-security.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
+import immobilisationsRoutes from './routes/immobilisations.js';
+import exportAssetsRoutes from './routes/export-assets.js';
 
 app.use(cors());
 app.use(express.json());
@@ -56,6 +58,8 @@ app.use('/api/parametres', parametresRoutes);
 
 // Dashboard
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/immobilisations', immobilisationsRoutes);
+app.use('/api/export-assets', exportAssetsRoutes);
 
 // Module Fournisseurs & Achats
 app.use('/api/fournisseurs', fournisseursRoutes);

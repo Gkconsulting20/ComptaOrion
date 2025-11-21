@@ -567,27 +567,7 @@ export const depenses = pgTable('depenses', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// ==========================================
-// MODULE 8: IMMOBILISATIONS
-// ==========================================
-
-export const immobilisations = pgTable('immobilisations', {
-  id: serial('id').primaryKey(),
-  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  nom: varchar('nom', { length: 255 }).notNull(),
-  categorie: varchar('categorie', { length: 100 }),
-  dateAcquisition: date('date_acquisition').notNull(),
-  valeurAcquisition: decimal('valeur_acquisition', { precision: 15, scale: 2 }).notNull(),
-  valeurResiduelle: decimal('valeur_residuelle', { precision: 15, scale: 2 }).default('0'),
-  dureeAmortissement: integer('duree_amortissement').notNull(), // en mois
-  methodeAmortissement: varchar('methode_amortissement', { length: 50 }).default('lineaire'), // linéaire, dégressif
-  amortissementCumule: decimal('amortissement_cumule', { precision: 15, scale: 2 }).default('0'),
-  valeurNette: decimal('valeur_nette', { precision: 15, scale: 2 }),
-  actif: boolean('actif').default(true),
-  dateCession: date('date_cession'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
+// NOTE: Immobilisations module moved to MODULE 15 (ORION ASSETS)
 
 // ==========================================
 // MODULE 7: EMPLOYÉS (HR LITE)
@@ -691,6 +671,64 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
   token: varchar('token', { length: 255 }).notNull().unique(),
   expiresAt: timestamp('expires_at').notNull(),
   usedAt: timestamp('used_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ==========================================
+// MODULE 15: ORION ASSETS - IMMOBILISATIONS
+// ==========================================
+
+// Catégories d'immobilisations avec durée de vie et méthode
+export const categoriesImmobilisations = pgTable('categories_immobilisations', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(), // Bâtiments, Véhicules, Matériel, etc.
+  dureeVie: integer('duree_vie').notNull(), // en années
+  methodeAmortissement: varchar('methode_amortissement', { length: 50 }).notNull(), // linéaire, dégressif
+  compteAmortissement: varchar('compte_amortissement', { length: 100 }), // numéro compte comptable
+  compte: varchar('compte', { length: 100 }), // compte principal
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Registre immobilisations
+export const immobilisations = pgTable('immobilisations', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  reference: varchar('reference', { length: 100 }).unique(),
+  description: text('description'),
+  categorieId: integer('categorie_id').references(() => categoriesImmobilisations.id).notNull(),
+  dateAcquisition: date('date_acquisition').notNull(),
+  valeurAcquisition: decimal('valeur_acquisition', { precision: 15, scale: 2 }).notNull(),
+  amortissementCumule: decimal('amortissement_cumule', { precision: 15, scale: 2 }).default('0'),
+  valeurNetteComptable: decimal('valeur_nette_comptable', { precision: 15, scale: 2 }).notNull(),
+  statut: varchar('statut', { length: 50 }).default('actif'), // actif, cédée, amortie
+  dateCession: date('date_cession'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Amortissements mensuels
+export const amortissements = pgTable('amortissements', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  immobilisationId: integer('immobilisation_id').references(() => immobilisations.id).notNull(),
+  dateAmortissement: date('date_amortissement').notNull(),
+  montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Cessions/sorties d'immobilisations
+export const cessionsImmobilisations = pgTable('cessions_immobilisations', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  immobilisationId: integer('immobilisation_id').references(() => immobilisations.id).notNull(),
+  dateCession: date('date_cession').notNull(),
+  valeurNetteComptable: decimal('valeur_nette_comptable', { precision: 15, scale: 2 }).notNull(),
+  prixVente: decimal('prix_vente', { precision: 15, scale: 2 }).notNull(),
+  gainPerte: decimal('gain_perte', { precision: 15, scale: 2 }).notNull(),
+  comptabilisee: boolean('comptabilisee').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
