@@ -19,7 +19,7 @@ export function ClientsModule() {
 
   return (
     <div>
-      <h2>👥 Module Clients Complet</h2>
+      <h2>👥 Module Clients</h2>
       
       <div style={{ borderBottom: '2px solid #e0e0e0', marginBottom: '20px', marginTop: '20px' }}>
         <div style={{ display: 'flex', gap: '5px' }}>
