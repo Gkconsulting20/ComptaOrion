@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { depenses, categoriesDépenses, approvalsDépenses, remboursementsEmployes, auditLogs } from '../schema.js';
+import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, auditLogs } from '../schema.js';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
 
 const router = express.Router();
@@ -12,8 +12,8 @@ const router = express.Router();
 router.get('/categories', async (req, res) => {
   try {
     const { entrepriseId } = req.query;
-    const categories = await db.query.categoriesDépenses.findMany({
-      where: eq(categoriesDépenses.entrepriseId, parseInt(entrepriseId))
+    const categories = await db.query.categoriesDepenses.findMany({
+      where: eq(categoriesDepenses.entrepriseId, parseInt(entrepriseId))
     });
     res.json(categories);
   } catch (error) {
@@ -24,7 +24,7 @@ router.get('/categories', async (req, res) => {
 router.post('/categories', async (req, res) => {
   try {
     const { entrepriseId, nom, description, limiteApproval } = req.body;
-    const result = await db.insert(categoriesDépenses).values({
+    const result = await db.insert(categoriesDepenses).values({
       entrepriseId: parseInt(entrepriseId),
       nom,
       description,
@@ -59,7 +59,7 @@ router.post('/create', async (req, res) => {
     }).returning();
 
     // Créer demande d'approbation initiale
-    await db.insert(approvalsDépenses).values({
+    await db.insert(approvalsDepenses).values({
       entrepriseId: parseInt(entrepriseId),
       depenseId: depense[0].id,
       etape: 'manager',
@@ -117,15 +117,15 @@ router.post('/approve/:depenseId/:etape', async (req, res) => {
     }
 
     // Mettre à jour approbation
-    const approval = await db.update(approvalsDépenses).set({
+    const approval = await db.update(approvalsDepenses).set({
       statut: statut, // approuvée, rejetée
       dateApprobation: new Date(),
       approbateurId: userId,
       raison
     }).where(
       and(
-        eq(approvalsDépenses.depenseId, depenseId_int),
-        eq(approvalsDépenses.etape, etape)
+        eq(approvalsDepenses.depenseId, depenseId_int),
+        eq(approvalsDepenses.etape, etape)
       )
     ).returning();
 
@@ -143,7 +143,7 @@ router.post('/approve/:depenseId/:etape', async (req, res) => {
     if (etape === 'manager') prochainEtape = 'comptable';
 
     if (prochainEtape) {
-      await db.insert(approvalsDépenses).values({
+      await db.insert(approvalsDepenses).values({
         entrepriseId: depense.entrepriseId,
         depenseId: depenseId_int,
         etape: prochainEtape,
