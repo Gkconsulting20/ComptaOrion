@@ -12,7 +12,7 @@ const MODULES = [
   { id: 'receptions', label: '📥 Réceptions', icon: '📥', api: '/api/receptions' },
   { id: 'achats', label: '🧾 Factures Achat', icon: '🧾', api: '/api/achats' },
   { id: 'tresorerie', label: '💰 Trésorerie', icon: '💰', api: '/api/tresorerie' },
-  { id: 'stock', label: '📦 Stock', icon: '📦', api: '/api/produits' },
+  { id: 'stock', label: '📦 Stock & Inventaire', icon: '📦', api: '/api/produits' },
   { id: 'depenses', label: '💸 Dépenses', icon: '💸', api: '/api/depenses' },
   { id: 'comptabilite', label: '📖 Comptabilité', icon: '📖', api: '/api/comptabilite' },
   { id: 'immobilisations', label: '🏗️ Immobilisations', icon: '🏗️', api: '/api/immobilisations' },
