@@ -15,9 +15,9 @@ export function AuthenticationModule() {
   });
 
   const TABS = [
-    { id: 'sessions', label: '🔐 Sessions Actives', icon: '🔐' },
-    { id: 'permissions', label: '🔑 Permissions RBAC', icon: '🔑' },
-    { id: 'audit', label: '📋 Audit Connexions', icon: '📋' }
+    { id: 'sessions', label: 'Sessions Actives', icon: '🔐' },
+    { id: 'permissions', label: 'Permissions RBAC', icon: '🔑' },
+    { id: 'audit', label: 'Audit Connexions', icon: '📋' }
   ];
 
   useEffect(() => {

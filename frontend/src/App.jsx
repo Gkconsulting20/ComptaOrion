@@ -13,15 +13,15 @@ import { Login } from './pages/Login';
 import api from './api';
 
 const MODULES = [
-  { id: 'dashboard', label: '📊 Tableau de Bord', icon: '📊' },
-  { id: 'saas-admin', label: '🎯 Admin SaaS', icon: '🎯' },
-  { id: 'clients', label: '👥 Clients', icon: '👥' },
-  { id: 'fournisseurs', label: '🏭 Fournisseurs', icon: '🏭' },
-  { id: 'tresorerie', label: '💰 Trésorerie', icon: '💰' },
-  { id: 'stock', label: '📦 Stock', icon: '📦' },
-  { id: 'comptabilite', label: '📖 Comptabilité', icon: '📖' },
-  { id: 'authentication', label: '🔐 Authentification', icon: '🔐' },
-  { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
+  { id: 'dashboard', label: 'Tableau de Bord', icon: '📊' },
+  { id: 'saas-admin', label: 'Admin SaaS', icon: '🎯' },
+  { id: 'clients', label: 'Clients', icon: '👥' },
+  { id: 'fournisseurs', label: 'Fournisseurs', icon: '🏭' },
+  { id: 'tresorerie', label: 'Trésorerie', icon: '💰' },
+  { id: 'stock', label: 'Stock', icon: '📦' },
+  { id: 'comptabilite', label: 'Comptabilité', icon: '📖' },
+  { id: 'authentication', label: 'Authentification', icon: '🔐' },
+  { id: 'parametres', label: 'Paramètres', icon: '⚙️' }
 ];
 
 function Dashboard() {
@@ -274,9 +274,9 @@ export default function App() {
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }
               }}
-              title={m.label}
+              title={`${m.icon} ${m.label}`}
             >
-              {sidebarOpen ? m.label : m.icon}
+              {sidebarOpen ? `${m.icon} ${m.label}` : m.icon}
             </div>
           ))}
         </nav>
