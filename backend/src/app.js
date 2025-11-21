@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
+import clientsRoutes from './routes/clients.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
@@ -23,11 +24,22 @@ app.get('/api/health', (req, res) => {
 // et sont automatiquement filtrées par entreprise
 app.use('/api', authMiddleware, entrepriseIsolation);
 
+// ===============================================
+// ROUTES CRUD DES MODULES
+// ===============================================
+
+// Module Clients
+app.use('/api/clients', clientsRoutes);
+
+// ===============================================
+// ROUTE INFO API
+// ===============================================
 app.get('/api', (req, res) => {
   res.json({ 
     nom: 'ComptaOrion API',
     version: '2.0.0',
     description: 'Solution de gestion d\'entreprise professionnelle',
+    entrepriseId: req.entrepriseId,
     modules: [
       'Tableau de bord',
       'Gestion clients',
@@ -40,19 +52,9 @@ app.get('/api', (req, res) => {
   });
 });
 
-app.get('/api/clients', (req, res) => {
-  res.json({ 
-    message: 'Module clients',
-    data: []
-  });
-});
-
-app.post('/api/clients', (req, res) => {
-  res.json({ 
-    message: 'Client créé avec succès',
-    data: req.body
-  });
-});
+// ===============================================
+// ROUTES STUBS (À IMPLÉMENTER)
+// ===============================================
 
 app.get('/api/fournisseurs', (req, res) => {
   res.json({ 
