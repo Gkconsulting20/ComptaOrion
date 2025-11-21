@@ -20,9 +20,10 @@ class ApiClient {
 
   async handleUnauthorized() {
     const refreshToken = localStorage.getItem('refreshToken');
+    
     if (refreshToken) {
       try {
-        const response = await fetch(`/api/auth-security/refresh-token`, {
+        const response = await fetch(`/api/auth-security/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken })
@@ -31,6 +32,9 @@ class ApiClient {
         if (response.ok) {
           const data = await response.json();
           localStorage.setItem('token', data.token);
+          if (data.refreshToken) {
+            localStorage.setItem('refreshToken', data.refreshToken);
+          }
           return true;
         }
       } catch (error) {
@@ -63,7 +67,21 @@ class ApiClient {
       if (response.status === 401) {
         const refreshed = await this.handleUnauthorized();
         if (refreshed) {
-          window.location.reload();
+          const retryConfig = {
+            ...config,
+            headers: {
+              ...config.headers,
+              ...this.getHeaders()
+            }
+          };
+          const retryResponse = await fetch(url, retryConfig);
+          const retryData = await retryResponse.json();
+          
+          if (!retryResponse.ok) {
+            throw new Error(retryData.message || retryData.error || 'Erreur API');
+          }
+          
+          return retryData;
         }
         throw new Error('Session expirée');
       }

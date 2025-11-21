@@ -162,6 +162,7 @@ export default function App() {
 
   const handleLogout = async () => {
     const token = localStorage.getItem('token');
+    const sessionId = localStorage.getItem('sessionId');
     
     try {
       await fetch('/api/auth-security/logout', {
@@ -169,7 +170,8 @@ export default function App() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({ sessionId: sessionId ? parseInt(sessionId) : null })
       });
     } catch (error) {
       console.error('Logout error:', error);

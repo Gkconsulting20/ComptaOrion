@@ -47,6 +47,9 @@ export function Login({ onLoginSuccess }) {
       localStorage.setItem('refreshToken', data.refreshToken);
       localStorage.setItem('user', JSON.stringify(data.user));
       localStorage.setItem('entrepriseId', formData.entrepriseId);
+      if (data.session && data.session.id) {
+        localStorage.setItem('sessionId', data.session.id);
+      }
 
       onLoginSuccess(data.user);
     } catch (err) {
@@ -106,7 +109,10 @@ export function Login({ onLoginSuccess }) {
       const response = await fetch('http://localhost:3000/api/auth-security/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail })
+        body: JSON.stringify({ 
+          email: resetEmail,
+          entrepriseId: parseInt(formData.entrepriseId)
+        })
       });
 
       const data = await response.json();
@@ -521,17 +527,36 @@ export function Login({ onLoginSuccess }) {
             )}
 
             <p style={{ color: '#7f8c8d', marginBottom: '20px' }}>
-              Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.
+              Entrez votre adresse email et votre ID d'entreprise pour réinitialiser votre mot de passe.
             </p>
 
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#2c3e50' }}>
-                Email
+                Email *
               </label>
               <input
                 type="email"
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
+                required
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '6px',
+                  fontSize: '16px'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#2c3e50' }}>
+                ID Entreprise *
+              </label>
+              <input
+                type="number"
+                value={formData.entrepriseId}
+                onChange={(e) => setFormData({ ...formData, entrepriseId: e.target.value })}
                 required
                 style={{
                   width: '100%',

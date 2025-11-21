@@ -1,9 +1,9 @@
 # ComptaOrion - ERP Léger pour l'Afrique
 
 ## Overview
-ComptaOrion is a comprehensive and lightweight ERP solution specifically optimized for the African market. It provides a modern, responsive, and intuitive platform to manage all aspects of a business, including accounting, inventory, customer/supplier relations, human resources, and more. Inspired by QuickBooks, it combines a modern React frontend with a robust Express.js backend, featuring multi-country, multi-currency support, and adherence to African accounting standards (SYSCOHADA).
+ComptaOrion is a comprehensive and lightweight ERP solution optimized for the African market. It provides a modern, responsive, and intuitive platform for managing accounting, inventory, customer/supplier relations, human resources, and more. Inspired by QuickBooks, it features a React frontend with an Express.js backend, supporting multi-country, multi-currency operations, and adhering to African accounting standards (SYSCOHADA).
 
-Key capabilities include support for SYSCOHADA, IFRS, and PCG, multi-currency functionality (20+ currencies), multi-tenancy with isolation per `entrepriseId`, and a comprehensive Role-Based Access Control (RBAC) system. The project aims to be a production-ready solution with a complete audit trail and a robust REST API.
+Key capabilities include support for SYSCOHADA, IFRS, and PCG, multi-currency functionality (20+ currencies), multi-tenancy with isolation per `entrepriseId`, and a comprehensive Role-Based Access Control (RBAC) system. The project aims to be a production-ready solution with a complete audit trail and a robust REST API, addressing the market potential for tailored ERP solutions in Africa.
 
 ## User Preferences
 - Approche directe et pragmatique
@@ -21,7 +21,7 @@ Key capabilities include support for SYSCOHADA, IFRS, and PCG, multi-currency fu
 - **AI:** OpenAI Integration
 
 ### Design Principles
-- **UI/UX:** QuickBooks-inspired style (Sidebar/Topbar fixes, icons, 100% French localization).
+- **UI/UX:** QuickBooks-inspired style (fixed Sidebar/Topbar, icons, 100% French localization).
 - **Responsiveness:** Mobile-first, adaptive layouts.
 - **Security:** Row-Level Security (RLS) by `entrepriseId`, modular RBAC, and a complete audit trail.
 - **Multi-tenancy:** Complete isolation per `entrepriseId`.
@@ -29,37 +29,22 @@ Key capabilities include support for SYSCOHADA, IFRS, and PCG, multi-currency fu
 ### Core Features
 ComptaOrion is built with a modular architecture comprising 17 modules organized into 7 domains:
 
-1.  **Dashboard Global:** Real-time KPIs, interactive charts, and system overview.
-2.  **Customer & Sales Management:** CRUD for clients, quotes, sales invoices, and payments. Includes automatic accounting integration.
-    - **Parameters:** 3 sous-onglets (Clients, Taxes, Codes Comptables)
-    - **Devis, Factures, Paiements, Relances, Rapports**
+1.  **Dashboard Global:** Real-time KPIs and system overview.
+2.  **Customer & Sales Management:** CRUD for clients, quotes, sales invoices, and payments, with automatic accounting integration.
 3.  **Supplier & Purchase Management:** CRUD for suppliers, purchase orders, goods receipts, and supplier invoices.
-    - **Parameters:** 3 sous-onglets (Fournisseurs, Taxes, Codes Comptables)
-    - **Commandes Achat** avec conversion automatique en facture
-    - **Réceptions, Factures Fournisseurs, Paiements, Rapports**
-4.  **Stock & Inventory:** Multi-warehouse stock management with movement tracking.
-    - **Stock Management:** Multi-warehouse, FIFO/CMP valorization
-    - **Movement Tracking:** Entries, exits, transfers, adjustments
-    - **Reports:** Period-based valorization reports
-5.  **Accounting & Compliance (Module Comptabilité):** Complete accounting system with 7 tabs:
-    - **📋 Plan Comptable:** CRUD des comptes (SYSCOHADA/IFRS/PCG classes 1-8)
-    - **📚 Journaux:** Gestion des journaux (Ventes, Achats, Banque, Caisse, OD)
-    - **✍️ Écritures Comptables:** Saisie débit/crédit avec validation d'équilibre automatique
-    - **📖 Grand Livre:** Mouvements par compte avec filtrage par période
-    - **⚖️ Balance Générale:** Balance des comptes avec soldes initiaux/finaux
-    - **🏢 Immobilisations:** Gestion des actifs avec calcul automatique amortissement
-    - **📊 Rapports Financiers:** Bilan, Compte de Résultat, Flux de Trésorerie
-6.  **Treasury & Finance:** Bank balances, cash management, reconciliation, and expense management with approval workflows.
+4.  **Stock & Inventory:** Multi-warehouse stock management with movement tracking and FIFO/CMP valorization.
+5.  **Accounting & Compliance:** Complete accounting system including Chart of Accounts (SYSCOHADA/IFRS/PCG), Journals, Accounting Entries (debit/credit validation), General Ledger, Trial Balance, Fixed Assets management with automatic amortization, and Financial Reports (Balance Sheet, Income Statement, Cash Flow).
+6.  **Treasury & Finance:** Bank balances, cash management, reconciliation, and expense management.
 7.  **Configuration & Security:** Currency management, accounting system settings, country-specific parameters, authentication (JWT, RBAC), Row-Level Security (RLS), and a comprehensive audit log.
-8.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI integration.
+8.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI.
 
 ### Cross-Modular Functionalities
--   **Automated Accounting:** Every client/supplier transaction automatically generates accounting entries.
--   **Treasury Impact:** Payments and expenses automatically update cash balances.
+-   **Automated Accounting:** Transactions automatically generate accounting entries.
+-   **Treasury Impact:** Payments and expenses update cash balances.
 -   **Monthly Amortization:** Automated calculation and posting of fixed asset depreciation.
 -   **Notifications:** Alerts for absences, birthdays, and contract expirations.
 -   **Multi-Currency & Internationalization:** Supports over 20 currencies, 3 accounting systems (SYSCOHADA, IFRS, PCG), and custom country settings.
--   **Compliance & Audit:** Complete audit trail for all operations, SYSCOHADA compliance, and CSV/Excel export for all modules.
+-   **Compliance & Audit:** Complete audit trail for all operations, SYSCOHADA compliance, and CSV/Excel export.
 
 ## External Dependencies
 
@@ -76,212 +61,6 @@ ComptaOrion is built with a modular architecture comprising 17 modules organized
 
 ### Database
 -   PostgreSQL
--   Drizzle migrations
 
 ### AI
--   OpenAI API (via Replit integration)
-
-## Recent Changes (November 21, 2025)
-
-### Module d'Authentification Complet ✅ 🔐
-**Système d'authentification sécurisé entièrement fonctionnel:**
-
-**Frontend:**
-- ✅ Page de Login (`Login.jsx`) avec 3 modes:
-  - 🔓 Connexion (email + mot de passe)
-  - 📝 Inscription (création de compte + entreprise)
-  - 🔑 Récupération de mot de passe
-- ✅ Gestion JWT complète dans `api.js`:
-  - Token JWT stocké dans localStorage
-  - Refresh token automatique en cas d'expiration
-  - Redirection vers login si session expirée
-  - Headers Authorization automatiques sur toutes les requêtes
-- ✅ Bouton de déconnexion dans la barre de navigation
-- ✅ Module d'Authentification (`AuthenticationModule.jsx`) avec 3 onglets:
-  - 🔐 **Sessions Actives:** Liste des sessions, révocation en un clic
-  - 🔑 **Permissions RBAC:** Gestion des permissions par rôle et module (lecture/écriture/suppression/admin)
-  - 📋 **Audit Connexions:** Historique complet des connexions avec filtres (type, statut, période)
-
-**Backend:**
-- ✅ Middleware d'authentification JWT **RÉACTIVÉ** (`app.js` ligne 52)
-- ✅ Routes d'authentification complètes (`/api/auth-security`):
-  - `/login` - Connexion avec création de session et audit
-  - `/logout` - Déconnexion avec révocation de session
-  - `/refresh-token` - Renouvellement automatique du token
-  - `/forgot-password` - Demande de réinitialisation
-  - `/reset-password` - Réinitialisation du mot de passe
-  - `/sessions/active` - Liste des sessions actives
-  - `/sessions/:id` (DELETE) - Révocation de session
-  - `/permissions` - Liste et gestion des permissions RBAC
-  - `/audit-connexions` - Historique des connexions avec filtrage
-
-**Base de données:**
-- ✅ Table `sessions` - Stockage des sessions actives avec expiration
-- ✅ Table `audit_connexions` - Log de toutes les tentatives de connexion
-- ✅ Table `permissions` - Permissions par rôle et module (RBAC)
-- ✅ Table `password_reset_tokens` - Tokens de réinitialisation de mot de passe
-
-**Fonctionnalités clés:**
-- ✅ Authentification JWT avec refresh token automatique
-- ✅ Gestion de sessions avec révocation manuelle
-- ✅ Audit complet des connexions (succès + échecs)
-- ✅ RBAC modulaire (permissions par rôle: admin, user, comptable, etc.)
-- ✅ Récupération de mot de passe par email
-- ✅ Protection de toutes les routes API par JWT
-- ✅ Row-Level Security (RLS) par `entrepriseId`
-- ✅ Interface utilisateur intuitive avec design moderne
-
-**Statut:** Module pleinement opérationnel - L'authentification est désormais **OBLIGATOIRE** pour accéder à l'application.
-
-## Recent Changes (November 21, 2025) - Suite
-
-### Comprehensive Audit Log System ✅
-**Complete audit trail implementation across all modules:**
-
-**Database:**
-- ✅ Created `audit_logs` table with fields: entreprise_id, user_id, action, table_name, record_id, ancienne_valeur, nouvelle_valeur, description, ip_address, user_agent, created_at
-- ✅ Note: Renamed `table` column to `table_name` to avoid SQL reserved word conflict
-
-**Backend:**
-- ✅ Created centralized `backend/src/utils/auditLogger.js` utility for consistent logging
-- ✅ Created API endpoint `/api/audit-logs` with filtering by action, table, user, date range
-- ✅ Integrated audit logging in all major modules:
-  - **Clients:** CREATE, UPDATE, DELETE operations
-  - **Fournisseurs:** CREATE, UPDATE, DELETE operations  
-  - **Stock:** CREATE/UPDATE/DELETE categories, CREATE products, warehouses, movements
-  - **Comptabilité:** All accounting operations (comptes, journaux, écritures)
-  - **Paramètres:** UPDATE company settings
-
-**Frontend:**
-- ✅ Added 6th tab "📋 Historique Audit" in ParametresModule.jsx
-- ✅ Complete audit log viewer with:
-  - Filter by action type (CREATE/UPDATE/DELETE)
-  - Filter by table (clients, fournisseurs, stock_categories, etc.)
-  - Filter by date range
-  - Display all audit fields including old/new values (JSON formatted)
-  - Real-time stats (total logs count)
-  - Pagination support
-
-**Testing:**
-- ✅ End-to-end test successful: created test client, verified audit log recorded
-- ✅ API returns proper JSON with pagination
-
-### Module Comptabilité - Complete Implementation ✅
-Created comprehensive accounting module (ModuleComptabilite.jsx) with 7 fully functional tabs:
-
-**Frontend:**
-- Plan Comptable: CRUD comptes comptables with categories
-- Journaux: Management of accounting journals (VE, AC, BQ, CA, OD)
-- Écritures: Complete entry workflow with ligne creation, debit/credit validation, and real-time balance check
-- Grand Livre: Account ledger with period filtering and API integration
-- Balance Générale: Trial balance generation with API integration
-- Immobilisations: Fixed assets management with depreciation tracking
-- Rapports: Financial reports (Bilan, Compte de Résultat, Rapport Journaux) with period-based filtering
-
-**Backend Routes (all functional with proper SQL JOINs):**
-- `/comptabilite/comptes` - CRUD chart of accounts
-- `/comptabilite/journaux` - CRUD journals
-- `/comptabilite/ecritures` - CRUD entries with debit/credit validation
-- `/comptabilite/lignes` - CRUD entry lines
-- `/comptabilite/grand-livre` - Ledger with JOIN on ecritures (fixes PostgreSQL error)
-- `/comptabilite/balance` - Trial balance with JOIN on ecritures (fixes PostgreSQL error)
-- `/comptabilite/bilan` - Balance sheet report with JOIN on ecritures
-- `/comptabilite/compte-resultat` - Income statement with JOIN on ecritures
-- `/comptabilite/rapport-journaux` - Journals report grouping entries by journal with totals
-- `/immobilisations/*` - Fixed assets management with automatic depreciation calculation
-
-**Key Features:**
-- ✅ Automatic debit/credit balance validation before entry approval
-- ✅ Multi-journal support (Sales, Purchases, Bank, Cash, OD)
-- ✅ Period-based filtering for all reports
-- ✅ Complete entry workflow: create header → add lignes → validate balance → approve
-- ✅ All frontend tabs connected to backend APIs
-- ✅ SYSCOHADA/IFRS/PCG compliance
-- ✅ Complete audit trail for all operations
-
-**Known Issues:**
-- ⚠️ **CRITICAL SECURITY ISSUE:** Authentication middleware disabled in `backend/src/app.js` line 49. All API routes are publicly accessible without authentication. Must be addressed before production deployment.
-
-### Module Client - Standardized Parameters
-Updated ClientsModule.jsx with 3 sub-tabs in Parameters:
-- Clients: CRUD with accounting codes, payment terms
-- Taxes: VAT configuration (18%, 9%, 0%)
-- Codes Comptables: Account codes (411, 4111, 4112, 4431)
-
-### Module Fournisseur - Complete Structure
-GestionFournisseurs.jsx with 6 tabs:
-- Parameters (3 sub-tabs: Suppliers, Taxes, Accounting Codes)
-- Purchase Orders with automatic invoice conversion
-- Receptions, Supplier Invoices, Payments, Reports
-
-### Module Paramètres - Complete Implementation ✅
-Created comprehensive system settings module (ParametresModule.jsx) with 5 tabs:
-
-**Frontend:**
-- 🏢 Entreprise: Complete company information (name, SIRET, address, contacts, fiscal year)
-- 📊 Système Comptable: Visual display of accounting systems (SYSCOHADA, IFRS, PCG) with active indicator
-- 💱 Devises: List of 20+ supported currencies with regions
-- 🌍 Pays & Régions: 30+ countries with default currency and accounting system
-- 💰 Taxes (TVA): VAT rates by country
-
-**Backend Routes (already existing):**
-- `/parametres/entreprise` - GET/PUT company settings with validation
-- `/parametres/devises` - GET list of supported currencies
-- `/parametres/systemes-comptables` - GET list of accounting systems
-- `/parametres/pays` - GET list of countries with settings
-- `/parametres/taux-tva` - GET VAT rates by country
-
-**Key Features:**
-- ✅ Complete company profile management with form validation
-- ✅ Multi-currency support (XOF, XAF, EUR, USD, MAD, etc.)
-- ✅ Multi-accounting system support (SYSCOHADA, IFRS, PCG)
-- ✅ Country-specific configurations (30+ countries across Africa, Europe, Americas)
-- ✅ Fiscal year configuration
-- ✅ VAT rate management by country
-
-### Module Paie & RH - Structure Created (MASQUÉ) 🔒
-**Structure complète créée mais module non visible dans le menu de navigation:**
-
-**Database Schema:**
-- ✅ Table `employes` enrichie avec tous les champs requis:
-  - Informations personnelles: nom, prénom, CNPS, date/lieu de naissance, nationalité, contacts
-  - Type de contrat: CDI, CDD, Journalier, Stagiaire, Consultant
-  - Salaire de base et indemnités régulières (transport, logement, autres)
-  - Avantages en nature (logement, véhicule, autres)
-  - Documents RH (CNI, contrat, CV, autres)
-- ✅ Table `fiches_paie` créée pour l'historique des bulletins de salaire
-  - Calcul automatique: salaire brut, cotisations (CNPS, IPRES), impôt sur revenu, salaire net
-  - Lien avec écriture comptable automatique
-- ✅ Table `avances_salaire` pour les avances sur salaire
-
-**Backend Routes (`/api/paie`):**
-- `/paie/employes` - CRUD employés avec audit log complet
-- `/paie/fiches-paie` - Génération fiches de paie avec:
-  - Calcul automatique salaire brut/net
-  - Comptabilisation automatique (écriture comptable auto-générée)
-  - Gestion des cotisations et retenues
-  - Historique complet des bulletins de salaire
-- `/paie/avances` - Gestion des avances sur salaire
-
-**Frontend (PaieModule.jsx):**
-- ✅ Module complet avec 4 onglets:
-  - 👥 Employés: CRUD avec formulaire complet (tous les champs)
-  - 📄 Fiches de Paie: Génération bulletins avec calcul auto brut/net
-  - 💵 Avances: Gestion avances sur salaire
-  - 📊 Rapports: Statistiques de paie (à développer)
-
-**Fonctionnalités clés:**
-- ✅ Informations personnelles complètes (nom, CNPS, contact)
-- ✅ Types de contrat (CDD, CDI, journalier, stagiaire)
-- ✅ Salaire de base avec indemnités régulières
-- ✅ Avantages en nature
-- ✅ Comptabilisation automatique du salaire (génère écriture comptable)
-- ✅ Historique des fiches de paie
-- ✅ Documents RH (contrat, CNI, CV)
-- ✅ Audit log intégré pour toutes les opérations
-
-**Statut:** Module en pause - structure complète créée mais non activée dans le menu de navigation.
-
-### Modules Removed
-**Employés Module (HR Lite):** Supprimé et remplacé par le Module Paie & RH (masqué).
-**Dépenses Module:** Temporairement retiré du menu, à développer plus tard.
+-   OpenAI API

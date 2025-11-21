@@ -100,6 +100,22 @@ router.post('/logout', authMiddleware, async (req, res) => {
     const { sessionId } = req.body;
     const ipAddress = req.ip || req.connection.remoteAddress;
 
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID requis' });
+    }
+
+    const session = await db.query.sessions.findFirst({
+      where: and(
+        eq(sessions.id, parseInt(sessionId)),
+        eq(sessions.userId, req.user.id),
+        eq(sessions.enterpriseId, req.user.entrepriseId)
+      )
+    });
+
+    if (!session) {
+      return res.status(403).json({ error: 'Session non autorisée ou introuvable' });
+    }
+
     await db.update(sessions).set({
       logoutAt: new Date()
     }).where(eq(sessions.id, parseInt(sessionId)));
@@ -140,11 +156,42 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'Utilisateur non trouvé' });
     }
 
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    
+    const session = await db.query.sessions.findFirst({
+      where: and(
+        eq(sessions.userId, user.id),
+        eq(sessions.refreshTokenHash, refreshTokenHash),
+        gt(sessions.expiresAt, new Date())
+      )
+    });
+
+    if (!session) {
+      return res.status(401).json({ error: 'Session invalide ou expirée' });
+    }
+
     const newToken = generateToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+    const newRefreshTokenHash = crypto.createHash('sha256').update(newRefreshToken).digest('hex');
+
+    await db.update(sessions).set({
+      tokenHash: crypto.createHash('sha256').update(newToken).digest('hex'),
+      refreshTokenHash: newRefreshTokenHash
+    }).where(eq(sessions.id, session.id));
+
+    await db.insert(auditConnexions).values({
+      userId: user.id,
+      enterpriseId: user.entrepriseId,
+      type: 'token_refresh',
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.get('user-agent'),
+      statut: 'success'
+    });
 
     res.json({
       message: 'Token rafraîchi',
-      token: newToken
+      token: newToken,
+      refreshToken: newRefreshToken
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -179,11 +226,12 @@ router.post('/forgot-password', async (req, res) => {
       expiresAt
     });
 
-    // Dans un vrai app : envoyer email avec lien
+    // TODO: Envoyer email avec lien de réinitialisation
+    // const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5000'}/reset-password?token=${resetToken}`;
+    // await sendEmail(user.email, 'Réinitialisation de mot de passe', resetLink);
+
     res.json({
-      message: 'Lien de réinitialisation envoyé',
-      resetToken: resetToken, // À retirer en production
-      resetLink: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/reset-password?token=${resetToken}`
+      message: 'Si l\'email existe, un lien de réinitialisation a été envoyé à votre adresse'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
