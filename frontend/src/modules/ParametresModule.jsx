@@ -248,8 +248,49 @@ function EntrepriseForm({ initialData, devises, systemes, pays, onSave, onCancel
     finAnneeFiscale: initialData?.finAnneeFiscale || '2025-12-31',
     numeroTva: initialData?.numeroTva || '',
     registreCommerce: initialData?.registreCommerce || '',
-    formeJuridique: initialData?.formeJuridique || 'SARL'
+    formeJuridique: initialData?.formeJuridique || 'SARL',
+    logoUrl: initialData?.logoUrl || '',
+    factureFooterText: initialData?.factureFooterText || '',
+    factureMentionsLegales: initialData?.factureMentionsLegales || '',
+    factureCouleurPrincipale: initialData?.factureCouleurPrincipale || '#3498db',
+    factureAfficherLogo: initialData?.factureAfficherLogo !== undefined ? initialData.factureAfficherLogo : true
   });
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formDataUpload = new FormData();
+    formDataUpload.append('logo', file);
+
+    setUploadingLogo(true);
+    try {
+      const response = await api.post('/upload/logo', formDataUpload, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      setFormData({ ...formData, logoUrl: response.data.logoUrl });
+      alert('Logo uploadé avec succès!');
+    } catch (error) {
+      alert('Erreur lors de l\'upload: ' + error.message);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    if (!window.confirm('Supprimer le logo actuel?')) return;
+    
+    try {
+      await api.delete('/upload/logo');
+      setFormData({ ...formData, logoUrl: '' });
+      alert('Logo supprimé avec succès!');
+    } catch (error) {
+      alert('Erreur lors de la suppression: ' + error.message);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -421,6 +462,96 @@ function EntrepriseForm({ initialData, devises, systemes, pays, onSave, onCancel
             type="date"
             value={formData.finAnneeFiscale}
             onChange={(e) => setFormData({ ...formData, finAnneeFiscale: e.target.value })}
+            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+          />
+        </div>
+      </div>
+
+      <div style={{ 
+        padding: '20px', 
+        background: '#f8f9fa', 
+        borderRadius: '8px', 
+        border: '1px solid #e0e0e0',
+        marginTop: '20px'
+      }}>
+        <h4 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>🎨 Personnalisation des Factures</h4>
+        
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '600' }}>Logo de l'entreprise</label>
+          {formData.logoUrl && (
+            <div style={{ marginBottom: '10px' }}>
+              <img 
+                src={formData.logoUrl} 
+                alt="Logo" 
+                style={{ maxWidth: '200px', maxHeight: '100px', border: '1px solid #ddd', borderRadius: '4px' }} 
+              />
+              <Button 
+                variant="secondary" 
+                size="small" 
+                onClick={handleDeleteLogo}
+                style={{ marginLeft: '10px' }}
+              >
+                🗑️ Supprimer
+              </Button>
+            </div>
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleLogoUpload}
+            disabled={uploadingLogo}
+            style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+          />
+          {uploadingLogo && <span style={{ marginLeft: '10px' }}>⏳ Upload en cours...</span>}
+        </div>
+
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={formData.factureAfficherLogo}
+              onChange={(e) => setFormData({ ...formData, factureAfficherLogo: e.target.checked })}
+              style={{ marginRight: '8px' }}
+            />
+            <span style={{ fontSize: '14px', fontWeight: '600' }}>Afficher le logo sur les factures</span>
+          </label>
+        </div>
+
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '600' }}>
+            Couleur principale des factures
+          </label>
+          <input
+            type="color"
+            value={formData.factureCouleurPrincipale}
+            onChange={(e) => setFormData({ ...formData, factureCouleurPrincipale: e.target.value })}
+            style={{ padding: '5px', width: '100px', height: '40px', border: '1px solid #ddd', borderRadius: '4px' }}
+          />
+          <span style={{ marginLeft: '10px', fontSize: '14px' }}>{formData.factureCouleurPrincipale}</span>
+        </div>
+
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '600' }}>
+            Texte de pied de page (factures)
+          </label>
+          <textarea
+            value={formData.factureFooterText}
+            onChange={(e) => setFormData({ ...formData, factureFooterText: e.target.value })}
+            placeholder="Ex: Merci de votre confiance..."
+            rows={2}
+            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '600' }}>
+            Mentions légales (factures)
+          </label>
+          <textarea
+            value={formData.factureMentionsLegales}
+            onChange={(e) => setFormData({ ...formData, factureMentionsLegales: e.target.value })}
+            placeholder="Ex: Entreprise immatriculée au RC de..., TVA: ..."
+            rows={3}
             style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
           />
         </div>

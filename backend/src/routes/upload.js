@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import fs from 'fs';
 import { db } from '../db.js';
 import { entreprises } from '../schema.js';
 import { eq } from 'drizzle-orm';
@@ -12,13 +13,21 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const uploadsDir = path.join(__dirname, '../../uploads/logos');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../uploads/logos'));
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
+    if (!req.entrepriseId) {
+      return cb(new Error('Entreprise ID manquant - authentification requise'));
+    }
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'logo-' + uniqueSuffix + path.extname(file.originalname));
+    cb(null, `entreprise-${req.entrepriseId}-logo-${uniqueSuffix}${path.extname(file.originalname)}`);
   }
 });
 
@@ -42,11 +51,27 @@ const upload = multer({
 
 router.post('/logo', upload.single('logo'), async (req, res) => {
   try {
+    if (!req.entrepriseId) {
+      return res.status(401).json({ error: 'Authentification requise' });
+    }
+
     if (!req.file) {
       return res.status(400).json({ error: 'Aucun fichier uploadé' });
     }
 
     const logoUrl = `/uploads/logos/${req.file.filename}`;
+
+    const [entreprise] = await db.select()
+      .from(entreprises)
+      .where(eq(entreprises.id, req.entrepriseId))
+      .limit(1);
+
+    if (entreprise?.logoUrl) {
+      const oldLogoPath = path.join(__dirname, '../..', entreprise.logoUrl);
+      if (fs.existsSync(oldLogoPath)) {
+        fs.unlinkSync(oldLogoPath);
+      }
+    }
 
     await db.update(entreprises)
       .set({ 
@@ -60,12 +85,35 @@ router.post('/logo', upload.single('logo'), async (req, res) => {
       logoUrl 
     });
   } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
 router.delete('/logo', async (req, res) => {
   try {
+    if (!req.entrepriseId) {
+      return res.status(401).json({ error: 'Authentification requise' });
+    }
+
+    const [entreprise] = await db.select()
+      .from(entreprises)
+      .where(eq(entreprises.id, req.entrepriseId))
+      .limit(1);
+
+    if (!entreprise) {
+      return res.status(404).json({ error: 'Entreprise introuvable' });
+    }
+
+    if (entreprise.logoUrl) {
+      const logoPath = path.join(__dirname, '../..', entreprise.logoUrl);
+      if (fs.existsSync(logoPath)) {
+        fs.unlinkSync(logoPath);
+      }
+    }
+
     await db.update(entreprises)
       .set({ 
         logoUrl: null,
