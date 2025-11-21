@@ -83,6 +83,58 @@ ComptaOrion is built with a modular architecture comprising 17 modules organized
 
 ## Recent Changes (November 21, 2025)
 
+### Module d'Authentification Complet ✅ 🔐
+**Système d'authentification sécurisé entièrement fonctionnel:**
+
+**Frontend:**
+- ✅ Page de Login (`Login.jsx`) avec 3 modes:
+  - 🔓 Connexion (email + mot de passe)
+  - 📝 Inscription (création de compte + entreprise)
+  - 🔑 Récupération de mot de passe
+- ✅ Gestion JWT complète dans `api.js`:
+  - Token JWT stocké dans localStorage
+  - Refresh token automatique en cas d'expiration
+  - Redirection vers login si session expirée
+  - Headers Authorization automatiques sur toutes les requêtes
+- ✅ Bouton de déconnexion dans la barre de navigation
+- ✅ Module d'Authentification (`AuthenticationModule.jsx`) avec 3 onglets:
+  - 🔐 **Sessions Actives:** Liste des sessions, révocation en un clic
+  - 🔑 **Permissions RBAC:** Gestion des permissions par rôle et module (lecture/écriture/suppression/admin)
+  - 📋 **Audit Connexions:** Historique complet des connexions avec filtres (type, statut, période)
+
+**Backend:**
+- ✅ Middleware d'authentification JWT **RÉACTIVÉ** (`app.js` ligne 52)
+- ✅ Routes d'authentification complètes (`/api/auth-security`):
+  - `/login` - Connexion avec création de session et audit
+  - `/logout` - Déconnexion avec révocation de session
+  - `/refresh-token` - Renouvellement automatique du token
+  - `/forgot-password` - Demande de réinitialisation
+  - `/reset-password` - Réinitialisation du mot de passe
+  - `/sessions/active` - Liste des sessions actives
+  - `/sessions/:id` (DELETE) - Révocation de session
+  - `/permissions` - Liste et gestion des permissions RBAC
+  - `/audit-connexions` - Historique des connexions avec filtrage
+
+**Base de données:**
+- ✅ Table `sessions` - Stockage des sessions actives avec expiration
+- ✅ Table `audit_connexions` - Log de toutes les tentatives de connexion
+- ✅ Table `permissions` - Permissions par rôle et module (RBAC)
+- ✅ Table `password_reset_tokens` - Tokens de réinitialisation de mot de passe
+
+**Fonctionnalités clés:**
+- ✅ Authentification JWT avec refresh token automatique
+- ✅ Gestion de sessions avec révocation manuelle
+- ✅ Audit complet des connexions (succès + échecs)
+- ✅ RBAC modulaire (permissions par rôle: admin, user, comptable, etc.)
+- ✅ Récupération de mot de passe par email
+- ✅ Protection de toutes les routes API par JWT
+- ✅ Row-Level Security (RLS) par `entrepriseId`
+- ✅ Interface utilisateur intuitive avec design moderne
+
+**Statut:** Module pleinement opérationnel - L'authentification est désormais **OBLIGATOIRE** pour accéder à l'application.
+
+## Recent Changes (November 21, 2025) - Suite
+
 ### Comprehensive Audit Log System ✅
 **Complete audit trail implementation across all modules:**
 

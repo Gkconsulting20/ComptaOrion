@@ -7,6 +7,7 @@ import { StockInventaire } from './modules/StockInventaire';
 import { ModuleComptabilite } from './modules/ModuleComptabilite';
 import { DepensesModule } from './modules/DepensesModule';
 import { ParametresModule } from './modules/ParametresModule';
+import { AuthenticationModule } from './modules/AuthenticationModule';
 import { Login } from './pages/Login';
 import api from './api';
 
@@ -17,6 +18,7 @@ const MODULES = [
   { id: 'tresorerie', label: '💰 Trésorerie', icon: '💰' },
   { id: 'stock', label: '📦 Stock', icon: '📦' },
   { id: 'comptabilite', label: '📖 Comptabilité', icon: '📖' },
+  { id: 'authentication', label: '🔐 Authentification', icon: '🔐' },
   { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
 ];
 
@@ -208,6 +210,7 @@ export default function App() {
       case 'tresorerie': return <TresorerieModule />;
       case 'stock': return <StockInventaire />;
       case 'comptabilite': return <ModuleComptabilite />;
+      case 'authentication': return <AuthenticationModule />;
       case 'parametres': return <ParametresModule />;
       default: return <Dashboard />;
     }
