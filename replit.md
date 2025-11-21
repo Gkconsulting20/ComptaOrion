@@ -84,6 +84,37 @@ ComptaOrion is built with a modular architecture comprising 17 modules organized
 
 ## Recent Changes (November 21, 2025)
 
+### Comprehensive Audit Log System ✅
+**Complete audit trail implementation across all modules:**
+
+**Database:**
+- ✅ Created `audit_logs` table with fields: entreprise_id, user_id, action, table_name, record_id, ancienne_valeur, nouvelle_valeur, description, ip_address, user_agent, created_at
+- ✅ Note: Renamed `table` column to `table_name` to avoid SQL reserved word conflict
+
+**Backend:**
+- ✅ Created centralized `backend/src/utils/auditLogger.js` utility for consistent logging
+- ✅ Created API endpoint `/api/audit-logs` with filtering by action, table, user, date range
+- ✅ Integrated audit logging in all major modules:
+  - **Clients:** CREATE, UPDATE, DELETE operations
+  - **Fournisseurs:** CREATE, UPDATE, DELETE operations  
+  - **Stock:** CREATE/UPDATE/DELETE categories, CREATE products, warehouses, movements
+  - **Comptabilité:** All accounting operations (comptes, journaux, écritures)
+  - **Paramètres:** UPDATE company settings
+
+**Frontend:**
+- ✅ Added 6th tab "📋 Historique Audit" in ParametresModule.jsx
+- ✅ Complete audit log viewer with:
+  - Filter by action type (CREATE/UPDATE/DELETE)
+  - Filter by table (clients, fournisseurs, stock_categories, etc.)
+  - Filter by date range
+  - Display all audit fields including old/new values (JSON formatted)
+  - Real-time stats (total logs count)
+  - Pagination support
+
+**Testing:**
+- ✅ End-to-end test successful: created test client, verified audit log recorded
+- ✅ API returns proper JSON with pagination
+
 ### Module Comptabilité - Complete Implementation ✅
 Created comprehensive accounting module (ModuleComptabilite.jsx) with 7 fully functional tabs:
 
