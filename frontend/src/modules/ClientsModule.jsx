@@ -1073,9 +1073,11 @@ function RapportsTab() {
 function PaiementsTab() {
   const [paiementsList, setPaiementsList] = useState([]);
   const [facturesList, setFacturesList] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedFacture, setSelectedFacture] = useState(null);
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [paymentData, setPaymentData] = useState({
     factureId: '',
     montant: 0,
@@ -1097,8 +1099,12 @@ function PaiementsTab() {
 
   const loadData = async () => {
     try {
-      const facturesRes = await api.get('/factures');
+      const [facturesRes, clientsRes] = await Promise.all([
+        api.get('/factures'),
+        api.get('/clients')
+      ]);
       setFacturesList(facturesRes.data || []);
+      setClients(clientsRes.data || []);
       setPaiementsList([]);
     } catch (error) {
       console.error('Erreur:', error);
@@ -1122,6 +1128,7 @@ function PaiementsTab() {
   };
 
   const resetPaymentForm = () => {
+    setSelectedClientId('');
     setPaymentData({
       factureId: '',
       montant: 0,
@@ -1234,24 +1241,51 @@ function PaiementsTab() {
         <form onSubmit={handleSubmitPayment}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
             {!selectedFacture && (
-              <FormField
-                label="Facture"
-                type="select"
-                value={paymentData.factureId}
-                onChange={(e) => {
-                  const facture = facturesImpayees.find(f => f.id === e.target.value);
-                  setPaymentData({ 
-                    ...paymentData, 
-                    factureId: e.target.value,
-                    montant: facture?.totalTTC || 0
-                  });
-                }}
-                options={facturesImpayees.map(f => ({ 
-                  value: f.id, 
-                  label: `${f.numeroFacture} - ${f.client?.nom} (${f.totalTTC} FCFA)` 
-                }))}
-                required
-              />
+              <>
+                <FormField
+                  label="1️⃣ Sélectionner le Client"
+                  type="select"
+                  value={selectedClientId}
+                  onChange={(e) => {
+                    setSelectedClientId(e.target.value);
+                    setPaymentData({ ...paymentData, factureId: '', montant: 0 });
+                  }}
+                  options={[
+                    { value: '', label: '-- Choisir un client --' },
+                    ...clients.map(c => ({ 
+                      value: c.id, 
+                      label: c.nom 
+                    }))
+                  ]}
+                  required
+                />
+                
+                {selectedClientId && (
+                  <FormField
+                    label="2️⃣ Sélectionner la Facture à Payer"
+                    type="select"
+                    value={paymentData.factureId}
+                    onChange={(e) => {
+                      const facture = facturesImpayees
+                        .filter(f => f.client?.id == selectedClientId)
+                        .find(f => f.id === e.target.value);
+                      setPaymentData({ 
+                        ...paymentData, 
+                        factureId: e.target.value,
+                        montant: facture?.totalTTC || 0
+                      });
+                    }}
+                    options={facturesImpayees
+                      .filter(f => f.client?.id == selectedClientId)
+                      .sort((a, b) => new Date(a.dateFacture) - new Date(b.dateFacture))
+                      .map(f => ({ 
+                        value: f.id, 
+                        label: `${f.numeroFacture} - ${new Date(f.dateFacture).toLocaleDateString('fr-FR')} - ${f.totalTTC} FCFA` 
+                      }))}
+                    required
+                  />
+                )}
+              </>
             )}
 
             <FormField

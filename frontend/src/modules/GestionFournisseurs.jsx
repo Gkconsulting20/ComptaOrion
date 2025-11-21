@@ -37,15 +37,16 @@ export function GestionFournisseurs() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [fournisseursRes, commandesRes] = await Promise.all([
+      const [fournisseursRes, commandesRes, facturesRes] = await Promise.all([
         api.get('/fournisseurs'),
-        api.get('/commandes-achat')
+        api.get('/commandes-achat'),
+        api.get('/factures-fournisseurs').catch(() => ({ data: [] }))
       ]);
       setData({
         fournisseurs: fournisseursRes.data || [],
         commandes: commandesRes.data || [],
         receptions: [],
-        factures: [],
+        factures: facturesRes.data || [],
         paiements: [],
         taxes: [
           { id: 1, nom: 'TVA 18%', taux: 18, codeComptable: '4431' },
@@ -568,24 +569,48 @@ export function GestionFournisseurs() {
 
           {modal.type === 'paiement' && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <FormField label="Fournisseur" name="fournisseurId" type="select" value={form.fournisseurId}
-                  onChange={(e) => setForm({...form, fournisseurId: e.target.value})}
-                  options={data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))} required />
-                <FormField label="Montant" name="montant" type="number" value={form.montant}
-                  onChange={(e) => setForm({...form, montant: parseFloat(e.target.value)})} required />
-                <FormField label="Date Paiement" name="datePaiement" type="date" value={form.datePaiement}
-                  onChange={(e) => setForm({...form, datePaiement: e.target.value})} required />
-                <FormField label="Mode de Paiement" name="modePaiement" type="select" value={form.modePaiement}
-                  onChange={(e) => setForm({...form, modePaiement: e.target.value})}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
+                <FormField label="1️⃣ Sélectionner le Fournisseur" name="fournisseurId" type="select" value={form.fournisseurId}
+                  onChange={(e) => setForm({...form, fournisseurId: e.target.value, factureId: '', montant: 0})}
                   options={[
-                    { value: 'virement', label: 'Virement' },
-                    { value: 'cheque', label: 'Chèque' },
-                    { value: 'especes', label: 'Espèces' },
-                    { value: 'carte', label: 'Carte Bancaire' }
+                    { value: '', label: '-- Choisir un fournisseur --' },
+                    ...data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))
                   ]} required />
-                <FormField label="Référence" name="reference" value={form.reference}
-                  onChange={(e) => setForm({...form, reference: e.target.value})} />
+                
+                {form.fournisseurId && (
+                  <FormField label="2️⃣ Sélectionner la Facture à Payer" name="factureId" type="select" value={form.factureId}
+                    onChange={(e) => {
+                      const facture = data.factures
+                        .filter(f => f.fournisseurId == form.fournisseurId && f.statut !== 'payee')
+                        .find(f => f.id === e.target.value);
+                      setForm({...form, factureId: e.target.value, montant: facture?.montantTotal || facture?.montantHT || 0});
+                    }}
+                    options={data.factures
+                      .filter(f => f.fournisseurId == form.fournisseurId && f.statut !== 'payee')
+                      .sort((a, b) => new Date(a.dateFacture) - new Date(b.dateFacture))
+                      .map(f => ({ 
+                        value: f.id, 
+                        label: `${f.numeroFacture || 'Facture'} - ${new Date(f.dateFacture).toLocaleDateString('fr-FR')} - ${f.montantTotal || f.montantHT || 0} FCFA` 
+                      }))}
+                    required />
+                )}
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                  <FormField label="Montant" name="montant" type="number" value={form.montant}
+                    onChange={(e) => setForm({...form, montant: parseFloat(e.target.value)})} required />
+                  <FormField label="Date Paiement" name="datePaiement" type="date" value={form.datePaiement}
+                    onChange={(e) => setForm({...form, datePaiement: e.target.value})} required />
+                  <FormField label="Mode de Paiement" name="modePaiement" type="select" value={form.modePaiement}
+                    onChange={(e) => setForm({...form, modePaiement: e.target.value})}
+                    options={[
+                      { value: 'virement', label: 'Virement' },
+                      { value: 'cheque', label: 'Chèque' },
+                      { value: 'especes', label: 'Espèces' },
+                      { value: 'carte', label: 'Carte Bancaire' }
+                    ]} required />
+                  <FormField label="Référence" name="reference" value={form.reference}
+                    onChange={(e) => setForm({...form, reference: e.target.value})} />
+                </div>
               </div>
               <FormField label="Notes" name="notes" value={form.notes}
                 onChange={(e) => setForm({...form, notes: e.target.value})} />
