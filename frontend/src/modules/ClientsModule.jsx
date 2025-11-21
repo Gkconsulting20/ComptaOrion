@@ -997,13 +997,31 @@ function RelancesTab() {
 // ==========================================
 // ONGLET 6: PARAMETRES COMPTABLES
 // ==========================================
+
+// ==========================================
+// ONGLET 6: PARAMETRES CLIENT (CRUD COMPLET)
+// ==========================================
 function ParametresTab() {
   const [clients, setClients] = useState([]);
   const [comptesComptables, setComptesComptables] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedClient, setSelectedClient] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [selectedCompteId, setSelectedCompteId] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [clientData, setClientData] = useState({
+    nom: '',
+    email: '',
+    telephone: '',
+    type: 'particulier',
+    categorieClient: 'standard',
+    adresse: '',
+    ville: '',
+    pays: 'Sénégal',
+    compteComptableId: null,
+    delaiPaiement: 30,
+    limiteCredit: 0,
+    echeancesPersonnalisees: [],
+    modesPaiementPreferes: [],
+  });
 
   useEffect(() => {
     loadData();
@@ -1024,30 +1042,102 @@ function ParametresTab() {
     }
   };
 
-  const handleConfigureCompte = (client) => {
-    setSelectedClient(client);
-    setSelectedCompteId(client.compteComptableId || null);
+  const handleNewClient = () => {
+    setClientData({
+      nom: '',
+      email: '',
+      telephone: '',
+      type: 'particulier',
+      categorieClient: 'standard',
+      adresse: '',
+      ville: '',
+      pays: 'Sénégal',
+      compteComptableId: null,
+      delaiPaiement: 30,
+      limiteCredit: 0,
+      echeancesPersonnalisees: [],
+      modesPaiementPreferes: [],
+    });
+    setIsEditing(false);
     setShowModal(true);
   };
 
-  const handleSaveCompte = async () => {
+  const handleEditClient = (client) => {
+    setClientData({
+      ...client,
+      echeancesPersonnalisees: client.echeancesPersonnalisees || [],
+      modesPaiementPreferes: client.modesPaiementPreferes || [],
+    });
+    setIsEditing(true);
+    setShowModal(true);
+  };
+
+  const handleDeleteClient = async (clientId) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce client?')) return;
     try {
-      await api.put(`/clients/${selectedClient.id}`, {
-        ...selectedClient,
-        compteComptableId: selectedCompteId
-      });
+      await api.delete(`/clients/${clientId}`);
       loadData();
-      setShowModal(false);
-      setSelectedClient(null);
-      alert('Compte comptable configuré avec succès!');
+      alert('Client supprimé avec succès!');
     } catch (error) {
       alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      if (isEditing) {
+        await api.put(`/clients/${clientData.id}`, clientData);
+        alert('Client modifié avec succès!');
+      } else {
+        await api.post('/clients', clientData);
+        alert('Client créé avec succès!');
+      }
+      loadData();
+      setShowModal(false);
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const addEcheance = () => {
+    setClientData({
+      ...clientData,
+      echeancesPersonnalisees: [...clientData.echeancesPersonnalisees, { jours: 30, pourcentage: 100 }]
+    });
+  };
+
+  const removeEcheance = (index) => {
+    setClientData({
+      ...clientData,
+      echeancesPersonnalisees: clientData.echeancesPersonnalisees.filter((_, i) => i !== index)
+    });
+  };
+
+  const updateEcheance = (index, field, value) => {
+    const newEcheances = [...clientData.echeancesPersonnalisees];
+    newEcheances[index][field] = value;
+    setClientData({ ...clientData, echeancesPersonnalisees: newEcheances });
+  };
+
+  const toggleModePaiement = (mode) => {
+    const modesPaiement = clientData.modesPaiementPreferes || [];
+    if (modesPaiement.includes(mode)) {
+      setClientData({
+        ...clientData,
+        modesPaiementPreferes: modesPaiement.filter(m => m !== mode)
+      });
+    } else {
+      setClientData({
+        ...clientData,
+        modesPaiementPreferes: [...modesPaiement, mode]
+      });
     }
   };
 
   const columns = [
     { key: 'numeroClient', label: 'N° Client' },
     { key: 'nom', label: 'Nom' },
+    { key: 'email', label: 'Email' },
     { key: 'type', label: 'Type' },
     { 
       key: 'compteComptableId', 
@@ -1065,7 +1155,10 @@ function ParametresTab() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h3>⚙️ Paramètres Comptables des Clients</h3>
+        <h3>⚙️ Paramètres Client</h3>
+        <Button variant="primary" onClick={handleNewClient}>
+          ➕ Nouveau Client
+        </Button>
       </div>
 
       <div style={{ 
@@ -1076,7 +1169,7 @@ function ParametresTab() {
         border: '1px solid #bee5eb'
       }}>
         <p style={{ margin: 0, color: '#0c5460', fontSize: '14px' }}>
-          💡 <strong>Configuration des comptes comptables:</strong> Associez un compte comptable à chaque client pour automatiser les écritures comptables lors de la facturation.
+          💡 <strong>Configuration complète des clients:</strong> Créez et configurez vos clients avec toutes leurs spécificités (compte comptable, échéances, modes de paiement).
         </p>
       </div>
 
@@ -1085,73 +1178,282 @@ function ParametresTab() {
         data={clients} 
         actions={true}
         customActions={(client) => (
-          <Button size="small" variant="info" onClick={() => handleConfigureCompte(client)}>
-            ⚙️ Configurer
-          </Button>
+          <div style={{ display: 'flex', gap: '5px' }}>
+            <Button size="small" variant="info" onClick={() => handleEditClient(client)}>
+              ✏️ Modifier
+            </Button>
+            <Button size="small" variant="danger" onClick={() => handleDeleteClient(client.id)}>
+              🗑️
+            </Button>
+          </div>
         )}
       />
 
-      {/* MODAL CONFIGURATION COMPTE COMPTABLE */}
+      {/* MODAL CRUD CLIENT */}
       <Modal
         isOpen={showModal}
-        onClose={() => { setShowModal(false); setSelectedClient(null); }}
-        title={`⚙️ Configuration Compte Comptable - ${selectedClient?.nom}`}
-        size="medium"
+        onClose={() => setShowModal(false)}
+        title={isEditing ? `✏️ Modifier Client - ${clientData.nom}` : '➕ Nouveau Client'}
+        size="large"
       >
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          {/* SECTION 1: INFORMATIONS GÉNÉRALES */}
           <div style={{ 
             padding: '15px', 
             backgroundColor: '#f8f9fa', 
             borderRadius: '8px',
             marginBottom: '20px'
           }}>
-            <div style={{ fontSize: '14px', marginBottom: '5px', color: '#666' }}>Client</div>
-            <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{selectedClient?.nom}</div>
-            <div style={{ fontSize: '14px', color: '#666', marginTop: '5px' }}>
-              N° Client: {selectedClient?.numeroClient || 'N/A'}
+            <h4 style={{ marginTop: 0 }}>📋 Informations Générales</h4>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <FormField
+                label="Nom *"
+                value={clientData.nom}
+                onChange={(e) => setClientData({ ...clientData, nom: e.target.value })}
+                placeholder="Nom du client"
+              />
+              <FormField
+                label="Email *"
+                type="email"
+                value={clientData.email}
+                onChange={(e) => setClientData({ ...clientData, email: e.target.value })}
+                placeholder="email@exemple.com"
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginTop: '15px' }}>
+              <FormField
+                label="Téléphone"
+                value={clientData.telephone}
+                onChange={(e) => setClientData({ ...clientData, telephone: e.target.value })}
+                placeholder="+221 77 123 45 67"
+              />
+              <FormField
+                label="Type"
+                type="select"
+                value={clientData.type}
+                onChange={(e) => setClientData({ ...clientData, type: e.target.value })}
+                options={[
+                  { value: 'particulier', label: 'Particulier' },
+                  { value: 'entreprise', label: 'Entreprise' },
+                  { value: 'administration', label: 'Administration' },
+                ]}
+              />
+              <FormField
+                label="Catégorie"
+                type="select"
+                value={clientData.categorie}
+                onChange={(e) => setClientData({ ...clientData, categorieClient: e.target.value })}
+                options={[
+                  { value: 'standard', label: 'Standard' },
+                  { value: 'premium', label: 'Premium' },
+                  { value: 'vip', label: 'VIP' },
+                ]}
+              />
+            </div>
+
+            <div style={{ marginTop: '15px' }}>
+              <FormField
+                label="Adresse"
+                value={clientData.adresse}
+                onChange={(e) => setClientData({ ...clientData, adresse: e.target.value })}
+                placeholder="Rue, quartier..."
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '15px' }}>
+              <FormField
+                label="Ville"
+                value={clientData.ville}
+                onChange={(e) => setClientData({ ...clientData, ville: e.target.value })}
+                placeholder="Dakar"
+              />
+              <FormField
+                label="Pays"
+                value={clientData.pays}
+                onChange={(e) => setClientData({ ...clientData, pays: e.target.value })}
+                placeholder="Sénégal"
+              />
             </div>
           </div>
 
-          <FormField
-            label="Compte Comptable (SYSCOHADA/IFRS/PCG)"
-            type="select"
-            value={selectedCompteId || ''}
-            onChange={(e) => setSelectedCompteId(parseInt(e.target.value) || null)}
-            options={[
-              { value: '', label: '-- Sélectionner un compte --' },
-              ...comptesComptables
-                .filter(c => c.actif)
-                .map(c => ({
-                  value: c.id,
-                  label: `${c.numero} - ${c.nom} (${c.type})`
-                }))
-            ]}
-          />
-
+          {/* SECTION 2: CONFIGURATION COMPTABLE */}
           <div style={{ 
             padding: '15px', 
-            backgroundColor: '#fff3cd', 
+            backgroundColor: '#e8f5e9', 
             borderRadius: '8px',
-            marginTop: '15px',
-            border: '1px solid #ffc107'
+            marginBottom: '20px'
           }}>
-            <div style={{ fontSize: '12px', color: '#856404' }}>
-              💡 <strong>Conseil:</strong> Pour les clients, utilisez généralement un compte de classe 4 (Comptes de tiers) comme:
+            <h4 style={{ marginTop: 0 }}>💰 Configuration Comptable</h4>
+            
+            <FormField
+              label="Compte Comptable (SYSCOHADA/IFRS/PCG)"
+              type="select"
+              value={clientData.compteComptableId || ''}
+              onChange={(e) => setClientData({ ...clientData, compteComptableId: parseInt(e.target.value) || null })}
+              options={[
+                { value: '', label: '-- Sélectionner un compte --' },
+                ...comptesComptables
+                  .filter(c => c.actif)
+                  .map(c => ({
+                    value: c.id,
+                    label: `${c.numero} - ${c.nom} (${c.type})`
+                  }))
+              ]}
+            />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '15px' }}>
+              <FormField
+                label="Délai de Paiement (jours)"
+                type="number"
+                value={clientData.delaiPaiement}
+                onChange={(e) => setClientData({ ...clientData, delaiPaiement: parseInt(e.target.value) || 30 })}
+              />
+              <FormField
+                label="Limite de Crédit (FCFA)"
+                type="number"
+                value={clientData.limiteCredit}
+                onChange={(e) => setClientData({ ...clientData, limiteCredit: parseFloat(e.target.value) || 0 })}
+              />
             </div>
-            <ul style={{ fontSize: '12px', color: '#856404', marginTop: '10px', marginBottom: 0 }}>
-              <li>411 - Clients</li>
-              <li>4111 - Clients ordinaires</li>
-              <li>4117 - Créances douteuses</li>
-            </ul>
+
+            <div style={{ 
+              padding: '10px', 
+              backgroundColor: '#fff3cd', 
+              borderRadius: '8px',
+              marginTop: '15px',
+              border: '1px solid #ffc107'
+            }}>
+              <div style={{ fontSize: '12px', color: '#856404' }}>
+                💡 <strong>Conseil:</strong> Pour les clients, utilisez généralement un compte de classe 4 (Comptes de tiers): 411 - Clients, 4111 - Clients ordinaires, 4117 - Créances douteuses
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 3: ÉCHÉANCES PERSONNALISÉES */}
+          <div style={{ 
+            padding: '15px', 
+            backgroundColor: '#fff3e0', 
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h4 style={{ marginTop: 0 }}>📅 Échéances Personnalisées</h4>
+              <Button size="small" variant="primary" onClick={addEcheance}>
+                ➕ Ajouter une échéance
+              </Button>
+            </div>
+
+            {clientData.echeancesPersonnalisees.length === 0 ? (
+              <div style={{ 
+                padding: '20px', 
+                textAlign: 'center',
+                backgroundColor: '#fff',
+                borderRadius: '8px',
+                border: '2px dashed #dee2e6'
+              }}>
+                <p style={{ color: '#999', margin: 0 }}>
+                  Aucune échéance personnalisée. Cliquez sur "Ajouter une échéance" pour créer des échéances de paiement spécifiques.
+                </p>
+              </div>
+            ) : (
+              <div style={{ marginTop: '15px' }}>
+                {clientData.echeancesPersonnalisees.map((echeance, index) => (
+                  <div key={index} style={{ 
+                    display: 'flex', 
+                    gap: '10px', 
+                    alignItems: 'center',
+                    marginBottom: '10px',
+                    padding: '10px',
+                    backgroundColor: '#fff',
+                    borderRadius: '8px',
+                    border: '1px solid #dee2e6'
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <FormField
+                        label="Jours"
+                        type="number"
+                        value={echeance.jours}
+                        onChange={(e) => updateEcheance(index, 'jours', parseInt(e.target.value) || 0)}
+                        placeholder="30"
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <FormField
+                        label="Pourcentage (%)"
+                        type="number"
+                        value={echeance.pourcentage}
+                        onChange={(e) => updateEcheance(index, 'pourcentage', parseInt(e.target.value) || 0)}
+                        placeholder="100"
+                      />
+                    </div>
+                    <Button 
+                      size="small" 
+                      variant="danger" 
+                      onClick={() => removeEcheance(index)}
+                      style={{ marginTop: '20px' }}
+                    >
+                      🗑️
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 4: MODES DE PAIEMENT PRÉFÉRÉS */}
+          <div style={{ 
+            padding: '15px', 
+            backgroundColor: '#e3f2fd', 
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <h4 style={{ marginTop: 0 }}>💳 Modes de Paiement Préférés</h4>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              {[
+                { value: 'mobile_money', label: '📱 Mobile Money', icon: '📱' },
+                { value: 'carte_bancaire', label: '💳 Carte Bancaire', icon: '💳' },
+                { value: 'virement', label: '🏦 Virement Bancaire', icon: '🏦' },
+                { value: 'especes', label: '💵 Espèces', icon: '💵' },
+                { value: 'cheque', label: '📝 Chèque', icon: '📝' },
+                { value: 'credit', label: '📊 Crédit', icon: '📊' },
+              ].map(mode => (
+                <label 
+                  key={mode.value}
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    padding: '10px',
+                    backgroundColor: (clientData.modesPaiementPreferes || []).includes(mode.value) ? '#4CAF50' : '#fff',
+                    color: (clientData.modesPaiementPreferes || []).includes(mode.value) ? '#fff' : '#000',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    border: '2px solid #dee2e6',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  <input 
+                    type="checkbox"
+                    checked={(clientData.modesPaiementPreferes || []).includes(mode.value)}
+                    onChange={() => toggleModePaiement(mode.value)}
+                    style={{ marginRight: '10px' }}
+                  />
+                  <span>{mode.icon} {mode.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-          <Button variant="secondary" onClick={() => { setShowModal(false); setSelectedClient(null); }}>
+        {/* ACTIONS */}
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+          <Button variant="secondary" onClick={() => setShowModal(false)}>
             Annuler
           </Button>
-          <Button variant="success" onClick={handleSaveCompte}>
-            💾 Enregistrer
+          <Button variant="success" onClick={handleSubmit}>
+            💾 {isEditing ? 'Modifier' : 'Créer'} le Client
           </Button>
         </div>
       </Modal>

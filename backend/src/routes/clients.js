@@ -105,6 +105,9 @@ router.post('/', async (req, res) => {
       remise,
       soldeDu,
       actif,
+      compteComptableId,
+      echeancesPersonnalisees,
+      modesPaiementPreferes,
     } = req.body;
 
     // Validation des champs obligatoires
@@ -153,6 +156,38 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Validation des champs JSONB
+    if (echeancesPersonnalisees && !Array.isArray(echeancesPersonnalisees)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Les échéances doivent être un tableau',
+      });
+    }
+
+    if (echeancesPersonnalisees) {
+      for (const ech of echeancesPersonnalisees) {
+        if (!ech.jours || !ech.pourcentage || isNaN(ech.jours) || isNaN(ech.pourcentage)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Chaque échéance doit avoir jours et pourcentage valides',
+          });
+        }
+        if (ech.pourcentage < 0 || ech.pourcentage > 100) {
+          return res.status(400).json({
+            success: false,
+            message: 'Le pourcentage d\'échéance doit être entre 0 et 100',
+          });
+        }
+      }
+    }
+
+    if (modesPaiementPreferes && !Array.isArray(modesPaiementPreferes)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Les modes de paiement doivent être un tableau',
+      });
+    }
+
     // Créer le client avec l'entrepriseId automatique
     const newClient = await db
       .insert(clients)
@@ -172,6 +207,9 @@ router.post('/', async (req, res) => {
         remise: remise || '0',
         soldeDu: soldeDu || '0',
         actif: actif !== undefined ? actif : true,
+        compteComptableId: compteComptableId || null,
+        echeancesPersonnalisees: echeancesPersonnalisees || null,
+        modesPaiementPreferes: modesPaiementPreferes || null,
       })
       .returning();
 
@@ -221,6 +259,9 @@ router.put('/:id', async (req, res) => {
       remise,
       soldeDu,
       actif,
+      compteComptableId,
+      echeancesPersonnalisees,
+      modesPaiementPreferes,
     } = req.body;
 
     // Vérifier que le client existe et appartient à l'entreprise
@@ -285,6 +326,37 @@ router.put('/:id', async (req, res) => {
       });
     }
 
+    // Validation des champs JSONB
+    if (echeancesPersonnalisees !== undefined) {
+      if (!Array.isArray(echeancesPersonnalisees)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Les échéances doivent être un tableau',
+        });
+      }
+      for (const ech of echeancesPersonnalisees) {
+        if (!ech.jours || !ech.pourcentage || isNaN(ech.jours) || isNaN(ech.pourcentage)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Chaque échéance doit avoir jours et pourcentage valides',
+          });
+        }
+        if (ech.pourcentage < 0 || ech.pourcentage > 100) {
+          return res.status(400).json({
+            success: false,
+            message: 'Le pourcentage d\'échéance doit être entre 0 et 100',
+          });
+        }
+      }
+    }
+
+    if (modesPaiementPreferes !== undefined && !Array.isArray(modesPaiementPreferes)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Les modes de paiement doivent être un tableau',
+      });
+    }
+
     // Construire l'objet de mise à jour (seulement les champs fournis)
     const updateData = {
       updatedAt: new Date(),
@@ -304,6 +376,9 @@ router.put('/:id', async (req, res) => {
     if (remise !== undefined) updateData.remise = remise;
     if (soldeDu !== undefined) updateData.soldeDu = soldeDu;
     if (actif !== undefined) updateData.actif = actif;
+    if (compteComptableId !== undefined) updateData.compteComptableId = compteComptableId;
+    if (echeancesPersonnalisees !== undefined) updateData.echeancesPersonnalisees = echeancesPersonnalisees;
+    if (modesPaiementPreferes !== undefined) updateData.modesPaiementPreferes = modesPaiementPreferes;
 
     // Mettre à jour le client
     const updatedClient = await db

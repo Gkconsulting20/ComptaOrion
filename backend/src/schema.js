@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, integer, decimal, boolean, timestamp, date, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, integer, decimal, boolean, timestamp, date, pgEnum, jsonb } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ==========================================
@@ -88,6 +88,8 @@ export const clients = pgTable('clients', {
   delaiPaiement: integer('delai_paiement').default(30), // jours
   remise: decimal('remise', { precision: 5, scale: 2 }).default('0'), // %
   soldeDu: decimal('solde_du', { precision: 15, scale: 2 }).default('0'),
+  echeancesPersonnalisees: jsonb('echeances_personnalisees'), // [{jours: 30, pourcentage: 100}]
+  modesPaiementPreferes: jsonb('modes_paiement_preferes'), // ['mobile_money', 'carte_bancaire']
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
