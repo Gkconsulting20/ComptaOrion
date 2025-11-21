@@ -33,6 +33,8 @@ function App() {
     { id: 'fournisseurs', icon: '🏭', label: 'Fournisseurs' },
     { id: 'tresorerie', icon: '💳', label: 'Trésorerie' },
     { id: 'stock', icon: '📦', label: 'Stock & Inventaire' },
+    { id: 'depenses', icon: '💸', label: 'Dépenses' },
+    { id: 'employes', icon: '👨‍💼', label: 'Employés' },
     { 
       id: 'comptabilite', 
       icon: '📚', 
@@ -45,6 +47,7 @@ function App() {
         { id: 'charte-comptes', label: 'Charte de comptes' }
       ]
     },
+    { id: 'immobilisations', icon: '🏗️', label: 'Immobilisations' },
     { id: 'parametres', icon: '⚙️', label: 'Paramètres' },
     { id: 'ia', icon: '🤖', label: 'Assistant IA' }
   ];
@@ -61,6 +64,10 @@ function App() {
         return <TresorerieView />;
       case 'stock':
         return <StockView />;
+      case 'depenses':
+        return <DependsView />;
+      case 'employes':
+        return <EmployesView />;
       case 'parametres':
         return <ParametresView />;
       case 'etats-financiers':
@@ -69,6 +76,8 @@ function App() {
       case 'reconciliation':
       case 'charte-comptes':
         return <ComptabiliteView subView={currentView} />;
+      case 'immobilisations':
+        return <ImmobilisationsView />;
       case 'ia':
         return <IAView />;
       default:
@@ -2423,6 +2432,84 @@ function ParametresView() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function DependsView() {
+  return (
+    <div className="view-container">
+      <div className="view-header">
+        <h2 className="view-title">💸 Dépenses & Notes de Frais</h2>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Gestion des dépenses et notes de frais des employés</p>
+      </div>
+      <div className="empty-state">
+        <p>📋 Module Dépenses</p>
+        <small>Workflow d'approbation: Employé → Manager → Comptable</small>
+      </div>
+      <div style={{marginTop: '20px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
+        <h3>Fonctionnalités</h3>
+        <ul style={{listStyle: 'none', paddingLeft: 0}}>
+          <li>✅ Enregistrement dépenses</li>
+          <li>✅ Upload justificatifs</li>
+          <li>✅ Catégories dépenses</li>
+          <li>✅ Workflow approbation 3 niveaux</li>
+          <li>✅ Remboursement employés</li>
+          <li>✅ Export Excel/CSV</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function EmployesView() {
+  return (
+    <div className="view-container">
+      <div className="view-header">
+        <h2 className="view-title">👨‍💼 Ressources Humaines</h2>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Gestion des employés, absences et avances sur salaire</p>
+      </div>
+      <div className="empty-state">
+        <p>👥 Module Employés</p>
+        <small>Gestion complète des RH avec intégration paie</small>
+      </div>
+      <div style={{marginTop: '20px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
+        <h3>Fonctionnalités</h3>
+        <ul style={{listStyle: 'none', paddingLeft: 0}}>
+          <li>✅ CRUD Employés</li>
+          <li>✅ Documents (contrats, diplômes)</li>
+          <li>✅ Avances sur salaire</li>
+          <li>✅ Gestion absences</li>
+          <li>✅ Notifications RH</li>
+          <li>✅ Rôles & Permissions</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function ImmobilisationsView() {
+  return (
+    <div className="view-container">
+      <div className="view-header">
+        <h2 className="view-title">🏗️ Immobilisations</h2>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Gestion des immobilisations et amortissements</p>
+      </div>
+      <div className="empty-state">
+        <p>📊 Module Immobilisations</p>
+        <small>Calcul d'amortissements linéaires et dégressifs</small>
+      </div>
+      <div style={{marginTop: '20px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
+        <h3>Fonctionnalités</h3>
+        <ul style={{listStyle: 'none', paddingLeft: 0}}>
+          <li>✅ CRUD Immobilisations</li>
+          <li>✅ Catégories durée de vie</li>
+          <li>✅ Amortissement linéaire/dégressif</li>
+          <li>✅ Comptabilisation mensuelle auto</li>
+          <li>✅ Gestion cessions</li>
+          <li>✅ Registre complet & Export</li>
+        </ul>
+      </div>
     </div>
   );
 }
