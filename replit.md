@@ -16,15 +16,21 @@ ComptaOrion est un ERP (Enterprise Resource Planning) complet et léger, spécia
 1. **Tableau de bord** 📊 - Vue d'ensemble avec métriques clés
 2. **Gestion clients** 👥 - Fichier clients complet
 3. **Gestion fournisseurs** 🏭 - Suivi des fournisseurs et dettes
-4. **Gestion de trésorerie** 💳 - Encaissements, décaissements, solde
-5. **Stock & Inventaire** 📦 - Gestion complète des stocks
-6. **Comptabilité** 📚 - Module complet avec :
+4. **Achats** 🛒 - Module complet avec :
+   - Bons de commande (numérotation auto CMD-2025-0001)
+   - Réceptions de marchandises (entrée automatique en stock)
+   - Factures fournisseurs (numérotation FACT-ACH-2025-0001)
+   - Paiements fournisseurs (impact trésorerie automatique)
+   - Échéancier des règlements
+5. **Gestion de trésorerie** 💳 - Encaissements, décaissements, solde
+6. **Stock & Inventaire** 📦 - Gestion complète des stocks
+7. **Comptabilité** 📚 - Module complet avec :
    - États financiers (Bilan, Compte de résultat, Flux de trésorerie)
    - Grand livre
    - Écriture de journal
    - Réconciliation bancaire
    - Charte de comptes
-7. **Assistant IA** 🤖 - Aide intelligente et automatisation
+8. **Assistant IA** 🤖 - Aide intelligente et automatisation
 
 ## Structure du projet
 ```
@@ -79,6 +85,29 @@ ComptaOrion est un ERP (Enterprise Resource Planning) complet et léger, spécia
 ### Fournisseurs
 - `GET /api/fournisseurs` - Liste des fournisseurs
 - `POST /api/fournisseurs` - Créer un fournisseur
+- `PUT /api/fournisseurs/:id` - Modifier un fournisseur
+- `DELETE /api/fournisseurs/:id` - Supprimer un fournisseur
+
+### Achats (Module complet)
+**Bons de commande**
+- `GET /api/commandes-achat` - Liste des commandes d'achat
+- `POST /api/commandes-achat` - Créer une commande (numérotation auto)
+- `GET /api/commandes-achat/:id` - Détails d'une commande
+- `PUT /api/commandes-achat/:id` - Modifier une commande
+- `PUT /api/commandes-achat/:id/statut` - Changer statut (confirmer, annuler)
+- `DELETE /api/commandes-achat/:id` - Supprimer une commande
+
+**Réceptions de marchandises**
+- `POST /api/receptions` - Enregistrer une réception (impact stock automatique)
+- `GET /api/receptions/commande/:commandeId` - Historique réceptions d'une commande
+
+**Factures fournisseurs**
+- `GET /api/achats/factures` - Liste des factures fournisseurs
+- `POST /api/achats/factures` - Créer une facture fournisseur
+- `GET /api/achats/factures/:id` - Détails d'une facture
+- `PUT /api/achats/factures/:id/statut` - Valider/annuler une facture
+- `POST /api/achats/factures/:id/paiement` - Enregistrer un paiement (impact trésorerie)
+- `GET /api/achats/echeances` - Échéancier des factures à payer
 
 ### Trésorerie
 - `GET /api/tresorerie` - État de trésorerie
@@ -182,6 +211,13 @@ Configuré pour déploiement **autoscale** sur Replit :
   - Calculs automatiques HT/TVA/TTC
   - Enregistrement paiements (mobile money, carte, virement, espèces)
   - Impact automatique sur trésorerie
+✅ **Module Achats** - CRUD complet avec workflow :
+  - Bons de commande (CMD-2025-0001)
+  - Réceptions marchandises (impact stock automatique)
+  - Factures fournisseurs (FACT-ACH-2025-0001)
+  - Paiements fournisseurs (impact trésorerie automatique)
+  - Échéancier et suivi dettes
+  - Tables séparées achats/ventes pour intégrité
 ✅ **Module Paramètres** - Configuration entreprise :
   - Gestion année fiscale
   - Choix système comptable (SYSCOHADA, IFRS, PCG)
@@ -197,11 +233,15 @@ Configuré pour déploiement **autoscale** sur Replit :
 
 ### ⚠️ **Prochaine étape : Phase 2 - Compléter modules restants**
 **À implémenter** :
-- Routes CRUD pour Fournisseurs, Employés, Trésorerie, Immobilisations
+- Routes CRUD pour Employés, Immobilisations
+- Gestion de trésorerie complète (rapprochement bancaire)
 - Impact stock lors des ventes (déduction automatique)
 - Impact comptable lors des transactions (écritures automatiques)
-- Dashboard avec métriques calculées
-- Factures récurrentes, PDF, envoi email
+- Dashboard avec métriques calculées (CA, achats, marge, tréso)
+- PDF pour factures/commandes
+- Envoi email automatique
+- Factures récurrentes
+- Transactions atomiques pour opérations critiques (paiements, stock)
 
 ## Prochaines étapes prioritaires
 1. **Connecter formulaires au backend** - Implémenter la logique CRUD pour sauvegarder/charger les données

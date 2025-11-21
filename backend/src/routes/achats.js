@@ -429,7 +429,12 @@ router.post('/factures/:id/paiement', async (req, res) => {
         statut: nouveauStatut,
         updatedAt: new Date()
       })
-      .where(eq(facturesAchat.id, parseInt(id)))
+      .where(
+        and(
+          eq(facturesAchat.id, parseInt(id)),
+          eq(facturesAchat.entrepriseId, req.entrepriseId)
+        )
+      )
       .returning();
 
     // Impact sur le solde dû du fournisseur
@@ -439,7 +444,12 @@ router.post('/factures/:id/paiement', async (req, res) => {
         soldeDu: sql`${fournisseurs.soldeDu} - ${montantPaiement}`,
         updatedAt: new Date()
       })
-      .where(eq(fournisseurs.id, factureData.fournisseurId));
+      .where(
+        and(
+          eq(fournisseurs.id, factureData.fournisseurId),
+          eq(fournisseurs.entrepriseId, req.entrepriseId)
+        )
+      );
 
     // Impact sur la trésorerie si un compte bancaire est spécifié
     if (compteBancaireId) {
@@ -465,7 +475,12 @@ router.post('/factures/:id/paiement', async (req, res) => {
           soldeActuel: sql`${comptesBancaires.soldeActuel} - ${montantPaiement}`,
           updatedAt: new Date()
         })
-        .where(eq(comptesBancaires.id, parseInt(compteBancaireId)));
+        .where(
+          and(
+            eq(comptesBancaires.id, parseInt(compteBancaireId)),
+            eq(comptesBancaires.entrepriseId, req.entrepriseId)
+          )
+        );
     }
 
     return res.json({

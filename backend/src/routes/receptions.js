@@ -72,7 +72,12 @@ router.post('/', async (req, res) => {
       const [commandeItem] = await db
         .select()
         .from(commandesAchatItems)
-        .where(eq(commandesAchatItems.id, parseInt(item.commandeItemId)))
+        .where(
+          and(
+            eq(commandesAchatItems.id, parseInt(item.commandeItemId)),
+            eq(commandesAchatItems.entrepriseId, req.entrepriseId)
+          )
+        )
         .limit(1);
 
       if (!commandeItem) {
@@ -124,7 +129,12 @@ router.post('/', async (req, res) => {
         const [produit] = await db
           .select()
           .from(produits)
-          .where(eq(produits.id, commandeItem.produitId))
+          .where(
+            and(
+              eq(produits.id, commandeItem.produitId),
+              eq(produits.entrepriseId, req.entrepriseId)
+            )
+          )
           .limit(1);
 
         if (produit) {
