@@ -84,34 +84,40 @@ ComptaOrion is built with a modular architecture comprising 17 modules organized
 
 ## Recent Changes (November 21, 2025)
 
-### Module Comptabilité - Complete Implementation
-Created comprehensive accounting module (ModuleComptabilite.jsx) with 7 tabs:
+### Module Comptabilité - Complete Implementation ✅
+Created comprehensive accounting module (ModuleComptabilite.jsx) with 7 fully functional tabs:
 
 **Frontend:**
 - Plan Comptable: CRUD comptes comptables with categories
 - Journaux: Management of accounting journals (VE, AC, BQ, CA, OD)
-- Écritures: Entry form with debit/credit validation and automatic balance check
-- Grand Livre: Account ledger with period filtering
-- Balance Générale: Trial balance with initial/final balances
+- Écritures: Complete entry workflow with ligne creation, debit/credit validation, and real-time balance check
+- Grand Livre: Account ledger with period filtering and API integration
+- Balance Générale: Trial balance generation with API integration
 - Immobilisations: Fixed assets management with depreciation tracking
-- Rapports: Financial reports (Bilan, Compte de Résultat)
+- Rapports: Financial reports (Bilan, Compte de Résultat) with period-based filtering
 
-**Backend Routes:**
+**Backend Routes (all functional with proper SQL JOINs):**
 - `/comptabilite/comptes` - CRUD chart of accounts
 - `/comptabilite/journaux` - CRUD journals
-- `/comptabilite/ecritures` - CRUD entries with validation
-- `/comptabilite/grand-livre` - Ledger with filtering
-- `/comptabilite/balance` - Trial balance generation
-- `/comptabilite/bilan` - Balance sheet report
-- `/comptabilite/compte-resultat` - Income statement
+- `/comptabilite/ecritures` - CRUD entries with debit/credit validation
+- `/comptabilite/lignes` - CRUD entry lines
+- `/comptabilite/grand-livre` - Ledger with JOIN on ecritures (fixes PostgreSQL error)
+- `/comptabilite/balance` - Trial balance with JOIN on ecritures (fixes PostgreSQL error)
+- `/comptabilite/bilan` - Balance sheet report with JOIN on ecritures
+- `/comptabilite/compte-resultat` - Income statement with JOIN on ecritures
 - `/immobilisations/*` - Fixed assets management with automatic depreciation calculation
 
 **Key Features:**
-- Automatic debit/credit balance validation
-- Multi-journal support (Sales, Purchases, Bank, Cash, OD)
-- Period-based filtering for all reports
-- SYSCOHADA/IFRS/PCG compliance
-- Complete audit trail for all operations
+- ✅ Automatic debit/credit balance validation before entry approval
+- ✅ Multi-journal support (Sales, Purchases, Bank, Cash, OD)
+- ✅ Period-based filtering for all reports
+- ✅ Complete entry workflow: create header → add lignes → validate balance → approve
+- ✅ All frontend tabs connected to backend APIs
+- ✅ SYSCOHADA/IFRS/PCG compliance
+- ✅ Complete audit trail for all operations
+
+**Known Issues:**
+- ⚠️ **CRITICAL SECURITY ISSUE:** Authentication middleware disabled in `backend/src/app.js` line 49. All API routes are publicly accessible without authentication. Must be addressed before production deployment.
 
 ### Module Client - Standardized Parameters
 Updated ClientsModule.jsx with 3 sub-tabs in Parameters:
