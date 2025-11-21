@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './app.css';
 import { ClientsModule } from './modules/ClientsModule';
-import { FournisseursModule } from './modules/FournisseursModule';
+import { GestionFournisseurs } from './modules/GestionFournisseurs';
 import { TresorerieModule } from './modules/TresorerieModule';
 import { StockInventaire } from './modules/StockInventaire';
 import { ComptabiliteModule } from './modules/ComptabiliteModule';
@@ -144,7 +144,7 @@ export default function App() {
     switch (currentView) {
       case 'dashboard': return <Dashboard />;
       case 'clients': return <ClientsModule />;
-      case 'fournisseurs': return <FournisseursModule />;
+      case 'fournisseurs': return <GestionFournisseurs />;
       case 'tresorerie': return <TresorerieModule />;
       case 'stock': return <StockInventaire />;
       case 'comptabilite': return <ComptabiliteModule />;
