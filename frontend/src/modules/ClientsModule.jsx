@@ -1192,10 +1192,14 @@ function RelancesTab() {
 // ONGLET 6: PARAMETRES CLIENT (CRUD COMPLET)
 // ==========================================
 function ParametresTab() {
+  const [subTab, setSubTab] = useState('clients');
   const [clients, setClients] = useState([]);
   const [comptesComptables, setComptesComptables] = useState([]);
+  const [taxes, setTaxes] = useState([]);
+  const [codesComptables, setCodesComptables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [clientData, setClientData] = useState({
     nom: '',
@@ -1212,6 +1216,8 @@ function ParametresTab() {
     echeancesPersonnalisees: [],
     modesPaiementPreferes: [],
   });
+  const [taxeData, setTaxeData] = useState({ nom: '', taux: 0, codeComptable: '' });
+  const [codeComptableData, setCodeComptableData] = useState({ code: '', libelle: '' });
 
   useEffect(() => {
     loadData();
@@ -1225,6 +1231,17 @@ function ParametresTab() {
       ]);
       setClients(clientsRes.data || []);
       setComptesComptables(comptesRes.data || []);
+      setTaxes([
+        { id: 1, nom: 'TVA 18%', taux: 18, codeComptable: '4431' },
+        { id: 2, nom: 'TVA 9%', taux: 9, codeComptable: '4432' },
+        { id: 3, nom: 'Exonéré', taux: 0, codeComptable: '-' }
+      ]);
+      setCodesComptables([
+        { id: 1, code: '411', libelle: 'Clients' },
+        { id: 2, code: '4111', libelle: 'Clients - Ventes de biens' },
+        { id: 3, code: '4112', libelle: 'Clients - Prestations de services' },
+        { id: 4, code: '4431', libelle: 'TVA collectée' }
+      ]);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -1249,6 +1266,21 @@ function ParametresTab() {
       modesPaiementPreferes: [],
     });
     setIsEditing(false);
+    setModalType('client');
+    setShowModal(true);
+  };
+
+  const handleNewTaxe = () => {
+    setTaxeData({ nom: '', taux: 0, codeComptable: '' });
+    setIsEditing(false);
+    setModalType('taxe');
+    setShowModal(true);
+  };
+
+  const handleNewCodeComptable = () => {
+    setCodeComptableData({ code: '', libelle: '' });
+    setIsEditing(false);
+    setModalType('codeComptable');
     setShowModal(true);
   };
 
@@ -1259,6 +1291,21 @@ function ParametresTab() {
       modesPaiementPreferes: client.modesPaiementPreferes || [],
     });
     setIsEditing(true);
+    setModalType('client');
+    setShowModal(true);
+  };
+
+  const handleEditTaxe = (taxe) => {
+    setTaxeData(taxe);
+    setIsEditing(true);
+    setModalType('taxe');
+    setShowModal(true);
+  };
+
+  const handleEditCodeComptable = (code) => {
+    setCodeComptableData(code);
+    setIsEditing(true);
+    setModalType('codeComptable');
     setShowModal(true);
   };
 
@@ -1275,12 +1322,16 @@ function ParametresTab() {
 
   const handleSubmit = async () => {
     try {
-      if (isEditing) {
-        await api.put(`/clients/${clientData.id}`, clientData);
-        alert('Client modifié avec succès!');
-      } else {
-        await api.post('/clients', clientData);
-        alert('Client créé avec succès!');
+      if (modalType === 'client') {
+        if (isEditing) {
+          await api.put(`/clients/${clientData.id}`, clientData);
+          alert('Client modifié avec succès!');
+        } else {
+          await api.post('/clients', clientData);
+          alert('Client créé avec succès!');
+        }
+      } else if (modalType === 'taxe' || modalType === 'codeComptable') {
+        alert('Configuration enregistrée (démo)');
       }
       loadData();
       setShowModal(false);
@@ -1344,48 +1395,118 @@ function ParametresTab() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h3>⚙️ Paramètres Client</h3>
-        <Button variant="primary" onClick={handleNewClient}>
-          ➕ Nouveau Client
-        </Button>
+      <h3>⚙️ Paramètres</h3>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '2px solid #e0e0e0' }}>
+        {['clients', 'taxes', 'codesComptables'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setSubTab(tab)}
+            style={{
+              padding: '10px 18px',
+              border: 'none',
+              background: subTab === tab ? '#3498db' : 'transparent',
+              color: subTab === tab ? 'white' : '#666',
+              cursor: 'pointer',
+              borderRadius: '6px 6px 0 0',
+              fontWeight: subTab === tab ? 'bold' : 'normal',
+              fontSize: '13px'
+            }}
+          >
+            {tab === 'clients' ? '👥 Clients' :
+             tab === 'taxes' ? '💰 Taxes' : '📋 Codes Comptables'}
+          </button>
+        ))}
       </div>
 
-      <div style={{ 
-        padding: '15px', 
-        backgroundColor: '#d1ecf1', 
-        borderRadius: '8px',
-        marginBottom: '20px',
-        border: '1px solid #bee5eb'
-      }}>
-        <p style={{ margin: 0, color: '#0c5460', fontSize: '14px' }}>
-          💡 <strong>Configuration complète des clients:</strong> Créez et configurez vos clients avec toutes leurs spécificités (compte comptable, échéances, modes de paiement).
-        </p>
-      </div>
-
-      <Table 
-        columns={columns} 
-        data={clients} 
-        actions={true}
-        customActions={(client) => (
-          <div style={{ display: 'flex', gap: '5px' }}>
-            <Button size="small" variant="info" onClick={() => handleEditClient(client)}>
-              ✏️ Modifier
-            </Button>
-            <Button size="small" variant="danger" onClick={() => handleDeleteClient(client.id)}>
-              🗑️
+      {subTab === 'clients' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h4>👥 Gestion Clients</h4>
+            <Button variant="primary" onClick={handleNewClient}>
+              ➕ Nouveau Client
             </Button>
           </div>
-        )}
-      />
 
-      {/* MODAL CRUD CLIENT */}
+          <div style={{ 
+            padding: '15px', 
+            backgroundColor: '#d1ecf1', 
+            borderRadius: '8px',
+            marginBottom: '20px',
+            border: '1px solid #bee5eb'
+          }}>
+            <p style={{ margin: 0, color: '#0c5460', fontSize: '14px' }}>
+              💡 <strong>Configuration complète des clients:</strong> Créez et configurez vos clients avec toutes leurs spécificités (compte comptable, échéances, modes de paiement).
+            </p>
+          </div>
+
+          <Table 
+            columns={columns} 
+            data={clients} 
+            actions={true}
+            customActions={(client) => (
+              <div style={{ display: 'flex', gap: '5px' }}>
+                <Button size="small" variant="info" onClick={() => handleEditClient(client)}>
+                  ✏️ Modifier
+                </Button>
+                <Button size="small" variant="danger" onClick={() => handleDeleteClient(client.id)}>
+                  🗑️
+                </Button>
+              </div>
+            )}
+          />
+        </div>
+      )}
+
+      {subTab === 'taxes' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h4>💰 Configuration des Taxes</h4>
+            <Button onClick={handleNewTaxe}>+ Nouvelle Taxe</Button>
+          </div>
+          <Table
+            columns={[
+              { key: 'nom', label: 'Nom' },
+              { key: 'taux', label: 'Taux (%)', render: (val) => `${val}%` },
+              { key: 'codeComptable', label: 'Code Comptable' }
+            ]}
+            data={taxes}
+            onEdit={handleEditTaxe}
+            actions={true}
+          />
+        </div>
+      )}
+
+      {subTab === 'codesComptables' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h4>📋 Codes Comptables</h4>
+            <Button onClick={handleNewCodeComptable}>+ Nouveau Code</Button>
+          </div>
+          <Table
+            columns={[
+              { key: 'code', label: 'Code' },
+              { key: 'libelle', label: 'Libellé' }
+            ]}
+            data={codesComptables}
+            onEdit={handleEditCodeComptable}
+            actions={true}
+          />
+        </div>
+      )}
+
+      {/* MODAL CRUD */}
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        title={isEditing ? `✏️ Modifier Client - ${clientData.nom}` : '➕ Nouveau Client'}
+        title={
+          modalType === 'client' ? (isEditing ? `✏️ Modifier Client - ${clientData.nom}` : '➕ Nouveau Client') :
+          modalType === 'taxe' ? (isEditing ? 'Modifier Taxe' : 'Nouvelle Taxe') :
+          modalType === 'codeComptable' ? (isEditing ? 'Modifier Code' : 'Nouveau Code Comptable') : ''
+        }
         size="large"
       >
+        {modalType === 'client' && (
+        <>
         <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           {/* SECTION 1: INFORMATIONS GÉNÉRALES */}
           <div style={{ 
@@ -1637,15 +1758,54 @@ function ParametresTab() {
           </div>
         </div>
 
-        {/* ACTIONS */}
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
-          <Button variant="secondary" onClick={() => setShowModal(false)}>
-            Annuler
-          </Button>
-          <Button variant="success" onClick={handleSubmit}>
-            💾 {isEditing ? 'Modifier' : 'Créer'} le Client
-          </Button>
-        </div>
+          {/* ACTIONS */}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+            <Button variant="secondary" onClick={() => setShowModal(false)}>
+              Annuler
+            </Button>
+            <Button variant="success" onClick={handleSubmit}>
+              💾 {isEditing ? 'Modifier' : 'Créer'} le Client
+            </Button>
+          </div>
+        </>
+        )}
+
+        {modalType === 'taxe' && (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <FormField label="Nom de la Taxe" name="nom" value={taxeData.nom}
+                onChange={(e) => setTaxeData({...taxeData, nom: e.target.value})} required
+                placeholder="Ex: TVA 18%" />
+              <FormField label="Taux (%)" name="taux" type="number" value={taxeData.taux}
+                onChange={(e) => setTaxeData({...taxeData, taux: parseFloat(e.target.value)})} required
+                placeholder="Ex: 18" />
+              <FormField label="Code Comptable" name="codeComptable" value={taxeData.codeComptable}
+                onChange={(e) => setTaxeData({...taxeData, codeComptable: e.target.value})}
+                placeholder="Ex: 4431" />
+            </div>
+            <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>Annuler</Button>
+              <Button type="button" variant="success" onClick={handleSubmit}>{isEditing ? 'Mettre à jour' : 'Créer'}</Button>
+            </div>
+          </div>
+        )}
+
+        {modalType === 'codeComptable' && (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
+              <FormField label="Code" name="code" value={codeComptableData.code}
+                onChange={(e) => setCodeComptableData({...codeComptableData, code: e.target.value})} required
+                placeholder="Ex: 411" />
+              <FormField label="Libellé" name="libelle" value={codeComptableData.libelle}
+                onChange={(e) => setCodeComptableData({...codeComptableData, libelle: e.target.value})} required
+                placeholder="Ex: Clients" />
+            </div>
+            <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>Annuler</Button>
+              <Button type="button" variant="success" onClick={handleSubmit}>{isEditing ? 'Mettre à jour' : 'Créer'}</Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
