@@ -510,19 +510,6 @@ export const comptesComptables = pgTable('comptes_comptables', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const ecritures = pgTable('ecritures', {
-  id: serial('id').primaryKey(),
-  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  journalId: integer('journal_id').references(() => journaux.id).notNull(),
-  numeroEcriture: varchar('numero_ecriture', { length: 100 }).unique(),
-  dateEcriture: date('date_ecriture').notNull(),
-  libelle: text('libelle').notNull(),
-  numeroPiece: varchar('numero_piece', { length: 100 }),
-  valide: boolean('valide').default(false),
-  userId: integer('user_id').references(() => users.id),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
 // ==========================================
 // MODULE 16: ORION EXPENSE - DEPENSES/NOTES DE FRAIS
 // ==========================================
