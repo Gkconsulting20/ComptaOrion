@@ -15,11 +15,11 @@ export function SaaSAdminModule() {
   const [formData, setFormData] = useState({});
 
   const TABS = [
-    { id: 'dashboard', label: '📊 Dashboard', icon: '📊' },
-    { id: 'clients', label: '🏢 Clients SaaS', icon: '🏢' },
-    { id: 'commerciaux', label: '👔 Commerciaux', icon: '👔' },
-    { id: 'plans', label: '💳 Plans Tarifaires', icon: '💳' },
-    { id: 'ventes', label: '💰 Ventes', icon: '💰' }
+    { id: 'dashboard', label: '📊 Dashboard' },
+    { id: 'clients', label: '🏢 Clients SaaS' },
+    { id: 'commerciaux', label: '👔 Commerciaux' },
+    { id: 'plans', label: '💳 Plans Tarifaires' },
+    { id: 'ventes', label: '💰 Ventes' }
   ];
 
   useEffect(() => {
@@ -545,7 +545,7 @@ export function SaaSAdminModule() {
                 transition: 'all 0.3s'
               }}
             >
-              {tab.icon} {tab.label}
+              {tab.label}
             </button>
           ))}
         </div>
