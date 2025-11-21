@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import { db } from '../db.js';
 import { factures, paiements, facturesAchat, paiementsFournisseurs, stockParEntrepot, produits, mouvementsStock } from '../schema.js';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
 

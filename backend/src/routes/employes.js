@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import { db } from '../db.js';
 import { employes, avancesSalaire, absences, notificationsRH, documentsEmployes, auditLogs, users } from '../schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 

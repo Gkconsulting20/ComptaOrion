@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import { db } from '../db.js';
 import { immobilisations } from '../schema.js';
 import { eq } from 'drizzle-orm';
 

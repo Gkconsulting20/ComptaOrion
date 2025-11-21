@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import { db } from '../db.js';
 import crypto from 'crypto';
 import { users, sessions, auditConnexions, passwordResetTokens } from '../schema.js';
 import { generateToken, generateRefreshToken, verifyRefreshToken, hashPassword, comparePassword, authMiddleware } from '../auth.js';

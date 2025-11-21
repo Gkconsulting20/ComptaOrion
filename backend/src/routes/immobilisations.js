@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import { db } from '../db.js';
 import { immobilisations, categoriesImmobilisations, amortissements, cessionsImmobilisations, auditLogs } from '../schema.js';
 import { eq, and, gte, lte } from 'drizzle-orm';
 

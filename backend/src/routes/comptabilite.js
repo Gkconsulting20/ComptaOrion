@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import { db } from '../db.js';
 import { 
   plansComptables, comptes, journaux, ecritures, lignesEcritures, 
   soldesComptes, auditLogs, entreprises 
