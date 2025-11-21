@@ -1387,266 +1387,97 @@ function FournisseursView() {
 }
 
 function TresorerieView() {
-  const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState('liste');
-  const [showForm, setShowForm] = useState(false);
+  const [comptes, setComptes] = useState([]);
+  const [mouvements, setMouvements] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch comptes bancaires
+        const comptesRes = await fetch('/api/tresorerie/comptes/1');
+        const comptesData = await comptesRes.json();
+        setComptes(comptesData || []);
+
+        // Fetch mouvements/transactions
+        const mouvementsRes = await fetch('/api/tresorerie/1');
+        const mouvementsData = await mouvementsRes.json();
+        setMouvements(mouvementsData || []);
+      } catch (err) {
+        console.error('Erreur chargement trésorerie:', err);
+      }
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
 
   return (
     <div className="view-container">
       <div className="view-header">
-        <h2 className="view-title">Gestion de trésorerie</h2>
+        <h2 className="view-title">💳 Trésorerie</h2>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Soldes des comptes et mouvements internes</p>
       </div>
 
-      <div className="tabs">
-        <button 
-          className={`tab ${activeTab === 'liste' ? 'active' : ''}`}
-          onClick={() => setActiveTab('liste')}
-        >
-          Transactions
-        </button>
-        <button 
-          className={`tab ${activeTab === 'parametres' ? 'active' : ''}`}
-          onClick={() => setActiveTab('parametres')}
-        >
-          Paramètres
-        </button>
-      </div>
-
-      {activeTab === 'liste' && (
-        <div className="tab-content">
-          <div className="metrics-grid">
-            <div className="metric-card-small success">
-              <h4>Encaissements</h4>
-              <p className="metric-value-small">0 FCFA</p>
-              <small>Ce mois</small>
-            </div>
-            <div className="metric-card-small danger">
-              <h4>Décaissements</h4>
-              <p className="metric-value-small">0 FCFA</p>
-              <small>Ce mois</small>
-            </div>
-            <div className="metric-card-small primary">
-              <h4>Solde net</h4>
-              <p className="metric-value-small">0 FCFA</p>
-              <small>Disponible</small>
-            </div>
-          </div>
-
-          <div className="content-header">
-            <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
-              {showForm ? 'Annuler' : '+ Nouvelle transaction'}
-            </button>
-          </div>
-
-          {showForm && (
-            <div className="form-card">
-              <h3>Enregistrer une transaction</h3>
-              <form className="professional-form">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Type de transaction *</label>
-                    <select required>
-                      <option>Encaissement</option>
-                      <option>Décaissement</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Date *</label>
-                    <input type="date" required />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Montant (FCFA) *</label>
-                    <input type="number" placeholder="0" required />
-                  </div>
-                  <div className="form-group">
-                    <label>Mode de paiement *</label>
-                    <select required>
-                      <option>Espèces</option>
-                      <option>Chèque</option>
-                      <option>Virement</option>
-                      <option>Mobile Money</option>
-                      <option>Carte bancaire</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Compte bancaire</label>
-                    <select>
-                      <option>Caisse principale</option>
-                      <option>Banque Atlantique</option>
-                      <option>Ecobank</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Catégorie</label>
-                    <select>
-                      <option>Vente</option>
-                      <option>Achat</option>
-                      <option>Frais généraux</option>
-                      <option>Salaires</option>
-                      <option>Impôts</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group full-width">
-                    <label>Description</label>
-                    <textarea rows="3" placeholder="Détails de la transaction"></textarea>
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Tiers (Client/Fournisseur)</label>
-                    <input type="text" placeholder="Nom" />
-                  </div>
-                  <div className="form-group">
-                    <label>N° pièce justificative</label>
-                    <input type="text" placeholder="Facture, reçu..." />
-                  </div>
-                </div>
-
-                <div className="form-actions">
-                  <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-                    Annuler
-                  </button>
-                  <button type="submit" className="btn-primary">
-                    Enregistrer
-                  </button>
-                </div>
-              </form>
+      <div style={{marginTop: '20px'}}>
+        <h3 style={{marginBottom: '15px'}}>📊 Comptes de Trésorerie</h3>
+        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginBottom: '30px'}}>
+          {comptes.length > 0 ? (
+            comptes.map(compte => (
+              <div key={compte.id} style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6'}}>
+                <h4 style={{marginTop: 0, marginBottom: '10px'}}>{compte.nom}</h4>
+                <p style={{fontSize: '24px', fontWeight: 'bold', color: '#28a745', marginBottom: '5px'}}>
+                  {parseFloat(compte.solde || 0).toLocaleString('fr-FR')} {compte.devise || 'XOF'}
+                </p>
+                <small style={{color: '#6c757d'}}>Type: {compte.type}</small>
+              </div>
+            ))
+          ) : (
+            <div style={{gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: '#999'}}>
+              Aucun compte enregistré
             </div>
           )}
-
-          <div className="data-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Description</th>
-                  <th>Catégorie</th>
-                  <th>Mode paiement</th>
-                  <th>Montant</th>
-                  <th>Solde</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colSpan="8" className="empty-row">Aucune transaction enregistrée</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </div>
-      )}
+      </div>
 
-      {activeTab === 'parametres' && (
-        <div className="tab-content">
-          <div className="settings-grid">
-            <div className="settings-card">
-              <h3>Comptes bancaires</h3>
-              <p className="settings-description">Gérer vos comptes bancaires et caisses</p>
-              <div className="settings-list">
-                <div className="settings-item">
-                  <span>💰 Caisse principale</span>
-                  <div className="settings-actions">
-                    <span className="badge">0 FCFA</span>
-                    <button className="btn-icon">✏️</button>
-                  </div>
-                </div>
-              </div>
-              <button className="btn-secondary btn-small">+ Ajouter un compte</button>
-            </div>
-
-            <div className="settings-card">
-              <h3>Modes de paiement</h3>
-              <p className="settings-description">Configurer les moyens de paiement</p>
-              <div className="settings-list">
-                <div className="settings-item">
-                  <span>Espèces</span>
-                  <div className="settings-actions">
-                    <button className="btn-icon">✏️</button>
-                  </div>
-                </div>
-                <div className="settings-item">
-                  <span>Mobile Money</span>
-                  <div className="settings-actions">
-                    <button className="btn-icon">✏️</button>
-                  </div>
-                </div>
-                <div className="settings-item">
-                  <span>Virement bancaire</span>
-                  <div className="settings-actions">
-                    <button className="btn-icon">✏️</button>
-                  </div>
-                </div>
-              </div>
-              <button className="btn-secondary btn-small">+ Ajouter un mode</button>
-            </div>
-
-            <div className="settings-card">
-              <h3>Catégories de transactions</h3>
-              <p className="settings-description">Organiser vos flux de trésorerie</p>
-              <div className="settings-list">
-                <div className="settings-item">
-                  <span>Ventes</span>
-                  <div className="settings-actions">
-                    <button className="btn-icon">✏️</button>
-                    <button className="btn-icon">🗑️</button>
-                  </div>
-                </div>
-                <div className="settings-item">
-                  <span>Achats</span>
-                  <div className="settings-actions">
-                    <button className="btn-icon">✏️</button>
-                    <button className="btn-icon">🗑️</button>
-                  </div>
-                </div>
-                <div className="settings-item">
-                  <span>Frais généraux</span>
-                  <div className="settings-actions">
-                    <button className="btn-icon">✏️</button>
-                    <button className="btn-icon">🗑️</button>
-                  </div>
-                </div>
-              </div>
-              <button className="btn-secondary btn-small">+ Ajouter une catégorie</button>
-            </div>
-
-            <div className="settings-card">
-              <h3>Alertes de trésorerie</h3>
-              <p className="settings-description">Surveillance des niveaux de trésorerie</p>
-              <div className="form-group">
-                <label>Seuil d'alerte minimum (FCFA)</label>
-                <input type="number" placeholder="100000" />
-              </div>
-              <div className="checkbox-group">
-                <label>
-                  <input type="checkbox" defaultChecked />
-                  <span>Alerte trésorerie basse</span>
-                </label>
-                <label>
-                  <input type="checkbox" />
-                  <span>Rapport quotidien</span>
-                </label>
-                <label>
-                  <input type="checkbox" defaultChecked />
-                  <span>Rapport hebdomadaire</span>
-                </label>
-              </div>
-              <button className="btn-primary btn-small">Enregistrer</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <div>
+        <h3 style={{marginBottom: '15px'}}>📋 Mouvements de Trésorerie</h3>
+        <table style={{width: '100%', borderCollapse: 'collapse'}}>
+          <thead>
+            <tr style={{backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6'}}>
+              <th style={{padding: '12px', textAlign: 'left'}}>Date</th>
+              <th style={{padding: '12px', textAlign: 'left'}}>Type</th>
+              <th style={{padding: '12px', textAlign: 'left'}}>Description</th>
+              <th style={{padding: '12px', textAlign: 'left'}}>Catégorie</th>
+              <th style={{padding: '12px', textAlign: 'left'}}>Tiers</th>
+              <th style={{padding: '12px', textAlign: 'right'}}>Montant</th>
+            </tr>
+          </thead>
+          <tbody>
+            {mouvements.length > 0 ? (
+              mouvements.map(mv => (
+                <tr key={mv.id} style={{borderBottom: '1px solid #dee2e6'}}>
+                  <td style={{padding: '12px'}}>{new Date(mv.dateTransaction).toLocaleDateString('fr-FR')}</td>
+                  <td style={{padding: '12px'}}>
+                    <span style={{padding: '4px 8px', borderRadius: '4px', backgroundColor: mv.type === 'encaissement' ? '#d4edda' : '#f8d7da', fontSize: '12px'}}>
+                      {mv.type === 'encaissement' ? '📥 Encaissement' : '📤 Décaissement'}
+                    </span>
+                  </td>
+                  <td style={{padding: '12px'}}>{mv.description || '-'}</td>
+                  <td style={{padding: '12px'}}>{mv.categorie || '-'}</td>
+                  <td style={{padding: '12px'}}>{mv.tiersNom || '-'}</td>
+                  <td style={{padding: '12px', textAlign: 'right', fontWeight: 'bold', color: mv.type === 'encaissement' ? '#28a745' : '#dc3545'}}>
+                    {mv.type === 'encaissement' ? '+' : '-'} {parseFloat(mv.montant || 0).toLocaleString('fr-FR')} XOF
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="6" style={{padding: '20px', textAlign: 'center', color: '#999'}}>Aucun mouvement enregistré</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
