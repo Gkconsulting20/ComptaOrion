@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcriture, journaux, comptesComptables } from '../schema.js';
+import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 
 const router = express.Router();
