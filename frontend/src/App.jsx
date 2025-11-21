@@ -5,7 +5,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [comptaSubmenu, setComptaSubmenu] = useState(false);
 
   useEffect(() => {
     const checkBackend = () => {
@@ -35,18 +34,11 @@ function App() {
     { id: 'stock', icon: '📦', label: 'Stock & Inventaire' },
     { id: 'depenses', icon: '💸', label: 'Dépenses' },
     { id: 'employes', icon: '👨‍💼', label: 'Employés' },
-    { 
-      id: 'comptabilite', 
-      icon: '📚', 
-      label: 'Comptabilité',
-      submenu: [
-        { id: 'etats-financiers', label: 'États financiers' },
-        { id: 'grand-livre', label: 'Grand livre' },
-        { id: 'journal', label: 'Écriture de journal' },
-        { id: 'reconciliation', label: 'Réconciliation' },
-        { id: 'charte-comptes', label: 'Charte de comptes' }
-      ]
-    },
+    { id: 'etats-financiers', icon: '📊', label: 'États financiers' },
+    { id: 'grand-livre', icon: '📖', label: 'Grand livre' },
+    { id: 'journal', icon: '📝', label: 'Écriture de journal' },
+    { id: 'reconciliation', icon: '✅', label: 'Réconciliation' },
+    { id: 'charte-comptes', icon: '📋', label: 'Charte de comptes' },
     { id: 'immobilisations', icon: '🏗️', label: 'Immobilisations' },
     { id: 'parametres', icon: '⚙️', label: 'Paramètres' },
     { id: 'ia', icon: '🤖', label: 'Assistant IA' }
@@ -95,36 +87,14 @@ function App() {
         
         <nav className="sidebar-nav">
           {menuItems.map(item => (
-            <div key={item.id}>
-              <button
-                className={`nav-item ${currentView === item.id || (item.submenu && item.submenu.some(sub => sub.id === currentView)) ? 'active' : ''}`}
-                onClick={() => {
-                  if (item.submenu) {
-                    setComptaSubmenu(!comptaSubmenu);
-                  } else {
-                    setCurrentView(item.id);
-                    setComptaSubmenu(false);
-                  }
-                }}
-              >
-                <span className="nav-icon">{item.icon}</span>
-                <span className="nav-label">{item.label}</span>
-                {item.submenu && <span className="submenu-arrow">{comptaSubmenu ? '▼' : '▶'}</span>}
-              </button>
-              {item.submenu && comptaSubmenu && (
-                <div className="submenu">
-                  {item.submenu.map(subItem => (
-                    <button
-                      key={subItem.id}
-                      className={`submenu-item ${currentView === subItem.id ? 'active' : ''}`}
-                      onClick={() => setCurrentView(subItem.id)}
-                    >
-                      {subItem.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <button
+              key={item.id}
+              className={`nav-item ${currentView === item.id ? 'active' : ''}`}
+              onClick={() => setCurrentView(item.id)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+            </button>
           ))}
         </nav>
       </div>
