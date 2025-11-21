@@ -24,6 +24,7 @@ import paieRoutes from './routes/paie.js';
 import bonsLivraisonRoutes from './routes/bons-livraison.js';
 import uploadRoutes from './routes/upload.js';
 import ecrituresRecurrentesRoutes from './routes/ecritures-recurrentes.js';
+import iaAssistantRoutes from './routes/ia-assistant.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -118,6 +119,9 @@ app.use('/api/fournisseurs', fournisseursRoutes);
 app.use('/api/commandes-achat', commandesAchatRoutes);
 app.use('/api/receptions', receptionsRoutes);
 app.use('/api/achats', achatsRoutes);
+
+// Module Assistant IA
+app.use('/api/ia', iaAssistantRoutes);
 
 // ===============================================
 // ROUTE INFO API
