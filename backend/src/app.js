@@ -12,11 +12,12 @@ import receptionsRoutes from './routes/receptions.js';
 import achatsRoutes from './routes/achats.js';
 import dashboardRoutes from './routes/dashboard.js';
 import authSecurityRoutes from './routes/auth-security.js';
+import dépensesRoutes from './routes/dépenses.js';
+import immobilisationsRoutes from './routes/immobilisations.js';
+import exportAssetsRoutes from './routes/export-assets.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
-import immobilisationsRoutes from './routes/immobilisations.js';
-import exportAssetsRoutes from './routes/export-assets.js';
 
 app.use(cors());
 app.use(express.json());
@@ -58,8 +59,13 @@ app.use('/api/parametres', parametresRoutes);
 
 // Dashboard
 app.use('/api/dashboard', dashboardRoutes);
+
+// Module Immobilisations
 app.use('/api/immobilisations', immobilisationsRoutes);
 app.use('/api/export-assets', exportAssetsRoutes);
+
+// Module Dépenses
+app.use('/api/depenses', dépensesRoutes);
 
 // Module Fournisseurs & Achats
 app.use('/api/fournisseurs', fournisseursRoutes);

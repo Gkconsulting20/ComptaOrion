@@ -570,6 +570,65 @@ export const depenses = pgTable('depenses', {
 // NOTE: Immobilisations module moved to MODULE 15 (ORION ASSETS)
 
 // ==========================================
+// MODULE 16: ORION EXPENSE - DÉPENSES/NOTES DE FRAIS
+// ==========================================
+
+// Catégories de dépenses
+export const categoriesDépenses = pgTable('categories_depenses', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(), // Transport, Fournitures, Repas, etc.
+  description: text('description'),
+  limiteApproval: decimal('limite_approval', { precision: 15, scale: 2 }).default('0'),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Enregistrement des dépenses
+export const depenses = pgTable('depenses', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  employeId: integer('employe_id').references(() => users.id).notNull(),
+  categorieId: integer('categorie_id').references(() => categoriesDépenses.id).notNull(),
+  montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
+  dateDepense: date('date_depense').notNull(),
+  description: text('description'),
+  justificatifUrl: text('justificatif_url'), // Stocke URL du fichier uploadé
+  récurrente: boolean('recurrente').default(false),
+  fréquenceRécurrence: varchar('frequence_recurrence', { length: 50 }), // hebdo, mensuel, etc.
+  statut: varchar('statut', { length: 50 }).default('en_attente'), // en_attente, approuvée, rejetée, remboursée, partiellement_remboursée
+  montantApprouve: decimal('montant_approuve', { precision: 15, scale: 2 }).default('0'),
+  montantRembourse: decimal('montant_rembourse', { precision: 15, scale: 2 }).default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Workflow d'approbation
+export const approvalsDépenses = pgTable('approvals_depenses', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  depenseId: integer('depense_id').references(() => depenses.id).notNull(),
+  etape: varchar('etape', { length: 50 }).notNull(), // manager, comptable
+  statut: varchar('statut', { length: 50 }).default('en_attente'), // en_attente, approuvée, rejetée
+  approbateurId: integer('approbateur_id').references(() => users.id),
+  dateApprobation: timestamp('date_approbation'),
+  raison: text('raison'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Remboursements employés
+export const remboursementsEmployes = pgTable('remboursements_employes', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  depenseId: integer('depense_id').references(() => depenses.id).notNull(),
+  montantRembourse: decimal('montant_rembourse', { precision: 15, scale: 2 }).notNull(),
+  dateRemboursement: date('date_remboursement').notNull(),
+  methodePaiement: varchar('methode_paiement', { length: 100 }), // virement, chèque, cash
+  statut: varchar('statut', { length: 50 }).default('complété'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ==========================================
 // MODULE 7: EMPLOYÉS (HR LITE)
 // ==========================================
 

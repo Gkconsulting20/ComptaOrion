@@ -143,3 +143,64 @@ ComptaOrion dispose maintenant de **15 modules** complets :
 12. Immobilisations/Amortissements ✅ NEW
 
 **APPLICATION COMPLÈTE ET PRÊTE POUR PRODUCTION** 🚀
+
+## ✅ MODULE ORION EXPENSE - DÉPENSES/NOTES DE FRAIS (Phase 5 - COMPLÉTÉ)
+
+### Fonctionnalités implémentées
+
+✅ **Enregistrement dépenses**
+- Créer dépense avec montant et catégorie
+- Justificatif uploadable (image/PDF)
+- Récurrence optionnelle (hebdo, mensuel, etc.)
+
+✅ **Catégories dépenses**
+- Transport, Fournitures, Repas, etc.
+- Limites d'approbation par catégorie
+
+✅ **Workflow d'approbation**
+- Employé → Manager → Comptable
+- Statut: en_attente → approuvée → remboursée
+- Possibilité de rejet avec raison
+
+✅ **Dépenses récurrentes**
+- Support pour dépenses mensuelles/hebdomadaires
+- Fréquence configurable
+
+✅ **Remboursement employés**
+- Enregistrement remboursement partiel ou complet
+- Méthodes: virement, chèque, cash
+- Suivi statut remboursement
+
+✅ **Impact automatique**
+- Trésorerie: déduction automatique au remboursement
+- Comptabilité: création journal d'achats automatique
+- Mise à jour soldes employés
+
+✅ **Historique dépenses**
+- Lister toutes les dépenses par employé
+- Filtrage par statut/catégorie
+- Audit trail complet
+
+✅ **Export Excel/CSV**
+- GET `/api/depenses/export?format=csv`
+- Colonnes: Date, Employé, Catégorie, Montant, Description, Statut, Remboursé
+
+### Tables Database créées
+- `categories_depenses` (catégories avec limites)
+- `depenses` (enregistrement dépenses)
+- `approvals_depenses` (workflow approbation)
+- `remboursements_employes` (suivi remboursements)
+
+### Routes API implémentées
+- POST `/api/depenses/create` - Créer dépense
+- GET `/api/depenses/list` - Lister dépenses
+- GET `/api/depenses/categories` - Catégories
+- POST `/api/depenses/categories` - Créer catégorie
+- POST `/api/depenses/approve/:depenseId/:etape` - Approuver dépense
+- POST `/api/depenses/remboursement` - Enregistrer remboursement
+- GET `/api/depenses/export?format=csv` - Export CSV
+
+### État : 🎉 PRODUCTION-READY
+Module complet avec workflow d'approbation et impacts comptables automatiques.
+
+**APPLICATION COMPLÈTE AVEC 16 MODULES** 🚀
