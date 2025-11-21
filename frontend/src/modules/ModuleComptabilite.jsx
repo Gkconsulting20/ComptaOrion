@@ -11,7 +11,9 @@ export function ModuleComptabilite() {
     comptes: [],
     journaux: [],
     ecritures: [],
-    immobilisations: []
+    immobilisations: [],
+    ecrituresRecurrentes: [],
+    parametresComptables: null
   });
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ open: false, type: null, item: null });
@@ -32,12 +34,16 @@ export function ModuleComptabilite() {
       const journauxRes = await api.get('/comptabilite/journaux');
       const ecrituresRes = await api.get('/comptabilite/ecritures');
       const immosRes = await api.get('/immobilisations/list');
+      const recurrentesRes = await api.get('/ecritures-recurrentes');
+      const parametresRes = await api.get('/ecritures-recurrentes/parametres/comptables');
       
       setData({
         comptes: comptesRes || [],
         journaux: journauxRes || [],
         ecritures: ecrituresRes || [],
-        immobilisations: immosRes || []
+        immobilisations: immosRes || [],
+        ecrituresRecurrentes: recurrentesRes || [],
+        parametresComptables: parametresRes || null
       });
     } catch (error) {
       console.error('Erreur chargement:', error);
@@ -62,6 +68,25 @@ export function ModuleComptabilite() {
           { compteId: '', libelle: '', debit: 0, credit: 0 },
           { compteId: '', libelle: '', debit: 0, credit: 0 }
         ]
+      });
+    } else if (type === 'recurrente') {
+      const lignesModele = item?.lignesModele || [];
+      const parsedLignes = typeof lignesModele === 'string' ? JSON.parse(lignesModele) : lignesModele;
+      setForm(item || {
+        nom: '',
+        description: '',
+        journalId: '',
+        frequence: 'mensuel',
+        jourDuMois: 1,
+        moisDebut: 1,
+        dateDebut: new Date().toISOString().split('T')[0],
+        dateFin: '',
+        montantReference: 0,
+        lignesModele: parsedLignes.length > 0 ? parsedLignes : [
+          { compteId: '', montant: 0, type: 'debit', description: '' },
+          { compteId: '', montant: 0, type: 'credit', description: '' }
+        ],
+        actif: true
       });
     } else if (type === 'immobilisation') {
       setForm(item || {
@@ -133,6 +158,12 @@ export function ModuleComptabilite() {
         }
         
         await api.post(`/comptabilite/ecritures/${ecritureCreated.id}/valider`, {});
+      } else if (type === 'recurrente') {
+        if (item) {
+          await api.put(`/ecritures-recurrentes/${item.id}`, form);
+        } else {
+          await api.post('/ecritures-recurrentes', form);
+        }
       } else if (type === 'immobilisation') {
         await api.post('/immobilisations/create', { 
           ...form, 
@@ -176,10 +207,12 @@ export function ModuleComptabilite() {
     { id: 'plan', label: '📋 Plan Comptable', icon: '📋' },
     { id: 'journaux', label: '📚 Journaux', icon: '📚' },
     { id: 'ecritures', label: '✍️ Écritures', icon: '✍️' },
+    { id: 'recurrentes', label: '🔄 Écritures Récurrentes', icon: '🔄' },
     { id: 'grandlivre', label: '📖 Grand Livre', icon: '📖' },
     { id: 'balance', label: '⚖️ Balance', icon: '⚖️' },
     { id: 'immobilisations', label: '🏢 Immobilisations', icon: '🏢' },
-    { id: 'rapports', label: '📊 Rapports', icon: '📊' }
+    { id: 'rapports', label: '📊 Rapports', icon: '📊' },
+    { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
   ];
 
   if (loading) return <div style={{ padding: '20px' }}>Chargement...</div>;
@@ -523,14 +556,238 @@ export function ModuleComptabilite() {
         </div>
       )}
 
+      {activeTab === 'recurrentes' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h3>🔄 Écritures Récurrentes</h3>
+            <Button onClick={() => openModal('recurrente')}>+ Nouvelle Écriture Récurrente</Button>
+          </div>
+          
+          {data.ecrituresRecurrentes.length > 0 ? (
+            <Table
+              columns={[
+                { key: 'nom', label: 'Nom' },
+                { key: 'journal', label: 'Journal', render: (val) => val?.nom || 'N/A' },
+                { key: 'frequence', label: 'Fréquence', render: (val) => {
+                  const freq = {
+                    'mensuel': '📅 Mensuel',
+                    'trimestriel': '📊 Trimestriel',
+                    'semestriel': '📆 Semestriel',
+                    'annuel': '🗓️ Annuel'
+                  };
+                  return freq[val] || val;
+                }},
+                { key: 'prochaineDateGeneration', label: 'Prochaine Génération', render: (val) => val ? new Date(val).toLocaleDateString('fr-FR') : 'N/A' },
+                { key: 'actif', label: 'Statut', render: (val) => (
+                  <span style={{ 
+                    padding: '4px 12px', 
+                    borderRadius: '12px', 
+                    background: val ? '#e8f5e9' : '#ffebee',
+                    color: val ? '#2e7d32' : '#c62828',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}>
+                    {val ? 'Actif' : 'Inactif'}
+                  </span>
+                )}
+              ]}
+              data={data.ecrituresRecurrentes}
+              onEdit={(item) => openModal('recurrente', item)}
+              actions={true}
+              extraActions={(item) => (
+                <Button 
+                  size="small" 
+                  variant="success"
+                  onClick={async () => {
+                    if (confirm(`Générer une écriture depuis "${item.nom}" ?`)) {
+                      try {
+                        await api.post(`/ecritures-recurrentes/${item.id}/generer`, {
+                          dateEcriture: new Date().toISOString().split('T')[0]
+                        });
+                        alert('Écriture générée avec succès !');
+                        loadAllData();
+                      } catch (err) {
+                        alert('Erreur: ' + err.message);
+                      }
+                    }
+                  }}
+                >
+                  ▶️ Générer
+                </Button>
+              )}
+            />
+          ) : (
+            <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
+              <p style={{ color: '#7f8c8d', margin: 0 }}>Aucune écriture récurrente configurée</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'parametres' && (
+        <div>
+          <h3>⚙️ Paramètres Comptables</h3>
+          
+          <div style={{ display: 'grid', gap: '20px', marginTop: '20px' }}>
+            <div style={{ padding: '20px', background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
+              <h4 style={{ marginTop: 0, color: '#1976d2' }}>📝 Numérotation Automatique</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                <FormField 
+                  label="Préfixe des écritures" 
+                  value={data.parametresComptables?.prefixeEcritures || 'EC'}
+                  onChange={(e) => {
+                    const updatedParams = { ...data.parametresComptables, prefixeEcritures: e.target.value };
+                    setData({ ...data, parametresComptables: updatedParams });
+                  }}
+                />
+                <FormField 
+                  label="Prochain numéro" 
+                  type="number"
+                  value={data.parametresComptables?.numeroSuivantEcriture || 1}
+                  onChange={(e) => {
+                    const updatedParams = { ...data.parametresComptables, numeroSuivantEcriture: parseInt(e.target.value) };
+                    setData({ ...data, parametresComptables: updatedParams });
+                  }}
+                />
+                <FormField 
+                  label="Format de numéro" 
+                  value={data.parametresComptables?.formatNumeroEcriture || '[PREFIX]-[YEAR]-[NUM]'}
+                  onChange={(e) => {
+                    const updatedParams = { ...data.parametresComptables, formatNumeroEcriture: e.target.value };
+                    setData({ ...data, parametresComptables: updatedParams });
+                  }}
+                  placeholder="[PREFIX]-[YEAR]-[NUM]"
+                />
+              </div>
+            </div>
+
+            <div style={{ padding: '20px', background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
+              <h4 style={{ marginTop: 0, color: '#1976d2' }}>✓ Validation et Contrôle</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={data.parametresComptables?.validationAutomatique || false}
+                      onChange={(e) => {
+                        const updatedParams = { ...data.parametresComptables, validationAutomatique: e.target.checked };
+                        setData({ ...data, parametresComptables: updatedParams });
+                      }}
+                    />
+                    <span>Validation automatique des écritures</span>
+                  </label>
+                </div>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={data.parametresComptables?.bloquerSiDesequilibre || true}
+                      onChange={(e) => {
+                        const updatedParams = { ...data.parametresComptables, bloquerSiDesequilibre: e.target.checked };
+                        setData({ ...data, parametresComptables: updatedParams });
+                      }}
+                    />
+                    <span>Bloquer si déséquilibre</span>
+                  </label>
+                </div>
+                <FormField 
+                  label="Tolérance de déséquilibre (FCFA)" 
+                  type="number"
+                  step="0.01"
+                  value={data.parametresComptables?.toleranceDesequilibre || '0.01'}
+                  onChange={(e) => {
+                    const updatedParams = { ...data.parametresComptables, toleranceDesequilibre: e.target.value };
+                    setData({ ...data, parametresComptables: updatedParams });
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ padding: '20px', background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
+              <h4 style={{ marginTop: 0, color: '#1976d2' }}>📅 Exercice Comptable</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <FormField 
+                  label="Exercice courant" 
+                  value={data.parametresComptables?.exerciceCourant || new Date().getFullYear().toString()}
+                  onChange={(e) => {
+                    const updatedParams = { ...data.parametresComptables, exerciceCourant: e.target.value };
+                    setData({ ...data, parametresComptables: updatedParams });
+                  }}
+                  placeholder="2025"
+                />
+                <FormField 
+                  label="Date limite de clôture" 
+                  type="date"
+                  value={data.parametresComptables?.clotureDateLimite || ''}
+                  onChange={(e) => {
+                    const updatedParams = { ...data.parametresComptables, clotureDateLimite: e.target.value };
+                    setData({ ...data, parametresComptables: updatedParams });
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ padding: '20px', background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
+              <h4 style={{ marginTop: 0, color: '#1976d2' }}>👁️ Options d'Affichage</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={data.parametresComptables?.afficherSoldesComptes || true}
+                      onChange={(e) => {
+                        const updatedParams = { ...data.parametresComptables, afficherSoldesComptes: e.target.checked };
+                        setData({ ...data, parametresComptables: updatedParams });
+                      }}
+                    />
+                    <span>Afficher les soldes des comptes</span>
+                  </label>
+                </div>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={data.parametresComptables?.afficherCodeComplet || true}
+                      onChange={(e) => {
+                        const updatedParams = { ...data.parametresComptables, afficherCodeComplet: e.target.checked };
+                        setData({ ...data, parametresComptables: updatedParams });
+                      }}
+                    />
+                    <span>Afficher le code comptable complet</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <Button 
+                variant="success"
+                onClick={async () => {
+                  try {
+                    await api.put('/ecritures-recurrentes/parametres/comptables', data.parametresComptables);
+                    alert('Paramètres comptables sauvegardés avec succès !');
+                    loadAllData();
+                  } catch (err) {
+                    alert('Erreur: ' + err.message);
+                  }
+                }}
+              >
+                💾 Enregistrer les Paramètres
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Modal isOpen={modal.open} onClose={closeModal}
         title={
           modal.type === 'compte' ? (modal.item ? 'Modifier Compte' : 'Nouveau Compte Comptable') :
           modal.type === 'journal' ? (modal.item ? 'Modifier Journal' : 'Nouveau Journal') :
           modal.type === 'ecriture' ? 'Nouvelle Écriture Comptable' :
+          modal.type === 'recurrente' ? (modal.item ? 'Modifier Écriture Récurrente' : 'Nouvelle Écriture Récurrente') :
           modal.type === 'immobilisation' ? (modal.item ? 'Modifier Immobilisation' : 'Nouvelle Immobilisation') : ''
         }
-        size={modal.type === 'ecriture' ? 'xlarge' : 'large'}
+        size={modal.type === 'ecriture' || modal.type === 'recurrente' ? 'xlarge' : 'large'}
       >
         <form onSubmit={handleSubmit}>
           {modal.type === 'compte' && (
@@ -585,6 +842,137 @@ export function ModuleComptabilite() {
                     { value: 'od', label: 'Opérations Diverses' }
                   ]} />
               </div>
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
+                <Button type="submit" variant="success">{modal.item ? 'Mettre à jour' : 'Créer'}</Button>
+              </div>
+            </>
+          )}
+
+          {modal.type === 'recurrente' && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                <FormField label="Nom" value={form.nom}
+                  onChange={(e) => setForm({...form, nom: e.target.value})} required
+                  placeholder="Ex: Loyer mensuel" />
+                <FormField label="Journal" type="select" value={form.journalId}
+                  onChange={(e) => setForm({...form, journalId: parseInt(e.target.value)})}
+                  options={data.journaux.map(j => ({ value: j.id, label: `${j.code} - ${j.nom}` }))} required />
+                <FormField label="Description" value={form.description}
+                  onChange={(e) => setForm({...form, description: e.target.value})}
+                  placeholder="Détails supplémentaires" />
+                <FormField label="Fréquence" type="select" value={form.frequence}
+                  onChange={(e) => setForm({...form, frequence: e.target.value})}
+                  options={[
+                    { value: 'mensuel', label: '📅 Mensuel' },
+                    { value: 'trimestriel', label: '📊 Trimestriel' },
+                    { value: 'semestriel', label: '📆 Semestriel' },
+                    { value: 'annuel', label: '🗓️ Annuel' }
+                  ]} required />
+                <FormField label="Jour du mois (1-31)" type="number" value={form.jourDuMois}
+                  onChange={(e) => setForm({...form, jourDuMois: parseInt(e.target.value)})}
+                  min="1" max="31" />
+                <FormField label="Mois de début (pour annuel)" type="number" value={form.moisDebut}
+                  onChange={(e) => setForm({...form, moisDebut: parseInt(e.target.value)})}
+                  min="1" max="12" />
+                <FormField label="Date de début" type="date" value={form.dateDebut}
+                  onChange={(e) => setForm({...form, dateDebut: e.target.value})} required />
+                <FormField label="Date de fin (optionnel)" type="date" value={form.dateFin}
+                  onChange={(e) => setForm({...form, dateFin: e.target.value})} />
+              </div>
+
+              <h4>Lignes du Modèle</h4>
+              {(form.lignesModele || []).map((ligne, index) => (
+                <div key={index} style={{ 
+                  display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 60px', gap: '10px', 
+                  marginBottom: '10px', alignItems: 'end', padding: '10px', background: '#f8f9fa', borderRadius: '4px'
+                }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', color: '#666' }}>Compte</label>
+                    <select value={ligne.compteId}
+                      onChange={(e) => {
+                        const newLignes = [...form.lignesModele];
+                        newLignes[index].compteId = parseInt(e.target.value);
+                        setForm({...form, lignesModele: newLignes});
+                      }}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      required>
+                      <option value="">Sélectionner</option>
+                      {data.comptes.map(c => (
+                        <option key={c.id} value={c.id}>{c.numero} - {c.nom}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <FormField label="Description" value={ligne.description}
+                    onChange={(e) => {
+                      const newLignes = [...form.lignesModele];
+                      newLignes[index].description = e.target.value;
+                      setForm({...form, lignesModele: newLignes});
+                    }} />
+                  <FormField label="Type" type="select" value={ligne.type}
+                    onChange={(e) => {
+                      const newLignes = [...form.lignesModele];
+                      newLignes[index].type = e.target.value;
+                      setForm({...form, lignesModele: newLignes});
+                    }}
+                    options={[
+                      { value: 'debit', label: 'Débit' },
+                      { value: 'credit', label: 'Crédit' }
+                    ]} required />
+                  <FormField label="Montant" type="number" value={ligne.montant}
+                    onChange={(e) => {
+                      const newLignes = [...form.lignesModele];
+                      newLignes[index].montant = parseFloat(e.target.value) || 0;
+                      setForm({...form, lignesModele: newLignes});
+                    }} />
+                  <Button type="button" variant="danger" size="small" 
+                    onClick={() => {
+                      const newLignes = form.lignesModele.filter((_, i) => i !== index);
+                      setForm({...form, lignesModele: newLignes.length > 0 ? newLignes : [{ compteId: '', montant: 0, type: 'debit', description: '' }]});
+                    }}
+                    disabled={form.lignesModele.length <= 2} style={{ marginTop: '20px' }}>×</Button>
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="small" onClick={() => {
+                setForm({
+                  ...form,
+                  lignesModele: [...(form.lignesModele || []), { compteId: '', montant: 0, type: 'debit', description: '' }]
+                });
+              }}>
+                + Ajouter une ligne
+              </Button>
+
+              {(() => {
+                const totalDebit = (form.lignesModele || []).filter(l => l.type === 'debit').reduce((sum, l) => sum + parseFloat(l.montant || 0), 0);
+                const totalCredit = (form.lignesModele || []).filter(l => l.type === 'credit').reduce((sum, l) => sum + parseFloat(l.montant || 0), 0);
+                const difference = totalDebit - totalCredit;
+                return (
+                  <div style={{ marginTop: '20px', padding: '15px', background: difference === 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                      <div>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL DÉBIT</p>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{totalDebit.toLocaleString()} FCFA</h3>
+                      </div>
+                      <div>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL CRÉDIT</p>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#7b1fa2' }}>{totalCredit.toLocaleString()} FCFA</h3>
+                      </div>
+                      <div>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>DIFFÉRENCE</p>
+                        <h3 style={{ margin: '5px 0 0 0', color: difference === 0 ? '#388e3c' : '#d32f2f' }}>
+                          {difference.toLocaleString()} FCFA {difference === 0 ? '✓' : '✗'}
+                        </h3>
+                      </div>
+                    </div>
+                    {difference !== 0 && (
+                      <p style={{ margin: '10px 0 0 0', color: '#d32f2f', fontSize: '12px' }}>
+                        ⚠️ L'écriture doit être équilibrée (Débit = Crédit)
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
                 <Button type="submit" variant="success">{modal.item ? 'Mettre à jour' : 'Créer'}</Button>
