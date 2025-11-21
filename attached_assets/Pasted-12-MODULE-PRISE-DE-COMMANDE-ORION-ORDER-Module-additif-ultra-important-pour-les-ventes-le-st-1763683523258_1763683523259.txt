@@ -1,0 +1,219 @@
+12. MODULE PRISE DE COMMANDE (ORION ORDER)
+🔥 Module additif ultra-important pour les ventes & le stock
+
+Voici la liste complète des fonctionnalités à demander à Replit :
+
+📦 A) Gestion des commandes clients
+✔ Fonctions
+
+Création d’une commande client
+
+Sélection du client (ou client ponctuel)
+
+Ajout d’articles (avec prix + quantité + remise)
+
+Calcul automatique :
+
+total HT
+
+total TTC
+
+TVA
+
+remises
+
+transport / livraison
+
+Enregistrement statut commande :
+
+Brouillon
+
+Confirmée
+
+Préparée
+
+Livrée
+
+Annulée
+
+Numérotation automatique
+
+Historique des commandes
+
+Impact auto :
+
+Réserve le stock en “stock réservé” si commande confirmée
+
+Peut générer une facture ou un bon de livraison
+
+🚚 B) Bon de livraison (BL)
+✔ Fonctions
+
+Génération d’un BL à partir d’une commande
+
+Déduction automatique du stock après livraison
+
+Possibilité de livraison partielle
+
+Signature client (option mobile)
+
+Export PDF du BL
+
+Suivi des BL en attente
+
+💳 C) Comptabilisation automatique (option)
+✔ Fonctions
+
+Si facture générée → écriture de vente
+
+Si acompte → écriture encaissement acompte
+
+Si livraison partielle → pas de compta jusqu’à facturation
+
+🏬 D) Préparation commande (Orion Warehouse Prep)
+✔ Fonctions
+
+Préparation d’une commande via interface entrepôt
+
+Contrôle des quantités disponibles
+
+Réservation du stock
+
+Validation avant livraison
+
+Impression fiche de préparation
+
+📱 E) Mode mobile / tablette (idéal pour commerciaux terrain)
+✔ Fonctionnalités
+
+Création commande directement sur mobile
+
+Mode hors-ligne (local storage → sync)
+
+Ajout rapide des produits (scan code-barres en option)
+
+Enregistrement client rapide
+
+Signature digitale
+
+Sync cloud dès retour en ligne
+
+🧾 F) Transformation de la commande
+✔ Fonctions
+
+Commande → Bon de livraison
+
+Commande → Facture
+
+Commande → Échéancier de paiement
+
+Acompte → Facture d’acompte
+
+🟣 G) Intégration complète avec les autres modules
+✔ Stock
+
+Décrémentation auto après livraison
+
+Réservation stock à la confirmation
+
+✔ Clients (CRM Orion)
+
+Augmente solde dû client
+
+Historique complet du client
+
+Statistiques : commandes / achats
+
+✔ Ventes
+
+Commande → facture
+
+Paiement partiel ou total
+
+✔ Trésorerie
+
+Encaissement acompte → trésorerie “encaissement”
+
+✔ Comptabilité
+
+Écritures automatic en cas de facturation
+
+TVA auto
+
+Reconnaissance revenu
+
+📊 H) Reporting & Dashboard - Commandes
+✔ Indicateurs
+
+Commandes du jour / mois
+
+Commandes en attente
+
+Taux de livraison
+
+Ventes par article / catégorie
+
+Panier moyen
+
+Top 10 clients
+
+Top 10 produits commandés
+
+📝 I) Base de données (tables à créer)
+orion_orders
+orion_order_items
+orion_delivery_notes
+orion_delivery_items
+orion_order_status
+orion_reservations (stock réservé)
+
+🚀 J) API REST — Commandes
+POST   /orders
+GET    /orders
+GET    /orders/:id
+PUT    /orders/:id
+DELETE /orders/:id
+
+POST   /orders/:id/confirm
+POST   /orders/:id/reserve-stock
+POST   /orders/:id/prepare
+POST   /orders/:id/deliver
+POST   /orders/:id/invoice
+
+🎯 Module Prise de Commande — résumé à donner à Replit
+
+Tu peux copier-coller ceci :
+
+👉 “Replit, génère un module complet 'ORION ORDER' pour ComptaOrion comprenant :
+
+gestion des commandes (création, modification, annulation)
+
+sélection du client
+
+ajout d’articles avec quantité et prix
+
+calcul total HT, TTC, TVA, remise
+
+statuts (Brouillon, Confirmée, Préparée, Livrée, Annulée)
+
+réservation de stock
+
+génération de bon de livraison PDF
+
+livraison partielle
+
+transformation commande → facture
+
+prise de commande mobile offline
+
+génération écriture comptable après facturation
+
+intégration automatique stock, ventes, trésorerie, compta
+
+API complète (CRUD + actions spéciales)
+
+tables SQL : orion_orders, orion_order_items, orion_delivery_notes
+
+interface préparation entrepôt
+
+tableau de bord commandes.”**
