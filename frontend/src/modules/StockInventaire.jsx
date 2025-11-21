@@ -73,7 +73,7 @@ export function StockInventaire() {
   const openModal = (type, item = null) => {
     setModal({ open: true, type, item });
     if (type === 'produit') {
-      setForm(item || { reference: '', nom: '', categorieId: null, prixAchat: 0, prixVente: 0, stockMinimum: 10, uniteMesure: 'pièce' });
+      setForm(item || { reference: '', nom: '', categorieId: null, prixAchat: 0, prixVente: 0, stockMinimum: 10, uniteMesure: 'pièce', valorisationMethod: 'FIFO' });
     } else if (type === 'categorie') {
       setForm(item || { nom: '', description: '' });
     } else if (type === 'entrepot') {
@@ -521,6 +521,13 @@ export function StockInventaire() {
               <FormField label="Prix Achat" type="number" value={form.prixAchat || 0} onChange={(e) => setForm({...form, prixAchat: parseFloat(e.target.value) || 0})} />
               <FormField label="Prix Vente" type="number" value={form.prixVente || 0} onChange={(e) => setForm({...form, prixVente: parseFloat(e.target.value) || 0})} required />
               <FormField label="Stock Min" type="number" value={form.stockMinimum || 10} onChange={(e) => setForm({...form, stockMinimum: parseFloat(e.target.value) || 0})} />
+              <FormField label="Méthode de Valorisation" type="select" value={form.valorisationMethod || 'FIFO'} 
+                onChange={(e) => setForm({...form, valorisationMethod: e.target.value})}
+                options={[
+                  { value: 'FIFO', label: 'FIFO (Premier Entré, Premier Sorti)' },
+                  { value: 'CMP', label: 'CMP (Coût Moyen Pondéré)' },
+                  { value: 'LIFO', label: 'LIFO (Dernier Entré, Premier Sorti)' }
+                ]} />
             </>
           )}
 
@@ -581,6 +588,7 @@ export function StockInventaire() {
               fields: [
                 { label: 'Stock Actuel', value: `${selectedProduit.quantite || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
                 { label: 'Stock Minimum', value: `${selectedProduit.stockMinimum || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
+                { label: 'Méthode de Valorisation', value: selectedProduit.valorisationMethod || 'FIFO' },
                 { label: 'Prix Achat', value: `${selectedProduit.prixAchat || 0} FCFA` },
                 { label: 'Prix Vente', value: `${selectedProduit.prixVente || 0} FCFA` },
                 { label: 'Marge', value: `${((selectedProduit.prixVente || 0) - (selectedProduit.prixAchat || 0))} FCFA` }
