@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { clients } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -213,6 +214,17 @@ router.post('/', async (req, res) => {
       })
       .returning();
 
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'CREATE',
+      table: 'clients',
+      recordId: newClient[0].id,
+      nouvelleValeur: newClient[0],
+      description: `Client créé: ${nom}`
+    });
+
     res.status(201).json({
       success: true,
       message: 'Client créé avec succès',
@@ -390,6 +402,18 @@ router.put('/:id', async (req, res) => {
       ))
       .returning();
 
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'UPDATE',
+      table: 'clients',
+      recordId: parseInt(id),
+      ancienneValeur: existingClient[0],
+      nouvelleValeur: updatedClient[0],
+      description: `Client modifié: ${updatedClient[0].nom}`
+    });
+
     res.json({
       success: true,
       message: 'Client mis à jour avec succès',
@@ -438,6 +462,17 @@ router.delete('/:id', async (req, res) => {
         message: 'Client non trouvé ou accès non autorisé',
       });
     }
+
+    // Audit log avant suppression
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'DELETE',
+      table: 'clients',
+      recordId: parseInt(id),
+      ancienneValeur: existingClient[0],
+      description: `Client supprimé: ${existingClient[0].nom}`
+    });
 
     // Supprimer le client
     await db

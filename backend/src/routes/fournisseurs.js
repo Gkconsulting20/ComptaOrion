@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { fournisseurs } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
