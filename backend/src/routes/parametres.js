@@ -360,3 +360,77 @@ router.get('/pays', (req, res) => {
 });
 
 export default router;
+
+// ==========================================
+// AUDIT LOG
+// ==========================================
+
+router.get('/audit-logs', async (req, res) => {
+  try {
+    const { entrepriseId, limit = 100, offset = 0 } = req.query;
+    const { auditLogs } = await import('../schema.js');
+    
+    const logs = await db.query.auditLogs.findMany({
+      where: eq(auditLogs.entrepriseId, parseInt(entrepriseId)),
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      orderBy: (logs) => [desc(logs.createdAt)]
+    });
+    
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/audit-logs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { auditLogs } = await import('../schema.js');
+    
+    const log = await db.query.auditLogs.findFirst({
+      where: eq(auditLogs.id, parseInt(id))
+    });
+    
+    res.json(log);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/audit-stats', async (req, res) => {
+  try {
+    const { entrepriseId, startDate, endDate } = req.query;
+    const { auditLogs } = await import('../schema.js');
+    
+    // Statistiques par action
+    const stats = await db.query.auditLogs.findMany({
+      where: and(
+        eq(auditLogs.entrepriseId, parseInt(entrepriseId)),
+        startDate ? gte(auditLogs.createdAt, new Date(startDate)) : undefined,
+        endDate ? lte(auditLogs.createdAt, new Date(endDate)) : undefined
+      )
+    });
+    
+    const summary = {
+      total: stats.length,
+      byAction: {
+        CREATE: stats.filter(s => s.action === 'CREATE').length,
+        UPDATE: stats.filter(s => s.action === 'UPDATE').length,
+        DELETE: stats.filter(s => s.action === 'DELETE').length,
+        READ: stats.filter(s => s.action === 'READ').length
+      },
+      byTable: {}
+    };
+    
+    stats.forEach(log => {
+      summary.byTable[log.table] = (summary.byTable[log.table] || 0) + 1;
+    });
+    
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+export default router;

@@ -625,6 +625,25 @@ export const avancesSalaire = pgTable('avances_salaire', {
 });
 
 // ==========================================
+// MODULE 13: AUDIT LOG & PARAMETRES
+// ==========================================
+
+export const auditLogs = pgTable('audit_logs', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  userId: integer('user_id').references(() => users.id),
+  action: varchar('action', { length: 50 }).notNull(), // CREATE, READ, UPDATE, DELETE
+  table: varchar('table', { length: 100 }).notNull(), // nom de la table modifiée
+  recordId: integer('record_id'), // ID de l'enregistrement modifié
+  ancienneValeur: text('ancienne_valeur'), // JSON avant modification
+  nouvelleValeur: text('nouvelle_valeur'), // JSON après modification
+  description: text('description'),
+  ipAddress: varchar('ip_address', { length: 45 }),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ==========================================
 // RELATIONS
 // ==========================================
 
