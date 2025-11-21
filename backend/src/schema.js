@@ -47,6 +47,13 @@ export const entreprises = pgTable('entreprises', {
   formeJuridique: varchar('forme_juridique', { length: 100 }), // SARL, SA, EURL, etc.
   
   logoUrl: text('logo_url'),
+  
+  // Paramètres de personnalisation des factures
+  factureFooterText: text('facture_footer_text'),
+  factureMentionsLegales: text('facture_mentions_legales'),
+  factureCouleurPrincipale: varchar('facture_couleur_principale', { length: 7 }).default('#3498db'),
+  factureAfficherLogo: boolean('facture_afficher_logo').default(true),
+  
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
