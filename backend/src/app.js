@@ -23,6 +23,7 @@ import auditLogsRoutes from './routes/audit-logs.js';
 import paieRoutes from './routes/paie.js';
 import bonsLivraisonRoutes from './routes/bons-livraison.js';
 import uploadRoutes from './routes/upload.js';
+import ecrituresRecurrentesRoutes from './routes/ecritures-recurrentes.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -103,6 +104,7 @@ app.use('/api/depenses', dépensesRoutes);
 
 // Module Comptabilité Générale
 app.use('/api/comptabilite', comptabiliteRoutes);
+app.use('/api/ecritures-recurrentes', ecrituresRecurrentesRoutes);
 
 // Module Trésorerie
 app.use('/api/tresorerie', tresorerieRoutes);

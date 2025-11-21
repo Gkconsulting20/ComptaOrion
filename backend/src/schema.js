@@ -949,6 +949,69 @@ export const soldesComptes = pgTable('soldes_comptes', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Écritures récurrentes (modèles)
+export const ecrituresRecurrentes = pgTable('ecritures_recurrentes', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  journalId: integer('journal_id').references(() => journaux.id).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  description: text('description'),
+  frequence: varchar('frequence', { length: 50 }).notNull(), // mensuel, trimestriel, semestriel, annuel
+  jourDuMois: integer('jour_du_mois').default(1), // 1-31
+  moisDebut: integer('mois_debut').default(1), // 1-12 (pour annuel/semestriel)
+  dateDebut: date('date_debut').notNull(),
+  dateFin: date('date_fin'),
+  derniereDateGeneration: date('derniere_date_generation'),
+  prochaineDateGeneration: date('prochaine_date_generation'),
+  montantReference: decimal('montant_reference', { precision: 15, scale: 2 }),
+  lignesModele: jsonb('lignes_modele'), // [{compteId, montant, type, description}]
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Historique de génération des écritures récurrentes
+export const histoGeneration = pgTable('histo_generation', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  ecritureRecurrenteId: integer('ecriture_recurrente_id').references(() => ecrituresRecurrentes.id).notNull(),
+  ecritureId: integer('ecriture_id').references(() => ecritures.id),
+  dateGeneration: timestamp('date_generation').defaultNow(),
+  dateEcriture: date('date_ecriture').notNull(),
+  statut: varchar('statut', { length: 50 }).default('generee'), // generee, echouee
+  messageErreur: text('message_erreur'),
+});
+
+// Paramètres comptables avancés
+export const parametresComptables = pgTable('parametres_comptables', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull().unique(),
+  
+  // Numérotation automatique
+  prefixeEcritures: varchar('prefixe_ecritures', { length: 10 }).default('EC'),
+  numeroSuivantEcriture: integer('numero_suivant_ecriture').default(1),
+  formatNumeroEcriture: varchar('format_numero_ecriture', { length: 50 }).default('[PREFIX]-[YEAR]-[NUM]'),
+  
+  // Validation et contrôle
+  validationAutomatique: boolean('validation_automatique').default(false),
+  toleranceDesequilibre: decimal('tolerance_desequilibre', { precision: 10, scale: 2 }).default('0.01'),
+  bloquerSiDesequilibre: boolean('bloquer_si_desequilibre').default(true),
+  
+  // Exercice comptable
+  clotureDateLimite: date('cloture_date_limite'),
+  exerciceCourant: varchar('exercice_courant', { length: 10 }),
+  
+  // Options d'affichage
+  afficherSoldesComptes: boolean('afficher_soldes_comptes').default(true),
+  afficherCodeComplet: boolean('afficher_code_complet').default(true),
+  
+  // Archivage
+  archiverApresNJours: integer('archiver_apres_n_jours').default(365),
+  
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // ==========================================
 // MODULE ABONNEMENTS & FACTURATION
 // ==========================================
