@@ -6,6 +6,67 @@ import { FormField } from '../components/FormField';
 import api from '../api';
 
 export function ClientsModule() {
+  const [activeTab, setActiveTab] = useState('clients');
+
+  const tabs = [
+    { id: 'clients', label: '📋 Clients', icon: '👥' },
+    { id: 'devis', label: '📝 Devis', icon: '📝' },
+    { id: 'factures', label: '💰 Factures', icon: '💵' },
+    { id: 'paiements', label: '💳 Paiements', icon: '💳' },
+    { id: 'relances', label: '🔔 Relances', icon: '🔔' },
+  ];
+
+  return (
+    <div>
+      <h2>👥 Module Clients Complet</h2>
+      
+      <div style={{ borderBottom: '2px solid #e0e0e0', marginBottom: '20px', marginTop: '20px' }}>
+        <div style={{ display: 'flex', gap: '5px' }}>
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '12px 24px',
+                border: 'none',
+                backgroundColor: activeTab === tab.id ? '#3498db' : 'transparent',
+                color: activeTab === tab.id ? 'white' : '#333',
+                cursor: 'pointer',
+                borderRadius: '8px 8px 0 0',
+                fontWeight: activeTab === tab.id ? '600' : '400',
+                fontSize: '14px',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                if (activeTab !== tab.id) {
+                  e.currentTarget.style.backgroundColor = '#ecf0f1';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== tab.id) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === 'clients' && <ClientsTab />}
+      {activeTab === 'devis' && <DevisTab />}
+      {activeTab === 'factures' && <FacturesTab />}
+      {activeTab === 'paiements' && <PaiementsTab />}
+      {activeTab === 'relances' && <RelancesTab />}
+    </div>
+  );
+}
+
+// ==========================================
+// ONGLET 1: CLIENTS (CRUD)
+// ==========================================
+function ClientsTab() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -32,7 +93,7 @@ export function ClientsModule() {
       const data = await api.get('/clients');
       setClients(data.data || []);
     } catch (error) {
-      console.error('Erreur chargement clients:', error);
+      console.error('Erreur:', error);
     } finally {
       setLoading(false);
     }
@@ -100,7 +161,7 @@ export function ClientsModule() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>👥 Clients</h2>
+        <h3>Liste des Clients</h3>
         <Button onClick={() => { resetForm(); setEditingClient(null); setShowModal(true); }}>
           + Nouveau Client
         </Button>
@@ -183,7 +244,7 @@ export function ClientsModule() {
               ]}
             />
             <FormField
-              label="Limite de crédit"
+              label="Limite de crédit (FCFA)"
               name="limiteCredit"
               type="number"
               value={formData.limiteCredit}
@@ -207,6 +268,54 @@ export function ClientsModule() {
           </div>
         </form>
       </Modal>
+    </div>
+  );
+}
+
+// ==========================================
+// ONGLET 2: DEVIS
+// ==========================================
+function DevisTab() {
+  return (
+    <div>
+      <h3>📝 Gestion des Devis</h3>
+      <p style={{ color: '#666' }}>Implémentation en cours...</p>
+    </div>
+  );
+}
+
+// ==========================================
+// ONGLET 3: FACTURES
+// ==========================================
+function FacturesTab() {
+  return (
+    <div>
+      <h3>💰 Gestion des Factures</h3>
+      <p style={{ color: '#666' }}>Implémentation en cours...</p>
+    </div>
+  );
+}
+
+// ==========================================
+// ONGLET 4: PAIEMENTS
+// ==========================================
+function PaiementsTab() {
+  return (
+    <div>
+      <h3>💳 Enregistrement des Paiements</h3>
+      <p style={{ color: '#666' }}>Implémentation en cours...</p>
+    </div>
+  );
+}
+
+// ==========================================
+// ONGLET 5: RELANCES AUTOMATIQUES
+// ==========================================
+function RelancesTab() {
+  return (
+    <div>
+      <h3>🔔 Relances Automatiques</h3>
+      <p style={{ color: '#666' }}>Implémentation en cours...</p>
     </div>
   );
 }
