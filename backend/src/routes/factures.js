@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables } from '../schema.js';
+import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables, mouvementsStock } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 
 const router = express.Router();
@@ -492,6 +492,55 @@ router.put('/:id', async (req, res) => {
         eq(factures.entrepriseId, req.entrepriseId)
       ))
       .returning();
+
+    // *** INTÉGRATION STOCK AUTOMATIQUE ***
+    // Si le statut change vers 'envoyee' ou 'payee', générer mouvements SORTIE
+    if (statut && (statut === 'envoyee' || statut === 'payee') && existingFacture.statut === 'brouillon') {
+      // Récupérer les items de la facture
+      const factureItemsList = await db
+        .select()
+        .from(factureItems)
+        .where(eq(factureItems.factureId, parseInt(id)));
+
+      // Créer un mouvement SORTIE pour chaque produit
+      for (const item of factureItemsList) {
+        if (item.produitId) {
+          try {
+            // Créer mouvement de stock SORTIE
+            await db.insert(mouvementsStock).values({
+              entrepriseId: req.entrepriseId,
+              produitId: item.produitId,
+              type: 'sortie',
+              quantite: parseFloat(item.quantite),
+              prixUnitaire: parseFloat(item.prixUnitaire),
+              reference: `Facture ${updatedFacture.numeroFacture}`,
+              notes: `Vente client - Facture ${updatedFacture.numeroFacture}`,
+              userId: req.user?.id || null
+            });
+
+            // Mettre à jour le stock du produit (décrémenter)
+            const [produit] = await db
+              .select()
+              .from(produits)
+              .where(eq(produits.id, item.produitId))
+              .limit(1);
+
+            if (produit) {
+              const nouvelleQuantite = Math.max(0, parseFloat(produit.quantite || 0) - parseFloat(item.quantite));
+              await db
+                .update(produits)
+                .set({ 
+                  quantite: nouvelleQuantite,
+                  updatedAt: new Date()
+                })
+                .where(eq(produits.id, item.produitId));
+            }
+          } catch (error) {
+            console.error(`Erreur création mouvement SORTIE pour produit ${item.produitId}:`, error);
+          }
+        }
+      }
+    }
 
     res.json({
       success: true,
