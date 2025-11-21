@@ -510,16 +510,6 @@ export const comptesComptables = pgTable('comptes_comptables', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const journaux = pgTable('journaux', {
-  id: serial('id').primaryKey(),
-  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  code: varchar('code', { length: 20 }).notNull(),
-  nom: varchar('nom', { length: 255 }).notNull(),
-  type: journalTypeEnum('type').notNull(),
-  actif: boolean('actif').default(true),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
 export const ecritures = pgTable('ecritures', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
@@ -530,19 +520,7 @@ export const ecritures = pgTable('ecritures', {
   numeroPiece: varchar('numero_piece', { length: 100 }),
   valide: boolean('valide').default(false),
   userId: integer('user_id').references(() => users.id),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const lignesEcriture = pgTable('lignes_ecriture', {
-  id: serial('id').primaryKey(),
-  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  ecritureId: integer('ecriture_id').references(() => ecritures.id).notNull(),
-  compteComptableId: integer('compte_comptable_id').references(() => comptesComptables.id).notNull(),
-  debit: decimal('debit', { precision: 15, scale: 2 }).default('0'),
-  credit: decimal('credit', { precision: 15, scale: 2 }).default('0'),
-  libelle: text('libelle'),
-});
+  
 
 // NOTE: Immobilisations module moved to MODULE 15 (ORION ASSETS)
 
@@ -559,7 +537,7 @@ export const categoriesDépenses = pgTable('categories_depenses', {
   limiteApproval: decimal('limite_approval', { precision: 15, scale: 2 }).default('0'),
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
-});
+
 
 // Enregistrement des dépenses
 export const depenses = pgTable('depenses', {
