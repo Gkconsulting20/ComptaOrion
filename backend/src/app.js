@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import clientsRoutes from './routes/clients.js';
+import produitsRoutes from './routes/produits.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
@@ -30,6 +31,9 @@ app.use('/api', authMiddleware, entrepriseIsolation);
 
 // Module Clients
 app.use('/api/clients', clientsRoutes);
+
+// Module Produits & Stock
+app.use('/api/produits', produitsRoutes);
 
 // ===============================================
 // ROUTE INFO API
