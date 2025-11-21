@@ -27,7 +27,7 @@ Key capabilities include support for SYSCOHADA, IFRS, and PCG, multi-currency fu
 - **Multi-tenancy:** Complete isolation per `entrepriseId`.
 
 ### Core Features
-ComptaOrion is built with a modular architecture comprising 17 modules organized into 7 domains:
+ComptaOrion is built with a modular architecture comprising 18 modules organized into 8 domains:
 
 1.  **Dashboard Global:** Real-time KPIs and system overview.
 2.  **Customer & Sales Management:** CRUD for clients, quotes, sales invoices, and payments, with automatic accounting integration.
@@ -37,6 +37,7 @@ ComptaOrion is built with a modular architecture comprising 17 modules organized
 6.  **Treasury & Finance:** Bank balances, cash management, reconciliation, and expense management.
 7.  **Configuration & Security:** Currency management, accounting system settings, country-specific parameters, authentication (JWT, RBAC), Row-Level Security (RLS), and a comprehensive audit log.
 8.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI.
+9.  **SaaS Administration:** Complete commercialization platform with sales team management, client tracking, subscription plans, invoicing, and revenue analytics (MRR tracking).
 
 ### Cross-Modular Functionalities
 -   **Automated Accounting:** Transactions automatically generate accounting entries.
@@ -64,3 +65,39 @@ ComptaOrion is built with a modular architecture comprising 17 modules organized
 
 ### AI
 -   OpenAI API
+
+## Recent Changes (November 21, 2025)
+
+### SaaS Admin Module - Commercialization Platform
+Created a complete SaaS administration module for managing ComptaOrion's commercialization:
+
+**Database Schema:**
+- `saas_commerciaux`: Sales team with commission tracking, regional assignment, and monthly targets
+- `saas_clients`: Client organizations using ComptaOrion (extends entreprises table)
+- `saas_ventes`: Sales tracking with automatic commission calculation
+- `plans_abonnement`: Subscription plans with feature limits and pricing
+- `abonnements`: Active subscriptions with renewal tracking
+- `factures_abonnement`: Invoice history and payment tracking
+
+**Backend API (`/api/saas-admin`):**
+- Dashboard: Real-time KPIs (MRR, total clients, active/trial counts, commissions)
+- Commerciaux: CRUD operations for sales team management
+- Clients: Client tracking with commercial assignment and subscription status
+- Plans: Subscription plan management with feature toggles
+- Ventes: Sales history and commission tracking
+- Reports: Commercial performance analytics
+
+**Frontend Interface:**
+- 5-tab interface: Dashboard, Clients SaaS, Commerciaux, Plans Tarifaires, Ventes
+- Real-time KPI cards with color-coded metrics
+- Complete CRUD forms with modal dialogs
+- Professional table layouts with status badges
+- Plan cards with pricing and feature display
+
+**Features:**
+- Multi-currency support (XOF, EUR, USD)
+- Commission-based sales tracking (default 10%)
+- MRR (Monthly Recurring Revenue) calculation
+- Trial/Active/Suspended/Inactive status management
+- Regional sales team assignment
+- Complete sales funnel analytics
