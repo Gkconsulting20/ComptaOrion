@@ -110,44 +110,147 @@ router.get('/categories/:entrepriseId', async (req, res) => {
 router.get('/previsions/:entrepriseId', async (req, res) => {
   try {
     const { entrepriseId } = req.params;
+    const { periode } = req.query;
     const entId = parseInt(entrepriseId);
     
-    // Factures clients à venir (non payées)
-    const facturesAVenir = await db.select().from(factures)
+    const joursProj = parseInt(periode) || 30;
+    const dateAujourdhui = new Date();
+    dateAujourdhui.setHours(0, 0, 0, 0);
+    const dateLimite = new Date(dateAujourdhui);
+    dateLimite.setDate(dateLimite.getDate() + joursProj);
+    
+    const comptesData = await db.select().from(comptesBancaires)
+      .where(and(
+        eq(comptesBancaires.entrepriseId, entId),
+        eq(comptesBancaires.actif, true)
+      ));
+    
+    const mouvementsData = await db.select().from(transactionsTresorerie)
+      .where(eq(transactionsTresorerie.entrepriseId, entId));
+    
+    let soldeActuel = 0;
+    comptesData.forEach(compte => {
+      const mouvements = mouvementsData.filter(m => m.compteBancaireId === compte.id);
+      let soldeCompte = parseFloat(compte.soldeInitial || 0);
+      mouvements.forEach(m => {
+        if (m.type === 'encaissement') {
+          soldeCompte += parseFloat(m.montant || 0);
+        } else if (m.type === 'decaissement') {
+          soldeCompte -= parseFloat(m.montant || 0);
+        }
+      });
+      soldeActuel += soldeCompte;
+    });
+    
+    const facturesClients = await db.select().from(factures)
       .where(and(
         eq(factures.entrepriseId, entId),
         eq(factures.statut, 'en_attente')
       ));
     
-    const totalFactures = facturesAVenir.reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
+    const facturesClientsPeriode = facturesClients.filter(f => {
+      if (!f.dateEcheance) return false;
+      const echeance = new Date(f.dateEcheance);
+      return echeance >= dateAujourdhui && echeance <= dateLimite;
+    });
     
-    // Échéances fournisseur (factures non payées)
-    const echancesFS = await db.select().from(achats)
+    const totalCreances = facturesClientsPeriode.reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
+    
+    const facturesFournisseurs = await db.select().from(facturesAchat)
       .where(and(
-        eq(achats.entrepriseId, entId),
-        eq(achats.statut, 'en_attente_paiement')
+        eq(facturesAchat.entrepriseId, entId),
+        eq(facturesAchat.statut, 'en_attente')
       ));
     
-    const totalEchances = echancesFS.reduce((sum, a) => sum + parseFloat(a.montantTTC || 0), 0);
+    const facturesFournisseursPeriode = facturesFournisseurs.filter(f => {
+      if (!f.dateEcheance) return false;
+      const echeance = new Date(f.dateEcheance);
+      return echeance >= dateAujourdhui && echeance <= dateLimite;
+    });
+    
+    const totalDettes = facturesFournisseursPeriode.reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
+    
+    const soldePrevu = soldeActuel + totalCreances - totalDettes;
+    
+    const projectionParSemaine = [];
+    const nbSemaines = Math.ceil(joursProj / 7);
+    
+    for (let semaine = 1; semaine <= nbSemaines; semaine++) {
+      const debutSemaine = new Date(dateAujourdhui);
+      debutSemaine.setDate(debutSemaine.getDate() + (semaine - 1) * 7);
+      const finSemaine = new Date(debutSemaine);
+      finSemaine.setDate(finSemaine.getDate() + 6);
+      
+      const encaissementsSemaine = facturesClientsPeriode
+        .filter(f => {
+          const echeance = new Date(f.dateEcheance);
+          return echeance >= debutSemaine && echeance <= finSemaine;
+        })
+        .reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
+      
+      const decaissementsSemaine = facturesFournisseursPeriode
+        .filter(f => {
+          const echeance = new Date(f.dateEcheance);
+          return echeance >= debutSemaine && echeance <= finSemaine;
+        })
+        .reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
+      
+      const encaissementsCumules = facturesClientsPeriode
+        .filter(f => {
+          const echeance = new Date(f.dateEcheance);
+          return echeance <= finSemaine;
+        })
+        .reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
+      
+      const decaissementsCumules = facturesFournisseursPeriode
+        .filter(f => {
+          const echeance = new Date(f.dateEcheance);
+          return echeance <= finSemaine;
+        })
+        .reduce((sum, f) => sum + parseFloat(f.montantTTC || 0), 0);
+      
+      const soldeSemaine = soldeActuel + encaissementsCumules - decaissementsCumules;
+      
+      projectionParSemaine.push({
+        semaine,
+        periode: `Semaine ${semaine} (${debutSemaine.toLocaleDateString('fr-FR')} - ${finSemaine.toLocaleDateString('fr-FR')})`,
+        encaissements: encaissementsSemaine,
+        decaissements: decaissementsSemaine,
+        soldePrevu: soldeSemaine
+      });
+    }
     
     res.json({
-      facturesAVenir: {
-        count: facturesAVenir.length,
-        total: totalFactures,
-        items: facturesAVenir.slice(0, 5)
+      soldeActuel,
+      soldePrevu,
+      periode: joursProj,
+      creances: {
+        total: totalCreances,
+        count: facturesClientsPeriode.length,
+        factures: facturesClientsPeriode.map(f => ({
+          id: f.id,
+          numero: f.numeroFacture,
+          montant: parseFloat(f.montantTTC || 0),
+          dateEcheance: f.dateEcheance,
+          clientId: f.clientId
+        }))
       },
-      echancesFournisseur: {
-        count: echancesFS.length,
-        total: totalEchances,
-        items: echancesFS.slice(0, 5)
+      dettes: {
+        total: totalDettes,
+        count: facturesFournisseursPeriode.length,
+        factures: facturesFournisseursPeriode.map(f => ({
+          id: f.id,
+          numero: f.numeroFacture,
+          montant: parseFloat(f.montantTTC || 0),
+          dateEcheance: f.dateEcheance,
+          fournisseurId: f.fournisseurId
+        }))
       },
-      fluxFuturs: {
-        semaine: totalFactures - totalEchances,
-        mois: (totalFactures - totalEchances) * 4,
-        trimestre: (totalFactures - totalEchances) * 13
-      }
+      projection: projectionParSemaine,
+      variation: soldePrevu - soldeActuel
     });
   } catch (err) {
+    console.error('Erreur prévisions:', err);
     res.status(500).json({ error: err.message });
   }
 });

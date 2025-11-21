@@ -6,21 +6,39 @@ export function TresorerieModule() {
   const [dashboardStats, setDashboardStats] = useState(null);
   const [comptes, setComptes] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [previsions, setPrevisions] = useState(null);
+  const [periodePrevision, setPeriodePrevision] = useState(30);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
   const [formData, setFormData] = useState({});
+  
+  const ENTREPRISE_ID = parseInt(localStorage.getItem('entrepriseId')) || 1;
 
   const TABS = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'comptes', label: 'Comptes Bancaires', icon: '🏦' },
     { id: 'transactions', label: 'Transactions', icon: '💸' },
+    { id: 'previsions', label: 'Prévisions', icon: '📈' },
     { id: 'rapprochement', label: 'Rapprochement', icon: '✅' }
   ];
 
   useEffect(() => {
     loadData();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'previsions' && previsions === null) {
+      loadPrevisions();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'previsions') {
+      loadPrevisions();
+    }
+  }, [periodePrevision]);
 
   const loadData = async () => {
     setLoading(true);
@@ -31,6 +49,8 @@ export function TresorerieModule() {
         await loadComptes();
       } else if (activeTab === 'transactions') {
         await loadTransactions();
+      } else if (activeTab === 'previsions') {
+        await loadPrevisions();
       } else if (activeTab === 'rapprochement') {
         await loadTransactions();
       }
@@ -42,28 +62,54 @@ export function TresorerieModule() {
   };
 
   const loadDashboard = async () => {
-    const data = await api.get('/tresorerie/comptes/1');
-    const soldeTotal = data.reduce((sum, c) => sum + parseFloat(c.soldeActuel || 0), 0);
-    const soldeBanques = data.filter(c => c.type === 'banque').reduce((sum, c) => sum + parseFloat(c.soldeActuel || 0), 0);
-    const soldeCaisses = data.filter(c => c.type === 'caisse').reduce((sum, c) => sum + parseFloat(c.soldeActuel || 0), 0);
-    
-    setDashboardStats({
-      solde_total: soldeTotal,
-      nb_comptes_actifs: data.filter(c => c.actif).length,
-      solde_banques: soldeBanques,
-      solde_caisses: soldeCaisses
-    });
-    setComptes(data);
+    try {
+      setError(null);
+      const data = await api.get(`/tresorerie/comptes/${ENTREPRISE_ID}`);
+      const soldeTotal = data.reduce((sum, c) => sum + parseFloat(c.soldeActuel || 0), 0);
+      const soldeBanques = data.filter(c => c.type === 'banque').reduce((sum, c) => sum + parseFloat(c.soldeActuel || 0), 0);
+      const soldeCaisses = data.filter(c => c.type === 'caisse').reduce((sum, c) => sum + parseFloat(c.soldeActuel || 0), 0);
+      
+      setDashboardStats({
+        solde_total: soldeTotal,
+        nb_comptes_actifs: data.filter(c => c.actif).length,
+        solde_banques: soldeBanques,
+        solde_caisses: soldeCaisses
+      });
+      setComptes(data);
+    } catch (err) {
+      setError(err.message || 'Erreur lors du chargement du dashboard');
+    }
   };
 
   const loadComptes = async () => {
-    const data = await api.get('/tresorerie/comptes/1');
-    setComptes(data);
+    try {
+      setError(null);
+      const data = await api.get(`/tresorerie/comptes/${ENTREPRISE_ID}`);
+      setComptes(data);
+    } catch (err) {
+      setError(err.message || 'Erreur lors du chargement des comptes');
+    }
   };
 
   const loadTransactions = async () => {
-    const data = await api.get('/tresorerie/mouvements/1');
-    setTransactions(data);
+    try {
+      setError(null);
+      const data = await api.get(`/tresorerie/mouvements/${ENTREPRISE_ID}`);
+      setTransactions(data);
+    } catch (err) {
+      setError(err.message || 'Erreur lors du chargement des transactions');
+    }
+  };
+
+  const loadPrevisions = async () => {
+    try {
+      setError(null);
+      const data = await api.get(`/tresorerie/previsions/${ENTREPRISE_ID}?periode=${periodePrevision}`);
+      setPrevisions(data);
+    } catch (err) {
+      setError(err.message || 'Erreur lors du chargement des prévisions');
+      setPrevisions(null);
+    }
   };
 
   const openModal = (type, data = {}) => {
@@ -288,6 +334,189 @@ export function TresorerieModule() {
     </div>
   );
 
+  const renderPrevisions = () => {
+    if (error) {
+      return (
+        <div style={{ padding: '20px', backgroundColor: '#ffebee', borderRadius: '8px', border: '1px solid #e74c3c' }}>
+          <p style={{ margin: 0, color: '#e74c3c', fontWeight: 'bold' }}>❌ {error}</p>
+        </div>
+      );
+    }
+
+    if (!previsions) return <p>Chargement des prévisions...</p>;
+
+    const variation = previsions.variation || 0;
+    const variationColor = variation >= 0 ? '#27ae60' : '#e74c3c';
+
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h3 style={{ margin: 0 }}>Prévisions de Trésorerie</h3>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => setPeriodePrevision(7)}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: periodePrevision === 7 ? '#667eea' : '#e0e0e0',
+                color: periodePrevision === 7 ? 'white' : '#333',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              7 jours
+            </button>
+            <button
+              onClick={() => setPeriodePrevision(30)}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: periodePrevision === 30 ? '#667eea' : '#e0e0e0',
+                color: periodePrevision === 30 ? 'white' : '#333',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              30 jours
+            </button>
+            <button
+              onClick={() => setPeriodePrevision(90)}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: periodePrevision === 90 ? '#667eea' : '#e0e0e0',
+                color: periodePrevision === 90 ? 'white' : '#333',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              90 jours
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+          <div style={{ padding: '20px', backgroundColor: '#667eea', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ fontSize: '14px', opacity: 0.9 }}>Solde Actuel</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{parseFloat(previsions.soldeActuel || 0).toLocaleString()} XOF</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Tous comptes confondus</div>
+          </div>
+
+          <div style={{ padding: '20px', backgroundColor: '#27ae60', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ fontSize: '14px', opacity: 0.9 }}>Créances à Recevoir</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>+{parseFloat(previsions.creances?.total || 0).toLocaleString()} XOF</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>{previsions.creances?.count || 0} facture(s) client</div>
+          </div>
+
+          <div style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ fontSize: '14px', opacity: 0.9 }}>Dettes à Payer</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>-{parseFloat(previsions.dettes?.total || 0).toLocaleString()} XOF</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>{previsions.dettes?.count || 0} facture(s) fournisseur</div>
+          </div>
+
+          <div style={{ padding: '20px', backgroundColor: variationColor, color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ fontSize: '14px', opacity: 0.9 }}>Solde Prévu</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{parseFloat(previsions.soldePrevu || 0).toLocaleString()} XOF</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>
+              {variation >= 0 ? '↗' : '↘'} {Math.abs(variation).toLocaleString()} XOF
+            </div>
+          </div>
+        </div>
+
+        <h4 style={{ marginTop: '30px', marginBottom: '15px' }}>Projection par Semaine ({periodePrevision} jours)</h4>
+        <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Période</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Encaissements Prévus</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Décaissements Prévus</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Solde Prévu</th>
+            </tr>
+          </thead>
+          <tbody>
+            {previsions.projection?.map((proj, index) => (
+              <tr key={index} style={{ borderBottom: '1px solid #dee2e6' }}>
+                <td style={{ padding: '12px', fontWeight: 'bold' }}>{proj.periode}</td>
+                <td style={{ padding: '12px', textAlign: 'right', color: '#27ae60' }}>
+                  +{parseFloat(proj.encaissements || 0).toLocaleString()} XOF
+                </td>
+                <td style={{ padding: '12px', textAlign: 'right', color: '#e74c3c' }}>
+                  -{parseFloat(proj.decaissements || 0).toLocaleString()} XOF
+                </td>
+                <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: parseFloat(proj.soldePrevu) >= 0 ? '#27ae60' : '#e74c3c' }}>
+                  {parseFloat(proj.soldePrevu || 0).toLocaleString()} XOF
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div>
+            <h4 style={{ marginBottom: '15px' }}>📥 Factures Clients en Attente</h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                  <th style={{ padding: '12px', textAlign: 'left' }}>N° Facture</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previsions.creances?.factures?.slice(0, 5).map((facture) => (
+                  <tr key={facture.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                    <td style={{ padding: '12px' }}>{facture.numero || `#${facture.id}`}</td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
+                      {parseFloat(facture.montant || 0).toLocaleString()} XOF
+                    </td>
+                  </tr>
+                ))}
+                {(!previsions.creances?.factures || previsions.creances.factures.length === 0) && (
+                  <tr>
+                    <td colSpan="2" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                      Aucune facture en attente
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h4 style={{ marginBottom: '15px' }}>📤 Factures Fournisseurs à Payer</h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                  <th style={{ padding: '12px', textAlign: 'left' }}>N° Facture</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previsions.dettes?.factures?.slice(0, 5).map((facture) => (
+                  <tr key={facture.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                    <td style={{ padding: '12px' }}>{facture.numero || `#${facture.id}`}</td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: '#e74c3c' }}>
+                      {parseFloat(facture.montant || 0).toLocaleString()} XOF
+                    </td>
+                  </tr>
+                ))}
+                {(!previsions.dettes?.factures || previsions.dettes.factures.length === 0) && (
+                  <tr>
+                    <td colSpan="2" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                      Aucune facture à payer
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderRapprochement = () => {
     const transactionsNonRapprochees = transactions.filter(t => !t.rapproche);
     
@@ -393,6 +622,7 @@ export function TresorerieModule() {
         {activeTab === 'dashboard' && renderDashboard()}
         {activeTab === 'comptes' && renderComptes()}
         {activeTab === 'transactions' && renderTransactions()}
+        {activeTab === 'previsions' && renderPrevisions()}
         {activeTab === 'rapprochement' && renderRapprochement()}
       </div>
     </div>
