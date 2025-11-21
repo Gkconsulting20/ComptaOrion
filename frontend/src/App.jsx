@@ -4,7 +4,7 @@ import { ClientsModule } from './modules/ClientsModule';
 import { GestionFournisseurs } from './modules/GestionFournisseurs';
 import { TresorerieModule } from './modules/TresorerieModule';
 import { StockInventaire } from './modules/StockInventaire';
-import { ComptabiliteModule } from './modules/ComptabiliteModule';
+import { ModuleComptabilite } from './modules/ModuleComptabilite';
 import { DepensesModule } from './modules/DepensesModule';
 import { EmployesModule } from './modules/EmployesModule';
 import { ParametresModule } from './modules/ParametresModule';
@@ -147,7 +147,7 @@ export default function App() {
       case 'fournisseurs': return <GestionFournisseurs />;
       case 'tresorerie': return <TresorerieModule />;
       case 'stock': return <StockInventaire />;
-      case 'comptabilite': return <ComptabiliteModule />;
+      case 'comptabilite': return <ModuleComptabilite />;
       case 'depenses': return <DepensesModule />;
       case 'employes': return <EmployesModule />;
       case 'parametres': return <ParametresModule />;

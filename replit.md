@@ -31,12 +31,28 @@ ComptaOrion is built with a modular architecture comprising 17 modules organized
 
 1.  **Dashboard Global:** Real-time KPIs, interactive charts, and system overview.
 2.  **Customer & Sales Management:** CRUD for clients, quotes, sales invoices, and payments. Includes automatic accounting integration.
+    - **Parameters:** 3 sous-onglets (Clients, Taxes, Codes Comptables)
+    - **Devis, Factures, Paiements, Relances, Rapports**
 3.  **Supplier & Purchase Management:** CRUD for suppliers, purchase orders, goods receipts, and supplier invoices.
-4.  **Treasury & Finance:** Bank balances, cash management, reconciliation, and expense management with approval workflows. Integrates with inventory for automatic stock updates.
-5.  **Accounting & Compliance:** General ledger, chart of accounts (SYSCOHADA/IFRS/PCG), journals, entries, trial balance, and fixed asset management with automated depreciation.
-6.  **Human Resources (HR Lite):** Employee management, salary advances, absence tracking, and HR notifications.
-7.  **Configuration & Security:** Currency management, accounting system settings, country-specific parameters, authentication (JWT, RBAC), Row-Level Security (RLS), and a comprehensive audit log.
-8.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI integration.
+    - **Parameters:** 3 sous-onglets (Fournisseurs, Taxes, Codes Comptables)
+    - **Commandes Achat** avec conversion automatique en facture
+    - **Réceptions, Factures Fournisseurs, Paiements, Rapports**
+4.  **Stock & Inventory:** Multi-warehouse stock management with movement tracking.
+    - **Stock Management:** Multi-warehouse, FIFO/CMP valorization
+    - **Movement Tracking:** Entries, exits, transfers, adjustments
+    - **Reports:** Period-based valorization reports
+5.  **Accounting & Compliance (Module Comptabilité):** Complete accounting system with 7 tabs:
+    - **📋 Plan Comptable:** CRUD des comptes (SYSCOHADA/IFRS/PCG classes 1-8)
+    - **📚 Journaux:** Gestion des journaux (Ventes, Achats, Banque, Caisse, OD)
+    - **✍️ Écritures Comptables:** Saisie débit/crédit avec validation d'équilibre automatique
+    - **📖 Grand Livre:** Mouvements par compte avec filtrage par période
+    - **⚖️ Balance Générale:** Balance des comptes avec soldes initiaux/finaux
+    - **🏢 Immobilisations:** Gestion des actifs avec calcul automatique amortissement
+    - **📊 Rapports Financiers:** Bilan, Compte de Résultat, Flux de Trésorerie
+6.  **Treasury & Finance:** Bank balances, cash management, reconciliation, and expense management with approval workflows.
+7.  **Human Resources (HR Lite):** Employee management, salary advances, absence tracking, and HR notifications.
+8.  **Configuration & Security:** Currency management, accounting system settings, country-specific parameters, authentication (JWT, RBAC), Row-Level Security (RLS), and a comprehensive audit log.
+9.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI integration.
 
 ### Cross-Modular Functionalities
 -   **Automated Accounting:** Every client/supplier transaction automatically generates accounting entries.
@@ -65,3 +81,46 @@ ComptaOrion is built with a modular architecture comprising 17 modules organized
 
 ### AI
 -   OpenAI API (via Replit integration)
+
+## Recent Changes (November 21, 2025)
+
+### Module Comptabilité - Complete Implementation
+Created comprehensive accounting module (ModuleComptabilite.jsx) with 7 tabs:
+
+**Frontend:**
+- Plan Comptable: CRUD comptes comptables with categories
+- Journaux: Management of accounting journals (VE, AC, BQ, CA, OD)
+- Écritures: Entry form with debit/credit validation and automatic balance check
+- Grand Livre: Account ledger with period filtering
+- Balance Générale: Trial balance with initial/final balances
+- Immobilisations: Fixed assets management with depreciation tracking
+- Rapports: Financial reports (Bilan, Compte de Résultat)
+
+**Backend Routes:**
+- `/comptabilite/comptes` - CRUD chart of accounts
+- `/comptabilite/journaux` - CRUD journals
+- `/comptabilite/ecritures` - CRUD entries with validation
+- `/comptabilite/grand-livre` - Ledger with filtering
+- `/comptabilite/balance` - Trial balance generation
+- `/comptabilite/bilan` - Balance sheet report
+- `/comptabilite/compte-resultat` - Income statement
+- `/immobilisations/*` - Fixed assets management with automatic depreciation calculation
+
+**Key Features:**
+- Automatic debit/credit balance validation
+- Multi-journal support (Sales, Purchases, Bank, Cash, OD)
+- Period-based filtering for all reports
+- SYSCOHADA/IFRS/PCG compliance
+- Complete audit trail for all operations
+
+### Module Client - Standardized Parameters
+Updated ClientsModule.jsx with 3 sub-tabs in Parameters:
+- Clients: CRUD with accounting codes, payment terms
+- Taxes: VAT configuration (18%, 9%, 0%)
+- Codes Comptables: Account codes (411, 4111, 4112, 4431)
+
+### Module Fournisseur - Complete Structure
+GestionFournisseurs.jsx with 6 tabs:
+- Parameters (3 sub-tabs: Suppliers, Taxes, Accounting Codes)
+- Purchase Orders with automatic invoice conversion
+- Receptions, Supplier Invoices, Payments, Reports
