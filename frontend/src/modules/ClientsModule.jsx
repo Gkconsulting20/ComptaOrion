@@ -6,13 +6,14 @@ import { FormField } from '../components/FormField';
 import api from '../api';
 
 export function ClientsModule() {
-  const [activeTab, setActiveTab] = useState('clients');
+  const [activeTab, setActiveTab] = useState('parametres');
 
   const tabs = [
-    { id: 'clients', label: '📋 Clients', icon: '👥' },
     { id: 'devis', label: '📝 Devis', icon: '📝' },
+    { id: 'factures', label: '💵 Factures Client', icon: '💵' },
     { id: 'paiements', label: '💳 Paiements', icon: '💳' },
     { id: 'relances', label: '🔔 Relances', icon: '🔔' },
+    { id: 'rapports', label: '📊 Rapports', icon: '📊' },
     { id: 'parametres', label: '⚙️ Paramètres Client', icon: '⚙️' },
   ];
 
@@ -54,220 +55,12 @@ export function ClientsModule() {
         </div>
       </div>
 
-      {activeTab === 'clients' && <ClientsTab />}
       {activeTab === 'devis' && <DevisTab />}
+      {activeTab === 'factures' && <FacturesClientTab />}
       {activeTab === 'paiements' && <PaiementsTab />}
       {activeTab === 'relances' && <RelancesTab />}
+      {activeTab === 'rapports' && <RapportsTab />}
       {activeTab === 'parametres' && <ParametresTab />}
-    </div>
-  );
-}
-
-// ==========================================
-// ONGLET 1: CLIENTS (CRUD)
-// ==========================================
-function ClientsTab() {
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingClient, setEditingClient] = useState(null);
-  const [formData, setFormData] = useState({
-    nom: '',
-    email: '',
-    telephone: '',
-    adresse: '',
-    ville: '',
-    pays: 'Côte d\'Ivoire',
-    type: 'entreprise',
-    categorieClient: 'standard',
-    limiteCredit: 0,
-    delaiPaiement: 30,
-  });
-
-  useEffect(() => {
-    loadClients();
-  }, []);
-
-  const loadClients = async () => {
-    try {
-      const data = await api.get('/clients');
-      setClients(data.data || []);
-    } catch (error) {
-      console.error('Erreur:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editingClient) {
-        await api.put(`/clients/${editingClient.id}`, formData);
-      } else {
-        await api.post('/clients', formData);
-      }
-      setShowModal(false);
-      setEditingClient(null);
-      resetForm();
-      loadClients();
-    } catch (error) {
-      alert('Erreur: ' + error.message);
-    }
-  };
-
-  const handleEdit = (client) => {
-    setEditingClient(client);
-    setFormData({ ...client });
-    setShowModal(true);
-  };
-
-  const handleDelete = async (client) => {
-    if (!confirm(`Supprimer le client ${client.nom} ?`)) return;
-    try {
-      await api.delete(`/clients/${client.id}`);
-      loadClients();
-    } catch (error) {
-      alert('Erreur: ' + error.message);
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      nom: '',
-      email: '',
-      telephone: '',
-      adresse: '',
-      ville: '',
-      pays: 'Côte d\'Ivoire',
-      type: 'entreprise',
-      categorieClient: 'standard',
-      limiteCredit: 0,
-      delaiPaiement: 30,
-    });
-  };
-
-  const columns = [
-    { key: 'numeroClient', label: 'N° Client' },
-    { key: 'nom', label: 'Nom' },
-    { key: 'email', label: 'Email' },
-    { key: 'telephone', label: 'Téléphone' },
-    { key: 'ville', label: 'Ville' },
-    { key: 'type', label: 'Type' },
-  ];
-
-  if (loading) return <p>Chargement...</p>;
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h3>Liste des Clients</h3>
-        <Button onClick={() => { resetForm(); setEditingClient(null); setShowModal(true); }}>
-          + Nouveau Client
-        </Button>
-      </div>
-
-      <Table 
-        columns={columns} 
-        data={clients} 
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
-
-      <Modal
-        isOpen={showModal}
-        onClose={() => { setShowModal(false); setEditingClient(null); resetForm(); }}
-        title={editingClient ? 'Modifier Client' : 'Nouveau Client'}
-        size="large"
-      >
-        <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            <FormField
-              label="Nom"
-              name="nom"
-              value={formData.nom}
-              onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-              required
-            />
-            <FormField
-              label="Email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-            <FormField
-              label="Téléphone"
-              name="telephone"
-              value={formData.telephone}
-              onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
-            />
-            <FormField
-              label="Type"
-              name="type"
-              type="select"
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              options={[
-                { value: 'entreprise', label: 'Entreprise' },
-                { value: 'particulier', label: 'Particulier' },
-              ]}
-            />
-            <FormField
-              label="Adresse"
-              name="adresse"
-              value={formData.adresse}
-              onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
-            />
-            <FormField
-              label="Ville"
-              name="ville"
-              value={formData.ville}
-              onChange={(e) => setFormData({ ...formData, ville: e.target.value })}
-            />
-            <FormField
-              label="Pays"
-              name="pays"
-              value={formData.pays}
-              onChange={(e) => setFormData({ ...formData, pays: e.target.value })}
-            />
-            <FormField
-              label="Catégorie"
-              name="categorieClient"
-              type="select"
-              value={formData.categorieClient}
-              onChange={(e) => setFormData({ ...formData, categorieClient: e.target.value })}
-              options={[
-                { value: 'standard', label: 'Standard' },
-                { value: 'premium', label: 'Premium' },
-                { value: 'vip', label: 'VIP' },
-              ]}
-            />
-            <FormField
-              label="Limite de crédit (FCFA)"
-              name="limiteCredit"
-              type="number"
-              value={formData.limiteCredit}
-              onChange={(e) => setFormData({ ...formData, limiteCredit: parseFloat(e.target.value) })}
-            />
-            <FormField
-              label="Délai de paiement (jours)"
-              name="delaiPaiement"
-              type="number"
-              value={formData.delaiPaiement}
-              onChange={(e) => setFormData({ ...formData, delaiPaiement: parseInt(e.target.value) })}
-            />
-          </div>
-          <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-            <Button type="button" variant="secondary" onClick={() => { setShowModal(false); resetForm(); }}>
-              Annuler
-            </Button>
-            <Button type="submit" variant="success">
-              {editingClient ? 'Mettre à jour' : 'Créer'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 }
@@ -648,6 +441,403 @@ function DevisTab() {
 // ==========================================
 // ONGLET 4: PAIEMENTS
 // ==========================================
+// ==========================================
+// ONGLET 3: FACTURES CLIENT
+// ==========================================
+function FacturesClientTab() {
+  const [facturesList, setFacturesList] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterStatut, setFilterStatut] = useState('toutes');
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [factureData, setFactureData] = useState({
+    clientId: '',
+    dateFacture: new Date().toISOString().split('T')[0],
+    dateEcheance: '',
+    items: [{ description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
+    tauxTVA: 18,
+    notesInternes: '',
+    conditionsPaiement: '',
+    statut: 'brouillon',
+  });
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [facturesRes, clientsRes] = await Promise.all([
+        api.get('/factures'),
+        api.get('/clients')
+      ]);
+      const normalized = (facturesRes.data || []).map(f => ({
+        ...f.facture,
+        client: f.client
+      }));
+      setFacturesList(normalized);
+      setClients(clientsRes.data || []);
+    } catch (error) {
+      console.error('Erreur:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAnnulerFacture = async (id) => {
+    if (!confirm('Voulez-vous vraiment annuler cette facture?')) return;
+    try {
+      await api.put(`/factures/${id}`, { statut: 'annulee' });
+      alert('Facture annulée');
+      loadData();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleNewFacture = () => {
+    setFactureData({
+      clientId: '',
+      dateFacture: new Date().toISOString().split('T')[0],
+      dateEcheance: '',
+      items: [{ description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
+      tauxTVA: 18,
+      notesInternes: '',
+      conditionsPaiement: '',
+      statut: 'brouillon',
+    });
+    setWizardStep(1);
+    setShowWizard(true);
+  };
+
+  const handleSubmitFacture = async () => {
+    try {
+      const totalHT = factureData.items.reduce((sum, item) => {
+        const montantHT = item.quantite * item.prixUnitaire * (1 - item.remise / 100);
+        return sum + montantHT;
+      }, 0);
+      const montantTVA = totalHT * (factureData.tauxTVA / 100);
+      const totalTTC = totalHT + montantTVA;
+
+      await api.post('/factures', {
+        ...factureData,
+        totalHT,
+        montantTVA,
+        totalTTC,
+        items: factureData.items,
+      });
+
+      alert('Facture créée avec succès!');
+      setShowWizard(false);
+      loadData();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const addItem = () => {
+    setFactureData({
+      ...factureData,
+      items: [...factureData.items, { description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }]
+    });
+  };
+
+  const removeItem = (index) => {
+    setFactureData({
+      ...factureData,
+      items: factureData.items.filter((_, i) => i !== index)
+    });
+  };
+
+  const updateItem = (index, field, value) => {
+    const newItems = [...factureData.items];
+    newItems[index][field] = value;
+    setFactureData({ ...factureData, items: newItems });
+  };
+
+  const filteredFactures = filterStatut === 'toutes'
+    ? facturesList
+    : facturesList.filter(f => f.statut === filterStatut);
+
+  if (loading) return <p>Chargement...</p>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3>💵 Factures Client</h3>
+        <Button variant="primary" onClick={handleNewFacture}>
+          ➕ Nouvelle Facture
+        </Button>
+      </div>
+
+      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
+        {['toutes', 'brouillon', 'envoyee', 'payee', 'en_retard', 'annulee'].map(statut => (
+          <Button
+            key={statut}
+            size="small"
+            variant={filterStatut === statut ? 'primary' : 'secondary'}
+            onClick={() => setFilterStatut(statut)}
+          >
+            {statut.charAt(0).toUpperCase() + statut.slice(1).replace('_', ' ')}
+          </Button>
+        ))}
+      </div>
+
+      <Table
+        columns={[
+          { key: 'numeroFacture', label: 'N° Facture' },
+          { key: 'client', label: 'Client', render: (_, row) => row.client?.nom || 'N/A' },
+          { key: 'dateFacture', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
+          { key: 'totalTTC', label: 'Montant TTC', render: (val) => `${parseFloat(val).toLocaleString()} FCFA` },
+          { key: 'statut', label: 'Statut' },
+        ]}
+        data={filteredFactures}
+        actions={true}
+        customActions={(facture) => (
+          <div style={{ display: 'flex', gap: '5px' }}>
+            {facture.statut === 'brouillon' && (
+              <Button size="small" variant="danger" onClick={() => handleAnnulerFacture(facture.id)}>
+                ❌ Annuler
+              </Button>
+            )}
+          </div>
+        )}
+      />
+
+      {/* WIZARD CRÉATION FACTURE */}
+      <Modal
+        isOpen={showWizard}
+        onClose={() => setShowWizard(false)}
+        title="➕ Nouvelle Facture Client"
+        size="large"
+      >
+        {wizardStep === 1 && (
+          <div>
+            <h4>Étape 1: Informations Client</h4>
+            <FormField
+              label="Client *"
+              type="select"
+              value={factureData.clientId}
+              onChange={(e) => setFactureData({ ...factureData, clientId: parseInt(e.target.value) })}
+              options={[
+                { value: '', label: '-- Sélectionner un client --' },
+                ...clients.map(c => ({ value: c.id, label: c.nom }))
+              ]}
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '15px' }}>
+              <FormField
+                label="Date Facture"
+                type="date"
+                value={factureData.dateFacture}
+                onChange={(e) => setFactureData({ ...factureData, dateFacture: e.target.value })}
+              />
+              <FormField
+                label="Date Échéance"
+                type="date"
+                value={factureData.dateEcheance}
+                onChange={(e) => setFactureData({ ...factureData, dateEcheance: e.target.value })}
+              />
+            </div>
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button onClick={() => setWizardStep(2)} disabled={!factureData.clientId}>
+                Suivant &gt;
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {wizardStep === 2 && (
+          <div>
+            <h4>Étape 2: Articles</h4>
+            {factureData.items.map((item, index) => (
+              <div key={index} style={{ 
+                padding: '15px', 
+                backgroundColor: '#f8f9fa', 
+                borderRadius: '8px', 
+                marginBottom: '10px' 
+              }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 2 }}>
+                    <FormField
+                      label="Description"
+                      value={item.description}
+                      onChange={(e) => updateItem(index, 'description', e.target.value)}
+                      placeholder="Description de l'article..."
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <FormField
+                      label="Quantité"
+                      type="number"
+                      value={item.quantite}
+                      onChange={(e) => updateItem(index, 'quantite', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <FormField
+                      label="Prix Unitaire"
+                      type="number"
+                      value={item.prixUnitaire}
+                      onChange={(e) => updateItem(index, 'prixUnitaire', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <FormField
+                      label="Remise (%)"
+                      type="number"
+                      value={item.remise}
+                      onChange={(e) => updateItem(index, 'remise', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  {factureData.items.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="small"
+                      onClick={() => removeItem(index)}
+                      style={{ marginTop: '27px' }}
+                    >
+                      🗑️
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <Button type="button" variant="secondary" onClick={addItem} style={{ marginTop: '10px' }}>
+              ➕ Ajouter un article
+            </Button>
+
+            <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
+              <Button type="button" variant="secondary" onClick={() => setWizardStep(1)}>
+                &lt; Précédent
+              </Button>
+              <Button onClick={() => setWizardStep(3)}>
+                Suivant &gt;
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {wizardStep === 3 && (
+          <div>
+            <h4>Étape 3: Récapitulatif</h4>
+            <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+              <div style={{ marginBottom: '15px' }}>
+                <strong>Client:</strong> {clients.find(c => c.id === factureData.clientId)?.nom}
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <strong>Total HT:</strong> {factureData.items.reduce((sum, item) => 
+                  sum + item.quantite * item.prixUnitaire * (1 - item.remise / 100), 0
+                ).toLocaleString()} FCFA
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <strong>TVA ({factureData.tauxTVA}%):</strong> {(
+                  factureData.items.reduce((sum, item) => 
+                    sum + item.quantite * item.prixUnitaire * (1 - item.remise / 100), 0
+                  ) * factureData.tauxTVA / 100
+                ).toLocaleString()} FCFA
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                <strong>Total TTC:</strong> {(
+                  factureData.items.reduce((sum, item) => 
+                    sum + item.quantite * item.prixUnitaire * (1 - item.remise / 100), 0
+                  ) * (1 + factureData.tauxTVA / 100)
+                ).toLocaleString()} FCFA
+              </div>
+            </div>
+
+            <div style={{ marginTop: '20px' }}>
+              <FormField
+                label="Conditions de Paiement"
+                type="textarea"
+                value={factureData.conditionsPaiement}
+                onChange={(e) => setFactureData({ ...factureData, conditionsPaiement: e.target.value })}
+                placeholder="Paiement à 30 jours..."
+              />
+            </div>
+
+            <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
+              <Button type="button" variant="secondary" onClick={() => setWizardStep(2)}>
+                &lt; Précédent
+              </Button>
+              <Button variant="success" onClick={handleSubmitFacture}>
+                ✓ Créer la Facture
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+// ONGLET: RAPPORTS CLIENT
+// ==========================================
+function RapportsTab() {
+  const [rapportData, setRapportData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRapports();
+  }, []);
+
+  const loadRapports = async () => {
+    try {
+      // Pour l'instant, affichage placeholder
+      setRapportData({
+        topClients: [],
+        retardsPaiement: [],
+        chiffreAffaire: 0
+      });
+    } catch (error) {
+      console.error('Erreur:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <p>Chargement...</p>;
+
+  return (
+    <div>
+      <h3>📊 Rapports Client</h3>
+      
+      <div style={{ 
+        padding: '40px', 
+        textAlign: 'center',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '8px',
+        border: '2px dashed #dee2e6',
+        marginTop: '20px'
+      }}>
+        <div style={{ fontSize: '64px', marginBottom: '20px' }}>📊</div>
+        <h3 style={{ color: '#666', marginBottom: '10px' }}>Rapports en développement</h3>
+        <p style={{ color: '#999', fontSize: '16px' }}>
+          Les rapports clients seront disponibles prochainement.
+        </p>
+        <p style={{ color: '#999', fontSize: '14px', marginTop: '15px' }}>
+          Fonctionnalités prévues:
+        </p>
+        <ul style={{ 
+          color: '#999', 
+          fontSize: '14px', 
+          textAlign: 'left', 
+          maxWidth: '600px', 
+          margin: '10px auto',
+          lineHeight: '1.8'
+        }}>
+          <li>Chiffre d'affaires par client</li>
+          <li>Clients avec retards de paiement</li>
+          <li>Top 10 clients (CA)</li>
+          <li>Historique des transactions par client</li>
+          <li>Analyse des échéances</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function PaiementsTab() {
   const [paiementsList, setPaiementsList] = useState([]);
   const [facturesList, setFacturesList] = useState([]);
@@ -1460,3 +1650,4 @@ function ParametresTab() {
     </div>
   );
 }
+
