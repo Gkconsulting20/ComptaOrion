@@ -33,7 +33,7 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 3.  **Supplier & Purchase Management:** CRUD for suppliers, purchase orders, goods receipts, and supplier invoices.
 4.  **Stock & Inventory:** Multi-warehouse stock management with movement tracking and FIFO/CMP valorization.
 5.  **Accounting & Compliance:** Complete accounting system including Chart of Accounts (SYSCOHADA/IFRS/PCG), Journals, Accounting Entries, General Ledger, Trial Balance, Fixed Assets management with automatic amortization, Financial Reports, and recurrent entries management.
-6.  **Treasury & Finance:** Bank balances, cash management, reconciliation, expense management, and cash flow forecasting. Includes bank account management with accounting linkage.
+6.  **Treasury & Finance:** Bank balances, cash management, reconciliation, expense management, and **cash flow forecasting with automated predictions**. Includes bank account management with accounting linkage, and advanced treasury forecasts based on outstanding invoices (both receivables and payables).
 7.  **Configuration & Security:** Currency management, accounting system settings, country-specific parameters, authentication (JWT, RBAC), Row-Level Security (RLS), a comprehensive audit log, and customizable invoice branding (logo, colors, footer).
 8.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI.
 9.  **SaaS Administration:** Complete commercialization platform with sales team management, client tracking, subscription plans, invoicing, and revenue analytics (MRR tracking).
@@ -47,6 +47,13 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 -   **Compliance & Audit:** Complete audit trail for all operations, SYSCOHADA compliance, and CSV/Excel export.
 -   **Email Automation (NEW - Nov 2025):** SendGrid integration for automated invoice sending with professional HTML templates, email tracking, and delivery history. Requires SENDGRID_API_KEY secret configuration.
 -   **Interactive Details View (NEW - Nov 2025):** Click on any facture or écriture comptable row to view complete details in a modal with all associated information (client data, line items, totals, accounting lines, etc.).
+-   **Treasury Forecasting (Nov 2025):** Automated cash flow predictions considering:
+    - Current bank balances across all active accounts
+    - Outstanding client invoices (receivables) with due dates
+    - Outstanding supplier invoices (payables) with due dates
+    - Week-by-week projection for 7, 30, or 90 days
+    - Automatic calculation of projected balance = current balance + receivables - payables
+-   **Account Statements (Nov 2025):** Complete account statement generation for both clients and suppliers with period filtering, automatic balance calculation, and professional email delivery via SendGrid.
 
 ## External Dependencies
 
