@@ -2437,79 +2437,532 @@ function ParametresView() {
 }
 
 function DependsView() {
+  const [depenses, setDepenses] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    description: '',
+    montant: '',
+    categorie: 'transport',
+    date: new Date().toISOString().split('T')[0],
+    justificatif: ''
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchDepenses = async () => {
+      try {
+        const res = await fetch('/api/depenses');
+        if (res.ok) {
+          const data = await res.json();
+          setDepenses(data);
+        }
+      } catch (err) {
+        console.error('Erreur chargement dépenses:', err);
+      }
+    };
+    fetchDepenses();
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch('/api/depenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        const newDepense = await res.json();
+        setDepenses([...depenses, newDepense]);
+        setFormData({ description: '', montant: '', categorie: 'transport', date: new Date().toISOString().split('T')[0], justificatif: '' });
+        setShowForm(false);
+      }
+    } catch (err) {
+      console.error('Erreur création dépense:', err);
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="view-container">
       <div className="view-header">
         <h2 className="view-title">💸 Dépenses & Notes de Frais</h2>
-        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Gestion des dépenses et notes de frais des employés</p>
+        <button className="btn-primary" onClick={() => setShowForm(!showForm)} style={{marginTop: '0'}}>
+          {showForm ? 'Annuler' : '➕ Nouvelle dépense'}
+        </button>
       </div>
-      <div className="empty-state">
-        <p>📋 Module Dépenses</p>
-        <small>Workflow d'approbation: Employé → Manager → Comptable</small>
-      </div>
-      <div style={{marginTop: '20px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
-        <h3>Fonctionnalités</h3>
-        <ul style={{listStyle: 'none', paddingLeft: 0}}>
-          <li>✅ Enregistrement dépenses</li>
-          <li>✅ Upload justificatifs</li>
-          <li>✅ Catégories dépenses</li>
-          <li>✅ Workflow approbation 3 niveaux</li>
-          <li>✅ Remboursement employés</li>
-          <li>✅ Export Excel/CSV</li>
-        </ul>
-      </div>
+
+      {showForm && (
+        <div style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', marginBottom: '20px'}}>
+          <h3>Enregistrer une dépense</h3>
+          <form onSubmit={handleSubmit}>
+            <div style={{marginBottom: '15px'}}>
+              <label>Description</label>
+              <input 
+                type="text" 
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                placeholder="Ex: Carburant, Repas client..."
+                required
+                style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+              />
+            </div>
+            <div style={{marginBottom: '15px'}}>
+              <label>Montant (XOF)</label>
+              <input 
+                type="number" 
+                value={formData.montant}
+                onChange={(e) => setFormData({...formData, montant: e.target.value})}
+                placeholder="0.00"
+                required
+                style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+              />
+            </div>
+            <div style={{marginBottom: '15px'}}>
+              <label>Catégorie</label>
+              <select 
+                value={formData.categorie}
+                onChange={(e) => setFormData({...formData, categorie: e.target.value})}
+                style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+              >
+                <option value="transport">Transport</option>
+                <option value="repas">Repas</option>
+                <option value="fournitures">Fournitures</option>
+                <option value="autres">Autres</option>
+              </select>
+            </div>
+            <div style={{marginBottom: '15px'}}>
+              <label>Date</label>
+              <input 
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({...formData, date: e.target.value})}
+                style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Enregistrement...' : 'Enregistrer'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      <table style={{width: '100%', borderCollapse: 'collapse', marginTop: '20px'}}>
+        <thead>
+          <tr style={{backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6'}}>
+            <th style={{padding: '12px', textAlign: 'left'}}>Date</th>
+            <th style={{padding: '12px', textAlign: 'left'}}>Description</th>
+            <th style={{padding: '12px', textAlign: 'left'}}>Catégorie</th>
+            <th style={{padding: '12px', textAlign: 'right'}}>Montant</th>
+            <th style={{padding: '12px', textAlign: 'center'}}>Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+          {depenses.length > 0 ? (
+            depenses.map(dep => (
+              <tr key={dep.id} style={{borderBottom: '1px solid #dee2e6'}}>
+                <td style={{padding: '12px'}}>{new Date(dep.date).toLocaleDateString('fr-FR')}</td>
+                <td style={{padding: '12px'}}>{dep.description}</td>
+                <td style={{padding: '12px'}}>{dep.categorie}</td>
+                <td style={{padding: '12px', textAlign: 'right'}}>{dep.montant} XOF</td>
+                <td style={{padding: '12px', textAlign: 'center'}}>
+                  <span style={{padding: '4px 8px', borderRadius: '4px', backgroundColor: '#e7f3ff', color: '#0066cc', fontSize: '12px'}}>
+                    {dep.statut || 'En attente'}
+                  </span>
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="5" style={{padding: '20px', textAlign: 'center', color: '#999'}}>Aucune dépense enregistrée</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 function EmployesView() {
+  const [employes, setEmployes] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({
+    nom: '',
+    prenom: '',
+    email: '',
+    poste: '',
+    dateEmbauche: new Date().toISOString().split('T')[0],
+    salaire: ''
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchEmployes = async () => {
+      try {
+        const res = await fetch('/api/employes');
+        if (res.ok) {
+          const data = await res.json();
+          setEmployes(data);
+        }
+      } catch (err) {
+        console.error('Erreur chargement employés:', err);
+      }
+    };
+    fetchEmployes();
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const method = editingId ? 'PUT' : 'POST';
+      const url = editingId ? `/api/employes/${editingId}` : '/api/employes';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (editingId) {
+          setEmployes(employes.map(e => e.id === editingId ? data : e));
+        } else {
+          setEmployes([...employes, data]);
+        }
+        setFormData({ nom: '', prenom: '', email: '', poste: '', dateEmbauche: new Date().toISOString().split('T')[0], salaire: '' });
+        setShowForm(false);
+        setEditingId(null);
+      }
+    } catch (err) {
+      console.error('Erreur:', err);
+    }
+    setLoading(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Confirmer la suppression?')) {
+      try {
+        const res = await fetch(`/api/employes/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          setEmployes(employes.filter(e => e.id !== id));
+        }
+      } catch (err) {
+        console.error('Erreur suppression:', err);
+      }
+    }
+  };
+
   return (
     <div className="view-container">
       <div className="view-header">
         <h2 className="view-title">👨‍💼 Ressources Humaines</h2>
-        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Gestion des employés, absences et avances sur salaire</p>
+        <button className="btn-primary" onClick={() => { setShowForm(!showForm); setEditingId(null); }} style={{marginTop: '0'}}>
+          {showForm ? 'Annuler' : '➕ Nouvel employé'}
+        </button>
       </div>
-      <div className="empty-state">
-        <p>👥 Module Employés</p>
-        <small>Gestion complète des RH avec intégration paie</small>
-      </div>
-      <div style={{marginTop: '20px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
-        <h3>Fonctionnalités</h3>
-        <ul style={{listStyle: 'none', paddingLeft: 0}}>
-          <li>✅ CRUD Employés</li>
-          <li>✅ Documents (contrats, diplômes)</li>
-          <li>✅ Avances sur salaire</li>
-          <li>✅ Gestion absences</li>
-          <li>✅ Notifications RH</li>
-          <li>✅ Rôles & Permissions</li>
-        </ul>
-      </div>
+
+      {showForm && (
+        <div style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', marginBottom: '20px'}}>
+          <h3>{editingId ? 'Modifier employé' : 'Ajouter employé'}</h3>
+          <form onSubmit={handleSubmit}>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px'}}>
+              <div>
+                <label>Nom</label>
+                <input 
+                  type="text" 
+                  value={formData.nom}
+                  onChange={(e) => setFormData({...formData, nom: e.target.value})}
+                  required
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                />
+              </div>
+              <div>
+                <label>Prénom</label>
+                <input 
+                  type="text" 
+                  value={formData.prenom}
+                  onChange={(e) => setFormData({...formData, prenom: e.target.value})}
+                  required
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                />
+              </div>
+            </div>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px'}}>
+              <div>
+                <label>Email</label>
+                <input 
+                  type="email" 
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  required
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                />
+              </div>
+              <div>
+                <label>Poste</label>
+                <input 
+                  type="text" 
+                  value={formData.poste}
+                  onChange={(e) => setFormData({...formData, poste: e.target.value})}
+                  required
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                />
+              </div>
+            </div>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px'}}>
+              <div>
+                <label>Date d'embauche</label>
+                <input 
+                  type="date"
+                  value={formData.dateEmbauche}
+                  onChange={(e) => setFormData({...formData, dateEmbauche: e.target.value})}
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                />
+              </div>
+              <div>
+                <label>Salaire (XOF)</label>
+                <input 
+                  type="number" 
+                  value={formData.salaire}
+                  onChange={(e) => setFormData({...formData, salaire: e.target.value})}
+                  required
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                />
+              </div>
+            </div>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Enregistrement...' : editingId ? 'Modifier' : 'Ajouter'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      <table style={{width: '100%', borderCollapse: 'collapse', marginTop: '20px'}}>
+        <thead>
+          <tr style={{backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6'}}>
+            <th style={{padding: '12px', textAlign: 'left'}}>Nom</th>
+            <th style={{padding: '12px', textAlign: 'left'}}>Email</th>
+            <th style={{padding: '12px', textAlign: 'left'}}>Poste</th>
+            <th style={{padding: '12px', textAlign: 'left'}}>Embauche</th>
+            <th style={{padding: '12px', textAlign: 'right'}}>Salaire</th>
+            <th style={{padding: '12px', textAlign: 'center'}}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {employes.length > 0 ? (
+            employes.map(emp => (
+              <tr key={emp.id} style={{borderBottom: '1px solid #dee2e6'}}>
+                <td style={{padding: '12px'}}>{emp.prenom} {emp.nom}</td>
+                <td style={{padding: '12px'}}>{emp.email}</td>
+                <td style={{padding: '12px'}}>{emp.poste}</td>
+                <td style={{padding: '12px'}}>{new Date(emp.dateEmbauche).toLocaleDateString('fr-FR')}</td>
+                <td style={{padding: '12px', textAlign: 'right'}}>{emp.salaire} XOF</td>
+                <td style={{padding: '12px', textAlign: 'center'}}>
+                  <button onClick={() => { setFormData(emp); setEditingId(emp.id); setShowForm(true); }} style={{marginRight: '8px', cursor: 'pointer', background: 'none', border: 'none', color: '#0066cc'}}>✏️</button>
+                  <button onClick={() => handleDelete(emp.id)} style={{cursor: 'pointer', background: 'none', border: 'none', color: '#dc3545'}}>🗑️</button>
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="6" style={{padding: '20px', textAlign: 'center', color: '#999'}}>Aucun employé</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 function ImmobilisationsView() {
+  const [immobilisations, setImmobilisations] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({
+    nom: '',
+    description: '',
+    valeurAcquisition: '',
+    dateAcquisition: new Date().toISOString().split('T')[0],
+    dureeVie: '',
+    typeAmortissement: 'lineaire',
+    categorie: ''
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchImmobilisations = async () => {
+      try {
+        const res = await fetch('/api/immobilisations');
+        if (res.ok) {
+          const data = await res.json();
+          setImmobilisations(data);
+        }
+      } catch (err) {
+        console.error('Erreur chargement immobilisations:', err);
+      }
+    };
+    fetchImmobilisations();
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const method = editingId ? 'PUT' : 'POST';
+      const url = editingId ? `/api/immobilisations/${editingId}` : '/api/immobilisations';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (editingId) {
+          setImmobilisations(immobilisations.map(i => i.id === editingId ? data : i));
+        } else {
+          setImmobilisations([...immobilisations, data]);
+        }
+        setFormData({ nom: '', description: '', valeurAcquisition: '', dateAcquisition: new Date().toISOString().split('T')[0], dureeVie: '', typeAmortissement: 'lineaire', categorie: '' });
+        setShowForm(false);
+        setEditingId(null);
+      }
+    } catch (err) {
+      console.error('Erreur:', err);
+    }
+    setLoading(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Confirmer la suppression?')) {
+      try {
+        const res = await fetch(`/api/immobilisations/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          setImmobilisations(immobilisations.filter(i => i.id !== id));
+        }
+      } catch (err) {
+        console.error('Erreur suppression:', err);
+      }
+    }
+  };
+
   return (
     <div className="view-container">
       <div className="view-header">
         <h2 className="view-title">🏗️ Immobilisations</h2>
-        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Gestion des immobilisations et amortissements</p>
+        <button className="btn-primary" onClick={() => { setShowForm(!showForm); setEditingId(null); }} style={{marginTop: '0'}}>
+          {showForm ? 'Annuler' : '➕ Nouvelle immobilisation'}
+        </button>
       </div>
-      <div className="empty-state">
-        <p>📊 Module Immobilisations</p>
-        <small>Calcul d'amortissements linéaires et dégressifs</small>
-      </div>
-      <div style={{marginTop: '20px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
-        <h3>Fonctionnalités</h3>
-        <ul style={{listStyle: 'none', paddingLeft: 0}}>
-          <li>✅ CRUD Immobilisations</li>
-          <li>✅ Catégories durée de vie</li>
-          <li>✅ Amortissement linéaire/dégressif</li>
-          <li>✅ Comptabilisation mensuelle auto</li>
-          <li>✅ Gestion cessions</li>
-          <li>✅ Registre complet & Export</li>
-        </ul>
-      </div>
+
+      {showForm && (
+        <div style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', marginBottom: '20px'}}>
+          <h3>{editingId ? 'Modifier' : 'Ajouter immobilisation'}</h3>
+          <form onSubmit={handleSubmit}>
+            <div style={{marginBottom: '15px'}}>
+              <label>Nom de l'immobilisation</label>
+              <input 
+                type="text" 
+                value={formData.nom}
+                onChange={(e) => setFormData({...formData, nom: e.target.value})}
+                placeholder="Ex: Véhicule, Ordinateur..."
+                required
+                style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+              />
+            </div>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px'}}>
+              <div>
+                <label>Valeur d'acquisition (XOF)</label>
+                <input 
+                  type="number" 
+                  value={formData.valeurAcquisition}
+                  onChange={(e) => setFormData({...formData, valeurAcquisition: e.target.value})}
+                  required
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                />
+              </div>
+              <div>
+                <label>Date d'acquisition</label>
+                <input 
+                  type="date"
+                  value={formData.dateAcquisition}
+                  onChange={(e) => setFormData({...formData, dateAcquisition: e.target.value})}
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                />
+              </div>
+            </div>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px'}}>
+              <div>
+                <label>Durée de vie (années)</label>
+                <input 
+                  type="number" 
+                  value={formData.dureeVie}
+                  onChange={(e) => setFormData({...formData, dureeVie: e.target.value})}
+                  required
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                />
+              </div>
+              <div>
+                <label>Type d'amortissement</label>
+                <select 
+                  value={formData.typeAmortissement}
+                  onChange={(e) => setFormData({...formData, typeAmortissement: e.target.value})}
+                  style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}
+                >
+                  <option value="lineaire">Linéaire</option>
+                  <option value="degressif">Dégressif</option>
+                </select>
+              </div>
+            </div>
+            <div style={{marginBottom: '15px'}}>
+              <label>Description</label>
+              <textarea 
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minHeight: '60px'}}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Enregistrement...' : editingId ? 'Modifier' : 'Ajouter'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      <table style={{width: '100%', borderCollapse: 'collapse', marginTop: '20px'}}>
+        <thead>
+          <tr style={{backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6'}}>
+            <th style={{padding: '12px', textAlign: 'left'}}>Nom</th>
+            <th style={{padding: '12px', textAlign: 'left'}}>Valeur</th>
+            <th style={{padding: '12px', textAlign: 'left'}}>Date Acquisition</th>
+            <th style={{padding: '12px', textAlign: 'left'}}>Durée (ans)</th>
+            <th style={{padding: '12px', textAlign: 'left'}}>Amortissement</th>
+            <th style={{padding: '12px', textAlign: 'center'}}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {immobilisations.length > 0 ? (
+            immobilisations.map(imm => (
+              <tr key={imm.id} style={{borderBottom: '1px solid #dee2e6'}}>
+                <td style={{padding: '12px'}}>{imm.nom}</td>
+                <td style={{padding: '12px'}}>{imm.valeurAcquisition} XOF</td>
+                <td style={{padding: '12px'}}>{new Date(imm.dateAcquisition).toLocaleDateString('fr-FR')}</td>
+                <td style={{padding: '12px'}}>{imm.dureeVie}</td>
+                <td style={{padding: '12px'}}>{imm.typeAmortissement}</td>
+                <td style={{padding: '12px', textAlign: 'center'}}>
+                  <button onClick={() => { setFormData(imm); setEditingId(imm.id); setShowForm(true); }} style={{marginRight: '8px', cursor: 'pointer', background: 'none', border: 'none', color: '#0066cc'}}>✏️</button>
+                  <button onClick={() => handleDelete(imm.id)} style={{cursor: 'pointer', background: 'none', border: 'none', color: '#dc3545'}}>🗑️</button>
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="6" style={{padding: '20px', textAlign: 'center', color: '#999'}}>Aucune immobilisation</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
