@@ -14,6 +14,7 @@ export function ClientsModule() {
     { id: 'factures', label: '💵 Factures Client', icon: '💵' },
     { id: 'bons-livraison', label: '📦 Bons de Livraison', icon: '📦' },
     { id: 'paiements', label: '💳 Paiements', icon: '💳' },
+    { id: 'etats-compte', label: '📋 États de Compte', icon: '📋' },
     { id: 'relances', label: '🔔 Relances', icon: '🔔' },
     { id: 'rapports', label: '📊 Rapports', icon: '📊' },
     { id: 'parametres', label: '⚙️ Paramètres Client', icon: '⚙️' },
@@ -61,6 +62,7 @@ export function ClientsModule() {
       {activeTab === 'factures' && <FacturesClientTab />}
       {activeTab === 'bons-livraison' && <BonsLivraisonTab />}
       {activeTab === 'paiements' && <PaiementsTab />}
+      {activeTab === 'etats-compte' && <EtatsCompteTab />}
       {activeTab === 'relances' && <RelancesTab />}
       {activeTab === 'rapports' && <RapportsTab />}
       {activeTab === 'parametres' && <ParametresTab />}
@@ -2126,6 +2128,241 @@ function ParametresTab() {
             }
           ]}
         />
+      )}
+    </div>
+  );
+}
+
+function EtatsCompteTab() {
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [periode, setPeriode] = useState({
+    dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    dateFin: new Date().toISOString().split('T')[0]
+  });
+  const [etatCompte, setEtatCompte] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    loadClients();
+  }, []);
+
+  const loadClients = async () => {
+    try {
+      const res = await api.get('/clients');
+      setClients(res.data || []);
+    } catch (error) {
+      console.error('Erreur chargement clients:', error);
+    }
+  };
+
+  const genererEtatCompte = async () => {
+    if (!selectedClientId) {
+      alert('Veuillez sélectionner un client');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await api.post('/clients/etat-compte', {
+        clientId: selectedClientId,
+        dateDebut: periode.dateDebut,
+        dateFin: periode.dateFin
+      });
+      setEtatCompte(res.data);
+    } catch (error) {
+      alert('Erreur lors de la génération: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const envoyerParEmail = async () => {
+    if (!etatCompte) return;
+
+    const client = clients.find(c => c.id == selectedClientId);
+    if (!client?.email) {
+      alert('Ce client n\'a pas d\'adresse email configurée');
+      return;
+    }
+
+    setSending(true);
+    try {
+      await api.post('/clients/etat-compte/email', {
+        clientId: selectedClientId,
+        dateDebut: periode.dateDebut,
+        dateFin: periode.dateFin
+      });
+      alert(`État de compte envoyé à ${client.email} avec succès!`);
+    } catch (error) {
+      alert('Erreur lors de l\'envoi: ' + error.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const selectedClient = clients.find(c => c.id == selectedClientId);
+
+  return (
+    <div>
+      <h3>📋 États de Compte Client</h3>
+      <div style={{ 
+        backgroundColor: 'white', 
+        padding: '20px', 
+        borderRadius: '8px',
+        marginBottom: '20px'
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+          <FormField
+            label="Client"
+            type="select"
+            value={selectedClientId}
+            onChange={(e) => {
+              setSelectedClientId(e.target.value);
+              setEtatCompte(null);
+            }}
+            options={[
+              { value: '', label: '-- Sélectionner un client --' },
+              ...clients.map(c => ({ value: c.id, label: c.nom }))
+            ]}
+          />
+          <FormField
+            label="Date Début"
+            type="date"
+            value={periode.dateDebut}
+            onChange={(e) => {
+              setPeriode({ ...periode, dateDebut: e.target.value });
+              setEtatCompte(null);
+            }}
+          />
+          <FormField
+            label="Date Fin"
+            type="date"
+            value={periode.dateFin}
+            onChange={(e) => {
+              setPeriode({ ...periode, dateFin: e.target.value });
+              setEtatCompte(null);
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <Button onClick={genererEtatCompte} disabled={loading || !selectedClientId}>
+            {loading ? '⏳ Génération...' : '📄 Générer État de Compte'}
+          </Button>
+          {etatCompte && selectedClient?.email && (
+            <Button variant="success" onClick={envoyerParEmail} disabled={sending}>
+              {sending ? '📧 Envoi...' : `📧 Envoyer à ${selectedClient.email}`}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {etatCompte && (
+        <div style={{ 
+          backgroundColor: 'white', 
+          padding: '30px', 
+          borderRadius: '8px',
+          border: '1px solid #e0e0e0'
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #3498db', paddingBottom: '20px' }}>
+            <h2 style={{ color: '#3498db', margin: '0 0 10px 0' }}>ÉTAT DE COMPTE CLIENT</h2>
+            <p style={{ margin: '5px 0', fontSize: '16px' }}><strong>{selectedClient?.nom}</strong></p>
+            <p style={{ margin: '5px 0', color: '#666' }}>
+              Période: {new Date(periode.dateDebut).toLocaleDateString('fr-FR')} au {new Date(periode.dateFin).toLocaleDateString('fr-FR')}
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+            <div style={{ padding: '15px', backgroundColor: '#e8f4f8', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Facturé</p>
+              <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>
+                {etatCompte.totalFacture?.toLocaleString('fr-FR') || 0} FCFA
+              </p>
+            </div>
+            <div style={{ padding: '15px', backgroundColor: '#e8f8f0', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Payé</p>
+              <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>
+                {etatCompte.totalPaye?.toLocaleString('fr-FR') || 0} FCFA
+              </p>
+            </div>
+            <div style={{ padding: '15px', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Solde Restant</p>
+              <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: etatCompte.solde > 0 ? '#e74c3c' : '#27ae60' }}>
+                {etatCompte.solde?.toLocaleString('fr-FR') || 0} FCFA
+              </p>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '30px' }}>
+            <h4 style={{ marginBottom: '15px', color: '#333' }}>📋 Factures</h4>
+            {etatCompte.factures && etatCompte.factures.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                    <th style={{ padding: '12px', textAlign: 'left' }}>N° Facture</th>
+                    <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+                    <th style={{ padding: '12px', textAlign: 'right' }}>Montant TTC</th>
+                    <th style={{ padding: '12px', textAlign: 'center' }}>Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {etatCompte.factures.map((f, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
+                      <td style={{ padding: '12px' }}>{f.numeroFacture}</td>
+                      <td style={{ padding: '12px' }}>{new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{f.totalTTC?.toLocaleString('fr-FR')} FCFA</td>
+                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                        <span style={{ 
+                          padding: '4px 12px', 
+                          borderRadius: '12px', 
+                          fontSize: '12px',
+                          backgroundColor: f.statut === 'payee' ? '#d4edda' : '#fff3cd',
+                          color: f.statut === 'payee' ? '#155724' : '#856404'
+                        }}>
+                          {f.statut === 'payee' ? '✅ Payée' : '⏳ En attente'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p style={{ color: '#999', fontStyle: 'italic' }}>Aucune facture sur cette période</p>
+            )}
+          </div>
+
+          <div>
+            <h4 style={{ marginBottom: '15px', color: '#333' }}>💳 Paiements</h4>
+            {etatCompte.paiements && etatCompte.paiements.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                    <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+                    <th style={{ padding: '12px', textAlign: 'left' }}>Référence</th>
+                    <th style={{ padding: '12px', textAlign: 'left' }}>Mode</th>
+                    <th style={{ padding: '12px', textAlign: 'right' }}>Montant</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {etatCompte.paiements.map((p, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
+                      <td style={{ padding: '12px' }}>{new Date(p.datePaiement).toLocaleDateString('fr-FR')}</td>
+                      <td style={{ padding: '12px' }}>{p.reference || '-'}</td>
+                      <td style={{ padding: '12px' }}>{p.modePaiement}</td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
+                        {p.montant?.toLocaleString('fr-FR')} FCFA
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p style={{ color: '#999', fontStyle: 'italic' }}>Aucun paiement sur cette période</p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
