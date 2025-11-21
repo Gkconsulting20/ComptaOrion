@@ -30,9 +30,9 @@ export function DashboardView() {
       const ventesData = await ventesRes.json();
       const kpisData = await kpisRes.json();
 
-      setData(globalData);
-      setVentes(ventesData);
-      setKpis(kpisData);
+      setData(globalData || {});
+      setVentes(Array.isArray(ventesData) ? ventesData : ventesData?.data || []);
+      setKpis(kpisData || {});
     } catch (error) {
       console.error('Erreur chargement dashboard:', error);
     } finally {
