@@ -22,12 +22,21 @@ import tresorerieRoutes from './routes/tresorerie.js';
 import auditLogsRoutes from './routes/audit-logs.js';
 import paieRoutes from './routes/paie.js';
 import bonsLivraisonRoutes from './routes/bons-livraison.js';
+import uploadRoutes from './routes/upload.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Routes d'authentification (publiques - pas de middleware)
 app.use('/api/auth', authRoutes);
@@ -79,6 +88,9 @@ app.use('/api/bons-livraison', bonsLivraisonRoutes);
 
 // Module Paramètres & Configuration
 app.use('/api/parametres', parametresRoutes);
+
+// Upload de fichiers
+app.use('/api/upload', uploadRoutes);
 
 // Dashboard
 

@@ -174,7 +174,11 @@ router.put('/entreprise', async (req, res) => {
       registreCommerce,
       codeNaf,
       formeJuridique,
-      logoUrl
+      logoUrl,
+      factureFooterText,
+      factureMentionsLegales,
+      factureCouleurPrincipale,
+      factureAfficherLogo
     } = req.body;
 
     // Validation des données
@@ -250,6 +254,10 @@ router.put('/entreprise', async (req, res) => {
     if (codeNaf !== undefined) updateData.codeNaf = codeNaf;
     if (formeJuridique !== undefined) updateData.formeJuridique = formeJuridique;
     if (logoUrl !== undefined) updateData.logoUrl = logoUrl;
+    if (factureFooterText !== undefined) updateData.factureFooterText = factureFooterText;
+    if (factureMentionsLegales !== undefined) updateData.factureMentionsLegales = factureMentionsLegales;
+    if (factureCouleurPrincipale !== undefined) updateData.factureCouleurPrincipale = factureCouleurPrincipale;
+    if (factureAfficherLogo !== undefined) updateData.factureAfficherLogo = factureAfficherLogo;
 
     updateData.updatedAt = new Date();
 
