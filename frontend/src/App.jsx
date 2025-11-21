@@ -1685,8 +1685,6 @@ function StockView() {
                   <div className="form-group">
                     <label>Référence / SKU</label>
                     <input type="text" placeholder="Code article" />
-  const [message, setMessage] = useState("");
-  const handleAddArticle = async (e) => { e.preventDefault(); setMessage("✅ Article ajouté"); setTimeout(() => setMessage(""), 3000); };
                   </div>
                 </div>
 
