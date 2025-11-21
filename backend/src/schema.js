@@ -907,3 +907,59 @@ export const soldesComptes = pgTable('soldes_comptes', {
   soldeCredit: decimal('solde_credit', { precision: 15, scale: 2 }).default('0'),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// ==========================================
+// MODULE ABONNEMENTS & FACTURATION
+// ==========================================
+
+// Plans d'abonnement
+export const plansAbonnement = pgTable('plans_abonnement', {
+  id: serial('id').primaryKey(),
+  nom: varchar('nom', { length: 255 }).notNull(), // Gratuit, Pro, Entreprise
+  prix: decimal('prix', { precision: 10, scale: 2 }).notNull(),
+  devise: varchar('devise', { length: 10 }).default('EUR'),
+  periode: varchar('periode', { length: 50 }).default('mensuel'), // mensuel, annuel
+  limiteUtilisateurs: integer('limite_utilisateurs').default(5),
+  limiteEntreprises: integer('limite_entreprises').default(1),
+  stockageGb: integer('stockage_gb').default(10),
+  supportEmail: boolean('support_email').default(true),
+  supportPrioritaire: boolean('support_prioritaire').default(false),
+  featuresCRM: boolean('features_crm').default(true),
+  featuresRH: boolean('features_rh').default(false),
+  featuresComptabilite: boolean('features_comptabilite').default(true),
+  descriptionFeatures: text('description_features'),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Abonnements actifs
+export const abonnements = pgTable('abonnements', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull().unique(),
+  planId: integer('plan_id').references(() => plansAbonnement.id).notNull(),
+  statut: varchar('statut', { length: 50 }).default('actif'), // actif, suspendu, expire, annule
+  dateDebut: date('date_debut').notNull(),
+  dateExpiration: date('date_expiration').notNull(),
+  prochainRenouvellement: date('prochain_renouvellement'),
+  nombreUtilisateurs: integer('nombre_utilisateurs').default(1),
+  montantMensuel: decimal('montant_mensuel', { precision: 10, scale: 2 }).notNull(),
+  modeRenouvellement: varchar('mode_renouvellement', { length: 50 }).default('automatique'), // automatique, manuel
+  remarques: text('remarques'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Historique des factures d'abonnement
+export const facturesAbonnement = pgTable('factures_abonnement', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  abonnementId: integer('abonnement_id').references(() => abonnements.id).notNull(),
+  numerofacture: varchar('numero_facture', { length: 100 }).unique(),
+  montant: decimal('montant', { precision: 10, scale: 2 }).notNull(),
+  devise: varchar('devise', { length: 10 }).default('EUR'),
+  dateFacture: date('date_facture').notNull(),
+  datePaiement: date('date_paiement'),
+  statut: varchar('statut', { length: 50 }).default('en_attente'), // en_attente, payee, echouee
+  methodePaiement: varchar('methode_paiement', { length: 100 }), // carte_credit, virement, etc
+  createdAt: timestamp('created_at').defaultNow(),
+});
