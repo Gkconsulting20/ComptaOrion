@@ -5,6 +5,7 @@ import clientsRoutes from './routes/clients.js';
 import produitsRoutes from './routes/produits.js';
 import devisRoutes from './routes/devis.js';
 import facturesRoutes from './routes/factures.js';
+import parametresRoutes from './routes/parametres.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
@@ -42,6 +43,9 @@ app.use('/api/devis', devisRoutes);
 
 // Module Factures (Invoices)
 app.use('/api/factures', facturesRoutes);
+
+// Module Paramètres & Configuration
+app.use('/api/parametres', parametresRoutes);
 
 // ===============================================
 // ROUTE INFO API

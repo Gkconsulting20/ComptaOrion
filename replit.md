@@ -9,7 +9,8 @@ ComptaOrion est un ERP (Enterprise Resource Planning) complet et léger, spécia
 - 🤖 **IA intégrée** - Assistant intelligent utilisant OpenAI (via Replit AI Integrations)
 - 📊 **Tableaux de données** - Tables professionnelles pour tous les modules
 - 💰 **Comptabilité complète** - États financiers, grand livre, réconciliation
-- 🌍 **Adapté à l'Afrique** - FCFA, français, optimisé connexions limitées
+- 🌍 **Multi-pays** - 20+ devises, SYSCOHADA/IFRS/PCG, support mondial
+- 🇨🇮 **Optimisé Afrique** - FCFA, français, connexions limitées, SYSCOHADA
 
 ## Modules ERP
 1. **Tableau de bord** 📊 - Vue d'ensemble avec métriques clés
@@ -100,6 +101,14 @@ ComptaOrion est un ERP (Enterprise Resource Planning) complet et léger, spécia
 - `GET /api/ia/chat` - État de l'assistant
 - `POST /api/ia/chat` - Envoyer un message
 
+### Paramètres & Configuration
+- `GET /api/parametres/entreprise` - Paramètres de l'entreprise
+- `PUT /api/parametres/entreprise` - Mise à jour paramètres entreprise
+- `GET /api/parametres/devises` - Liste des devises supportées (20+)
+- `GET /api/parametres/systemes-comptables` - Systèmes (SYSCOHADA, IFRS, PCG)
+- `GET /api/parametres/taux-tva` - Taux TVA par pays
+- `GET /api/parametres/pays` - Pays supportés avec configs
+
 ## Intégration IA
 L'application utilise **Replit AI Integrations** pour l'accès à OpenAI :
 - ✅ Pas besoin de clé API personnelle
@@ -147,7 +156,7 @@ Configuré pour déploiement **autoscale** sur Replit :
   - Backend avec tous les endpoints nécessaires
   - Intégration OpenAI via Replit AI Integrations
 
-## ✅ État actuel : Phase 1 TERMINÉE - Fondations solides
+## ✅ État actuel : Phase 2 EN COURS - Modules CRUD fonctionnels
 
 ### **Infrastructure complète** 
 ✅ Base de données PostgreSQL avec Drizzle ORM
@@ -163,13 +172,36 @@ Configuré pour déploiement **autoscale** sur Replit :
 ✅ Paramètres de configuration pour chaque module
 ✅ Design QuickBooks moderne et responsive
 
-### ⚠️ **Prochaine étape : Phase 2 - Routes CRUD**
-Les formulaires frontend existent mais les routes backend sont des stubs. 
-**À implémenter** : Logique CRUD réelle avec :
-- Utilisation de `req.entrepriseId` pour isolation automatique
-- Validation des données
-- Gestion des erreurs
-- Transactions SQL appropriées
+### **Modules CRUD fonctionnels**
+✅ **Module Clients** - CRUD complet avec pagination et validation
+✅ **Module Produits/Stock** - CRUD avec ajustements stock et alertes
+✅ **Module Devis** - Création, numérotation auto (DEV-2025-0001), transformation en facture
+✅ **Module Factures** - CRUD complet avec :
+  - Transformation devis → facture
+  - Numérotation automatique (FACT-2025-0001)
+  - Calculs automatiques HT/TVA/TTC
+  - Enregistrement paiements (mobile money, carte, virement, espèces)
+  - Impact automatique sur trésorerie
+✅ **Module Paramètres** - Configuration entreprise :
+  - Gestion année fiscale
+  - Choix système comptable (SYSCOHADA, IFRS, PCG)
+  - Support multi-devises (20+ devises mondiales)
+  - Support multi-pays (Afrique, Europe, Amérique, Asie)
+  - Paramètres fiscaux (TVA par pays)
+
+### 🌍 **Support International**
+✅ **Multi-devises** : XOF, XAF, EUR, USD, GBP, MAD, TND, DZD, NGN, etc.
+✅ **Systèmes comptables** : SYSCOHADA (Afrique OHADA), IFRS (International), PCG (France)
+✅ **Multi-pays** : Configuration adaptée à chaque pays avec TVA et devises par défaut
+✅ **Année fiscale flexible** : Configurable selon les normes locales
+
+### ⚠️ **Prochaine étape : Phase 2 - Compléter modules restants**
+**À implémenter** :
+- Routes CRUD pour Fournisseurs, Employés, Trésorerie, Immobilisations
+- Impact stock lors des ventes (déduction automatique)
+- Impact comptable lors des transactions (écritures automatiques)
+- Dashboard avec métriques calculées
+- Factures récurrentes, PDF, envoi email
 
 ## Prochaines étapes prioritaires
 1. **Connecter formulaires au backend** - Implémenter la logique CRUD pour sauvegarder/charger les données

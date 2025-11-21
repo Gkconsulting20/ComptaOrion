@@ -13,6 +13,7 @@ export const invoiceStatusEnum = pgEnum('invoice_status', ['brouillon', 'envoyee
 export const expenseStatusEnum = pgEnum('expense_status', ['brouillon', 'soumise', 'approuvee', 'rejetee', 'remboursee']);
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['entree', 'sortie', 'transfert', 'ajustement']);
 export const journalTypeEnum = pgEnum('journal_type', ['achats', 'ventes', 'banque', 'caisse', 'od']);
+export const systemeComptableEnum = pgEnum('systeme_comptable', ['SYSCOHADA', 'IFRS', 'PCG']);
 
 // ==========================================
 // MODULE 9: MULTI-ENTREPRISE & ADMINISTRATION
@@ -28,8 +29,23 @@ export const entreprises = pgTable('entreprises', {
   pays: varchar('pays', { length: 100 }).default('Côte d\'Ivoire'),
   telephone: varchar('telephone', { length: 50 }),
   email: varchar('email', { length: 255 }),
-  devise: varchar('devise', { length: 10 }).default('FCFA'),
+  
+  // Paramètres financiers et comptables
+  devise: varchar('devise', { length: 10 }).default('FCFA'), // FCFA, EUR, USD, GBP, CAD, etc.
+  symboleDevise: varchar('symbole_devise', { length: 10 }).default('FCFA'),
   tauxTva: decimal('taux_tva', { precision: 5, scale: 2 }).default('18.00'),
+  systemeComptable: systemeComptableEnum('systeme_comptable').default('SYSCOHADA'), // SYSCOHADA, IFRS, PCG
+  
+  // Année fiscale
+  debutAnneeFiscale: date('debut_annee_fiscale').default('2025-01-01'),
+  finAnneeFiscale: date('fin_annee_fiscale').default('2025-12-31'),
+  
+  // Autres paramètres
+  numeroTva: varchar('numero_tva', { length: 50 }),
+  registreCommerce: varchar('registre_commerce', { length: 100 }),
+  codeNaf: varchar('code_naf', { length: 20 }),
+  formeJuridique: varchar('forme_juridique', { length: 100 }), // SARL, SA, EURL, etc.
+  
   logoUrl: text('logo_url'),
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
