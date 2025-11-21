@@ -2305,50 +2305,128 @@ function ComptabiliteView({ subView }) {
 }
 
 function ParametresView() {
+  const [activeTab, setActiveTab] = useState('general');
+  const [auditLogs, setAuditLogs] = useState([]);
+
+  const fetchAuditLogs = async () => {
+    try {
+      const response = await fetch('/api/parametres/audit-logs?entrepriseId=1&limit=50');
+      const data = await response.json();
+      setAuditLogs(data);
+    } catch (error) {
+      console.error('Erreur chargement audit logs:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'audit') {
+      fetchAuditLogs();
+    }
+  }, [activeTab]);
+
   return (
     <div className="view-container">
       <div className="view-header">
         <h2 className="view-title">⚙️ Paramètres Entreprise</h2>
         <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Configuration générale et paramètres comptables</p>
       </div>
-      <div className="settings-grid">
-        <div className="settings-card">
-          <h3>Entreprise</h3>
-          <div className="settings-list">
-            <div className="settings-item"><span>Raison sociale</span><span>Mon Entreprise</span></div>
-            <div className="settings-item"><span>Année fiscale</span><span>2025</span></div>
-            <div className="settings-item"><span>Système comptable</span><span>SYSCOHADA</span></div>
-            <div className="settings-item"><span>Devise par défaut</span><span>XOF (FCFA)</span></div>
-            <div className="settings-item"><span>Pays</span><span>Côte d'Ivoire</span></div>
-          </div>
-          <button className="btn-primary btn-small">Modifier</button>
-        </div>
-        <div className="settings-card">
-          <h3>Numérotation automatique</h3>
-          <div className="settings-list">
-            <div className="settings-item"><span>Devis</span><span>DEV-2025-0001</span></div>
-            <div className="settings-item"><span>Factures</span><span>FACT-2025-0001</span></div>
-            <div className="settings-item"><span>Commandes achat</span><span>CMD-2025-0001</span></div>
-            <div className="settings-item"><span>Factures fournisseurs</span><span>FACT-ACH-2025-0001</span></div>
-          </div>
-        </div>
-        <div className="settings-card">
-          <h3>TVA et Fiscalité</h3>
-          <div className="settings-list">
-            <div className="settings-item"><span>Taux TVA standard</span><span>18%</span></div>
-            <div className="settings-item"><span>Taux TVA réduit</span><span>10%</span></div>
-            <div className="settings-item"><span>Régime d'imposition</span><span>Normal</span></div>
-          </div>
-          <button className="btn-secondary btn-small">Modifier</button>
-        </div>
-        <div className="settings-card">
-          <h3>Comptes bancaires</h3>
-          <div className="settings-list">
-            <div className="settings-item"><span>Caisse principale</span><span>0 FCFA</span></div>
-          </div>
-          <button className="btn-secondary btn-small">+ Ajouter un compte</button>
-        </div>
+
+      {/* Onglets */}
+      <div style={{display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #e5e7eb'}}>
+        <button 
+          className={`tab ${activeTab === 'general' ? 'active' : ''}`}
+          onClick={() => setActiveTab('general')}
+          style={{padding: '10px 15px', cursor: 'pointer', borderBottom: activeTab === 'general' ? '2px solid #3b82f6' : 'none'}}
+        >
+          ⚙️ Paramètres généraux
+        </button>
+        <button 
+          className={`tab ${activeTab === 'audit' ? 'active' : ''}`}
+          onClick={() => setActiveTab('audit')}
+          style={{padding: '10px 15px', cursor: 'pointer', borderBottom: activeTab === 'audit' ? '2px solid #3b82f6' : 'none'}}
+        >
+          📋 Audit Log
+        </button>
       </div>
+
+      {activeTab === 'general' && (
+        <div className="settings-grid">
+          <div className="settings-card">
+            <h3>Entreprise</h3>
+            <div className="settings-list">
+              <div className="settings-item"><span>Raison sociale</span><span>Mon Entreprise</span></div>
+              <div className="settings-item"><span>Année fiscale</span><span>2025</span></div>
+              <div className="settings-item"><span>Système comptable</span><span>SYSCOHADA</span></div>
+              <div className="settings-item"><span>Devise par défaut</span><span>XOF (FCFA)</span></div>
+              <div className="settings-item"><span>Pays</span><span>Côte d'Ivoire</span></div>
+            </div>
+            <button className="btn-primary btn-small">Modifier</button>
+          </div>
+          <div className="settings-card">
+            <h3>Numérotation automatique</h3>
+            <div className="settings-list">
+              <div className="settings-item"><span>Devis</span><span>DEV-2025-0001</span></div>
+              <div className="settings-item"><span>Factures</span><span>FACT-2025-0001</span></div>
+              <div className="settings-item"><span>Commandes achat</span><span>CMD-2025-0001</span></div>
+              <div className="settings-item"><span>Factures fournisseurs</span><span>FACT-ACH-2025-0001</span></div>
+            </div>
+          </div>
+          <div className="settings-card">
+            <h3>TVA et Fiscalité</h3>
+            <div className="settings-list">
+              <div className="settings-item"><span>Taux TVA standard</span><span>18%</span></div>
+              <div className="settings-item"><span>Taux TVA réduit</span><span>10%</span></div>
+              <div className="settings-item"><span>Régime d'imposition</span><span>Normal</span></div>
+            </div>
+            <button className="btn-secondary btn-small">Modifier</button>
+          </div>
+          <div className="settings-card">
+            <h3>Comptes bancaires</h3>
+            <div className="settings-list">
+              <div className="settings-item"><span>Caisse principale</span><span>0 FCFA</span></div>
+            </div>
+            <button className="btn-secondary btn-small">+ Ajouter un compte</button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'audit' && (
+        <div style={{padding: '20px', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)'}}>
+          <h3 style={{marginTop: 0}}>📋 Historique des Opérations</h3>
+          <p style={{fontSize: '12px', color: '#6c757d', marginBottom: '15px'}}>Audit complet de toutes les actions effectuées dans le système</p>
+          
+          {auditLogs.length === 0 ? (
+            <p style={{textAlign: 'center', color: '#6c757d', padding: '20px'}}>Aucune opération enregistrée</p>
+          ) : (
+            <div className="data-table">
+              <table style={{width: '100%', fontSize: '13px'}}>
+                <thead>
+                  <tr style={{backgroundColor: '#f8f9fa'}}>
+                    <th>Date</th>
+                    <th>Utilisateur</th>
+                    <th>Action</th>
+                    <th>Tableau</th>
+                    <th>Description</th>
+                    <th>IP Address</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.slice(0, 20).map((log, i) => (
+                    <tr key={i} style={{borderBottom: '1px solid #e5e7eb'}}>
+                      <td>{new Date(log.createdAt).toLocaleString('fr-FR')}</td>
+                      <td>{log.userId || '-'}</td>
+                      <td><span style={{backgroundColor: log.action === 'CREATE' ? '#d1fae5' : log.action === 'UPDATE' ? '#dbeafe' : '#fee2e2', padding: '4px 8px', borderRadius: '4px', fontSize: '11px'}}>{log.action}</span></td>
+                      <td>{log.table}</td>
+                      <td style={{maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis'}}>{log.description || '-'}</td>
+                      <td style={{fontSize: '11px'}}>{log.ipAddress}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

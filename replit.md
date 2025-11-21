@@ -50,7 +50,7 @@ ComptaOrion is built as a full-stack application with a clear separation of fron
 - **Database:** PostgreSQL (with Drizzle ORM)
 - **AI Integration:** OpenAI (via Replit AI Integrations, utilizing `AI_INTEGRATIONS_OPENAI_BASE_URL` and `AI_INTEGRATIONS_OPENAI_API_KEY` environment variables).
 - **Authentication Hashing:** bcrypt (for password hashing)
-## ✅ MODULE ORION ASSETS - IMMOBILISATIONS (Phase 4 - COMPLÉTÉ)
+## ✅ MODULE IMMOBILISATIONS (Phase 4 - COMPLÉTÉ)
 
 ### Fonctionnalités implémentées
 
@@ -137,7 +137,7 @@ ComptaOrion dispose maintenant de **15 modules** complets :
 6. Comptabilité (GL, JE, Devis, Factures) ✅
 7. Paramètres ✅
 8. Assistant IA ✅
-9. **ORION SECURE (Auth & Security)** ✅
+9. **Sécurité (ORION SECURE) (Auth & Security)** ✅
 10. Dashboard avec KPIs ✅
 11. Audit Log ✅
 12. Immobilisations/Amortissements ✅ NEW
