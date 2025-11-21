@@ -5,6 +5,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [comptaSubmenu, setComptaSubmenu] = useState(false);
 
   useEffect(() => {
     const checkBackend = () => {
@@ -34,11 +35,19 @@ function App() {
     { id: 'stock', icon: '📦', label: 'Stock & Inventaire' },
     { id: 'depenses', icon: '💸', label: 'Dépenses' },
     { id: 'employes', icon: '👨‍💼', label: 'Employés' },
-    { id: 'etats-financiers', icon: '📊', label: 'États financiers' },
-    { id: 'grand-livre', icon: '📖', label: 'Grand livre' },
-    { id: 'journal', icon: '📝', label: 'Écriture de journal' },
-    { id: 'reconciliation', icon: '✅', label: 'Réconciliation' },
-    { id: 'charte-comptes', icon: '📋', label: 'Charte de comptes' },
+    { 
+      id: 'comptabilite', 
+      icon: '📚', 
+      label: 'Comptabilité Générale',
+      submenu: [
+        { id: 'compta-parametres', label: 'Paramètre' },
+        { id: 'grand-livre', label: 'Grand livre' },
+        { id: 'journal', label: 'Écriture de journal' },
+        { id: 'reconciliation', label: 'Réconciliation' },
+        { id: 'etats-financiers', label: 'États financiers' },
+        { id: 'rapport-journaux', label: 'Rapport de journaux' }
+      ]
+    },
     { id: 'immobilisations', icon: '🏗️', label: 'Immobilisations' },
     { id: 'parametres', icon: '⚙️', label: 'Paramètres' },
     { id: 'ia', icon: '🤖', label: 'Assistant IA' }
@@ -62,11 +71,13 @@ function App() {
         return <EmployesView />;
       case 'parametres':
         return <ParametresView />;
+      case 'compta-parametres':
+        return <ComptabiliteParametreView />;
       case 'etats-financiers':
       case 'grand-livre':
       case 'journal':
       case 'reconciliation':
-      case 'charte-comptes':
+      case 'rapport-journaux':
         return <ComptabiliteView subView={currentView} />;
       case 'immobilisations':
         return <ImmobilisationsView />;
@@ -87,14 +98,36 @@ function App() {
         
         <nav className="sidebar-nav">
           {menuItems.map(item => (
-            <button
-              key={item.id}
-              className={`nav-item ${currentView === item.id ? 'active' : ''}`}
-              onClick={() => setCurrentView(item.id)}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              <span className="nav-label">{item.label}</span>
-            </button>
+            <div key={item.id}>
+              <button
+                className={`nav-item ${currentView === item.id || (item.submenu && item.submenu.some(sub => sub.id === currentView)) ? 'active' : ''}`}
+                onClick={() => {
+                  if (item.submenu) {
+                    setComptaSubmenu(!comptaSubmenu);
+                  } else {
+                    setCurrentView(item.id);
+                    setComptaSubmenu(false);
+                  }
+                }}
+              >
+                <span className="nav-icon">{item.icon}</span>
+                <span className="nav-label">{item.label}</span>
+                {item.submenu && <span className="submenu-arrow">{comptaSubmenu ? '▼' : '▶'}</span>}
+              </button>
+              {item.submenu && comptaSubmenu && (
+                <div className="submenu">
+                  {item.submenu.map(subItem => (
+                    <button
+                      key={subItem.id}
+                      className={`nav-item submenu-item ${currentView === subItem.id ? 'active' : ''}`}
+                      onClick={() => setCurrentView(subItem.id)}
+                    >
+                      {subItem.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
       </div>
@@ -1938,6 +1971,7 @@ function ComptabiliteView({ subView }) {
     'grand-livre': 'Grand livre',
     'journal': 'Écriture de journal',
     'reconciliation': 'Réconciliation bancaire',
+    'rapport-journaux': 'Rapport de journaux',
     'charte-comptes': 'Charte de comptes'
   };
 
@@ -2933,6 +2967,83 @@ function ImmobilisationsView() {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function ComptabiliteParametreView() {
+  return (
+    <div className="view-container">
+      <div className="view-header">
+        <h2 className="view-title">⚙️ Paramètres Comptabilité</h2>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Configuration des paramètres comptables généraux</p>
+      </div>
+
+      <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '20px'}}>
+        <div style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6'}}>
+          <h3>📊 Exercice comptable</h3>
+          <div style={{marginTop: '15px'}}>
+            <div style={{marginBottom: '15px'}}>
+              <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>Début exercice</label>
+              <input type="date" style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}} />
+            </div>
+            <div style={{marginBottom: '15px'}}>
+              <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>Fin exercice</label>
+              <input type="date" style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}} />
+            </div>
+            <button className="btn-primary" style={{width: '100%'}}>Enregistrer</button>
+          </div>
+        </div>
+
+        <div style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6'}}>
+          <h3>📚 Plan comptable</h3>
+          <div style={{marginTop: '15px'}}>
+            <div style={{marginBottom: '15px'}}>
+              <label style={{display: 'block', marginBottom: '8px', fontWeight: 'bold'}}>Système comptable</label>
+              <select style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}>
+                <option>SYSCOHADA (Afrique de l'Ouest)</option>
+                <option>IFRS (International)</option>
+                <option>PCG (France)</option>
+              </select>
+            </div>
+            <button className="btn-primary" style={{width: '100%'}}>Enregistrer</button>
+          </div>
+        </div>
+
+        <div style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6'}}>
+          <h3>💱 Devise et TVA</h3>
+          <div style={{marginTop: '15px'}}>
+            <div style={{marginBottom: '15px'}}>
+              <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>Devise principale</label>
+              <select style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}}>
+                <option>XOF (FCFA)</option>
+                <option>EUR (€)</option>
+                <option>USD ($)</option>
+              </select>
+            </div>
+            <div style={{marginBottom: '15px'}}>
+              <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>Taux TVA par défaut (%)</label>
+              <input type="number" defaultValue="18" style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}} />
+            </div>
+            <button className="btn-primary" style={{width: '100%'}}>Enregistrer</button>
+          </div>
+        </div>
+
+        <div style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6'}}>
+          <h3>🔢 Numérotation</h3>
+          <div style={{marginTop: '15px'}}>
+            <div style={{marginBottom: '15px'}}>
+              <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>Préfixe écritures journal</label>
+              <input type="text" placeholder="JNL-" style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}} />
+            </div>
+            <div style={{marginBottom: '15px'}}>
+              <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>Préfixe factures</label>
+              <input type="text" placeholder="FAC-" style={{width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd'}} />
+            </div>
+            <button className="btn-primary" style={{width: '100%'}}>Enregistrer</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
