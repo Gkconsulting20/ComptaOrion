@@ -629,9 +629,10 @@ export const remboursementsEmployes = pgTable('remboursements_employes', {
 });
 
 // ==========================================
-// MODULE 7: EMPLOYÉS (HR LITE)
+// MODULE 7: EMPLOYÉS (ORION HR LITE)
 // ==========================================
 
+// Table employés
 export const employes = pgTable('employes', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
@@ -873,3 +874,81 @@ export const facturesRelations = relations(factures, ({ one, many }) => ({
   items: many(factureItems),
   paiements: many(paiements),
 }));
+
+// ==========================================
+// MODULE COMPTABILITÉ GÉNÉRALE
+// ==========================================
+
+// Plans comptables
+export const plansComptables = pgTable('plans_comptables', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  systeme: varchar('systeme', { length: 50 }), // SYSCOHADA, IFRS, PCG
+  description: text('description'),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Comptes comptables
+export const comptes = pgTable('comptes', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  numero: varchar('numero', { length: 50 }).notNull(), // 601, 411, 512, etc.
+  nom: varchar('nom', { length: 255 }).notNull(),
+  categorie: varchar('categorie', { length: 100 }), // Actif, Passif, Capitaux propres, Charges, Produits
+  sousCategorie: varchar('sous_categorie', { length: 100 }),
+  devise: varchar('devise', { length: 10 }).default('XOF'),
+  solde: decimal('solde', { precision: 15, scale: 2 }).default('0'),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Journaux comptables
+export const journaux = pgTable('journaux', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  code: varchar('code', { length: 20 }).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  type: varchar('type', { length: 50 }), // Achats, Ventes, Banque, Caisse, OD
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Écritures comptables
+export const ecritures = pgTable('ecritures', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  journalId: integer('journal_id').references(() => journaux.id).notNull(),
+  dateEcriture: date('date_ecriture').notNull(),
+  reference: varchar('reference', { length: 100 }),
+  description: text('description'),
+  statut: varchar('statut', { length: 50 }).default('brouillon'), // brouillon, validée, clôturée
+  totalDebit: decimal('total_debit', { precision: 15, scale: 2 }).default('0'),
+  totalCredit: decimal('total_credit', { precision: 15, scale: 2 }).default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Lignes d'écritures (débit/crédit)
+export const lignesEcritures = pgTable('lignes_ecritures', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  ecritureId: integer('ecriture_id').references(() => ecritures.id).notNull(),
+  compteId: integer('compte_id').references(() => comptes.id).notNull(),
+  montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
+  type: varchar('type', { length: 20 }), // debit, credit
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Soldes comptables (cache)
+export const soldesComptes = pgTable('soldes_comptes', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  compteId: integer('compte_id').references(() => comptes.id).notNull(),
+  periode: varchar('periode', { length: 10 }), // YYYY-MM
+  soldeDebit: decimal('solde_debit', { precision: 15, scale: 2 }).default('0'),
+  soldeCredit: decimal('solde_credit', { precision: 15, scale: 2 }).default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+});

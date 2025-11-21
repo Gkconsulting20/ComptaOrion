@@ -204,3 +204,91 @@ ComptaOrion dispose maintenant de **15 modules** complets :
 Module complet avec workflow d'approbation et impacts comptables automatiques.
 
 **APPLICATION COMPLÈTE AVEC 16 MODULES** 🚀
+
+## ✅ MODULE COMPTABILITÉ GÉNÉRALE (Phase 6 - COMPLÉTÉ)
+
+### Fonctionnalités implémentées
+
+✅ **Gestion du plan comptable**
+- SYSCOHADA, IFRS, PCG ou custom
+- Configuration par entreprise
+
+✅ **CRUD Comptes Comptables**
+- Créer comptes avec numéro unique (601, 411, 512, etc.)
+- Catégories (Actif, Passif, Capitaux propres, Charges, Produits)
+- Devise par compte
+
+✅ **Journaux Comptables**
+- Achats, Ventes, Banque, Caisse, OD
+- Gestion complète des journaux
+
+✅ **Création d'Écritures Comptables**
+- Brouillon → Validée → Clôturée
+- Référence et description
+- Support multi-devise
+
+✅ **Lignes d'Écritures**
+- Ajout débit/crédit par compte
+- Mise à jour automatique des totaux
+- Validation équilibre (débit = crédit)
+
+✅ **Modification/Suppression**
+- Modification écritures en brouillon
+- Suppression avec audit trail
+- Historique complet
+
+✅ **Grand Livre**
+- Filtrage par compte et période
+- Affichage complet des mouvements
+- Tri par date
+
+✅ **Balance Générale**
+- Total débit/crédit par compte
+- Vue synthétique comptable
+- Vérification équilibre
+
+✅ **Export**
+- Export CSV écritures
+- Export balance générale
+- Format compatible Excel
+
+### Tables Database créées
+- `plans_comptables` (configuration)
+- `comptes` (numérotation comptable)
+- `journaux` (Achats, Ventes, Banque, etc.)
+- `ecritures` (transactions)
+- `lignes_ecritures` (débit/crédit)
+- `soldes_comptes` (cache performance)
+
+### Routes API implémentées
+- GET/POST `/api/comptabilite/plans` - Plans comptables
+- GET/POST `/api/comptabilite/comptes` - Comptes
+- GET/POST `/api/comptabilite/journaux` - Journaux
+- POST `/api/comptabilite/ecritures` - Créer écriture
+- GET `/api/comptabilite/ecritures` - Lister écritures
+- POST `/api/comptabilite/lignes` - Ajouter ligne
+- POST `/api/comptabilite/ecritures/:id/valider` - Valider
+- PUT/DELETE `/api/comptabilite/ecritures/:id` - Modifier/Supprimer
+- GET `/api/comptabilite/grand-livre` - Grand livre
+- GET `/api/comptabilite/balance` - Balance générale
+- GET `/api/comptabilite/export` - Export CSV
+
+### Flux Comptable Automatisé
+```
+Création écriture (brouillon)
+  ↓
+Ajout lignes débit/crédit
+  ↓
+Validation équilibre (D = C)
+  ↓
+Passage en validée
+  ↓
+Mise à jour soldes comptes
+  ↓
+Génération balance générale
+```
+
+### État : 🎉 PRODUCTION-READY
+Comptabilité générale complète et conforme SYSCOHADA/IFRS/PCG.
+
+**APPLICATION COMPLÈTE AVEC 17 MODULES** 🚀

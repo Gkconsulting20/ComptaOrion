@@ -15,6 +15,8 @@ import authSecurityRoutes from './routes/auth-security.js';
 import dépensesRoutes from './routes/dépenses.js';
 import immobilisationsRoutes from './routes/immobilisations.js';
 import exportAssetsRoutes from './routes/export-assets.js';
+import comptabiliteRoutes from './routes/comptabilite.js';
+import employesRoutes from './routes/employes.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
@@ -66,6 +68,12 @@ app.use('/api/export-assets', exportAssetsRoutes);
 
 // Module Dépenses
 app.use('/api/depenses', dépensesRoutes);
+
+// Module Comptabilité Générale
+app.use('/api/comptabilite', comptabiliteRoutes);
+
+// Module Employés (HR Lite)
+app.use('/api/employes', employesRoutes);
 
 // Module Fournisseurs & Achats
 app.use('/api/fournisseurs', fournisseursRoutes);
