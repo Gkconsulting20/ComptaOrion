@@ -8,7 +8,9 @@ import {
   commandesAchat,
   commandesAchatItems,
   transactionsTresorerie,
-  comptesBancaires
+  comptesBancaires,
+  mouvementsStock,
+  produits
 } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 
@@ -330,9 +332,42 @@ router.put('/factures/:id/valider', async (req, res) => {
       })
       .where(eq(fournisseurs.id, facture.fournisseurId));
 
+    // ✅ NOUVEAU: Génération automatique des mouvements de stock ENTRÉE
+    const factureItems = await db
+      .select()
+      .from(factureAchatItems)
+      .where(eq(factureAchatItems.factureId, parseInt(id)));
+
+    for (const item of factureItems) {
+      if (item.produitId) {
+        // Créer mouvement de stock ENTRÉE
+        await db.insert(mouvementsStock).values({
+          entrepriseId: req.entrepriseId,
+          produitId: item.produitId,
+          type: 'entree',
+          quantite: item.quantite,
+          prixUnitaire: item.prixUnitaire,
+          reference: `Facture ${updated.numeroFacture}`,
+          notes: `Réception depuis facture fournisseur ${updated.numeroFactureFournisseur || updated.numeroFacture}`,
+          userId: req.user.id
+        });
+
+        // Mettre à jour le stock du produit
+        await db
+          .update(produits)
+          .set({
+            quantite: sql`${produits.quantite} + ${item.quantite}`,
+            updatedAt: new Date()
+          })
+          .where(eq(produits.id, item.produitId));
+      }
+    }
+
+    console.log(`✅ Facture ${updated.numeroFacture} validée - ${factureItems.length} mouvements de stock créés`);
+
     return res.json({
       success: true,
-      message: 'Facture validée avec succès',
+      message: 'Facture validée avec succès et stock mis à jour',
       data: updated
     });
   } catch (error) {
