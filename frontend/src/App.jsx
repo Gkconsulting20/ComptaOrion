@@ -1423,8 +1423,6 @@ function TresorerieView() {
           <div className="content-header">
             <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
               {showForm ? 'Annuler' : '+ Nouvelle transaction'}
-  const [message, setMessage] = useState("");
-  const handleAddTransaction = async (e) => { e.preventDefault(); setMessage("✅ Transaction enregistrée"); setTimeout(() => setMessage(""), 3000); };
             </button>
           </div>
 

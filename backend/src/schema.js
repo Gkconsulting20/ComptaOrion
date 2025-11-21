@@ -544,29 +544,6 @@ export const lignesEcriture = pgTable('lignes_ecriture', {
   libelle: text('libelle'),
 });
 
-// ==========================================
-// MODULE 3: DÉPENSES & NOTES DE FRAIS
-// ==========================================
-
-export const depenses = pgTable('depenses', {
-  id: serial('id').primaryKey(),
-  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  employeId: integer('employe_id').references(() => users.id).notNull(),
-  montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
-  dateDepense: date('date_depense').notNull(),
-  categorie: varchar('categorie', { length: 100 }),
-  description: text('description'),
-  justificatifUrl: text('justificatif_url'),
-  statut: expenseStatusEnum('statut').default('brouillon'),
-  montantApprouve: decimal('montant_approuve', { precision: 15, scale: 2 }),
-  montantRembourse: decimal('montant_rembourse', { precision: 15, scale: 2 }).default('0'),
-  approuvePar: integer('approuve_par').references(() => users.id),
-  dateApprobation: timestamp('date_approbation'),
-  notes: text('notes'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
 // NOTE: Immobilisations module moved to MODULE 15 (ORION ASSETS)
 
 // ==========================================
