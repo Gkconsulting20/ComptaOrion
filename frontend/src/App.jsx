@@ -463,7 +463,10 @@ function FournisseursView() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h2 className="view-title">Gestion des fournisseurs</h2>
+        <h2 className="view-title">🏭 Fournisseurs & Achats</h2>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>
+          Gestion complète des achats : fournisseurs, commandes, réceptions, factures et paiements
+        </p>
       </div>
 
       <div className="tabs">
@@ -471,13 +474,37 @@ function FournisseursView() {
           className={`tab ${activeTab === 'liste' ? 'active' : ''}`}
           onClick={() => setActiveTab('liste')}
         >
-          Liste des fournisseurs
+          📋 Fournisseurs
+        </button>
+        <button 
+          className={`tab ${activeTab === 'commandes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('commandes')}
+        >
+          🛒 Bons de commande
+        </button>
+        <button 
+          className={`tab ${activeTab === 'receptions' ? 'active' : ''}`}
+          onClick={() => setActiveTab('receptions')}
+        >
+          📦 Réceptions
+        </button>
+        <button 
+          className={`tab ${activeTab === 'factures' ? 'active' : ''}`}
+          onClick={() => setActiveTab('factures')}
+        >
+          📄 Factures
+        </button>
+        <button 
+          className={`tab ${activeTab === 'paiements' ? 'active' : ''}`}
+          onClick={() => setActiveTab('paiements')}
+        >
+          💰 Paiements
         </button>
         <button 
           className={`tab ${activeTab === 'parametres' ? 'active' : ''}`}
           onClick={() => setActiveTab('parametres')}
         >
-          Paramètres
+          ⚙️ Paramètres
         </button>
       </div>
 
@@ -700,6 +727,562 @@ function FournisseursView() {
               </div>
               <button className="btn-primary btn-small">Enregistrer</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'commandes' && (
+        <div className="tab-content">
+          <div className="content-header">
+            <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+              {showForm ? 'Annuler' : '+ Nouvelle commande'}
+            </button>
+          </div>
+
+          {showForm && (
+            <div className="form-card">
+              <h3>Créer un bon de commande</h3>
+              <form className="professional-form">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>N° Commande *</label>
+                    <input type="text" placeholder="CMD-2025-0001 (auto)" disabled />
+                  </div>
+                  <div className="form-group">
+                    <label>Fournisseur *</label>
+                    <select required>
+                      <option value="">Sélectionner un fournisseur</option>
+                      <option>Fournisseur A</option>
+                      <option>Fournisseur B</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Date commande *</label>
+                    <input type="date" required />
+                  </div>
+                  <div className="form-group">
+                    <label>Date livraison prévue</label>
+                    <input type="date" />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group full-width">
+                    <label>Articles commandés</label>
+                    <div className="data-table" style={{marginTop: '10px'}}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Produit</th>
+                            <th>Quantité</th>
+                            <th>Prix unitaire</th>
+                            <th>Remise %</th>
+                            <th>Total</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td colSpan="6" className="empty-row">
+                              <button type="button" className="btn-secondary btn-small">+ Ajouter un article</button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Mode de livraison</label>
+                    <select>
+                      <option>Franco de port</option>
+                      <option>Retrait en magasin</option>
+                      <option>Livraison express</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Conditions de livraison</label>
+                    <input type="text" placeholder="Ex: Livraison en 2 fois" />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group full-width">
+                    <label>Notes / Remarques</label>
+                    <textarea rows="3" placeholder="Informations complémentaires"></textarea>
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                    Annuler
+                  </button>
+                  <button type="submit" className="btn-primary">
+                    Créer le bon de commande
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="metrics-grid" style={{marginBottom: '20px'}}>
+            <div className="metric-card">
+              <div className="metric-icon">📝</div>
+              <div className="metric-info">
+                <div className="metric-label">Brouillon</div>
+                <div className="metric-value">0</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon">✅</div>
+              <div className="metric-info">
+                <div className="metric-label">Confirmées</div>
+                <div className="metric-value">0</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon">📦</div>
+              <div className="metric-info">
+                <div className="metric-label">En livraison</div>
+                <div className="metric-value">0</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon">💰</div>
+              <div className="metric-info">
+                <div className="metric-label">Total commandes</div>
+                <div className="metric-value">0 FCFA</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>N° Commande</th>
+                  <th>Date</th>
+                  <th>Fournisseur</th>
+                  <th>Montant HT</th>
+                  <th>Montant TTC</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colSpan="7" className="empty-row">Aucune commande enregistrée</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'receptions' && (
+        <div className="tab-content">
+          <div className="content-header">
+            <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+              {showForm ? 'Annuler' : '+ Nouvelle réception'}
+            </button>
+          </div>
+
+          {showForm && (
+            <div className="form-card">
+              <h3>Enregistrer une réception de marchandises</h3>
+              <form className="professional-form">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Bon de commande *</label>
+                    <select required>
+                      <option value="">Sélectionner une commande</option>
+                      <option>CMD-2025-0001 - Fournisseur A</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Date réception *</label>
+                    <input type="date" required />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>N° Bon de livraison</label>
+                    <input type="text" placeholder="Numéro du BL fournisseur" />
+                  </div>
+                  <div className="form-group">
+                    <label>Transporteur</label>
+                    <input type="text" placeholder="Nom du transporteur" />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group full-width">
+                    <label>Articles reçus</label>
+                    <div className="data-table" style={{marginTop: '10px'}}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Article</th>
+                            <th>Qté commandée</th>
+                            <th>Qté déjà reçue</th>
+                            <th>Qté à recevoir</th>
+                            <th>État</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td colSpan="5" className="empty-row">Sélectionnez une commande</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group full-width">
+                    <label>Remarques / État de la marchandise</label>
+                    <textarea rows="3" placeholder="Commentaires sur la réception, dommages éventuels..."></textarea>
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                    Annuler
+                  </button>
+                  <button type="submit" className="btn-primary">
+                    Valider la réception
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date réception</th>
+                  <th>N° Commande</th>
+                  <th>Fournisseur</th>
+                  <th>N° BL</th>
+                  <th>Articles reçus</th>
+                  <th>Statut stock</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colSpan="7" className="empty-row">Aucune réception enregistrée</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'factures' && (
+        <div className="tab-content">
+          <div className="content-header">
+            <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+              {showForm ? 'Annuler' : '+ Nouvelle facture'}
+            </button>
+          </div>
+
+          {showForm && (
+            <div className="form-card">
+              <h3>Créer une facture fournisseur</h3>
+              <form className="professional-form">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>N° Facture interne</label>
+                    <input type="text" placeholder="FACT-ACH-2025-0001 (auto)" disabled />
+                  </div>
+                  <div className="form-group">
+                    <label>N° Facture fournisseur *</label>
+                    <input type="text" placeholder="Numéro facture du fournisseur" required />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Fournisseur *</label>
+                    <select required>
+                      <option value="">Sélectionner un fournisseur</option>
+                      <option>Fournisseur A</option>
+                      <option>Fournisseur B</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Bon de commande (optionnel)</label>
+                    <select>
+                      <option value="">Aucun</option>
+                      <option>CMD-2025-0001</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Date facture *</label>
+                    <input type="date" required />
+                  </div>
+                  <div className="form-group">
+                    <label>Date échéance *</label>
+                    <input type="date" required />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group full-width">
+                    <label>Articles / Services</label>
+                    <div className="data-table" style={{marginTop: '10px'}}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Description</th>
+                            <th>Quantité</th>
+                            <th>Prix unitaire</th>
+                            <th>TVA %</th>
+                            <th>Total HT</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td colSpan="6" className="empty-row">
+                              <button type="button" className="btn-secondary btn-small">+ Ajouter une ligne</button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Total HT (FCFA)</label>
+                    <input type="number" placeholder="0" disabled />
+                  </div>
+                  <div className="form-group">
+                    <label>Total TVA (FCFA)</label>
+                    <input type="number" placeholder="0" disabled />
+                  </div>
+                  <div className="form-group">
+                    <label>Total TTC (FCFA)</label>
+                    <input type="number" placeholder="0" disabled />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group full-width">
+                    <label>Notes</label>
+                    <textarea rows="2" placeholder="Remarques ou conditions"></textarea>
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                    Annuler
+                  </button>
+                  <button type="submit" className="btn-primary">
+                    Enregistrer la facture
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="metrics-grid" style={{marginBottom: '20px'}}>
+            <div className="metric-card">
+              <div className="metric-icon">📄</div>
+              <div className="metric-info">
+                <div className="metric-label">Brouillon</div>
+                <div className="metric-value">0</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon">⏰</div>
+              <div className="metric-info">
+                <div className="metric-label">À payer</div>
+                <div className="metric-value">0</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon">✅</div>
+              <div className="metric-info">
+                <div className="metric-label">Payées</div>
+                <div className="metric-value">0</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon">💵</div>
+              <div className="metric-info">
+                <div className="metric-label">Total dettes</div>
+                <div className="metric-value">0 FCFA</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>N° Facture</th>
+                  <th>Date</th>
+                  <th>Fournisseur</th>
+                  <th>Montant TTC</th>
+                  <th>Montant payé</th>
+                  <th>Solde restant</th>
+                  <th>Échéance</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colSpan="9" className="empty-row">Aucune facture enregistrée</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'paiements' && (
+        <div className="tab-content">
+          <div className="content-header">
+            <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+              {showForm ? 'Annuler' : '+ Nouveau paiement'}
+            </button>
+          </div>
+
+          {showForm && (
+            <div className="form-card">
+              <h3>Enregistrer un paiement fournisseur</h3>
+              <form className="professional-form">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Facture à payer *</label>
+                    <select required>
+                      <option value="">Sélectionner une facture</option>
+                      <option>FACT-ACH-2025-0001 - Fournisseur A (50 000 FCFA)</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Montant à payer (FCFA) *</label>
+                    <input type="number" placeholder="Montant" required />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Date paiement *</label>
+                    <input type="date" required />
+                  </div>
+                  <div className="form-group">
+                    <label>Mode de paiement *</label>
+                    <select required>
+                      <option>Virement bancaire</option>
+                      <option>Chèque</option>
+                      <option>Espèces</option>
+                      <option>Mobile Money</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Compte bancaire *</label>
+                    <select required>
+                      <option>Compte principal</option>
+                      <option>Banque Atlantique</option>
+                      <option>Caisse</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Référence paiement</label>
+                    <input type="text" placeholder="N° chèque, virement..." />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group full-width">
+                    <label>Notes</label>
+                    <textarea rows="2" placeholder="Remarques"></textarea>
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                    Annuler
+                  </button>
+                  <button type="submit" className="btn-primary">
+                    Enregistrer le paiement
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="metrics-grid" style={{marginBottom: '20px'}}>
+            <div className="metric-card">
+              <div className="metric-icon">💳</div>
+              <div className="metric-info">
+                <div className="metric-label">Paiements ce mois</div>
+                <div className="metric-value">0 FCFA</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon">⏰</div>
+              <div className="metric-info">
+                <div className="metric-label">Échéances &lt; 7 jours</div>
+                <div className="metric-value">0</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon">⚠️</div>
+              <div className="metric-info">
+                <div className="metric-label">Retards de paiement</div>
+                <div className="metric-value">0</div>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-icon">💰</div>
+              <div className="metric-info">
+                <div className="metric-label">Total à régler</div>
+                <div className="metric-value">0 FCFA</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>N° Facture</th>
+                  <th>Fournisseur</th>
+                  <th>Montant payé</th>
+                  <th>Mode paiement</th>
+                  <th>Référence</th>
+                  <th>Compte</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colSpan="8" className="empty-row">Aucun paiement enregistré</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       )}
