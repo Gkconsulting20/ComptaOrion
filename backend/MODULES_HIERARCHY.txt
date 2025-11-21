@@ -1,0 +1,43 @@
+ComptaOrion - 17 Modules Hierarchy
+
+0. DASHBOARD GLOBAL (Tableau de bord système)
+   └─ Agrégation KPIs temps réel
+
+1. CLIENTS & VENTES (3 modules)
+   ├─ Clients (CRUD)
+   ├─ Devis (DEV-YYYY-NNNN)
+   └─ Factures Ventes (FACT-YYYY-NNNN)
+
+2. FOURNISSEURS & ACHATS (4 modules)
+   ├─ Fournisseurs (CRUD)
+   ├─ Commandes (CMD-YYYY-NNNN)
+   ├─ Réceptions
+   └─ Factures Fournisseurs (FACT-ACH-YYYY-NNNN)
+
+3. TRÉSORERIE & FINANCE (3 modules)
+   ├─ Trésorerie
+   ├─ Stock & Inventaire (Multi-entrepôts)
+   └─ Dépenses (Workflow 3 niveaux)
+
+4. COMPTABILITÉ (2 modules)
+   ├─ Comptabilité Générale
+   └─ Immobilisations
+
+5. RESSOURCES HUMAINES (4 modules)
+   ├─ Employés
+   ├─ Avances Salaire
+   ├─ Absences
+   └─ Notifications RH
+
+6. CONFIGURATION & SÉCURITÉ (6 modules)
+   ├─ Paramètres
+   ├─ Authentification
+   ├─ RBAC
+   ├─ RLS
+   ├─ Audit Log
+   └─ Sessions Management
+
+7. IA (1 module)
+   └─ Assistant IA (OpenAI)
+
+TOTAL: 17 MODULES

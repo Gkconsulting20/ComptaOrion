@@ -39,7 +39,17 @@ ComptaOrion est une solution ERP (Enterprise Resource Planning) complète et lé
 
 ---
 
-## 📦 ARCHITECTURE MODULAIRE - 16 Modules
+## 📦 ARCHITECTURE MODULAIRE - 17 Modules
+
+### 📊 MODULE 0: TABLEAU DE BORD GLOBAL
+
+| Module | Fonctionnalités | API Endpoints | État |
+|--------|-----------------|----------------|------|
+| **📊 Dashboard KPIs** | Métriques temps réel (Trésorerie, Revenus, Dépenses, Bénéfice), Graphiques interactifs (Recharts), Filtrage par période, Vue globale du système | GET /dashboard/kpis | ✅ |
+
+**Agrégation:** Données provenant de tous les modules (Clients, Fournisseurs, Stock, Comptabilité, HR)
+
+---
 
 ### 🎯 DOMAINE 1: GESTION CLIENTS & VENTES
 
@@ -48,7 +58,6 @@ ComptaOrion est une solution ERP (Enterprise Resource Planning) complète et lé
 | **👥 Clients** | CRUD, Contact, Info fiscale | POST/GET /clients | ✅ |
 | **📄 Devis** | Création (DEV-YYYY-NNNN), Suivi, Conversion facture | POST/GET /devis | ✅ |
 | **💵 Factures Ventes** | Facturation (FACT-YYYY-NNNN), Paiements, Suivi statut | POST/GET /factures | ✅ |
-| **📊 Dashboard KPIs** | Métriques temps réel, Graphiques (Recharts), Filtrage période | GET /dashboard/kpis | ✅ |
 
 **Flux:** Client → Devis → Facture → Paiement → Comptabilité auto
 
@@ -139,7 +148,7 @@ ComptaOrion est une solution ERP (Enterprise Resource Planning) complète et lé
 - **Sécurité:** RLS par entrepriseId
 
 ### Frontend React
-- **Components:** 16 Views (Dashboard, Clients, Fournisseurs, etc.)
+- **Components:** 17 Views (Dashboard Global + 16 modules métier)
 - **Layout:** Sidebar + Topbar + Content Area
 - **Responsive:** Mobile-first design
 - **Langue:** 100% Français
@@ -196,11 +205,11 @@ ComptaOrion est une solution ERP (Enterprise Resource Planning) complète et lé
 
 ## 🎯 STATUS FINAL: 🚀 PRODUCTION-READY
 
-✅ **16 Modules complètement implémentés**
+✅ **17 Modules complètement implémentés** (incluant Dashboard Global)
 ✅ **70+ Endpoints API fonctionnels**
 ✅ **Multi-tenant sécurisé (RLS + RBAC)**
 ✅ **Audit trail complète**
 ✅ **Multi-devise & multi-pays**
 ✅ **Prêt pour déploiement (Publishing)**
 
-**Architecture optimisée: Pas de code dupliqué, Regroupement logique par domaine fonctionnel**
+**Architecture optimisée: Dashboard module central + 6 domaines métier sans code dupliqué**
