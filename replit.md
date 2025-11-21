@@ -94,7 +94,7 @@ Created comprehensive accounting module (ModuleComptabilite.jsx) with 7 fully fu
 - Grand Livre: Account ledger with period filtering and API integration
 - Balance Générale: Trial balance generation with API integration
 - Immobilisations: Fixed assets management with depreciation tracking
-- Rapports: Financial reports (Bilan, Compte de Résultat) with period-based filtering
+- Rapports: Financial reports (Bilan, Compte de Résultat, Rapport Journaux) with period-based filtering
 
 **Backend Routes (all functional with proper SQL JOINs):**
 - `/comptabilite/comptes` - CRUD chart of accounts
@@ -105,6 +105,7 @@ Created comprehensive accounting module (ModuleComptabilite.jsx) with 7 fully fu
 - `/comptabilite/balance` - Trial balance with JOIN on ecritures (fixes PostgreSQL error)
 - `/comptabilite/bilan` - Balance sheet report with JOIN on ecritures
 - `/comptabilite/compte-resultat` - Income statement with JOIN on ecritures
+- `/comptabilite/rapport-journaux` - Journals report grouping entries by journal with totals
 - `/immobilisations/*` - Fixed assets management with automatic depreciation calculation
 
 **Key Features:**

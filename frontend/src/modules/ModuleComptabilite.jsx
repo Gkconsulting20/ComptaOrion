@@ -479,6 +479,31 @@ export function ModuleComptabilite() {
               </p>
             </div>
 
+            <div style={{ padding: '30px', background: '#fff9e6', borderRadius: '8px', cursor: 'pointer' }}
+              onClick={async () => {
+                try {
+                  const rapport = await api.get('/comptabilite/rapport-journaux', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                  let message = `📚 Rapport des Journaux\n\n`;
+                  message += `Total général: ${rapport.totaux.nombreEcritures} écritures\n`;
+                  message += `Débit: ${rapport.totaux.debit.toLocaleString()} FCFA\n`;
+                  message += `Crédit: ${rapport.totaux.credit.toLocaleString()} FCFA\n\n`;
+                  rapport.journaux.forEach(j => {
+                    if (j.nombreEcritures > 0) {
+                      message += `${j.code} - ${j.nom}:\n`;
+                      message += `  ${j.nombreEcritures} écritures, Débit: ${j.totalDebit.toLocaleString()} FCFA\n`;
+                    }
+                  });
+                  alert(message);
+                } catch (err) {
+                  alert('Erreur génération Rapport Journaux: ' + err.message);
+                }
+              }}>
+              <h4 style={{ margin: '0 0 10px 0', color: '#f9a825' }}>📚 Rapport des Journaux</h4>
+              <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
+                Synthèse des écritures par journal comptable
+              </p>
+            </div>
+
             <div style={{ padding: '30px', background: '#e8f5e9', borderRadius: '8px', cursor: 'pointer' }}
               onClick={() => alert('Tableau des Flux de Trésorerie (à venir)')}>
               <h4 style={{ margin: '0 0 10px 0', color: '#388e3c' }}>💰 Tableau des Flux de Trésorerie</h4>

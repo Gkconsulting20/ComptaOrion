@@ -547,6 +547,70 @@ router.get('/compte-resultat', async (req, res) => {
   }
 });
 
+// Rapport des Journaux
+router.get('/rapport-journaux', async (req, res) => {
+  try {
+    const { entrepriseId, dateDebut, dateFin } = req.query;
+
+    const conditions = [
+      eq(ecritures.entrepriseId, parseInt(entrepriseId)),
+      eq(ecritures.statut, 'validée')
+    ];
+    if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
+    if (dateFin) conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
+
+    const ecrituresData = await db
+      .select({
+        id: ecritures.id,
+        journalId: ecritures.journalId,
+        dateEcriture: ecritures.dateEcriture,
+        reference: ecritures.reference,
+        description: ecritures.description,
+        totalDebit: ecritures.totalDebit,
+        totalCredit: ecritures.totalCredit
+      })
+      .from(ecritures)
+      .where(and(...conditions))
+      .orderBy(ecritures.journalId, ecritures.dateEcriture);
+
+    const journauxData = await db.query.journaux.findMany({
+      where: eq(journaux.entrepriseId, parseInt(entrepriseId))
+    });
+
+    const rapportParJournal = {};
+    journauxData.forEach(journal => {
+      rapportParJournal[journal.id] = {
+        code: journal.code,
+        nom: journal.nom,
+        ecritures: [],
+        totalDebit: 0,
+        totalCredit: 0,
+        nombreEcritures: 0
+      };
+    });
+
+    ecrituresData.forEach(ecriture => {
+      if (rapportParJournal[ecriture.journalId]) {
+        rapportParJournal[ecriture.journalId].ecritures.push(ecriture);
+        rapportParJournal[ecriture.journalId].totalDebit += parseFloat(ecriture.totalDebit || 0);
+        rapportParJournal[ecriture.journalId].totalCredit += parseFloat(ecriture.totalCredit || 0);
+        rapportParJournal[ecriture.journalId].nombreEcritures++;
+      }
+    });
+
+    res.json({
+      journaux: Object.values(rapportParJournal),
+      totaux: {
+        debit: ecrituresData.reduce((sum, e) => sum + parseFloat(e.totalDebit || 0), 0),
+        credit: ecrituresData.reduce((sum, e) => sum + parseFloat(e.totalCredit || 0), 0),
+        nombreEcritures: ecrituresData.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==========================================
 // EXPORT
 // ==========================================
