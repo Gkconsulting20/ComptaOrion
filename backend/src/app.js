@@ -1,14 +1,27 @@
 import express from 'express';
 import cors from 'cors';
+import authRoutes from './routes/auth.js';
+import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+// Routes d'authentification (publiques - pas de middleware)
+app.use('/api/auth', authRoutes);
+
+// Route de santé (publique)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'ComptaOrion serveur opérationnel' });
 });
+
+// ===============================================
+// MIDDLEWARE GLOBAL POUR TOUTES LES ROUTES PROTÉGÉES
+// ===============================================
+// Toutes les routes après ce point nécessitent une authentification
+// et sont automatiquement filtrées par entreprise
+app.use('/api', authMiddleware, entrepriseIsolation);
 
 app.get('/api', (req, res) => {
   res.json({ 
