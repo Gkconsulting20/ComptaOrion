@@ -11,6 +11,7 @@ import commandesAchatRoutes from './routes/commandes-achat.js';
 import receptionsRoutes from './routes/receptions.js';
 import achatsRoutes from './routes/achats.js';
 import dashboardRoutes from './routes/dashboard.js';
+import authSecurityRoutes from './routes/auth-security.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
@@ -20,6 +21,7 @@ app.use(express.json());
 
 // Routes d'authentification (publiques - pas de middleware)
 app.use('/api/auth', authRoutes);
+app.use('/api/auth-security', authSecurityRoutes);
 
 // Route de santé (publique)
 app.get('/api/health', (req, res) => {

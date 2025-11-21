@@ -632,14 +632,65 @@ export const auditLogs = pgTable('audit_logs', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   userId: integer('user_id').references(() => users.id),
-  action: varchar('action', { length: 50 }).notNull(), // CREATE, READ, UPDATE, DELETE
-  table: varchar('table', { length: 100 }).notNull(), // nom de la table modifiée
-  recordId: integer('record_id'), // ID de l'enregistrement modifié
-  ancienneValeur: text('ancienne_valeur'), // JSON avant modification
-  nouvelleValeur: text('nouvelle_valeur'), // JSON après modification
+  action: varchar('action', { length: 50 }).notNull(),
+  table: varchar('table', { length: 100 }).notNull(),
+  recordId: integer('record_id'),
+  ancienneValeur: text('ancienne_valeur'),
+  nouvelleValeur: text('nouvelle_valeur'),
   description: text('description'),
   ipAddress: varchar('ip_address', { length: 45 }),
   userAgent: text('user_agent'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ==========================================
+// MODULE 14: ORION SECURE - AUTHENTICATION & SECURITY
+// ==========================================
+
+// Permissions par rôle et module
+export const permissions = pgTable('permissions', {
+  id: serial('id').primaryKey(),
+  role: userRoleEnum('role').notNull(), // admin, manager, accountant, employee, viewer
+  module: varchar('module', { length: 100 }).notNull(), // clients, fournisseurs, stock, comptabilite, etc.
+  action: varchar('action', { length: 50 }).notNull(), // create, read, update, delete, export
+  autorise: boolean('autorise').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Sessions utilisateur actives
+export const sessions = pgTable('sessions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  enterpriseId: integer('enterprise_id').references(() => entreprises.id).notNull(),
+  tokenHash: varchar('token_hash', { length: 255 }).notNull(),
+  refreshTokenHash: varchar('refresh_token_hash', { length: 255 }).notNull(),
+  ipAddress: varchar('ip_address', { length: 45 }).notNull(),
+  userAgent: text('user_agent'),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  logoutAt: timestamp('logout_at'),
+});
+
+// Audit des connexions
+export const auditConnexions = pgTable('audit_connexions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  enterpriseId: integer('enterprise_id').references(() => entreprises.id).notNull(),
+  type: varchar('type', { length: 50 }).notNull(), // login, logout, failed_login, token_refresh
+  ipAddress: varchar('ip_address', { length: 45 }).notNull(),
+  userAgent: text('user_agent'),
+  statut: varchar('statut', { length: 50 }).default('success'), // success, failed
+  raison: text('raison'), // raison de l'échec si statut=failed
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Jetons de récupération de mot de passe
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  token: varchar('token', { length: 255 }).notNull().unique(),
+  expiresAt: timestamp('expires_at').notNull(),
+  usedAt: timestamp('used_at'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
