@@ -34,6 +34,9 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'ComptaOrion serveur opérationnel' });
 });
 
+// Dashboard (publique - pas d'authentification requise)
+app.use('/api/dashboard', dashboardRoutes);
+
 // ===============================================
 // MIDDLEWARE GLOBAL POUR TOUTES LES ROUTES PROTÉGÉES
 // ===============================================
@@ -61,7 +64,6 @@ app.use('/api/factures', facturesRoutes);
 app.use('/api/parametres', parametresRoutes);
 
 // Dashboard
-app.use('/api/dashboard', dashboardRoutes);
 
 // Module Immobilisations
 app.use('/api/immobilisations', immobilisationsRoutes);
