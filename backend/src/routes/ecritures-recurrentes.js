@@ -171,6 +171,25 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Écriture récurrente introuvable' });
     }
 
+    if (lignesModele && lignesModele.length > 0) {
+      let totalDebit = 0;
+      let totalCredit = 0;
+      lignesModele.forEach(ligne => {
+        const montant = parseFloat(ligne.montant);
+        if (ligne.type === 'debit') {
+          totalDebit += montant;
+        } else {
+          totalCredit += montant;
+        }
+      });
+
+      if (Math.abs(totalDebit - totalCredit) > 0.01) {
+        return res.status(400).json({ 
+          error: 'Les lignes doivent être équilibrées (total débit = total crédit)' 
+        });
+      }
+    }
+
     const [updated] = await db.update(ecrituresRecurrentes)
       .set({
         journalId,
@@ -250,6 +269,22 @@ router.post('/:id/generer', async (req, res) => {
     const lignes = typeof recurrente.lignesModele === 'string' 
       ? JSON.parse(recurrente.lignesModele) 
       : recurrente.lignesModele;
+
+    for (const ligne of lignes) {
+      const [compte] = await db.select()
+        .from(comptesComptables)
+        .where(and(
+          eq(comptesComptables.id, ligne.compteId),
+          eq(comptesComptables.entrepriseId, req.entrepriseId)
+        ))
+        .limit(1);
+      
+      if (!compte) {
+        return res.status(400).json({ 
+          error: `Le compte ${ligne.compteId} n'appartient pas à cette entreprise` 
+        });
+      }
+    }
 
     let totalDebit = 0;
     let totalCredit = 0;
