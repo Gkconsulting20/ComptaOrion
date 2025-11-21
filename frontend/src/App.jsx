@@ -1389,24 +1389,43 @@ function FournisseursView() {
 function TresorerieView() {
   const [comptes, setComptes] = useState([]);
   const [mouvements, setMouvements] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [encaissements, setEncaissements] = useState([]);
+  const [decaissements, setDecaissements] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [previsions, setPrevisions] = useState(null);
+  const [activeTab, setActiveTab] = useState('suivi');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch comptes bancaires
+        // Comptes avec solde initial + solde actuel
         const comptesRes = await fetch('/api/tresorerie/comptes/1');
-        const comptesData = await comptesRes.json();
-        setComptes(comptesData || []);
+        setComptes(await comptesRes.json());
 
-        // Fetch mouvements/transactions
-        const mouvementsRes = await fetch('/api/tresorerie/1');
-        const mouvementsData = await mouvementsRes.json();
-        setMouvements(mouvementsData || []);
+        // Mouvements
+        const mouvementsRes = await fetch('/api/tresorerie/mouvements/1');
+        setMouvements(await mouvementsRes.json());
+
+        // Encaissements
+        const encaisRes = await fetch('/api/tresorerie/encaissements/1');
+        const encaisData = await encaisRes.json();
+        setEncaissements(encaisData.encaissements || []);
+
+        // Décaissements
+        const decaisRes = await fetch('/api/tresorerie/decaissements/1');
+        const decaisData = await decaisRes.json();
+        setDecaissements(decaisData.decaissements || []);
+
+        // Catégories
+        const catRes = await fetch('/api/tresorerie/categories/1');
+        setCategories(await catRes.json());
+
+        // Prévisions
+        const prevRes = await fetch('/api/tresorerie/previsions/1');
+        setPrevisions(await prevRes.json());
       } catch (err) {
-        console.error('Erreur chargement trésorerie:', err);
+        console.error('Erreur trésorerie:', err);
       }
-      setLoading(false);
     };
     fetchData();
   }, []);
@@ -1415,69 +1434,233 @@ function TresorerieView() {
     <div className="view-container">
       <div className="view-header">
         <h2 className="view-title">💳 Trésorerie</h2>
-        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Soldes des comptes et mouvements internes</p>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Suivi des soldes, mouvements et prévisions</p>
       </div>
 
-      <div style={{marginTop: '20px'}}>
-        <h3 style={{marginBottom: '15px'}}>📊 Comptes de Trésorerie</h3>
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginBottom: '30px'}}>
-          {comptes.length > 0 ? (
-            comptes.map(compte => (
-              <div key={compte.id} style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6'}}>
-                <h4 style={{marginTop: 0, marginBottom: '10px'}}>{compte.nom}</h4>
-                <p style={{fontSize: '24px', fontWeight: 'bold', color: '#28a745', marginBottom: '5px'}}>
-                  {parseFloat(compte.solde || 0).toLocaleString('fr-FR')} {compte.devise || 'XOF'}
-                </p>
-                <small style={{color: '#6c757d'}}>Type: {compte.type}</small>
+      <div className="tabs" style={{marginTop: '20px'}}>
+        <button 
+          className={`tab ${activeTab === 'suivi' ? 'active' : ''}`}
+          onClick={() => setActiveTab('suivi')}
+        >
+          📊 Suivi des Soldes
+        </button>
+        <button 
+          className={`tab ${activeTab === 'mouvements' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mouvements')}
+        >
+          📋 Mouvements
+        </button>
+        <button 
+          className={`tab ${activeTab === 'categories' ? 'active' : ''}`}
+          onClick={() => setActiveTab('categories')}
+        >
+          🏷️ Catégories
+        </button>
+        <button 
+          className={`tab ${activeTab === 'previsions' ? 'active' : ''}`}
+          onClick={() => setActiveTab('previsions')}
+        >
+          🔮 Prévisions
+        </button>
+      </div>
+
+      {activeTab === 'suivi' && (
+        <div className="tab-content">
+          <h3>💰 Suivi Banque</h3>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px', marginBottom: '30px'}}>
+            {comptes.filter(c => c.type === 'banque').map(compte => (
+              <div key={compte.id} style={{padding: '20px', backgroundColor: '#e8f4f8', borderRadius: '8px', border: '2px solid #0066cc'}}>
+                <h4 style={{marginTop: 0, marginBottom: '8px'}}>{compte.nomCompte}</h4>
+                <p style={{color: '#666', fontSize: '12px', marginBottom: '10px'}}>N°: {compte.numeroCompte || '-'} | {compte.banque || 'Banque'}</p>
+                <div style={{marginBottom: '10px', padding: '10px', backgroundColor: '#fff', borderRadius: '4px'}}>
+                  <small style={{color: '#666'}}>Solde initial</small>
+                  <p style={{margin: '3px 0', fontSize: '14px', fontWeight: 'bold'}}>{parseFloat(compte.soldeInitial).toLocaleString('fr-FR')} XOF</p>
+                </div>
+                <div style={{marginBottom: '10px', padding: '10px', backgroundColor: '#fff', borderRadius: '4px'}}>
+                  <small style={{color: '#666'}}>Solde actuel</small>
+                  <p style={{margin: '3px 0', fontSize: '18px', fontWeight: 'bold', color: compte.soldeActuel >= 0 ? '#28a745' : '#dc3545'}}>
+                    {parseFloat(compte.soldeActuel).toLocaleString('fr-FR')} XOF
+                  </p>
+                </div>
               </div>
-            ))
-          ) : (
-            <div style={{gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: '#999'}}>
-              Aucun compte enregistré
-            </div>
-          )}
-        </div>
-      </div>
+            ))}
+          </div>
 
-      <div>
-        <h3 style={{marginBottom: '15px'}}>📋 Mouvements de Trésorerie</h3>
-        <table style={{width: '100%', borderCollapse: 'collapse'}}>
-          <thead>
-            <tr style={{backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6'}}>
-              <th style={{padding: '12px', textAlign: 'left'}}>Date</th>
-              <th style={{padding: '12px', textAlign: 'left'}}>Type</th>
-              <th style={{padding: '12px', textAlign: 'left'}}>Description</th>
-              <th style={{padding: '12px', textAlign: 'left'}}>Catégorie</th>
-              <th style={{padding: '12px', textAlign: 'left'}}>Tiers</th>
-              <th style={{padding: '12px', textAlign: 'right'}}>Montant</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mouvements.length > 0 ? (
-              mouvements.map(mv => (
-                <tr key={mv.id} style={{borderBottom: '1px solid #dee2e6'}}>
-                  <td style={{padding: '12px'}}>{new Date(mv.dateTransaction).toLocaleDateString('fr-FR')}</td>
-                  <td style={{padding: '12px'}}>
-                    <span style={{padding: '4px 8px', borderRadius: '4px', backgroundColor: mv.type === 'encaissement' ? '#d4edda' : '#f8d7da', fontSize: '12px'}}>
-                      {mv.type === 'encaissement' ? '📥 Encaissement' : '📤 Décaissement'}
-                    </span>
-                  </td>
-                  <td style={{padding: '12px'}}>{mv.description || '-'}</td>
-                  <td style={{padding: '12px'}}>{mv.categorie || '-'}</td>
-                  <td style={{padding: '12px'}}>{mv.tiersNom || '-'}</td>
-                  <td style={{padding: '12px', textAlign: 'right', fontWeight: 'bold', color: mv.type === 'encaissement' ? '#28a745' : '#dc3545'}}>
-                    {mv.type === 'encaissement' ? '+' : '-'} {parseFloat(mv.montant || 0).toLocaleString('fr-FR')} XOF
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="6" style={{padding: '20px', textAlign: 'center', color: '#999'}}>Aucun mouvement enregistré</td>
+          <h3>🏪 Suivi Caisse</h3>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px', marginBottom: '30px'}}>
+            {comptes.filter(c => c.type === 'caisse').map(compte => (
+              <div key={compte.id} style={{padding: '20px', backgroundColor: '#fff3cd', borderRadius: '8px', border: '2px solid #ffc107'}}>
+                <h4 style={{marginTop: 0, marginBottom: '8px'}}>{compte.nomCompte}</h4>
+                <div style={{marginBottom: '10px', padding: '10px', backgroundColor: '#fff', borderRadius: '4px'}}>
+                  <small style={{color: '#666'}}>Solde initial</small>
+                  <p style={{margin: '3px 0', fontSize: '14px', fontWeight: 'bold'}}>{parseFloat(compte.soldeInitial).toLocaleString('fr-FR')} XOF</p>
+                </div>
+                <div style={{marginBottom: '10px', padding: '10px', backgroundColor: '#fff', borderRadius: '4px'}}>
+                  <small style={{color: '#666'}}>Solde actuel</small>
+                  <p style={{margin: '3px 0', fontSize: '18px', fontWeight: 'bold', color: compte.soldeActuel >= 0 ? '#28a745' : '#dc3545'}}>
+                    {parseFloat(compte.soldeActuel).toLocaleString('fr-FR')} XOF
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'mouvements' && (
+        <div className="tab-content">
+          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px'}}>
+            <div style={{padding: '20px', backgroundColor: '#d4edda', borderRadius: '8px', border: '1px solid #28a745'}}>
+              <h3 style={{marginTop: 0, marginBottom: '15px'}}>📥 Encaissements</h3>
+              <p style={{fontSize: '24px', fontWeight: 'bold', color: '#28a745', marginBottom: '10px'}}>
+                +{encaissements.reduce((sum, e) => sum + parseFloat(e.montant || 0), 0).toLocaleString('fr-FR')} XOF
+              </p>
+              <small style={{color: '#666'}}>{encaissements.length} transactions</small>
+            </div>
+            <div style={{padding: '20px', backgroundColor: '#f8d7da', borderRadius: '8px', border: '1px solid #dc3545'}}>
+              <h3 style={{marginTop: 0, marginBottom: '15px'}}>📤 Décaissements</h3>
+              <p style={{fontSize: '24px', fontWeight: 'bold', color: '#dc3545', marginBottom: '10px'}}>
+                -{decaissements.reduce((sum, d) => sum + parseFloat(d.montant || 0), 0).toLocaleString('fr-FR')} XOF
+              </p>
+              <small style={{color: '#666'}}>{decaissements.length} transactions</small>
+            </div>
+          </div>
+
+          <h3>Historique des Mouvements</h3>
+          <table style={{width: '100%', borderCollapse: 'collapse'}}>
+            <thead>
+              <tr style={{backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6'}}>
+                <th style={{padding: '12px', textAlign: 'left'}}>Date</th>
+                <th style={{padding: '12px', textAlign: 'left'}}>Type</th>
+                <th style={{padding: '12px', textAlign: 'left'}}>Description</th>
+                <th style={{padding: '12px', textAlign: 'left'}}>Catégorie</th>
+                <th style={{padding: '12px', textAlign: 'left'}}>Tiers</th>
+                <th style={{padding: '12px', textAlign: 'right'}}>Montant</th>
               </tr>
+            </thead>
+            <tbody>
+              {mouvements.length > 0 ? (
+                mouvements.map(mv => (
+                  <tr key={mv.id} style={{borderBottom: '1px solid #dee2e6'}}>
+                    <td style={{padding: '12px'}}>{new Date(mv.dateTransaction).toLocaleDateString('fr-FR')}</td>
+                    <td style={{padding: '12px'}}>
+                      <span style={{padding: '4px 8px', borderRadius: '4px', backgroundColor: mv.type === 'encaissement' ? '#d4edda' : '#f8d7da', fontSize: '12px', fontWeight: 'bold'}}>
+                        {mv.type === 'encaissement' ? '📥' : '📤'}
+                      </span>
+                    </td>
+                    <td style={{padding: '12px'}}>{mv.description || '-'}</td>
+                    <td style={{padding: '12px'}}>{mv.categorie || '-'}</td>
+                    <td style={{padding: '12px'}}>{mv.tiersNom || '-'}</td>
+                    <td style={{padding: '12px', textAlign: 'right', fontWeight: 'bold', color: mv.type === 'encaissement' ? '#28a745' : '#dc3545'}}>
+                      {mv.type === 'encaissement' ? '+' : '-'} {parseFloat(mv.montant).toLocaleString('fr-FR')} XOF
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan="6" style={{padding: '20px', textAlign: 'center', color: '#999'}}>Aucun mouvement</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === 'categories' && (
+        <div className="tab-content">
+          <h3>🏷️ Catégories de Flux de Trésorerie</h3>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px'}}>
+            {categories.map(cat => (
+              <div key={cat.id} style={{padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '2px solid', borderColor: cat.color, textAlign: 'center'}}>
+                <span style={{fontSize: '32px'}}>{cat.icon}</span>
+                <h4 style={{marginTop: '10px', marginBottom: '0', color: cat.color}}>{cat.nom}</h4>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'previsions' && previsions && (
+        <div className="tab-content">
+          <h3>🔮 Prévisions de Trésorerie</h3>
+          
+          <div style={{marginBottom: '30px'}}>
+            <h4>📊 Flux Futurs Prévus</h4>
+            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px'}}>
+              <div style={{padding: '15px', backgroundColor: '#e7f3ff', borderRadius: '8px'}}>
+                <small style={{color: '#666'}}>Cette semaine</small>
+                <p style={{fontSize: '20px', fontWeight: 'bold', color: '#0066cc', marginTop: '5px'}}>
+                  {previsions.fluxFuturs.semaine.toLocaleString('fr-FR')} XOF
+                </p>
+              </div>
+              <div style={{padding: '15px', backgroundColor: '#e7f3ff', borderRadius: '8px'}}>
+                <small style={{color: '#666'}}>Ce mois</small>
+                <p style={{fontSize: '20px', fontWeight: 'bold', color: '#0066cc', marginTop: '5px'}}>
+                  {previsions.fluxFuturs.mois.toLocaleString('fr-FR')} XOF
+                </p>
+              </div>
+              <div style={{padding: '15px', backgroundColor: '#e7f3ff', borderRadius: '8px'}}>
+                <small style={{color: '#666'}}>Ce trimestre</small>
+                <p style={{fontSize: '20px', fontWeight: 'bold', color: '#0066cc', marginTop: '5px'}}>
+                  {previsions.fluxFuturs.trimestre.toLocaleString('fr-FR')} XOF
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div style={{marginBottom: '30px'}}>
+            <h4>💰 Factures Clients à Venir</h4>
+            <div style={{padding: '15px', backgroundColor: '#d4edda', borderRadius: '8px', marginBottom: '15px'}}>
+              <p style={{margin: 0}}><strong>{previsions.facturesAVenir.count}</strong> factures | Total: <strong>{previsions.facturesAVenir.total.toLocaleString('fr-FR')} XOF</strong></p>
+            </div>
+            {previsions.facturesAVenir.items.length > 0 && (
+              <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
+                <thead>
+                  <tr style={{backgroundColor: '#f8f9fa', borderBottom: '1px solid #dee2e6'}}>
+                    <th style={{padding: '8px', textAlign: 'left'}}>Facture</th>
+                    <th style={{padding: '8px', textAlign: 'left'}}>Client</th>
+                    <th style={{padding: '8px', textAlign: 'right'}}>Montant</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previsions.facturesAVenir.items.map((f, i) => (
+                    <tr key={i} style={{borderBottom: '1px solid #dee2e6'}}>
+                      <td style={{padding: '8px'}}>{f.numero || '-'}</td>
+                      <td style={{padding: '8px'}}>{f.clientNom || '-'}</td>
+                      <td style={{padding: '8px', textAlign: 'right'}}>{parseFloat(f.montantTTC).toLocaleString('fr-FR')} XOF</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
-          </tbody>
-        </table>
-      </div>
+          </div>
+
+          <div>
+            <h4>🏭 Échéances Fournisseur</h4>
+            <div style={{padding: '15px', backgroundColor: '#f8d7da', borderRadius: '8px', marginBottom: '15px'}}>
+              <p style={{margin: 0}}><strong>{previsions.echancesFournisseur.count}</strong> factures | Total: <strong>{previsions.echancesFournisseur.total.toLocaleString('fr-FR')} XOF</strong></p>
+            </div>
+            {previsions.echancesFournisseur.items.length > 0 && (
+              <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
+                <thead>
+                  <tr style={{backgroundColor: '#f8f9fa', borderBottom: '1px solid #dee2e6'}}>
+                    <th style={{padding: '8px', textAlign: 'left'}}>Facture</th>
+                    <th style={{padding: '8px', textAlign: 'left'}}>Fournisseur</th>
+                    <th style={{padding: '8px', textAlign: 'right'}}>Montant</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previsions.echancesFournisseur.items.map((a, i) => (
+                    <tr key={i} style={{borderBottom: '1px solid #dee2e6'}}>
+                      <td style={{padding: '8px'}}>{a.numero || '-'}</td>
+                      <td style={{padding: '8px'}}>{a.fournisseurNom || '-'}</td>
+                      <td style={{padding: '8px', textAlign: 'right'}}>{parseFloat(a.montantTTC).toLocaleString('fr-FR')} XOF</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

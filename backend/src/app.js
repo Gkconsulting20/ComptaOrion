@@ -17,6 +17,7 @@ import immobilisationsRoutes from './routes/immobilisations.js';
 import exportAssetsRoutes from './routes/export-assets.js';
 import comptabiliteRoutes from './routes/comptabilite.js';
 import employesRoutes from './routes/employes.js';
+import tresorerieRoutes from './routes/tresorerie.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
@@ -75,6 +76,9 @@ app.use('/api/comptabilite', comptabiliteRoutes);
 // Module Employés (HR Lite)
 app.use('/api/employes', employesRoutes);
 
+// Module Trésorerie
+app.use('/api/tresorerie', tresorerieRoutes);
+
 // Module Fournisseurs & Achats
 app.use('/api/fournisseurs', fournisseursRoutes);
 app.use('/api/commandes-achat', commandesAchatRoutes);
@@ -105,23 +109,6 @@ app.get('/api', (req, res) => {
 // ===============================================
 // ROUTES STUBS (À IMPLÉMENTER)
 // ===============================================
-
-app.get('/api/tresorerie', (req, res) => {
-  res.json({ 
-    message: 'Module trésorerie',
-    solde: 0,
-    encaissements: 0,
-    decaissements: 0,
-    transactions: []
-  });
-});
-
-app.post('/api/tresorerie/transaction', (req, res) => {
-  res.json({ 
-    message: 'Transaction enregistrée',
-    data: req.body
-  });
-});
 
 app.get('/api/stock', (req, res) => {
   res.json({ 
