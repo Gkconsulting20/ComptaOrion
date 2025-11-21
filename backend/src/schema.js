@@ -996,3 +996,51 @@ export const facturesAbonnement = pgTable('factures_abonnement', {
   methodePaiement: varchar('methode_paiement', { length: 100 }), // carte_credit, virement, etc
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// ==========================================
+// MODULE 17: SAAS ADMIN - COMMERCIALISATION
+// ==========================================
+
+// Commerciaux/Vendeurs
+export const saasCommerciaux = pgTable('saas_commerciaux', {
+  id: serial('id').primaryKey(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  prenom: varchar('prenom', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }).notNull().unique(),
+  telephone: varchar('telephone', { length: 50 }),
+  region: varchar('region', { length: 100 }), // Afrique de l'Ouest, Centrale, etc.
+  commission: decimal('commission', { precision: 5, scale: 2 }).default('10'), // % de commission
+  objectifMensuel: decimal('objectif_mensuel', { precision: 15, scale: 2 }),
+  nbClientsActifs: integer('nb_clients_actifs').default(0),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Clients SaaS (organisations qui utilisent ComptaOrion - extension de entreprises)
+export const saasClients = pgTable('saas_clients', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).unique(), // lien vers entreprise
+  commercialId: integer('commercial_id').references(() => saasCommerciaux.id),
+  statut: varchar('statut', { length: 50 }).default('trial'), // trial, actif, suspendu, inactif
+  dateInscription: timestamp('date_inscription').defaultNow(),
+  dateDerniereConnexion: timestamp('date_derniere_connexion'),
+  source: varchar('source', { length: 100 }), // web, commercial, partenaire
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Ventes (tracking des ventes par commercial)
+export const saasVentes = pgTable('saas_ventes', {
+  id: serial('id').primaryKey(),
+  commercialId: integer('commercial_id').references(() => saasCommerciaux.id).notNull(),
+  clientId: integer('client_id').references(() => saasClients.id).notNull(),
+  abonnementId: integer('abonnement_id').references(() => abonnements.id),
+  montantVente: decimal('montant_vente', { precision: 15, scale: 2 }).notNull(),
+  commission: decimal('commission', { precision: 15, scale: 2 }).notNull(),
+  dateVente: timestamp('date_vente').defaultNow(),
+  statut: varchar('statut', { length: 50 }).default('confirmée'), // confirmée, annulée
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});

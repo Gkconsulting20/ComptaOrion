@@ -8,11 +8,13 @@ import { ModuleComptabilite } from './modules/ModuleComptabilite';
 import { DepensesModule } from './modules/DepensesModule';
 import { ParametresModule } from './modules/ParametresModule';
 import { AuthenticationModule } from './modules/AuthenticationModule';
+import { SaaSAdminModule } from './modules/SaaSAdminModule';
 import { Login } from './pages/Login';
 import api from './api';
 
 const MODULES = [
   { id: 'dashboard', label: '📊 Tableau de Bord', icon: '📊' },
+  { id: 'saas-admin', label: '🎯 Admin SaaS', icon: '🎯' },
   { id: 'clients', label: '👥 Clients', icon: '👥' },
   { id: 'fournisseurs', label: '🏭 Fournisseurs', icon: '🏭' },
   { id: 'tresorerie', label: '💰 Trésorerie', icon: '💰' },
@@ -207,6 +209,7 @@ export default function App() {
   const renderView = () => {
     switch (currentView) {
       case 'dashboard': return <Dashboard />;
+      case 'saas-admin': return <SaaSAdminModule />;
       case 'clients': return <ClientsModule />;
       case 'fournisseurs': return <GestionFournisseurs />;
       case 'tresorerie': return <TresorerieModule />;
