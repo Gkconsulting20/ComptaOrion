@@ -116,6 +116,87 @@ export const fournisseurs = pgTable('fournisseurs', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Tables pour les commandes d'achat (ACHATS FOURNISSEURS)
+export const commandesAchat = pgTable('commandes_achat', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  numeroCommande: varchar('numero_commande', { length: 100 }).unique(),
+  fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id).notNull(),
+  statut: varchar('statut', { length: 50 }).default('brouillon'), // brouillon, confirmee, preparee, livree, annulee
+  dateCommande: date('date_commande').defaultNow(),
+  dateLivraisonPrevue: date('date_livraison_prevue'),
+  totalHT: decimal('total_ht', { precision: 15, scale: 2 }).default('0'),
+  totalTVA: decimal('total_tva', { precision: 15, scale: 2 }).default('0'),
+  totalTTC: decimal('total_ttc', { precision: 15, scale: 2 }).default('0'),
+  notes: text('notes'),
+  conditionsLivraison: text('conditions_livraison'),
+  modeLivraison: varchar('mode_livraison', { length: 100 }),
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const commandesAchatItems = pgTable('commandes_achat_items', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  commandeId: integer('commande_id').references(() => commandesAchat.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id),
+  description: text('description').notNull(),
+  quantite: decimal('quantite', { precision: 15, scale: 3 }).notNull(),
+  quantiteRecue: decimal('quantite_recue', { precision: 15, scale: 3 }).default('0'),
+  prixUnitaire: decimal('prix_unitaire', { precision: 15, scale: 2 }).notNull(),
+  remise: decimal('remise', { precision: 5, scale: 2 }).default('0'),
+  totalLigne: decimal('total_ligne', { precision: 15, scale: 2 }).notNull(),
+});
+
+// Tables pour les factures fournisseurs
+export const facturesAchat = pgTable('factures_achat', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  numeroFacture: varchar('numero_facture', { length: 100 }).unique(),
+  numeroFactureFournisseur: varchar('numero_facture_fournisseur', { length: 100 }),
+  fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id).notNull(),
+  commandeId: integer('commande_id'),
+  statut: varchar('statut', { length: 50 }).default('brouillon'),
+  dateFacture: date('date_facture').defaultNow(),
+  dateEcheance: date('date_echeance'),
+  totalHT: decimal('total_ht', { precision: 15, scale: 2 }).default('0'),
+  totalTVA: decimal('total_tva', { precision: 15, scale: 2 }).default('0'),
+  totalTTC: decimal('total_ttc', { precision: 15, scale: 2 }).default('0'),
+  montantPaye: decimal('montant_paye', { precision: 15, scale: 2 }).default('0'),
+  soldeRestant: decimal('solde_restant', { precision: 15, scale: 2 }).default('0'),
+  notes: text('notes'),
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const factureAchatItems = pgTable('facture_achat_items', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  factureId: integer('facture_id').references(() => facturesAchat.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id),
+  description: text('description').notNull(),
+  quantite: decimal('quantite', { precision: 15, scale: 3 }).notNull(),
+  prixUnitaire: decimal('prix_unitaire', { precision: 15, scale: 2 }).notNull(),
+  remise: decimal('remise', { precision: 5, scale: 2 }).default('0'),
+  totalLigne: decimal('total_ligne', { precision: 15, scale: 2 }).notNull(),
+});
+
+export const paiementsFournisseurs = pgTable('paiements_fournisseurs', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  factureId: integer('facture_id').references(() => facturesAchat.id),
+  fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id),
+  montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
+  modePaiement: varchar('mode_paiement', { length: 100 }),
+  reference: varchar('reference', { length: 255 }),
+  datePaiement: date('date_paiement').defaultNow(),
+  notes: text('notes'),
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // ==========================================
 // MODULE 6: STOCK & INVENTAIRE
 // ==========================================

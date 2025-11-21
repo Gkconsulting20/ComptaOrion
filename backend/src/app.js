@@ -6,6 +6,10 @@ import produitsRoutes from './routes/produits.js';
 import devisRoutes from './routes/devis.js';
 import facturesRoutes from './routes/factures.js';
 import parametresRoutes from './routes/parametres.js';
+import fournisseursRoutes from './routes/fournisseurs.js';
+import commandesAchatRoutes from './routes/commandes-achat.js';
+import receptionsRoutes from './routes/receptions.js';
+import achatsRoutes from './routes/achats.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
@@ -47,6 +51,12 @@ app.use('/api/factures', facturesRoutes);
 // Module Paramètres & Configuration
 app.use('/api/parametres', parametresRoutes);
 
+// Module Fournisseurs & Achats
+app.use('/api/fournisseurs', fournisseursRoutes);
+app.use('/api/commandes-achat', commandesAchatRoutes);
+app.use('/api/receptions', receptionsRoutes);
+app.use('/api/achats', achatsRoutes);
+
 // ===============================================
 // ROUTE INFO API
 // ===============================================
@@ -71,20 +81,6 @@ app.get('/api', (req, res) => {
 // ===============================================
 // ROUTES STUBS (À IMPLÉMENTER)
 // ===============================================
-
-app.get('/api/fournisseurs', (req, res) => {
-  res.json({ 
-    message: 'Module fournisseurs',
-    data: []
-  });
-});
-
-app.post('/api/fournisseurs', (req, res) => {
-  res.json({ 
-    message: 'Fournisseur créé avec succès',
-    data: req.body
-  });
-});
 
 app.get('/api/tresorerie', (req, res) => {
   res.json({ 
