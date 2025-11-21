@@ -251,6 +251,29 @@ export function Login({ onLoginSuccess }) {
               />
             </div>
 
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#2c3e50' }}>
+                ID Entreprise *
+              </label>
+              <input
+                type="number"
+                value={formData.entrepriseId}
+                onChange={(e) => setFormData({ ...formData, entrepriseId: e.target.value })}
+                required
+                min="1"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '6px',
+                  fontSize: '16px',
+                  transition: 'border 0.3s'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#667eea'}
+                onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+              />
+            </div>
+
             <button
               type="submit"
               disabled={loading}

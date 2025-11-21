@@ -5,15 +5,15 @@
 ### 👑 ADMIN (Accès Autorisé)
 - **Email**: `admin@comptaorion.com`
 - **Mot de passe**: `Test123!`
+- **ID Entreprise**: `1`
 - **Rôle**: `admin`
-- **Entreprise ID**: 1
 - **Résultat attendu**: ✅ **ACCÈS AUTORISÉ** au module SaaS Admin
 
 ### 👤 CLIENT STANDARD (Accès Refusé)
 - **Email**: `standard@client.com`
 - **Mot de passe**: `Test123!`
+- **ID Entreprise**: `4`
 - **Rôle**: `employee` (utilisateur standard)
-- **Entreprise ID**: 4
 - **Résultat attendu**: ❌ **ACCÈS REFUSÉ** (403 Forbidden)
 
 ---
@@ -25,9 +25,9 @@
 **Étapes:**
 1. Ouvrir l'application ComptaOrion
 2. Se connecter avec:
-   - Email: `admin@comptaorion.com`
-   - Mot de passe: `Test123!`
-   - Entreprise ID: `1`
+   - **Email**: `admin@comptaorion.com`
+   - **Mot de passe**: `Test123!`
+   - **ID Entreprise**: `1`
 3. Cliquer sur l'onglet **"🎯 Admin SaaS"** dans le menu
 
 **Résultat attendu:**
@@ -47,9 +47,9 @@
 **Étapes:**
 1. Se déconnecter de l'application
 2. Se connecter avec:
-   - Email: `standard@client.com`
-   - Mot de passe: `Test123!`
-   - Entreprise ID: `4`
+   - **Email**: `standard@client.com`
+   - **Mot de passe**: `Test123!`
+   - **ID Entreprise**: `4`
 3. Tenter de cliquer sur **"🎯 Admin SaaS"** dans le menu
 
 **Résultat attendu:**
