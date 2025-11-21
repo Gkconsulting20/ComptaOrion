@@ -21,6 +21,7 @@ import comptabiliteRoutes from './routes/comptabilite.js';
 import tresorerieRoutes from './routes/tresorerie.js';
 import auditLogsRoutes from './routes/audit-logs.js';
 import paieRoutes from './routes/paie.js';
+import bonsLivraisonRoutes from './routes/bons-livraison.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 
 const app = express();
@@ -72,6 +73,9 @@ app.use('/api/devis', devisRoutes);
 
 // Module Factures (Invoices)
 app.use('/api/factures', facturesRoutes);
+
+// Module Bons de Livraison
+app.use('/api/bons-livraison', bonsLivraisonRoutes);
 
 // Module Paramètres & Configuration
 app.use('/api/parametres', parametresRoutes);

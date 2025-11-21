@@ -68,6 +68,48 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 
 ## Recent Changes (November 21, 2025)
 
+### Module Bons de Livraison - Delivery Notes System (21 Nov 2025)
+Ajout d'un système complet de gestion des bons de livraison avec génération à partir des factures:
+
+**Fonctionnalités:**
+- Génération de bons de livraison à partir des factures validées
+- CRUD complet (Créer, Lire, Modifier, Supprimer)
+- Numérotation automatique (BL-000001, BL-000002, etc.)
+- Liaison automatique avec factures, clients et produits
+- Interface dédiée dans le module Clients
+
+**Schéma Base de Données:**
+- Tables `bons_livraison` et `bon_livraison_items` (déjà existantes)
+- Utilisation complète de la structure existante
+
+**API Backend:**
+- `GET /api/bons-livraison`: Liste des bons de livraison
+- `GET /api/bons-livraison/:id`: Détails d'un bon spécifique
+- `POST /api/bons-livraison/generer-depuis-facture/:factureId`: Génération automatique depuis facture
+- `POST /api/bons-livraison`: Création manuelle
+- `PUT /api/bons-livraison/:id`: Modification
+- `DELETE /api/bons-livraison/:id`: Suppression sécurisée
+
+**Sécurité Multi-Tenant:**
+- Toutes les routes utilisent `req.entrepriseId` du JWT
+- Validation de propriété lors de la suppression (bon + items)
+- Protection cross-tenant complète
+
+**Interface Frontend:**
+- Onglet "📦 Bons de Livraison" dans le module Clients
+- Liste des bons avec client, date, articles
+- Modal de génération depuis facture avec sélection dropdown
+- Affichage des factures validées/en attente uniquement
+
+**Workflow:**
+1. Créer une facture et la valider
+2. Aller dans l'onglet "Bons de Livraison"
+3. Cliquer sur "+ Générer depuis Facture"
+4. Sélectionner la facture
+5. Le bon de livraison est généré automatiquement avec les articles de la facture
+
+## Recent Changes (November 21, 2025)
+
 ### Module Prévisions de Trésorerie - Cash Flow Forecasting (21 Nov 2025)
 Ajout d'un système complet de prévision de trésorerie avec calcul automatique des flux futurs:
 

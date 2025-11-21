@@ -11,6 +11,7 @@ export function ClientsModule() {
   const tabs = [
     { id: 'devis', label: '📝 Devis', icon: '📝' },
     { id: 'factures', label: '💵 Factures Client', icon: '💵' },
+    { id: 'bons-livraison', label: '📦 Bons de Livraison', icon: '📦' },
     { id: 'paiements', label: '💳 Paiements', icon: '💳' },
     { id: 'relances', label: '🔔 Relances', icon: '🔔' },
     { id: 'rapports', label: '📊 Rapports', icon: '📊' },
@@ -57,6 +58,7 @@ export function ClientsModule() {
 
       {activeTab === 'devis' && <DevisTab />}
       {activeTab === 'factures' && <FacturesClientTab />}
+      {activeTab === 'bons-livraison' && <BonsLivraisonTab />}
       {activeTab === 'paiements' && <PaiementsTab />}
       {activeTab === 'relances' && <RelancesTab />}
       {activeTab === 'rapports' && <RapportsTab />}
@@ -442,7 +444,179 @@ function DevisTab() {
 // ONGLET 4: PAIEMENTS
 // ==========================================
 // ==========================================
-// ONGLET 3: FACTURES CLIENT
+// ONGLET 3: BONS DE LIVRAISON
+// ==========================================
+function BonsLivraisonTab() {
+  const [bonsList, setBonsList] = useState([]);
+  const [facturesList, setFacturesList] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState('');
+  const [selectedFacture, setSelectedFacture] = useState(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [bonsRes, facturesRes, clientsRes] = await Promise.all([
+        api.get('/bons-livraison'),
+        api.get('/factures'),
+        api.get('/clients')
+      ]);
+
+      setBonsList(bonsRes.data || bonsRes || []);
+      setFacturesList((facturesRes.data || []).map(f => ({
+        ...f.facture,
+        client: f.client
+      })));
+      setClients(clientsRes.data || []);
+    } catch (error) {
+      console.error('Erreur:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenererDepuisFacture = async () => {
+    if (!selectedFacture) {
+      alert('Veuillez sélectionner une facture');
+      return;
+    }
+
+    try {
+      await api.post(`/bons-livraison/generer-depuis-facture/${selectedFacture.id}`);
+      alert('✅ Bon de livraison généré avec succès!');
+      setShowModal(false);
+      setSelectedFacture(null);
+      loadData();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const columns = [
+    { key: 'numeroBL', label: 'N° BL' },
+    { 
+      key: 'client', 
+      label: 'Client',
+      render: (val) => val?.nom || '-'
+    },
+    { 
+      key: 'dateLivraison', 
+      label: 'Date de livraison', 
+      render: (val) => val?.split('T')[0] || '-' 
+    },
+    { 
+      key: 'items', 
+      label: 'Articles',
+      render: (val) => (val || []).length + ' article(s)'
+    },
+    { key: 'notes', label: 'Notes', render: (val) => val || '-' },
+  ];
+
+  if (loading) return <p>Chargement...</p>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <h3>📦 Bons de Livraison</h3>
+        <Button 
+          onClick={() => {
+            setModalType('generer');
+            setShowModal(true);
+          }}
+        >
+          + Générer depuis Facture
+        </Button>
+      </div>
+
+      <Table
+        columns={columns}
+        data={bonsList}
+        renderActions={(bon) => (
+          <div>
+            <Button size="small" variant="info">
+              👁️ Détails
+            </Button>
+          </div>
+        )}
+      />
+
+      {showModal && modalType === 'generer' && (
+        <Modal onClose={() => { setShowModal(false); setSelectedFacture(null); }}>
+          <h3>📦 Générer un Bon de Livraison</h3>
+          <p>Sélectionnez une facture pour générer automatiquement un bon de livraison:</p>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              Facture *
+            </label>
+            <select
+              value={selectedFacture?.id || ''}
+              onChange={(e) => {
+                const facture = facturesList.find(f => f.id === parseInt(e.target.value));
+                setSelectedFacture(facture);
+              }}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            >
+              <option value="">-- Sélectionner une facture --</option>
+              {facturesList
+                .filter(f => f.statut === 'validee' || f.statut === 'en_attente')
+                .map(facture => (
+                  <option key={facture.id} value={facture.id}>
+                    {facture.numeroFacture} - {facture.client?.nom} - {parseFloat(facture.totalTTC || 0).toLocaleString()} FCFA
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          {selectedFacture && (
+            <div style={{ 
+              padding: '15px', 
+              backgroundColor: '#e8f5e9', 
+              borderRadius: '6px',
+              marginBottom: '20px'
+            }}>
+              <p style={{ margin: 0, fontWeight: 'bold' }}>
+                ✅ Facture sélectionnée: {selectedFacture.numeroFacture}
+              </p>
+              <p style={{ margin: '5px 0 0 0', fontSize: '14px' }}>
+                Client: {selectedFacture.client?.nom} | Montant: {parseFloat(selectedFacture.totalTTC || 0).toLocaleString()} FCFA
+              </p>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Button onClick={handleGenererDepuisFacture} disabled={!selectedFacture}>
+              ✅ Générer le Bon
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => { 
+                setShowModal(false); 
+                setSelectedFacture(null); 
+              }}
+            >
+              ❌ Annuler
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// ONGLET 4: FACTURES CLIENT
 // ==========================================
 function FacturesClientTab() {
   const [facturesList, setFacturesList] = useState([]);
