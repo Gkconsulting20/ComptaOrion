@@ -10,6 +10,7 @@ import fournisseursRoutes from './routes/fournisseurs.js';
 import commandesAchatRoutes from './routes/commandes-achat.js';
 import receptionsRoutes from './routes/receptions.js';
 import achatsRoutes from './routes/achats.js';
+import dashboardRoutes from './routes/dashboard.js';
 import { authMiddleware, entrepriseIsolation } from './auth.js';
 
 const app = express();
@@ -50,6 +51,9 @@ app.use('/api/factures', facturesRoutes);
 
 // Module Paramètres & Configuration
 app.use('/api/parametres', parametresRoutes);
+
+// Dashboard
+app.use('/api/dashboard', dashboardRoutes);
 
 // Module Fournisseurs & Achats
 app.use('/api/fournisseurs', fournisseursRoutes);
