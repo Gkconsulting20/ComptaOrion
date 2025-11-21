@@ -7,12 +7,15 @@ import api from '../api';
 
 export function GestionFournisseurs() {
   const [activeTab, setActiveTab] = useState('parametres');
+  const [subTab, setSubTab] = useState('fournisseurs');
   const [data, setData] = useState({
     fournisseurs: [],
     commandes: [],
     receptions: [],
     factures: [],
-    paiements: []
+    paiements: [],
+    taxes: [],
+    codesComptables: []
   });
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ open: false, type: null, item: null });
@@ -38,7 +41,16 @@ export function GestionFournisseurs() {
         commandes: commandesRes.data || [],
         receptions: [],
         factures: [],
-        paiements: []
+        paiements: [],
+        taxes: [
+          { id: 1, nom: 'TVA 18%', taux: 18, codeComptable: '4431' },
+          { id: 2, nom: 'TVA 9%', taux: 9, codeComptable: '4432' }
+        ],
+        codesComptables: [
+          { id: 1, code: '401', libelle: 'Fournisseurs' },
+          { id: 2, code: '4011', libelle: 'Fournisseurs - Achats de biens' },
+          { id: 3, code: '4431', libelle: 'TVA facturée' }
+        ]
       });
     } catch (error) {
       console.error('Erreur chargement:', error);
@@ -71,6 +83,10 @@ export function GestionFournisseurs() {
         fournisseurId: '', factureId: '', datePaiement: new Date().toISOString().split('T')[0],
         montant: 0, modePaiement: 'virement', reference: '', notes: ''
       });
+    } else if (type === 'taxe') {
+      setForm(item || { nom: '', taux: 0, codeComptable: '' });
+    } else if (type === 'codeComptable') {
+      setForm(item || { code: '', libelle: '' });
     }
   };
 
@@ -97,8 +113,31 @@ export function GestionFournisseurs() {
         await api.post('/factures-fournisseurs', form);
       } else if (type === 'paiement') {
         await api.post('/paiements-fournisseurs', form);
+      } else if (type === 'taxe' || type === 'codeComptable') {
+        alert('Configuration enregistrée (démo)');
       }
       closeModal();
+      loadAllData();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const convertirEnFacture = async (commande) => {
+    if (!confirm('Convertir cette commande en facture ?')) return;
+    try {
+      const fournisseur = commande.fournisseur;
+      const factureData = {
+        fournisseurId: fournisseur?.id,
+        numeroFacture: `F-${commande.commande?.numeroCommande}`,
+        dateFacture: new Date().toISOString().split('T')[0],
+        dateEcheance: new Date(Date.now() + (fournisseur?.delaiPaiement || 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        montantHT: commande.commande?.totalHT || 0,
+        tva: 18,
+        notes: `Facture générée depuis commande ${commande.commande?.numeroCommande}`
+      };
+      await api.post('/factures-fournisseurs', factureData);
+      alert('Commande convertie en facture avec succès!');
       loadAllData();
     } catch (error) {
       alert('Erreur: ' + error.message);
@@ -181,24 +220,88 @@ export function GestionFournisseurs() {
 
       {activeTab === 'parametres' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3>⚙️ Paramètres Fournisseurs</h3>
-            <Button onClick={() => openModal('fournisseur')}>+ Nouveau Fournisseur</Button>
+          <h3>⚙️ Paramètres</h3>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '2px solid #e0e0e0' }}>
+            {['fournisseurs', 'taxes', 'codesComptables'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setSubTab(tab)}
+                style={{
+                  padding: '10px 18px',
+                  border: 'none',
+                  background: subTab === tab ? '#3498db' : 'transparent',
+                  color: subTab === tab ? 'white' : '#666',
+                  cursor: 'pointer',
+                  borderRadius: '6px 6px 0 0',
+                  fontWeight: subTab === tab ? 'bold' : 'normal',
+                  fontSize: '13px'
+                }}
+              >
+                {tab === 'fournisseurs' ? '🏭 Fournisseurs' :
+                 tab === 'taxes' ? '💰 Taxes' : '📋 Codes Comptables'}
+              </button>
+            ))}
           </div>
-          <Table
-            columns={[
-              { key: 'numeroFournisseur', label: 'N° Fournisseur' },
-              { key: 'nom', label: 'Nom' },
-              { key: 'email', label: 'Email' },
-              { key: 'telephone', label: 'Téléphone' },
-              { key: 'ville', label: 'Ville' },
-              { key: 'delaiPaiement', label: 'Échéance', render: (val) => `${val || 30} jours` },
-              { key: 'evaluation', label: 'Évaluation', render: (val) => '⭐'.repeat(val || 3) }
-            ]}
-            data={data.fournisseurs}
-            onEdit={(item) => openModal('fournisseur', item)}
-            onDelete={(item) => handleDelete('fournisseur', item.id)}
-          />
+
+          {subTab === 'fournisseurs' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h4>🏭 Gestion Fournisseurs</h4>
+                <Button onClick={() => openModal('fournisseur')}>+ Nouveau Fournisseur</Button>
+              </div>
+              <Table
+                columns={[
+                  { key: 'numeroFournisseur', label: 'N° Fournisseur' },
+                  { key: 'nom', label: 'Nom' },
+                  { key: 'email', label: 'Email' },
+                  { key: 'telephone', label: 'Téléphone' },
+                  { key: 'ville', label: 'Ville' },
+                  { key: 'delaiPaiement', label: 'Échéance', render: (val) => `${val || 30} jours` },
+                  { key: 'evaluation', label: 'Évaluation', render: (val) => '⭐'.repeat(val || 3) }
+                ]}
+                data={data.fournisseurs}
+                onEdit={(item) => openModal('fournisseur', item)}
+                onDelete={(item) => handleDelete('fournisseur', item.id)}
+              />
+            </div>
+          )}
+
+          {subTab === 'taxes' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h4>💰 Configuration des Taxes</h4>
+                <Button onClick={() => openModal('taxe')}>+ Nouvelle Taxe</Button>
+              </div>
+              <Table
+                columns={[
+                  { key: 'nom', label: 'Nom' },
+                  { key: 'taux', label: 'Taux (%)', render: (val) => `${val}%` },
+                  { key: 'codeComptable', label: 'Code Comptable' }
+                ]}
+                data={data.taxes}
+                onEdit={(item) => openModal('taxe', item)}
+                actions={true}
+              />
+            </div>
+          )}
+
+          {subTab === 'codesComptables' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h4>📋 Codes Comptables</h4>
+                <Button onClick={() => openModal('codeComptable')}>+ Nouveau Code</Button>
+              </div>
+              <Table
+                columns={[
+                  { key: 'code', label: 'Code' },
+                  { key: 'libelle', label: 'Libellé' }
+                ]}
+                data={data.codesComptables}
+                onEdit={(item) => openModal('codeComptable', item)}
+                actions={true}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -221,7 +324,16 @@ export function GestionFournisseurs() {
                   padding: '4px 8px', borderRadius: '4px', backgroundColor: colors[statut] || '#999',
                   color: 'white', fontSize: '11px'
                 }}>{statut}</span>;
-              }}
+              }},
+              { key: 'actions', label: 'Actions', render: (_, row) => (
+                <Button 
+                  variant="success" 
+                  size="small"
+                  onClick={() => convertirEnFacture(row)}
+                >
+                  🧾 Convertir en Facture
+                </Button>
+              )}
             ]}
             data={data.commandes}
             actions={false}
@@ -337,7 +449,9 @@ export function GestionFournisseurs() {
           modal.type === 'commande' ? 'Nouvelle Commande d\'Achat' :
           modal.type === 'reception' ? 'Nouvelle Réception' :
           modal.type === 'facture' ? 'Nouvelle Facture Fournisseur' :
-          modal.type === 'paiement' ? 'Nouveau Paiement' : ''
+          modal.type === 'paiement' ? 'Nouveau Paiement' :
+          modal.type === 'taxe' ? (modal.item ? 'Modifier Taxe' : 'Nouvelle Taxe') :
+          modal.type === 'codeComptable' ? (modal.item ? 'Modifier Code' : 'Nouveau Code Comptable') : ''
         }
         size={modal.type === 'commande' ? 'xlarge' : 'large'}
       >
@@ -471,6 +585,43 @@ export function GestionFournisseurs() {
               <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
                 <Button type="submit" variant="success">Enregistrer</Button>
+              </div>
+            </>
+          )}
+
+          {modal.type === 'taxe' && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <FormField label="Nom de la Taxe" name="nom" value={form.nom}
+                  onChange={(e) => setForm({...form, nom: e.target.value})} required
+                  placeholder="Ex: TVA 18%" />
+                <FormField label="Taux (%)" name="taux" type="number" value={form.taux}
+                  onChange={(e) => setForm({...form, taux: parseFloat(e.target.value)})} required
+                  placeholder="Ex: 18" />
+                <FormField label="Code Comptable" name="codeComptable" value={form.codeComptable}
+                  onChange={(e) => setForm({...form, codeComptable: e.target.value})}
+                  placeholder="Ex: 4431" />
+              </div>
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
+                <Button type="submit" variant="success">{modal.item ? 'Mettre à jour' : 'Créer'}</Button>
+              </div>
+            </>
+          )}
+
+          {modal.type === 'codeComptable' && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
+                <FormField label="Code" name="code" value={form.code}
+                  onChange={(e) => setForm({...form, code: e.target.value})} required
+                  placeholder="Ex: 401" />
+                <FormField label="Libellé" name="libelle" value={form.libelle}
+                  onChange={(e) => setForm({...form, libelle: e.target.value})} required
+                  placeholder="Ex: Fournisseurs" />
+              </div>
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
+                <Button type="submit" variant="success">{modal.item ? 'Mettre à jour' : 'Créer'}</Button>
               </div>
             </>
           )}
