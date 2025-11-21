@@ -3,6 +3,7 @@ import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import clientsRoutes from './routes/clients.js';
 import produitsRoutes from './routes/produits.js';
+import stockRoutes from './routes/stock.js';
 import devisRoutes from './routes/devis.js';
 import facturesRoutes from './routes/factures.js';
 import parametresRoutes from './routes/parametres.js';
@@ -63,6 +64,7 @@ app.use('/api/clients', clientsRoutes);
 
 // Module Produits & Stock
 app.use('/api/produits', produitsRoutes);
+app.use('/api/stock', stockRoutes);
 
 // Module Devis (Quotes)
 app.use('/api/devis', devisRoutes);

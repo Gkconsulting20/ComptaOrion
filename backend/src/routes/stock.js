@@ -8,9 +8,8 @@ const router = express.Router();
 // CRUD Catégories
 router.get('/categories', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
     const categories = await db.query.categoriesStock.findMany({
-      where: eq(categoriesStock.entrepriseId, parseInt(entrepriseId))
+      where: eq(categoriesStock.entrepriseId, req.entrepriseId)
     });
     res.json(categories);
   } catch (error) {
