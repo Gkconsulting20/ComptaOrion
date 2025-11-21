@@ -18,6 +18,10 @@ export function StockInventaire() {
   
   const [modal, setModal] = useState({ open: false, type: null, item: null });
   const [form, setForm] = useState({});
+  const [periode, setPeriode] = useState({
+    dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    dateFin: new Date().toISOString().split('T')[0]
+  });
 
   useEffect(() => {
     const load = async () => {
@@ -322,8 +326,9 @@ export function StockInventaire() {
 
       {activeTab === 'rapports' && (
         <div>
-          <h3>📊 Rapports</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '20px' }}>
+          <h3>📊 Rapports d'Inventaire</h3>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '20px', marginBottom: '30px' }}>
             <div style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px' }}>
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL PRODUITS</p>
               <h2 style={{ margin: '10px 0 0 0', color: '#1976d2' }}>{data.produits.length}</h2>
@@ -333,9 +338,162 @@ export function StockInventaire() {
               <h2 style={{ margin: '10px 0 0 0', color: '#7b1fa2' }}>{totalStock.toFixed(0)}</h2>
             </div>
             <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px' }}>
-              <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>VALORISATION</p>
+              <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>VALORISATION TOTALE</p>
               <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{valorisation.toLocaleString()} FCFA</h2>
             </div>
+          </div>
+
+          <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 15px 0' }}>📅 Filtrer par Période</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Début</label>
+                <input
+                  type="date"
+                  value={periode.dateDebut}
+                  onChange={(e) => setPeriode({...periode, dateDebut: e.target.value})}
+                  style={{
+                    width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Fin</label>
+                <input
+                  type="date"
+                  value={periode.dateFin}
+                  onChange={(e) => setPeriode({...periode, dateFin: e.target.value})}
+                  style={{
+                    width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '30px' }}>
+            <h4 style={{ marginBottom: '15px' }}>📋 Rapport de Valorisation par Produit</h4>
+            <p style={{ color: '#7f8c8d', fontSize: '14px', marginBottom: '15px' }}>
+              Valorisation de chaque produit basée sur le stock actuel et le prix d'achat
+            </p>
+            <Table
+              columns={[
+                { key: 'reference', label: 'Référence' },
+                { key: 'nom', label: 'Produit' },
+                { key: 'categorieId', label: 'Catégorie', render: (val) => {
+                  const cat = data.categories.find(c => c.id === val);
+                  return cat ? cat.nom : '-';
+                }},
+                { key: 'quantite', label: 'Quantité', render: (val, row) => `${val || 0} ${row.uniteMesure || 'pièce'}` },
+                { key: 'prixAchat', label: 'Prix Achat', render: (val) => `${val || 0} FCFA` },
+                { key: 'valorisation', label: 'Valorisation Totale', render: (_, row) => {
+                  const val = (parseFloat(row.quantite || 0) * parseFloat(row.prixAchat || 0));
+                  return <strong style={{ color: '#388e3c' }}>{val.toLocaleString()} FCFA</strong>;
+                }}
+              ]}
+              data={data.produits}
+            />
+            <div style={{ marginTop: '15px', padding: '15px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'right' }}>
+              <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>VALORISATION TOTALE DU STOCK</p>
+              <h2 style={{ margin: '5px 0 0 0', color: '#388e3c' }}>{valorisation.toLocaleString()} FCFA</h2>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '30px' }}>
+            <h4 style={{ marginBottom: '15px' }}>📊 Rapport des Mouvements par Période</h4>
+            <p style={{ color: '#7f8c8d', fontSize: '14px', marginBottom: '15px' }}>
+              Mouvements de stock survenus entre le {new Date(periode.dateDebut).toLocaleDateString('fr-FR')} et le {new Date(periode.dateFin).toLocaleDateString('fr-FR')}
+            </p>
+            {(() => {
+              const mouvementsPeriode = data.mouvements.filter(m => {
+                const dateMvt = new Date(m.createdAt);
+                const debut = new Date(periode.dateDebut);
+                const fin = new Date(periode.dateFin);
+                return dateMvt >= debut && dateMvt <= fin;
+              });
+
+              const entrees = mouvementsPeriode.filter(m => m.type === 'entree').reduce((sum, m) => sum + parseFloat(m.quantite || 0), 0);
+              const sorties = mouvementsPeriode.filter(m => m.type === 'sortie').reduce((sum, m) => sum + parseFloat(m.quantite || 0), 0);
+              const ajustements = mouvementsPeriode.filter(m => m.type === 'ajustement').reduce((sum, m) => sum + parseFloat(m.quantite || 0), 0);
+
+              return (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                    <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px' }}>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>📥 ENTRÉES</p>
+                      <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{entrees.toFixed(0)} unités</h3>
+                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
+                        {mouvementsPeriode.filter(m => m.type === 'entree').length} mouvements
+                      </p>
+                    </div>
+                    <div style={{ padding: '15px', background: '#ffebee', borderRadius: '8px' }}>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>📤 SORTIES</p>
+                      <h3 style={{ margin: '5px 0 0 0', color: '#d32f2f' }}>{sorties.toFixed(0)} unités</h3>
+                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
+                        {mouvementsPeriode.filter(m => m.type === 'sortie').length} mouvements
+                      </p>
+                    </div>
+                    <div style={{ padding: '15px', background: '#fff3e0', borderRadius: '8px' }}>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>🔄 AJUSTEMENTS</p>
+                      <h3 style={{ margin: '5px 0 0 0', color: '#f57c00' }}>{ajustements.toFixed(0)} unités</h3>
+                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
+                        {mouvementsPeriode.filter(m => m.type === 'ajustement').length} mouvements
+                      </p>
+                    </div>
+                  </div>
+
+                  {mouvementsPeriode.length === 0 ? (
+                    <div style={{ padding: '30px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
+                      <p style={{ color: '#7f8c8d', margin: 0 }}>Aucun mouvement pour cette période</p>
+                    </div>
+                  ) : (
+                    <Table
+                      columns={[
+                        { key: 'createdAt', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
+                        { key: 'type', label: 'Type', render: (val) => 
+                          val === 'entree' ? '📥 Entrée' : val === 'sortie' ? '📤 Sortie' : '🔄 Ajustement' 
+                        },
+                        { key: 'produitId', label: 'Produit', render: (val) => {
+                          const prod = data.produits.find(p => p.id === val);
+                          return prod ? prod.nom : `ID ${val}`;
+                        }},
+                        { key: 'quantite', label: 'Quantité' },
+                        { key: 'reference', label: 'Référence' },
+                        { key: 'notes', label: 'Notes' }
+                      ]}
+                      data={mouvementsPeriode}
+                    />
+                  )}
+                </>
+              );
+            })()}
+          </div>
+
+          <div>
+            <h4 style={{ marginBottom: '15px' }}>📦 Rapport des Quantités par Catégorie</h4>
+            <Table
+              columns={[
+                { key: 'nom', label: 'Catégorie' },
+                { key: 'nbProduits', label: 'Nb Produits', render: (_, row) => 
+                  data.produits.filter(p => p.categorieId === row.id).length 
+                },
+                { key: 'quantiteTotale', label: 'Quantité Totale', render: (_, row) => {
+                  const total = data.produits
+                    .filter(p => p.categorieId === row.id)
+                    .reduce((sum, p) => sum + parseFloat(p.quantite || 0), 0);
+                  return total.toFixed(0);
+                }},
+                { key: 'valorisation', label: 'Valorisation', render: (_, row) => {
+                  const val = data.produits
+                    .filter(p => p.categorieId === row.id)
+                    .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || 0)), 0);
+                  return <strong style={{ color: '#388e3c' }}>{val.toLocaleString()} FCFA</strong>;
+                }}
+              ]}
+              data={data.categories}
+            />
           </div>
         </div>
       )}
