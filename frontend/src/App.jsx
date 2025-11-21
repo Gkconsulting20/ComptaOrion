@@ -45,6 +45,7 @@ function App() {
         { id: 'charte-comptes', label: 'Charte de comptes' }
       ]
     },
+    { id: 'parametres', icon: '⚙️', label: 'Paramètres' },
     { id: 'ia', icon: '🤖', label: 'Assistant IA' }
   ];
 
@@ -60,6 +61,8 @@ function App() {
         return <TresorerieView />;
       case 'stock':
         return <StockView />;
+      case 'parametres':
+        return <ParametresView />;
       case 'etats-financiers':
       case 'grand-livre':
       case 'journal':
@@ -215,7 +218,10 @@ function ClientsView() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h2 className="view-title">Gestion des clients</h2>
+        <h2 className="view-title">👥 Clients & Ventes</h2>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>
+          Gestion complète des clients, devis, factures et suivi des paiements
+        </p>
       </div>
 
       <div className="tabs">
@@ -223,13 +229,31 @@ function ClientsView() {
           className={`tab ${activeTab === 'liste' ? 'active' : ''}`}
           onClick={() => setActiveTab('liste')}
         >
-          Liste des clients
+          👥 Clients
+        </button>
+        <button 
+          className={`tab ${activeTab === 'devis' ? 'active' : ''}`}
+          onClick={() => setActiveTab('devis')}
+        >
+          📋 Devis
+        </button>
+        <button 
+          className={`tab ${activeTab === 'factures' ? 'active' : ''}`}
+          onClick={() => setActiveTab('factures')}
+        >
+          📄 Factures
+        </button>
+        <button 
+          className={`tab ${activeTab === 'paiements' ? 'active' : ''}`}
+          onClick={() => setActiveTab('paiements')}
+        >
+          💰 Paiements
         </button>
         <button 
           className={`tab ${activeTab === 'parametres' ? 'active' : ''}`}
           onClick={() => setActiveTab('parametres')}
         >
-          Paramètres
+          ⚙️ Paramètres
         </button>
       </div>
 
@@ -451,6 +475,18 @@ function ClientsView() {
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'devis' && (
+        <div className="tab-content"><div className="content-header"><button className="btn-primary">+ Nouveau devis</button></div><div className="metrics-grid" style={{marginBottom: '20px'}}><div className="metric-card"><div className="metric-icon">📋</div><div className="metric-info"><div className="metric-label">En attente</div><div className="metric-value">0</div></div></div><div className="metric-card"><div className="metric-icon">✅</div><div className="metric-info"><div className="metric-label">Acceptés</div><div className="metric-value">0</div></div></div><div className="metric-card"><div className="metric-icon">💰</div><div className="metric-info"><div className="metric-label">Total</div><div className="metric-value">0 FCFA</div></div></div></div><div className="data-table"><table><thead><tr><th>N° Devis</th><th>Client</th><th>Montant</th><th>Date expiration</th><th>Statut</th><th>Actions</th></tr></thead><tbody><tr><td colSpan="6" className="empty-row">Aucun devis</td></tr></tbody></table></div></div>
+      )}
+
+      {activeTab === 'factures' && (
+        <div className="tab-content"><div className="content-header"><button className="btn-primary">+ Nouvelle facture</button></div><div className="metrics-grid" style={{marginBottom: '20px'}}><div className="metric-card"><div className="metric-icon">📄</div><div className="metric-info"><div className="metric-label">Brouillon</div><div className="metric-value">0</div></div></div><div className="metric-card"><div className="metric-icon">⏰</div><div className="metric-info"><div className="metric-label">Impayées</div><div className="metric-value">0</div></div></div><div className="metric-card"><div className="metric-icon">✅</div><div className="metric-info"><div className="metric-label">Payées</div><div className="metric-value">0</div></div></div></div><div className="data-table"><table><thead><tr><th>N° Facture</th><th>Client</th><th>Montant TTC</th><th>Payé</th><th>Solde</th><th>Statut</th><th>Actions</th></tr></thead><tbody><tr><td colSpan="7" className="empty-row">Aucune facture</td></tr></tbody></table></div></div>
+      )}
+
+      {activeTab === 'paiements' && (
+        <div className="tab-content"><div className="content-header"><button className="btn-primary">+ Nouveau paiement</button></div><div className="metrics-grid" style={{marginBottom: '20px'}}><div className="metric-card"><div className="metric-icon">💳</div><div className="metric-info"><div className="metric-label">Ce mois</div><div className="metric-value">0 FCFA</div></div></div><div className="metric-card"><div className="metric-icon">⚠️</div><div className="metric-info"><div className="metric-label">Retards</div><div className="metric-value">0</div></div></div><div className="metric-card"><div className="metric-icon">💰</div><div className="metric-info"><div className="metric-label">Encours</div><div className="metric-value">0 FCFA</div></div></div></div><div className="data-table"><table><thead><tr><th>Date</th><th>N° Facture</th><th>Client</th><th>Montant</th><th>Mode</th><th>Actions</th></tr></thead><tbody><tr><td colSpan="6" className="empty-row">Aucun paiement</td></tr></tbody></table></div></div>
       )}
     </div>
   );
@@ -2210,6 +2246,55 @@ function ComptabiliteView({ subView }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ParametresView() {
+  return (
+    <div className="view-container">
+      <div className="view-header">
+        <h2 className="view-title">⚙️ Paramètres Entreprise</h2>
+        <p style={{fontSize: '14px', color: '#6c757d', marginTop: '5px'}}>Configuration générale et paramètres comptables</p>
+      </div>
+      <div className="settings-grid">
+        <div className="settings-card">
+          <h3>Entreprise</h3>
+          <div className="settings-list">
+            <div className="settings-item"><span>Raison sociale</span><span>Mon Entreprise</span></div>
+            <div className="settings-item"><span>Année fiscale</span><span>2025</span></div>
+            <div className="settings-item"><span>Système comptable</span><span>SYSCOHADA</span></div>
+            <div className="settings-item"><span>Devise par défaut</span><span>XOF (FCFA)</span></div>
+            <div className="settings-item"><span>Pays</span><span>Côte d'Ivoire</span></div>
+          </div>
+          <button className="btn-primary btn-small">Modifier</button>
+        </div>
+        <div className="settings-card">
+          <h3>Numérotation automatique</h3>
+          <div className="settings-list">
+            <div className="settings-item"><span>Devis</span><span>DEV-2025-0001</span></div>
+            <div className="settings-item"><span>Factures</span><span>FACT-2025-0001</span></div>
+            <div className="settings-item"><span>Commandes achat</span><span>CMD-2025-0001</span></div>
+            <div className="settings-item"><span>Factures fournisseurs</span><span>FACT-ACH-2025-0001</span></div>
+          </div>
+        </div>
+        <div className="settings-card">
+          <h3>TVA et Fiscalité</h3>
+          <div className="settings-list">
+            <div className="settings-item"><span>Taux TVA standard</span><span>18%</span></div>
+            <div className="settings-item"><span>Taux TVA réduit</span><span>10%</span></div>
+            <div className="settings-item"><span>Régime d'imposition</span><span>Normal</span></div>
+          </div>
+          <button className="btn-secondary btn-small">Modifier</button>
+        </div>
+        <div className="settings-card">
+          <h3>Comptes bancaires</h3>
+          <div className="settings-list">
+            <div className="settings-item"><span>Caisse principale</span><span>0 FCFA</span></div>
+          </div>
+          <button className="btn-secondary btn-small">+ Ajouter un compte</button>
+        </div>
+      </div>
     </div>
   );
 }
