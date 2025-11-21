@@ -19,13 +19,42 @@ router.get('/categories', async (req, res) => {
 
 router.post('/categories', async (req, res) => {
   try {
-    const { entrepriseId, nom, description } = req.body;
+    const { nom, description } = req.body;
     const result = await db.insert(categoriesStock).values({
-      entrepriseId: parseInt(entrepriseId),
+      entrepriseId: req.entrepriseId,
       nom,
       description
     }).returning();
     res.json(result[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/categories/:id', async (req, res) => {
+  try {
+    const { nom, description } = req.body;
+    const result = await db.update(categoriesStock)
+      .set({ nom, description, updatedAt: new Date() })
+      .where(and(
+        eq(categoriesStock.id, parseInt(req.params.id)),
+        eq(categoriesStock.entrepriseId, req.entrepriseId)
+      ))
+      .returning();
+    res.json(result[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/categories/:id', async (req, res) => {
+  try {
+    await db.delete(categoriesStock)
+      .where(and(
+        eq(categoriesStock.id, parseInt(req.params.id)),
+        eq(categoriesStock.entrepriseId, req.entrepriseId)
+      ));
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -65,9 +94,8 @@ router.post('/produits', async (req, res) => {
 // CRUD Entrepôts
 router.get('/entrepots', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
     const entrepotsList = await db.query.entrepots.findMany({
-      where: eq(entrepots.entrepriseId, parseInt(entrepriseId))
+      where: eq(entrepots.entrepriseId, req.entrepriseId)
     });
     res.json(entrepotsList);
   } catch (error) {
@@ -77,9 +105,9 @@ router.get('/entrepots', async (req, res) => {
 
 router.post('/entrepots', async (req, res) => {
   try {
-    const { entrepriseId, nom, adresse, responsable } = req.body;
+    const { nom, adresse, responsable } = req.body;
     const result = await db.insert(entrepots).values({
-      entrepriseId: parseInt(entrepriseId),
+      entrepriseId: req.entrepriseId,
       nom,
       adresse,
       responsable
@@ -90,7 +118,49 @@ router.post('/entrepots', async (req, res) => {
   }
 });
 
+router.put('/entrepots/:id', async (req, res) => {
+  try {
+    const { nom, adresse, responsable } = req.body;
+    const result = await db.update(entrepots)
+      .set({ nom, adresse, responsable, updatedAt: new Date() })
+      .where(and(
+        eq(entrepots.id, parseInt(req.params.id)),
+        eq(entrepots.entrepriseId, req.entrepriseId)
+      ))
+      .returning();
+    res.json(result[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/entrepots/:id', async (req, res) => {
+  try {
+    await db.delete(entrepots)
+      .where(and(
+        eq(entrepots.id, parseInt(req.params.id)),
+        eq(entrepots.entrepriseId, req.entrepriseId)
+      ));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Mouvements de stock
+router.get('/mouvements', async (req, res) => {
+  try {
+    const mouvementsList = await db.select().from(mouvementsStock)
+      .where(eq(mouvementsStock.entrepriseId, req.entrepriseId))
+      .orderBy(mouvementsStock.createdAt);
+    res.json(mouvementsList);
+  } catch (error) {
+    // Table mouvements_stock pas encore créée - retourner vide temporairement
+    console.log('Erreur mouvements_stock:', error.message);
+    res.json([]);
+  }
+});
+
 router.post('/mouvements', async (req, res) => {
   try {
     const { entrepriseId, produitId, entrepotId, type, quantite, prixUnitaire, reference } = req.body;

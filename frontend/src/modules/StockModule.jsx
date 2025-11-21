@@ -6,7 +6,7 @@ import { FormField } from '../components/FormField';
 import api from '../api';
 
 export function StockModule() {
-  const [activeTab, setActiveTab] = useState('produits');
+  const [activeTab, setActiveTab] = useState('parametres');
   const [produits, setProduits] = useState([]);
   const [categories, setCategories] = useState([]);
   const [entrepots, setEntrepots] = useState([]);
@@ -114,9 +114,7 @@ export function StockModule() {
   };
 
   const tabs = [
-    { id: 'produits', label: '📦 Produits', icon: '📦' },
-    { id: 'categories', label: '🏷️ Catégories', icon: '🏷️' },
-    { id: 'entrepots', label: '🏭 Entrepôts', icon: '🏭' },
+    { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' },
     { id: 'mouvements', label: '🔄 Mouvements', icon: '🔄' },
     { id: 'inventaires', label: '📋 Inventaires', icon: '📋' },
     { id: 'alertes', label: '⚠️ Alertes Stock', icon: '⚠️' },
@@ -141,12 +139,8 @@ export function StockModule() {
     if (loading) return <p>Chargement...</p>;
 
     switch (activeTab) {
-      case 'produits':
-        return <ProduitsTab produits={produits} categories={categories} onReload={loadProduits} />;
-      case 'categories':
-        return <CategoriesTab categories={categories} onReload={loadCategories} />;
-      case 'entrepots':
-        return <EntrepotsTab entrepots={entrepots} onReload={loadEntrepots} />;
+      case 'parametres':
+        return <ParametresTab produits={produits} categories={categories} entrepots={entrepots} onReloadProduits={loadProduits} onReloadCategories={loadCategories} onReloadEntrepots={loadEntrepots} />;
       case 'mouvements':
         return <MouvementsTab mouvements={mouvements} produits={produits} entrepots={entrepots} onReload={loadMouvements} />;
       case 'inventaires':
@@ -188,7 +182,51 @@ export function StockModule() {
   );
 }
 
-function ProduitsTab({ produits, categories, onReload }) {
+function ParametresTab({ produits, categories, entrepots, onReloadProduits, onReloadCategories, onReloadEntrepots }) {
+  const [activeSubTab, setActiveSubTab] = useState('produits');
+
+  const subTabs = [
+    { id: 'produits', label: '📦 Produits', count: produits.length },
+    { id: 'categories', label: '🏷️ Catégories', count: categories.length },
+    { id: 'entrepots', label: '🏭 Entrepôts', count: entrepots.length }
+  ];
+
+  return (
+    <div>
+      <h3>⚙️ Configuration du Stock</h3>
+      <p style={{ color: '#7f8c8d', fontSize: '14px', marginBottom: '20px' }}>
+        Gérez les données de base: produits, catégories et entrepôts
+      </p>
+
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #e1e8ed' }}>
+        {subTabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id)}
+            style={{
+              padding: '10px 20px',
+              background: activeSubTab === tab.id ? '#3498db' : '#ecf0f1',
+              color: activeSubTab === tab.id ? '#fff' : '#34495e',
+              border: 'none',
+              borderRadius: '8px 8px 0 0',
+              fontWeight: activeSubTab === tab.id ? 'bold' : 'normal',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            {tab.label} ({tab.count})
+          </button>
+        ))}
+      </div>
+
+      {activeSubTab === 'produits' && <ProduitsSubTab produits={produits} categories={categories} onReload={onReloadProduits} />}
+      {activeSubTab === 'categories' && <CategoriesSubTab categories={categories} onReload={onReloadCategories} />}
+      {activeSubTab === 'entrepots' && <EntrepotsSubTab entrepots={entrepots} onReload={onReloadEntrepots} />}
+    </div>
+  );
+}
+
+function ProduitsSubTab({ produits, categories, onReload }) {
   const [showModal, setShowModal] = useState(false);
   const [editingProduit, setEditingProduit] = useState(null);
   const [formData, setFormData] = useState({
@@ -391,24 +429,218 @@ function ProduitsTab({ produits, categories, onReload }) {
   );
 }
 
-function CategoriesTab({ categories, onReload }) {
+function CategoriesSubTab({ categories, onReload }) {
+  const [showModal, setShowModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [formData, setFormData] = useState({
+    nom: '',
+    description: '',
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingCategory) {
+        await api.put(`/stock/categories/${editingCategory.id}`, formData);
+      } else {
+        await api.post('/stock/categories', formData);
+      }
+      setShowModal(false);
+      setEditingCategory(null);
+      resetForm();
+      onReload();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleEdit = (category) => {
+    setEditingCategory(category);
+    setFormData({ nom: category.nom, description: category.description || '' });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (category) => {
+    if (!confirm(`Supprimer la catégorie ${category.nom} ?`)) return;
+    try {
+      await api.delete(`/stock/categories/${category.id}`);
+      onReload();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({ nom: '', description: '' });
+  };
+
+  const columns = [
+    { key: 'nom', label: 'Nom' },
+    { key: 'description', label: 'Description' },
+    { key: 'actif', label: 'Statut', render: (val) => val ? '✅ Actif' : '❌ Inactif' },
+  ];
+
   return (
     <div>
-      <h3>Catégories de Stock</h3>
-      <p style={{ marginTop: '10px', padding: '15px', background: '#fff3cd', borderRadius: '8px' }}>
-        ⚠️ Interface Catégories en cours de développement - Fonctionnalité à venir
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div>
+          <h4>Liste des Catégories</h4>
+          <p style={{ color: '#7f8c8d', fontSize: '14px' }}>Total: {categories.length} catégories</p>
+        </div>
+        <Button onClick={() => { resetForm(); setEditingCategory(null); setShowModal(true); }}>
+          + Nouvelle Catégorie
+        </Button>
+      </div>
+
+      <Table 
+        columns={columns} 
+        data={categories} 
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
+
+      <Modal
+        isOpen={showModal}
+        onClose={() => { setShowModal(false); setEditingCategory(null); resetForm(); }}
+        title={editingCategory ? 'Modifier Catégorie' : 'Nouvelle Catégorie'}
+      >
+        <form onSubmit={handleSubmit}>
+          <FormField
+            label="Nom de la catégorie"
+            name="nom"
+            value={formData.nom}
+            onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+            required
+          />
+          <FormField
+            label="Description"
+            name="description"
+            type="textarea"
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          />
+          <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <Button type="button" variant="secondary" onClick={() => { setShowModal(false); resetForm(); }}>
+              Annuler
+            </Button>
+            <Button type="submit" variant="success">
+              {editingCategory ? 'Mettre à jour' : 'Créer'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
 
-function EntrepotsTab({ entrepots, onReload }) {
+function EntrepotsSubTab({ entrepots, onReload }) {
+  const [showModal, setShowModal] = useState(false);
+  const [editingEntrepot, setEditingEntrepot] = useState(null);
+  const [formData, setFormData] = useState({
+    nom: '',
+    adresse: '',
+    responsable: '',
+  });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingEntrepot) {
+        await api.put(`/stock/entrepots/${editingEntrepot.id}`, formData);
+      } else {
+        await api.post('/stock/entrepots', formData);
+      }
+      setShowModal(false);
+      setEditingEntrepot(null);
+      resetForm();
+      onReload();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleEdit = (entrepot) => {
+    setEditingEntrepot(entrepot);
+    setFormData({ nom: entrepot.nom, adresse: entrepot.adresse || '', responsable: entrepot.responsable || '' });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (entrepot) => {
+    if (!confirm(`Supprimer l'entrepôt ${entrepot.nom} ?`)) return;
+    try {
+      await api.delete(`/stock/entrepots/${entrepot.id}`);
+      onReload();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({ nom: '', adresse: '', responsable: '' });
+  };
+
+  const columns = [
+    { key: 'nom', label: 'Nom' },
+    { key: 'adresse', label: 'Adresse' },
+    { key: 'responsable', label: 'Responsable' },
+    { key: 'actif', label: 'Statut', render: (val) => val ? '✅ Actif' : '❌ Inactif' },
+  ];
+
   return (
     <div>
-      <h3>Gestion des Entrepôts</h3>
-      <p style={{ marginTop: '10px', padding: '15px', background: '#fff3cd', borderRadius: '8px' }}>
-        ⚠️ Interface Entrepôts en cours de développement - Fonctionnalité à venir
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div>
+          <h4>Liste des Entrepôts</h4>
+          <p style={{ color: '#7f8c8d', fontSize: '14px' }}>Total: {entrepots.length} entrepôts</p>
+        </div>
+        <Button onClick={() => { resetForm(); setEditingEntrepot(null); setShowModal(true); }}>
+          + Nouvel Entrepôt
+        </Button>
+      </div>
+
+      <Table 
+        columns={columns} 
+        data={entrepots} 
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
+
+      <Modal
+        isOpen={showModal}
+        onClose={() => { setShowModal(false); setEditingEntrepot(null); resetForm(); }}
+        title={editingEntrepot ? 'Modifier Entrepôt' : 'Nouvel Entrepôt'}
+      >
+        <form onSubmit={handleSubmit}>
+          <FormField
+            label="Nom de l'entrepôt"
+            name="nom"
+            value={formData.nom}
+            onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+            required
+          />
+          <FormField
+            label="Adresse"
+            name="adresse"
+            type="textarea"
+            value={formData.adresse}
+            onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
+          />
+          <FormField
+            label="Responsable"
+            name="responsable"
+            value={formData.responsable}
+            onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
+          />
+          <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <Button type="button" variant="secondary" onClick={() => { setShowModal(false); resetForm(); }}>
+              Annuler
+            </Button>
+            <Button type="submit" variant="success">
+              {editingEntrepot ? 'Mettre à jour' : 'Créer'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
