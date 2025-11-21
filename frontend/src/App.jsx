@@ -7,6 +7,7 @@ import { StockInventaire } from './modules/StockInventaire';
 import { ModuleComptabilite } from './modules/ModuleComptabilite';
 import { DepensesModule } from './modules/DepensesModule';
 import { ParametresModule } from './modules/ParametresModule';
+import { Login } from './pages/Login';
 import api from './api';
 
 const MODULES = [
@@ -136,6 +137,68 @@ function Dashboard() {
 export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    
+    if (token && storedUser) {
+      setIsAuthenticated(true);
+      setUser(JSON.parse(storedUser));
+    }
+    
+    setLoading(false);
+  }, []);
+
+  const handleLogin = (userData) => {
+    setIsAuthenticated(true);
+    setUser(userData);
+  };
+
+  const handleLogout = async () => {
+    const token = localStorage.getItem('token');
+    
+    try {
+      await fetch('/api/auth-security/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+    
+    localStorage.clear();
+    setIsAuthenticated(false);
+    setUser(null);
+    setCurrentView('dashboard');
+  };
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        backgroundColor: '#f5f5f5'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <h2>🌟 ComptaOrion</h2>
+          <p>Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Login onLoginSuccess={handleLogin} />;
+  }
 
   const renderView = () => {
     switch (currentView) {
@@ -245,20 +308,25 @@ export default function App() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <span style={{fontSize: '12px', color: '#7f8c8d', fontWeight: '500'}}>
-              👤 Administrateur
+              👤 {user?.nom || user?.username || 'Utilisateur'}
             </span>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              backgroundColor: '#3498db',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontWeight: 'bold',
-              fontSize: '14px'
-            }}>A</div>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#e74c3c',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500'
+              }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#c0392b'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#e74c3c'}
+            >
+              🚪 Déconnexion
+            </button>
           </div>
         </div>
         

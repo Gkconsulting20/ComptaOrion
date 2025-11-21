@@ -45,16 +45,8 @@ app.use('/api/dashboard', dashboardRoutes);
 // Toutes les routes après ce point nécessitent une authentification
 // et sont automatiquement filtrées par entreprise
 
-// ⚠️ DÉVELOPPEMENT SEULEMENT - DÉSACTIVÉ TEMPORAIREMENT POUR TESTER LE FRONTEND
-// TODO: RÉACTIVER EN PRODUCTION!
-// app.use('/api', authMiddleware, entrepriseIsolation);
-
-// Middleware de développement temporaire - ajoute entrepriseId depuis query/body
-app.use('/api', (req, res, next) => {
-  req.entrepriseId = parseInt(req.query.entrepriseId || req.body.entrepriseId || 1);
-  req.user = { id: 1, role: 'admin', entrepriseId: req.entrepriseId };
-  next();
-});
+// ✅ AUTHENTIFICATION ACTIVÉE - TOUTES LES ROUTES PROTÉGÉES
+app.use('/api', authMiddleware, entrepriseIsolation);
 
 // ===============================================
 // ROUTES CRUD DES MODULES

@@ -5,11 +5,49 @@ class ApiClient {
     this.baseURL = baseURL;
   }
 
+  getHeaders() {
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
+  }
+
+  async handleUnauthorized() {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      try {
+        const response = await fetch(`/api/auth-security/refresh-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          localStorage.setItem('token', data.token);
+          return true;
+        }
+      } catch (error) {
+        console.error('Refresh token failed:', error);
+      }
+    }
+    
+    localStorage.clear();
+    window.location.href = '/';
+    return false;
+  }
+
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     const config = {
       headers: {
-        'Content-Type': 'application/json',
+        ...this.getHeaders(),
         ...options.headers,
       },
       ...options,
@@ -21,10 +59,19 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
+      
+      if (response.status === 401) {
+        const refreshed = await this.handleUnauthorized();
+        if (refreshed) {
+          window.location.reload();
+        }
+        throw new Error('Session expirée');
+      }
+      
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.message || 'Erreur API');
+        throw new Error(data.message || data.error || 'Erreur API');
       }
       
       return data;
