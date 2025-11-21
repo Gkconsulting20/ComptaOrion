@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { transactionsTresorerie, comptesBancaires, factures, achats, employes } from '../schema.js';
+import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, employes } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
 
 const router = Router();
