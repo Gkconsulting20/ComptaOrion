@@ -315,8 +315,7 @@ router.get('/grand-livre', async (req, res) => {
       })
       .from(lignesEcritures)
       .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
-      .where(and(...conditions))
-      .orderBy(lignesEcritures.compteId, ecritures.dateEcriture);
+      .where(and(...conditions));
 
     res.json(lignes);
   } catch (error) {
@@ -570,8 +569,7 @@ router.get('/rapport-journaux', async (req, res) => {
         totalCredit: ecritures.totalCredit
       })
       .from(ecritures)
-      .where(and(...conditions))
-      .orderBy(ecritures.journalId, ecritures.dateEcriture);
+      .where(and(...conditions));
 
     const journauxData = await db.query.journaux.findMany({
       where: eq(journaux.entrepriseId, parseInt(entrepriseId))
