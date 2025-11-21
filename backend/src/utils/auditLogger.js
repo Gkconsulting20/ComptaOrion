@@ -32,7 +32,7 @@ export async function logAudit({
       entrepriseId: parseInt(entrepriseId),
       userId: userId ? parseInt(userId) : 1,
       action,
-      table,
+      tableName: table,
       recordId: recordId ? parseInt(recordId) : null,
       ancienneValeur: ancienneValeur ? JSON.stringify(ancienneValeur) : null,
       nouvelleValeur: nouvelleValeur ? JSON.stringify(nouvelleValeur) : null,

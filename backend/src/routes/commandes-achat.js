@@ -92,7 +92,7 @@ router.get('/:id', async (req, res) => {
 
     const [commande] = await db
       .select({
-        commande: commandes,
+        commande: commandesAchat,
         fournisseur: fournisseurs,
       })
       .from(commandesAchat)
@@ -205,7 +205,7 @@ router.post('/', async (req, res) => {
 
     // Créer la commande
     const [newCommande] = await db
-      .insert(commandes)
+      .insert(commandesAchat)
       .values({
         entrepriseId: req.entrepriseId,
         numeroCommande,
@@ -297,7 +297,7 @@ router.put('/:id/confirmer', async (req, res) => {
     }
 
     const [updated] = await db
-      .update(commandes)
+      .update(commandesAchat)
       .set({
         statut: 'confirmee',
         updatedAt: new Date()
@@ -352,7 +352,7 @@ router.put('/:id/annuler', async (req, res) => {
     }
 
     const [updated] = await db
-      .update(commandes)
+      .update(commandesAchat)
       .set({
         statut: 'annulee',
         notes: motifAnnulation ? `${commande.notes || ''}\n\nAnnulation: ${motifAnnulation}` : commande.notes,

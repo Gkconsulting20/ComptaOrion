@@ -54,7 +54,8 @@ export function ParametresModule() {
     { id: 'comptabilite', label: '📊 Système Comptable', icon: '📊' },
     { id: 'devises', label: '💱 Devises', icon: '💱' },
     { id: 'pays', label: '🌍 Pays & Régions', icon: '🌍' },
-    { id: 'taxes', label: '💰 Taxes (TVA)', icon: '💰' }
+    { id: 'taxes', label: '💰 Taxes (TVA)', icon: '💰' },
+    { id: 'audit', label: '📋 Historique Audit', icon: '📋' }
   ];
 
   if (loading) return <p>Chargement des paramètres...</p>;
@@ -199,6 +200,8 @@ export function ParametresModule() {
           </div>
         </div>
       )}
+
+      {activeTab === 'audit' && <AuditLogTab />}
 
       <Modal
         isOpen={modal.open}
@@ -428,5 +431,227 @@ function EntrepriseForm({ initialData, devises, systemes, pays, onSave, onCancel
         <Button type="submit">Enregistrer</Button>
       </div>
     </form>
+  );
+}
+
+function AuditLogTab() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    action: '',
+    table: '',
+    dateDebut: '',
+    dateFin: ''
+  });
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+
+  useEffect(() => {
+    loadLogs();
+  }, [page, filters]);
+
+  const loadLogs = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '20',
+        ...(filters.action && { action: filters.action }),
+        ...(filters.table && { table: filters.table }),
+        ...(filters.dateDebut && { dateDebut: filters.dateDebut }),
+        ...(filters.dateFin && { dateFin: filters.dateFin })
+      });
+
+      const response = await api.get(`/audit-logs?${params}`);
+      setLogs(response.data || []);
+      setPagination(response.pagination);
+    } catch (error) {
+      console.error('Erreur chargement logs audit:', error);
+      setLogs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getActionBadge = (action) => {
+    const styles = {
+      CREATE: { bg: '#d4edda', color: '#155724' },
+      UPDATE: { bg: '#fff3cd', color: '#856404' },
+      DELETE: { bg: '#f8d7da', color: '#721c24' }
+    };
+    const style = styles[action] || { bg: '#e2e3e5', color: '#383d41' };
+    return (
+      <span style={{
+        padding: '4px 8px',
+        borderRadius: '4px',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        background: style.bg,
+        color: style.color
+      }}>
+        {action}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <h3>📋 Historique des Opérations</h3>
+      <p style={{ color: '#666', marginBottom: '20px' }}>
+        Suivi complet de toutes les opérations effectuées dans le système
+      </p>
+
+      {/* Filtres */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '15px',
+        marginBottom: '20px',
+        padding: '15px',
+        background: '#f8f9fa',
+        borderRadius: '8px'
+      }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '600' }}>Action</label>
+          <select
+            value={filters.action}
+            onChange={(e) => setFilters({ ...filters, action: e.target.value })}
+            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+          >
+            <option value="">Toutes</option>
+            <option value="CREATE">CREATE</option>
+            <option value="UPDATE">UPDATE</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '600' }}>Table</label>
+          <select
+            value={filters.table}
+            onChange={(e) => setFilters({ ...filters, table: e.target.value })}
+            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+          >
+            <option value="">Toutes</option>
+            <option value="clients">Clients</option>
+            <option value="fournisseurs">Fournisseurs</option>
+            <option value="produits">Produits</option>
+            <option value="categories_stock">Catégories Stock</option>
+            <option value="entrepots">Entrepôts</option>
+            <option value="mouvements_stock">Mouvements Stock</option>
+            <option value="entreprises">Paramètres Entreprise</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '600' }}>Date Début</label>
+          <input
+            type="date"
+            value={filters.dateDebut}
+            onChange={(e) => setFilters({ ...filters, dateDebut: e.target.value })}
+            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '600' }}>Date Fin</label>
+          <input
+            type="date"
+            value={filters.dateFin}
+            onChange={(e) => setFilters({ ...filters, dateFin: e.target.value })}
+            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+          />
+        </div>
+      </div>
+
+      {/* Liste des logs */}
+      {loading ? (
+        <p style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Chargement des logs...</p>
+      ) : logs.length === 0 ? (
+        <p style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Aucun log d'audit trouvé</p>
+      ) : (
+        <>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>Date/Heure</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>Action</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>Table</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>Description</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>Utilisateur</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600' }}>IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log, index) => (
+                  <tr key={log.id || index} style={{ borderBottom: '1px solid #dee2e6' }}>
+                    <td style={{ padding: '12px', fontSize: '13px' }}>
+                      {new Date(log.createdAt).toLocaleString('fr-FR')}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      {getActionBadge(log.action)}
+                    </td>
+                    <td style={{ padding: '12px', fontSize: '13px', fontFamily: 'monospace' }}>
+                      {log.tableName}
+                    </td>
+                    <td style={{ padding: '12px', fontSize: '13px' }}>
+                      {log.description}
+                    </td>
+                    <td style={{ padding: '12px', fontSize: '13px' }}>
+                      User #{log.userId}
+                    </td>
+                    <td style={{ padding: '12px', fontSize: '13px', color: '#666' }}>
+                      {log.ipAddress || '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {pagination && pagination.pages > 1 && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '10px',
+              marginTop: '20px'
+            }}>
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  background: page === 1 ? '#f8f9fa' : '#fff',
+                  cursor: page === 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ← Précédent
+              </button>
+              <span style={{ fontSize: '14px', color: '#666' }}>
+                Page {page} / {pagination.pages} ({pagination.total} entrées)
+              </span>
+              <button
+                onClick={() => setPage(Math.min(pagination.pages, page + 1))}
+                disabled={page === pagination.pages}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  background: page === pagination.pages ? '#f8f9fa' : '#fff',
+                  cursor: page === pagination.pages ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

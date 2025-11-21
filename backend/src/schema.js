@@ -614,7 +614,7 @@ export const auditLogs = pgTable('audit_logs', {
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   userId: integer('user_id').references(() => users.id),
   action: varchar('action', { length: 50 }).notNull(),
-  table: varchar('table', { length: 100 }).notNull(),
+  tableName: varchar('table_name', { length: 100 }).notNull(),
   recordId: integer('record_id'),
   ancienneValeur: text('ancienne_valeur'),
   nouvelleValeur: text('nouvelle_valeur'),

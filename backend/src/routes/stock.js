@@ -54,6 +54,18 @@ router.put('/categories/:id', async (req, res) => {
         eq(categoriesStock.entrepriseId, req.entrepriseId)
       ))
       .returning();
+
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'UPDATE',
+      table: 'categories_stock',
+      recordId: parseInt(req.params.id),
+      nouvelleValeur: result[0],
+      description: `Catégorie stock modifiée: ${nom}`
+    });
+
     res.json(result[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -62,6 +74,16 @@ router.put('/categories/:id', async (req, res) => {
 
 router.delete('/categories/:id', async (req, res) => {
   try {
+    // Audit log avant suppression
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'DELETE',
+      table: 'categories_stock',
+      recordId: parseInt(req.params.id),
+      description: `Catégorie stock supprimée ID: ${req.params.id}`
+    });
+
     await db.delete(categoriesStock)
       .where(and(
         eq(categoriesStock.id, parseInt(req.params.id)),
@@ -98,6 +120,18 @@ router.post('/produits', async (req, res) => {
       prixVente: parseFloat(prixVente) || 0,
       valorisationMethod: valorisationMethod || 'FIFO'
     }).returning();
+
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'CREATE',
+      table: 'produits',
+      recordId: result[0].id,
+      nouvelleValeur: result[0],
+      description: `Produit créé: ${nom} (${reference})`
+    });
+
     res.json(result[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -125,6 +159,18 @@ router.post('/entrepots', async (req, res) => {
       adresse,
       responsable
     }).returning();
+
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'CREATE',
+      table: 'entrepots',
+      recordId: result[0].id,
+      nouvelleValeur: result[0],
+      description: `Entrepôt créé: ${nom}`
+    });
+
     res.json(result[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -141,6 +187,18 @@ router.put('/entrepots/:id', async (req, res) => {
         eq(entrepots.entrepriseId, req.entrepriseId)
       ))
       .returning();
+
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'UPDATE',
+      table: 'entrepots',
+      recordId: parseInt(req.params.id),
+      nouvelleValeur: result[0],
+      description: `Entrepôt modifié: ${nom}`
+    });
+
     res.json(result[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -149,6 +207,16 @@ router.put('/entrepots/:id', async (req, res) => {
 
 router.delete('/entrepots/:id', async (req, res) => {
   try {
+    // Audit log avant suppression
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'DELETE',
+      table: 'entrepots',
+      recordId: parseInt(req.params.id),
+      description: `Entrepôt supprimé ID: ${req.params.id}`
+    });
+
     await db.delete(entrepots)
       .where(and(
         eq(entrepots.id, parseInt(req.params.id)),
@@ -219,6 +287,17 @@ router.post('/mouvements', async (req, res) => {
       // Vérifier alertes
       await checkStockAlerts(parseInt(entrepriseId), parseInt(produitId), parseInt(entrepotId));
     }
+
+    // Audit log
+    const auditInfo = extractAuditInfo(req);
+    await logAudit({
+      ...auditInfo,
+      action: 'CREATE',
+      table: 'mouvements_stock',
+      recordId: movement[0].id,
+      nouvelleValeur: movement[0],
+      description: `Mouvement stock ${type}: ${quantite} unités (ref: ${reference || 'N/A'})`
+    });
 
     res.json(movement[0]);
   } catch (error) {
