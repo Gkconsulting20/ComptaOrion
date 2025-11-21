@@ -6,17 +6,16 @@ import { eq, and, like } from 'drizzle-orm';
 const router = Router();
 
 // GET solde caisse + banque avec solde initial
-router.get('/comptes/:entrepriseId', async (req, res) => {
+router.get('/comptes', async (req, res) => {
   try {
-    const { entrepriseId } = req.params;
     const comptes = await db.select().from(comptesBancaires)
-      .where(eq(comptesBancaires.entrepriseId, parseInt(entrepriseId)));
+      .where(eq(comptesBancaires.entrepriseId, req.entrepriseId));
     
     const comptesAvecMouvements = await Promise.all(comptes.map(async (compte) => {
       const mouvements = await db.select().from(transactionsTresorerie)
         .where(and(
           eq(transactionsTresorerie.compteBancaireId, compte.id),
-          eq(transactionsTresorerie.entrepriseId, parseInt(entrepriseId))
+          eq(transactionsTresorerie.entrepriseId, req.entrepriseId)
         ));
       
       let soldeCalcule = parseFloat(compte.soldeInitial || 0);
@@ -43,12 +42,10 @@ router.get('/comptes/:entrepriseId', async (req, res) => {
 });
 
 // GET mouvements trésorerie par catégorie
-router.get('/mouvements/:entrepriseId', async (req, res) => {
+router.get('/mouvements', async (req, res) => {
   try {
-    const { entrepriseId, categorie } = req.query;
-    const query = eq(transactionsTresorerie.entrepriseId, parseInt(entrepriseId));
     const mouvements = await db.select().from(transactionsTresorerie)
-      .where(query);
+      .where(eq(transactionsTresorerie.entrepriseId, req.entrepriseId));
     res.json(mouvements);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -56,12 +53,11 @@ router.get('/mouvements/:entrepriseId', async (req, res) => {
 });
 
 // GET encaissements
-router.get('/encaissements/:entrepriseId', async (req, res) => {
+router.get('/encaissements', async (req, res) => {
   try {
-    const { entrepriseId } = req.params;
     const encaissements = await db.select().from(transactionsTresorerie)
       .where(and(
-        eq(transactionsTresorerie.entrepriseId, parseInt(entrepriseId)),
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
         eq(transactionsTresorerie.type, 'encaissement')
       ));
     
@@ -73,12 +69,11 @@ router.get('/encaissements/:entrepriseId', async (req, res) => {
 });
 
 // GET décaissements
-router.get('/decaissements/:entrepriseId', async (req, res) => {
+router.get('/decaissements', async (req, res) => {
   try {
-    const { entrepriseId } = req.params;
     const decaissements = await db.select().from(transactionsTresorerie)
       .where(and(
-        eq(transactionsTresorerie.entrepriseId, parseInt(entrepriseId)),
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
         eq(transactionsTresorerie.type, 'decaissement')
       ));
     
@@ -90,7 +85,7 @@ router.get('/decaissements/:entrepriseId', async (req, res) => {
 });
 
 // GET catégories de flux
-router.get('/categories/:entrepriseId', async (req, res) => {
+router.get('/categories', async (req, res) => {
   try {
     const categories = [
       { id: 1, nom: 'Ventes', icon: '💰', color: '#28a745' },
@@ -107,11 +102,9 @@ router.get('/categories/:entrepriseId', async (req, res) => {
 });
 
 // GET prévisions: flux futurs, échéances fournisseur, factures à venir
-router.get('/previsions/:entrepriseId', async (req, res) => {
+router.get('/previsions', async (req, res) => {
   try {
-    const { entrepriseId } = req.params;
     const { periode } = req.query;
-    const entId = parseInt(entrepriseId);
     
     const joursProj = parseInt(periode) || 30;
     const dateAujourdhui = new Date();
@@ -121,12 +114,12 @@ router.get('/previsions/:entrepriseId', async (req, res) => {
     
     const comptesData = await db.select().from(comptesBancaires)
       .where(and(
-        eq(comptesBancaires.entrepriseId, entId),
+        eq(comptesBancaires.entrepriseId, req.entrepriseId),
         eq(comptesBancaires.actif, true)
       ));
     
     const mouvementsData = await db.select().from(transactionsTresorerie)
-      .where(eq(transactionsTresorerie.entrepriseId, entId));
+      .where(eq(transactionsTresorerie.entrepriseId, req.entrepriseId));
     
     let soldeActuel = 0;
     comptesData.forEach(compte => {
@@ -144,7 +137,7 @@ router.get('/previsions/:entrepriseId', async (req, res) => {
     
     const facturesClients = await db.select().from(factures)
       .where(and(
-        eq(factures.entrepriseId, entId),
+        eq(factures.entrepriseId, req.entrepriseId),
         eq(factures.statut, 'en_attente')
       ));
     
@@ -158,7 +151,7 @@ router.get('/previsions/:entrepriseId', async (req, res) => {
     
     const facturesFournisseurs = await db.select().from(facturesAchat)
       .where(and(
-        eq(facturesAchat.entrepriseId, entId),
+        eq(facturesAchat.entrepriseId, req.entrepriseId),
         eq(facturesAchat.statut, 'en_attente')
       ));
     
@@ -256,16 +249,15 @@ router.get('/previsions/:entrepriseId', async (req, res) => {
 });
 
 // POST créer un compte bancaire
-router.post('/comptes/:entrepriseId/create', async (req, res) => {
+router.post('/comptes/create', async (req, res) => {
   try {
-    const { entrepriseId } = req.params;
     const { nomCompte, numeroCompte, banque, soldeInitial, type, compteComptableId } = req.body;
 
     if (compteComptableId) {
       const compteExists = await db.select().from(comptesComptables)
         .where(and(
           eq(comptesComptables.id, parseInt(compteComptableId)),
-          eq(comptesComptables.entrepriseId, parseInt(entrepriseId))
+          eq(comptesComptables.entrepriseId, req.entrepriseId)
         ))
         .limit(1);
       
@@ -277,7 +269,7 @@ router.post('/comptes/:entrepriseId/create', async (req, res) => {
     }
 
     const newCompte = await db.insert(comptesBancaires).values({
-      entrepriseId: parseInt(entrepriseId),
+      entrepriseId: req.entrepriseId,
       nomCompte,
       numeroCompte,
       banque,
@@ -296,16 +288,16 @@ router.post('/comptes/:entrepriseId/create', async (req, res) => {
 });
 
 // PUT modifier un compte bancaire
-router.put('/comptes/:entrepriseId/:id', async (req, res) => {
+router.put('/comptes/:id', async (req, res) => {
   try {
-    const { entrepriseId, id } = req.params;
+    const { id } = req.params;
     const { nomCompte, numeroCompte, banque, type, compteComptableId, actif } = req.body;
 
     if (compteComptableId) {
       const compteExists = await db.select().from(comptesComptables)
         .where(and(
           eq(comptesComptables.id, parseInt(compteComptableId)),
-          eq(comptesComptables.entrepriseId, parseInt(entrepriseId))
+          eq(comptesComptables.entrepriseId, req.entrepriseId)
         ))
         .limit(1);
       
@@ -328,7 +320,7 @@ router.put('/comptes/:entrepriseId/:id', async (req, res) => {
       })
       .where(and(
         eq(comptesBancaires.id, parseInt(id)),
-        eq(comptesBancaires.entrepriseId, parseInt(entrepriseId))
+        eq(comptesBancaires.entrepriseId, req.entrepriseId)
       ))
       .returning();
 
@@ -344,14 +336,14 @@ router.put('/comptes/:entrepriseId/:id', async (req, res) => {
 });
 
 // DELETE supprimer un compte bancaire
-router.delete('/comptes/:entrepriseId/:id', async (req, res) => {
+router.delete('/comptes/:id', async (req, res) => {
   try {
-    const { entrepriseId, id } = req.params;
+    const { id } = req.params;
 
     const compte = await db.select().from(comptesBancaires)
       .where(and(
         eq(comptesBancaires.id, parseInt(id)),
-        eq(comptesBancaires.entrepriseId, parseInt(entrepriseId))
+        eq(comptesBancaires.entrepriseId, req.entrepriseId)
       ))
       .limit(1);
 
@@ -372,7 +364,7 @@ router.delete('/comptes/:entrepriseId/:id', async (req, res) => {
     await db.delete(comptesBancaires)
       .where(and(
         eq(comptesBancaires.id, parseInt(id)),
-        eq(comptesBancaires.entrepriseId, parseInt(entrepriseId))
+        eq(comptesBancaires.entrepriseId, req.entrepriseId)
       ));
     
     res.json({ message: 'Compte supprimé avec succès' });
@@ -383,12 +375,11 @@ router.delete('/comptes/:entrepriseId/:id', async (req, res) => {
 });
 
 // GET comptes comptables classe 5 (trésorerie)
-router.get('/comptes-comptables/:entrepriseId', async (req, res) => {
+router.get('/comptes-comptables', async (req, res) => {
   try {
-    const { entrepriseId } = req.params;
     const comptes = await db.select().from(comptesComptables)
       .where(and(
-        eq(comptesComptables.entrepriseId, parseInt(entrepriseId)),
+        eq(comptesComptables.entrepriseId, req.entrepriseId),
         like(comptesComptables.numero, '5%')
       ));
     

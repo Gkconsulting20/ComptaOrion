@@ -95,7 +95,40 @@ Ajout d'un système complet de prévision de trésorerie avec calcul automatique
 
 **Limitations Actuelles:**
 - Factures sans date d'échéance exclues des prévisions (recommandation: créer un bucket "À planifier" séparé)
-- Pas de validation serveur de l'entrepriseId (amélioration architecturale recommandée pour toute l'app)
+
+### Module Paramètres de Trésorerie - Bank Account Management (21 Nov 2025)
+Ajout d'un onglet "Paramètres" dans le module Trésorerie pour gérer les comptes bancaires et leur liaison avec la comptabilité:
+
+**Fonctionnalités:**
+- CRUD complet pour les comptes bancaires (Créer, Modifier, Supprimer)
+- Liaison avec les codes comptables de classe 5 (trésorerie)
+- Support de 3 types de comptes: Banque, Caisse, Mobile Money
+- Gestion du statut actif/inactif pour désactiver sans supprimer
+- Protection contre la suppression de comptes avec transactions existantes
+- Interface modale pour création et édition
+
+**Schéma de Base de Données:**
+- Ajout du champ `compte_comptable_id` dans la table `comptes_bancaires`
+- Relation foreign key vers `comptes_comptables` (classe 5)
+
+**API Backend:**
+- `POST /api/tresorerie/comptes/create`: Création d'un compte bancaire avec validation de propriété du code comptable
+- `PUT /api/tresorerie/comptes/:id`: Modification avec vérification multi-tenant (req.entrepriseId)
+- `DELETE /api/tresorerie/comptes/:id`: Suppression avec protection contre comptes ayant des transactions
+- `GET /api/tresorerie/comptes-comptables`: Liste des codes comptables classe 5 pour sélection
+
+**Sécurité Multi-Tenant:**
+- Toutes les routes utilisent `req.entrepriseId` extrait du JWT (pas d'entrepriseId dans l'URL)
+- Validation de propriété du code comptable lors de la création et modification
+- Filtre WHERE par entrepriseId sur toutes les opérations CRUD
+- Protection contre l'accès/modification cross-tenant
+
+**Interface Frontend:**
+- Onglet "⚙️ Paramètres" avec tableau de gestion des comptes
+- Formulaire modal avec sélection du compte comptable (dropdown classe 5)
+- Champs: Nom, Numéro de compte, Banque, Type, Compte comptable, Solde initial
+- Boutons Modifier/Supprimer par compte avec confirmations
+- Affichage du statut (Actif/Inactif) et du type avec badges colorés
 
 ### SaaS Admin Module - Commercialization Platform
 Created a complete SaaS administration module for managing ComptaOrion's commercialization:

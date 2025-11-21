@@ -70,7 +70,7 @@ export function TresorerieModule() {
   const loadDashboard = async () => {
     try {
       setError(null);
-      const data = await api.get(`/tresorerie/comptes/${ENTREPRISE_ID}`);
+      const data = await api.get('/tresorerie/comptes');
       const soldeTotal = data.reduce((sum, c) => sum + parseFloat(c.soldeActuel || 0), 0);
       const soldeBanques = data.filter(c => c.type === 'banque').reduce((sum, c) => sum + parseFloat(c.soldeActuel || 0), 0);
       const soldeCaisses = data.filter(c => c.type === 'caisse').reduce((sum, c) => sum + parseFloat(c.soldeActuel || 0), 0);
@@ -90,7 +90,7 @@ export function TresorerieModule() {
   const loadComptes = async () => {
     try {
       setError(null);
-      const data = await api.get(`/tresorerie/comptes/${ENTREPRISE_ID}`);
+      const data = await api.get('/tresorerie/comptes');
       setComptes(data);
     } catch (err) {
       setError(err.message || 'Erreur lors du chargement des comptes');
@@ -100,7 +100,7 @@ export function TresorerieModule() {
   const loadTransactions = async () => {
     try {
       setError(null);
-      const data = await api.get(`/tresorerie/mouvements/${ENTREPRISE_ID}`);
+      const data = await api.get('/tresorerie/mouvements');
       setTransactions(data);
     } catch (err) {
       setError(err.message || 'Erreur lors du chargement des transactions');
@@ -110,7 +110,7 @@ export function TresorerieModule() {
   const loadPrevisions = async () => {
     try {
       setError(null);
-      const data = await api.get(`/tresorerie/previsions/${ENTREPRISE_ID}?periode=${periodePrevision}`);
+      const data = await api.get(`/tresorerie/previsions?periode=${periodePrevision}`);
       setPrevisions(data);
     } catch (err) {
       setError(err.message || 'Erreur lors du chargement des prévisions');
@@ -120,7 +120,7 @@ export function TresorerieModule() {
 
   const loadComptesComptables = async () => {
     try {
-      const data = await api.get(`/tresorerie/comptes-comptables/${ENTREPRISE_ID}`);
+      const data = await api.get('/tresorerie/comptes-comptables');
       setComptesComptables(data);
     } catch (err) {
       console.error('Erreur chargement comptes comptables:', err);
@@ -129,7 +129,7 @@ export function TresorerieModule() {
 
   const handleCreateCompte = async () => {
     try {
-      await api.post(`/tresorerie/comptes/${ENTREPRISE_ID}/create`, formData);
+      await api.post('/tresorerie/comptes/create', formData);
       closeModal();
       loadComptes();
     } catch (err) {
@@ -139,7 +139,7 @@ export function TresorerieModule() {
 
   const handleUpdateCompte = async () => {
     try {
-      await api.put(`/tresorerie/comptes/${ENTREPRISE_ID}/${editingCompte.id}`, formData);
+      await api.put(`/tresorerie/comptes/${editingCompte.id}`, formData);
       closeModal();
       setEditingCompte(null);
       loadComptes();
@@ -152,7 +152,7 @@ export function TresorerieModule() {
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce compte ?')) return;
     
     try {
-      await api.delete(`/tresorerie/comptes/${ENTREPRISE_ID}/${id}`);
+      await api.delete(`/tresorerie/comptes/${id}`);
       loadComptes();
     } catch (err) {
       setError(err.message || 'Erreur lors de la suppression du compte');
