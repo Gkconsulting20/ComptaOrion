@@ -68,6 +68,35 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 
 ## Recent Changes (November 21, 2025)
 
+### Module Prévisions de Trésorerie - Cash Flow Forecasting (21 Nov 2025)
+Ajout d'un système complet de prévision de trésorerie avec calcul automatique des flux futurs:
+
+**Fonctionnalités:**
+- Prévisions sur périodes configurables: 7 jours, 30 jours, 90 jours
+- Calcul automatique basé sur les factures clients (créances à recevoir) et fournisseurs (dettes à payer)
+- Filtrage intelligent par date d'échéance pour des projections réalistes
+- Projection hebdomadaire détaillée avec soldes prévisionnels
+- Recalcul du solde actuel basé sur les transactions réelles (pas les soldes stockés)
+- Affichage des factures en attente par catégorie (clients/fournisseurs)
+
+**Interface:**
+- Onglet "📈 Prévisions" dans le module Trésorerie
+- 4 KPI cards: Solde Actuel, Créances à Recevoir, Dettes à Payer, Solde Prévu
+- Tableau de projection par semaine avec encaissements/décaissements prévus
+- Listes des factures clients et fournisseurs en attente de paiement
+- Sélection rapide de période (boutons 7/30/90 jours)
+
+**API Backend:**
+- Endpoint `GET /api/tresorerie/previsions/:entrepriseId?periode=X`
+- Filtrage des factures par dateEcheance dans la période demandée
+- Exclusion des factures sans date d'échéance pour des prévisions précises
+- Agrégation hebdomadaire basée sur les échéances réelles
+- Calcul des encaissements et décaissements cumulés par semaine
+
+**Limitations Actuelles:**
+- Factures sans date d'échéance exclues des prévisions (recommandation: créer un bucket "À planifier" séparé)
+- Pas de validation serveur de l'entrepriseId (amélioration architecturale recommandée pour toute l'app)
+
 ### SaaS Admin Module - Commercialization Platform
 Created a complete SaaS administration module for managing ComptaOrion's commercialization:
 
