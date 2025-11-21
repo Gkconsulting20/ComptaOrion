@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, actions = true }) {
+export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, onRowClick, actions = true }) {
   const safeData = Array.isArray(data) ? data : [];
   
   return (
@@ -55,8 +55,14 @@ export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, actio
               <tr key={rowIndex} style={{
                 borderBottom: '1px solid #dee2e6',
                 transition: 'background 0.2s',
+                cursor: onRowClick ? 'pointer' : 'default',
               }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}>
+                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                 onClick={(e) => {
+                   if (onRowClick && !e.target.closest('button')) {
+                     onRowClick(row);
+                   }
+                 }}>
                 {columns.map((col, colIndex) => (
                   <td key={colIndex} style={{
                     padding: '12px 15px',
