@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import './app.css';
 import { ClientsModule } from './modules/ClientsModule';
 import { FournisseursModule } from './modules/FournisseursModule';
-import { CommandesAchatModule } from './modules/CommandesAchatModule';
 import { TresorerieModule } from './modules/TresorerieModule';
 import { StockInventaire } from './modules/StockInventaire';
 import { ComptabiliteModule } from './modules/ComptabiliteModule';
@@ -15,7 +14,6 @@ const MODULES = [
   { id: 'dashboard', label: '📊 Tableau de Bord', icon: '📊' },
   { id: 'clients', label: '👥 Clients', icon: '👥' },
   { id: 'fournisseurs', label: '🏭 Fournisseurs', icon: '🏭' },
-  { id: 'commandes', label: '📦 Commandes Achat', icon: '📦' },
   { id: 'tresorerie', label: '💰 Trésorerie', icon: '💰' },
   { id: 'stock', label: '📦 Stock', icon: '📦' },
   { id: 'comptabilite', label: '📖 Comptabilité', icon: '📖' },
@@ -147,7 +145,6 @@ export default function App() {
       case 'dashboard': return <Dashboard />;
       case 'clients': return <ClientsModule />;
       case 'fournisseurs': return <FournisseursModule />;
-      case 'commandes': return <CommandesAchatModule />;
       case 'tresorerie': return <TresorerieModule />;
       case 'stock': return <StockInventaire />;
       case 'comptabilite': return <ComptabiliteModule />;
