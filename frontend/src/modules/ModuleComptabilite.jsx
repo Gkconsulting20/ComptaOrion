@@ -318,6 +318,9 @@ export function ModuleComptabilite() {
                 }}
               ]}
               data={data.ecritures}
+              onRowClick={(ecriture) => {
+                setModal({ open: true, type: 'details_ecriture', item: ecriture });
+              }}
               actions={false}
             />
           ) : (
@@ -784,10 +787,11 @@ export function ModuleComptabilite() {
           modal.type === 'compte' ? (modal.item ? 'Modifier Compte' : 'Nouveau Compte Comptable') :
           modal.type === 'journal' ? (modal.item ? 'Modifier Journal' : 'Nouveau Journal') :
           modal.type === 'ecriture' ? 'Nouvelle Écriture Comptable' :
+          modal.type === 'details_ecriture' ? `Détails Écriture - ${modal.item?.reference || ''}` :
           modal.type === 'recurrente' ? (modal.item ? 'Modifier Écriture Récurrente' : 'Nouvelle Écriture Récurrente') :
           modal.type === 'immobilisation' ? (modal.item ? 'Modifier Immobilisation' : 'Nouvelle Immobilisation') : ''
         }
-        size={modal.type === 'ecriture' || modal.type === 'recurrente' ? 'xlarge' : 'large'}
+        size={modal.type === 'ecriture' || modal.type === 'recurrente' || modal.type === 'details_ecriture' ? 'xlarge' : 'large'}
       >
         <form onSubmit={handleSubmit}>
           {modal.type === 'compte' && (
@@ -1090,6 +1094,86 @@ export function ModuleComptabilite() {
                 <Button type="submit" variant="success">{modal.item ? 'Mettre à jour' : 'Créer'}</Button>
               </div>
             </>
+          )}
+
+          {modal.type === 'details_ecriture' && modal.item && (
+            <div style={{ padding: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                <div>
+                  <h4 style={{ marginBottom: '15px', color: '#3498db' }}>Informations Générales</h4>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>Date:</strong> {new Date(modal.item.dateEcriture).toLocaleDateString('fr-FR')}
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>Référence:</strong> {modal.item.reference || '-'}
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>Description:</strong> {modal.item.description || '-'}
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>Statut:</strong> <span style={{ 
+                      color: modal.item.statut === 'validée' ? '#4caf50' : '#ff9800', 
+                      fontWeight: 'bold' 
+                    }}>{modal.item.statut?.toUpperCase() || '-'}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 style={{ marginBottom: '15px', color: '#3498db' }}>Totaux</h4>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>Total Débit:</strong> {parseFloat(modal.item.totalDebit || 0).toLocaleString()} FCFA
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>Total Crédit:</strong> {parseFloat(modal.item.totalCredit || 0).toLocaleString()} FCFA
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>Équilibre:</strong> {
+                      parseFloat(modal.item.totalDebit || 0) === parseFloat(modal.item.totalCredit || 0) 
+                        ? <span style={{ color: '#4caf50' }}>✓ Équilibré</span>
+                        : <span style={{ color: '#d32f2f' }}>✗ Non équilibré</span>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              {modal.item.lignes && modal.item.lignes.length > 0 && (
+                <div style={{ marginTop: '20px' }}>
+                  <h4 style={{ marginBottom: '15px', color: '#3498db' }}>Lignes d'Écriture</h4>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                        <th style={{ padding: '10px', textAlign: 'left' }}>Compte</th>
+                        <th style={{ padding: '10px', textAlign: 'left' }}>Description</th>
+                        <th style={{ padding: '10px', textAlign: 'right' }}>Débit</th>
+                        <th style={{ padding: '10px', textAlign: 'right' }}>Crédit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modal.item.lignes.map((ligne, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
+                          <td style={{ padding: '10px' }}>
+                            {ligne.compte ? `${ligne.compte.numero} - ${ligne.compte.nom}` : '-'}
+                          </td>
+                          <td style={{ padding: '10px' }}>{ligne.description || '-'}</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2', fontWeight: 'bold' }}>
+                            {ligne.type === 'debit' ? `${parseFloat(ligne.montant).toLocaleString()} FCFA` : '-'}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2', fontWeight: 'bold' }}>
+                            {ligne.type === 'credit' ? `${parseFloat(ligne.montant).toLocaleString()} FCFA` : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Button type="button" variant="secondary" onClick={closeModal}>
+                  Fermer
+                </Button>
+              </div>
+            </div>
           )}
         </form>
       </Modal>
