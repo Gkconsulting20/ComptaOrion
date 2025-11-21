@@ -520,46 +520,42 @@ export const ecritures = pgTable('ecritures', {
   numeroPiece: varchar('numero_piece', { length: 100 }),
   valide: boolean('valide').default(false),
   userId: integer('user_id').references(() => users.id),
-  
-
-// NOTE: Immobilisations module moved to MODULE 15 (ORION ASSETS)
+  createdAt: timestamp('created_at').defaultNow(),
+});
 
 // ==========================================
-// MODULE 16: ORION EXPENSE - DÉPENSES/NOTES DE FRAIS
+// MODULE 16: ORION EXPENSE - DEPENSES/NOTES DE FRAIS
 // ==========================================
 
-// Catégories de dépenses
-export const categoriesDépenses = pgTable('categories_depenses', {
+export const categoriesDepenses = pgTable('categories_depenses', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  nom: varchar('nom', { length: 255 }).notNull(), // Transport, Fournitures, Repas, etc.
+  nom: varchar('nom', { length: 255 }).notNull(),
   description: text('description'),
   limiteApproval: decimal('limite_approval', { precision: 15, scale: 2 }).default('0'),
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
+});
 
-
-// Enregistrement des dépenses
 export const depenses = pgTable('depenses', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   employeId: integer('employe_id').references(() => users.id).notNull(),
-  categorieId: integer('categorie_id').references(() => categoriesDépenses.id).notNull(),
+  categorieId: integer('categorie_id').references(() => categoriesDepenses.id).notNull(),
   montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
   dateDepense: date('date_depense').notNull(),
   description: text('description'),
-  justificatifUrl: text('justificatif_url'), // Stocke URL du fichier uploadé
-  récurrente: boolean('recurrente').default(false),
-  fréquenceRécurrence: varchar('frequence_recurrence', { length: 50 }), // hebdo, mensuel, etc.
-  statut: varchar('statut', { length: 50 }).default('en_attente'), // en_attente, approuvée, rejetée, remboursée, partiellement_remboursée
+  justificatifUrl: text('justificatif_url'),
+  recurrente: boolean('recurrente').default(false),
+  frequenceRecurrence: varchar('frequence_recurrence', { length: 50 }),
+  statut: varchar('statut', { length: 50 }).default('en_attente'),
   montantApprouve: decimal('montant_approuve', { precision: 15, scale: 2 }).default('0'),
   montantRembourse: decimal('montant_rembourse', { precision: 15, scale: 2 }).default('0'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// Workflow d'approbation
-export const approvalsDépenses = pgTable('approvals_depenses', {
+export const approvalsDepenses = pgTable('approvals_depenses', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   depenseId: integer('depense_id').references(() => depenses.id).notNull(),
