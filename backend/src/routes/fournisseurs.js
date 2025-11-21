@@ -1,8 +1,9 @@
 import express from 'express';
 import { db } from '../db.js';
-import { fournisseurs } from '../schema.js';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { fournisseurs, facturesFournisseurs, paiementsFournisseurs } from '../schema.js';
+import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { sendEmail } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -396,6 +397,272 @@ router.delete('/:id', async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erreur lors de la suppression du fournisseur',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/fournisseurs/etat-compte
+ * Génère un état de compte fournisseur sur une période donnée
+ */
+router.post('/etat-compte', async (req, res) => {
+  try {
+    const { fournisseurId, dateDebut, dateFin } = req.body;
+
+    if (!fournisseurId || !dateDebut || !dateFin) {
+      return res.status(400).json({
+        success: false,
+        message: 'fournisseurId, dateDebut et dateFin sont requis'
+      });
+    }
+
+    const fournisseur = await db
+      .select()
+      .from(fournisseurs)
+      .where(and(
+        eq(fournisseurs.id, parseInt(fournisseurId)),
+        eq(fournisseurs.entrepriseId, req.entrepriseId)
+      ))
+      .limit(1);
+
+    if (!fournisseur || fournisseur.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Fournisseur non trouvé'
+      });
+    }
+
+    const facturesList = await db
+      .select()
+      .from(facturesFournisseurs)
+      .where(and(
+        eq(facturesFournisseurs.fournisseurId, parseInt(fournisseurId)),
+        eq(facturesFournisseurs.entrepriseId, req.entrepriseId),
+        gte(facturesFournisseurs.dateFacture, dateDebut),
+        lte(facturesFournisseurs.dateFacture, dateFin)
+      ))
+      .orderBy(facturesFournisseurs.dateFacture);
+
+    const paiementsList = await db
+      .select()
+      .from(paiementsFournisseurs)
+      .where(and(
+        eq(paiementsFournisseurs.entrepriseId, req.entrepriseId),
+        gte(paiementsFournisseurs.datePaiement, dateDebut),
+        lte(paiementsFournisseurs.datePaiement, dateFin)
+      ))
+      .orderBy(paiementsFournisseurs.datePaiement);
+
+    const paiementsFournisseur = paiementsList.filter(p => {
+      const facture = facturesList.find(f => f.id === p.factureId);
+      return !!facture;
+    });
+
+    const totalFacture = facturesList.reduce((sum, f) => sum + (f.montantTotal || f.montantHT || 0), 0);
+    const totalPaye = paiementsFournisseur.reduce((sum, p) => sum + (p.montant || 0), 0);
+    const solde = totalFacture - totalPaye;
+
+    res.json({
+      success: true,
+      data: {
+        fournisseur: fournisseur[0],
+        factures: facturesList,
+        paiements: paiementsFournisseur,
+        totalFacture,
+        totalPaye,
+        solde,
+        periode: { dateDebut, dateFin }
+      }
+    });
+
+  } catch (error) {
+    console.error('Erreur POST /api/fournisseurs/etat-compte:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la génération de l\'état de compte',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/fournisseurs/etat-compte/email
+ * Envoie un état de compte fournisseur par email
+ */
+router.post('/etat-compte/email', async (req, res) => {
+  try {
+    const { fournisseurId, dateDebut, dateFin } = req.body;
+
+    if (!fournisseurId || !dateDebut || !dateFin) {
+      return res.status(400).json({
+        success: false,
+        message: 'fournisseurId, dateDebut et dateFin sont requis'
+      });
+    }
+
+    const fournisseur = await db
+      .select()
+      .from(fournisseurs)
+      .where(and(
+        eq(fournisseurs.id, parseInt(fournisseurId)),
+        eq(fournisseurs.entrepriseId, req.entrepriseId)
+      ))
+      .limit(1);
+
+    if (!fournisseur || fournisseur.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Fournisseur non trouvé'
+      });
+    }
+
+    if (!fournisseur[0].email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ce fournisseur n\'a pas d\'adresse email configurée'
+      });
+    }
+
+    const facturesList = await db
+      .select()
+      .from(facturesFournisseurs)
+      .where(and(
+        eq(facturesFournisseurs.fournisseurId, parseInt(fournisseurId)),
+        eq(facturesFournisseurs.entrepriseId, req.entrepriseId),
+        gte(facturesFournisseurs.dateFacture, dateDebut),
+        lte(facturesFournisseurs.dateFacture, dateFin)
+      ))
+      .orderBy(facturesFournisseurs.dateFacture);
+
+    const paiementsList = await db
+      .select()
+      .from(paiementsFournisseurs)
+      .where(and(
+        eq(paiementsFournisseurs.entrepriseId, req.entrepriseId),
+        gte(paiementsFournisseurs.datePaiement, dateDebut),
+        lte(paiementsFournisseurs.datePaiement, dateFin)
+      ))
+      .orderBy(paiementsFournisseurs.datePaiement);
+
+    const paiementsFournisseur = paiementsList.filter(p => {
+      const facture = facturesList.find(f => f.id === p.factureId);
+      return !!facture;
+    });
+
+    const totalFacture = facturesList.reduce((sum, f) => sum + (f.montantTotal || f.montantHT || 0), 0);
+    const totalPaye = paiementsFournisseur.reduce((sum, p) => sum + (p.montant || 0), 0);
+    const solde = totalFacture - totalPaye;
+
+    const dateDebutFr = new Date(dateDebut).toLocaleDateString('fr-FR');
+    const dateFinFr = new Date(dateFin).toLocaleDateString('fr-FR');
+
+    let facturesHtml = '';
+    if (facturesList.length > 0) {
+      facturesHtml = `
+        <h3>📋 Factures Fournisseur</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+          <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+              <th style="padding: 12px; text-align: left;">N° Facture</th>
+              <th style="padding: 12px; text-align: left;">Date</th>
+              <th style="padding: 12px; text-align: right;">Montant Total</th>
+              <th style="padding: 12px; text-align: center;">Statut</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${facturesList.map(f => `
+              <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 12px;">${f.numeroFacture || 'N/A'}</td>
+                <td style="padding: 12px;">${new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold;">${(f.montantTotal || f.montantHT || 0).toLocaleString('fr-FR')} FCFA</td>
+                <td style="padding: 12px; text-align: center;">
+                  <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; background-color: ${f.statut === 'payee' ? '#d4edda' : '#fff3cd'}; color: ${f.statut === 'payee' ? '#155724' : '#856404'};">
+                    ${f.statut === 'payee' ? '✅ Payée' : '⏳ En attente'}
+                  </span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    let paiementsHtml = '';
+    if (paiementsFournisseur.length > 0) {
+      paiementsHtml = `
+        <h3>💳 Paiements Effectués</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+              <th style="padding: 12px; text-align: left;">Date</th>
+              <th style="padding: 12px; text-align: left;">Référence</th>
+              <th style="padding: 12px; text-align: left;">Mode</th>
+              <th style="padding: 12px; text-align: right;">Montant</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${paiementsFournisseur.map(p => `
+              <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 12px;">${new Date(p.datePaiement).toLocaleDateString('fr-FR')}</td>
+                <td style="padding: 12px;">${p.reference || '-'}</td>
+                <td style="padding: 12px;">${p.modePaiement || '-'}</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold; color: #27ae60;">${(p.montant || 0).toLocaleString('fr-FR')} FCFA</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1976d2; padding-bottom: 20px;">
+          <h1 style="color: #1976d2; margin: 0 0 10px 0;">ÉTAT DE COMPTE FOURNISSEUR</h1>
+          <p style="margin: 5px 0; font-size: 16px;"><strong>${fournisseur[0].nom}</strong></p>
+          <p style="margin: 5px 0; color: #666;">Période: ${dateDebutFr} au ${dateFinFr}</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+          <div style="padding: 15px; background-color: #e8f4f8; border-radius: 8px; text-align: center;">
+            <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Total Facturé</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #1976d2;">${totalFacture.toLocaleString('fr-FR')} FCFA</p>
+          </div>
+          <div style="padding: 15px; background-color: #e8f8f0; border-radius: 8px; text-align: center;">
+            <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Total Payé</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #27ae60;">${totalPaye.toLocaleString('fr-FR')} FCFA</p>
+          </div>
+          <div style="padding: 15px; background-color: #fff3e0; border-radius: 8px; text-align: center;">
+            <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Solde Dû</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${solde > 0 ? '#e74c3c' : '#27ae60'};">${solde.toLocaleString('fr-FR')} FCFA</p>
+          </div>
+        </div>
+
+        ${facturesHtml}
+        ${paiementsHtml}
+
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center; color: #999; font-size: 12px;">
+          <p>Cet état de compte a été généré automatiquement par ComptaOrion</p>
+        </div>
+      </div>
+    `;
+
+    await sendEmail({
+      to: fournisseur[0].email,
+      subject: `État de Compte - ${fournisseur[0].nom} (${dateDebutFr} au ${dateFinFr})`,
+      html: emailHtml
+    });
+
+    res.json({
+      success: true,
+      message: `État de compte envoyé à ${fournisseur[0].email} avec succès`
+    });
+
+  } catch (error) {
+    console.error('Erreur POST /api/fournisseurs/etat-compte/email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'envoi de l\'état de compte',
       error: error.message
     });
   }
