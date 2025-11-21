@@ -109,6 +109,14 @@ ComptaOrion est une solution ERP (Enterprise Resource Planning) complète et lé
 **ONGLET 5 - RELANCES:**
 - ⚠️ Interface placeholder "Fonctionnalité à venir" (endpoints backend non implémentés)
 
+**ONGLET 6 - PARAMÈTRES COMPTABLES:** ✅ NOUVEAU!
+- ✅ Configuration compte comptable par client (champ compteComptableId ajouté)
+- ✅ Liste clients avec statut configuration (configuré / non configuré)
+- ✅ Sélection compte depuis plan comptable SYSCOHADA/IFRS/PCG
+- ✅ Conseils automatiques (classe 4 - Comptes de tiers: 411, 4111, 4117)
+- ✅ Sauvegarde configuration via PUT /clients/:id
+- ✅ Endpoints: GET /comptabilite/comptes, PUT /clients/:id
+
 ### ❌ ENDPOINTS BACKEND MANQUANTS
 
 Les endpoints suivants sont appelés par le frontend UI mais **n'existent pas côté backend**:
@@ -122,6 +130,17 @@ Les endpoints suivants sont appelés par le frontend UI mais **n'existent pas c�
 7. **POST /automations/reminders/send** - Envoi manuel de relances
 
 **Impact:** Boutons PDF, Email, Récurrence temporairement retirés de l'interface pour éviter confusion utilisateur.
+
+### ✅ NOUVEAU - 21 Nov 2025
+
+**Paramètres Comptables:**
+- Colonne `compte_comptable_id` ajoutée à la table `clients` (migration SQL)
+- Relation Drizzle `compteComptable` ajoutée dans `clientsRelations`
+- Onglet UI **⚙️ Paramètres Comptables** avec:
+  - Table clients avec statut configuration compte
+  - Modal sélection compte depuis plan comptable
+  - Conseils SYSCOHADA (classe 4: 411, 4111, 4117)
+  - Sauvegarde via PUT /clients/:id avec `compteComptableId`
 
 ### 🔧 PROCHAINES ÉTAPES RECOMMANDÉES
 

@@ -74,6 +74,7 @@ export const users = pgTable('users', {
 export const clients = pgTable('clients', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  compteComptableId: integer('compte_comptable_id'),
   numeroClient: varchar('numero_client', { length: 50 }).unique(),
   nom: varchar('nom', { length: 255 }).notNull(),
   type: varchar('type', { length: 50 }).default('particulier'), // particulier, entreprise
@@ -754,6 +755,10 @@ export const clientsRelations = relations(clients, ({ one, many }) => ({
   entreprise: one(entreprises, {
     fields: [clients.entrepriseId],
     references: [entreprises.id],
+  }),
+  compteComptable: one(comptesComptables, {
+    fields: [clients.compteComptableId],
+    references: [comptesComptables.id],
   }),
   commandes: many(commandes),
   factures: many(factures),
