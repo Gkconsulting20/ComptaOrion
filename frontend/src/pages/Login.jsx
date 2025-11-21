@@ -135,20 +135,59 @@ export function Login({ onLoginSuccess }) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '20px'
+      background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%)',
+      padding: '20px',
+      position: 'relative',
+      overflow: 'hidden'
     }}>
       <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(255,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)',
+        pointerEvents: 'none'
+      }}></div>
+      
+      <div style={{
         backgroundColor: 'white',
-        borderRadius: '12px',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+        borderRadius: '20px',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
         width: '100%',
-        maxWidth: mode === 'register' ? '800px' : '450px',
-        padding: '40px'
+        maxWidth: mode === 'register' ? '900px' : '480px',
+        padding: '50px',
+        position: 'relative',
+        zIndex: 1
       }}>
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <h1 style={{ margin: 0, color: '#2c3e50', fontSize: '32px' }}>🌟 ComptaOrion</h1>
-          <p style={{ color: '#7f8c8d', margin: '10px 0 0 0' }}>ERP Léger pour l'Afrique</p>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            marginBottom: '20px',
+            boxShadow: '0 10px 30px rgba(102,126,234,0.3)'
+          }}>
+            <span style={{ fontSize: '40px' }}>✨</span>
+          </div>
+          <h1 style={{ 
+            margin: '0 0 10px 0', 
+            color: '#1a202c', 
+            fontSize: '36px',
+            fontWeight: '700',
+            letterSpacing: '-0.5px'
+          }}>ComptaOrion</h1>
+          <p style={{ 
+            color: '#4a5568', 
+            margin: 0,
+            fontSize: '16px',
+            fontWeight: '500',
+            letterSpacing: '0.3px'
+          }}>La gestion moderne sans limite</p>
         </div>
 
         {mode === 'login' && (
