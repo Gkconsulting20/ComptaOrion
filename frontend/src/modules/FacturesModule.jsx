@@ -37,8 +37,10 @@ export function FacturesModule() {
         api.get('/factures'),
         api.get('/clients')
       ]);
-      setFactures(facturesRes.data || []);
-      setClients(clientsRes.data || []);
+      const facturesData = facturesRes.data?.data || facturesRes.data;
+      const clientsData = clientsRes.data?.data || clientsRes.data;
+      setFactures(Array.isArray(facturesData) ? facturesData : []);
+      setClients(Array.isArray(clientsData) ? clientsData : []);
     } catch (error) {
       console.error('Erreur chargement:', error);
     } finally {
@@ -101,6 +103,33 @@ export function FacturesModule() {
       loadData();
     } catch (error) {
       alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleSendEmail = async (row) => {
+    const client = row.client || {};
+    
+    if (!client.email) {
+      alert('Le client n\'a pas d\'adresse email renseignée');
+      return;
+    }
+
+    if (!confirm(`Envoyer la facture ${row.numeroFacture} par email à ${client.email} ?`)) return;
+    
+    try {
+      const response = await api.post(`/factures/${row.id}/send-email`);
+      
+      if (response.data?.simulation) {
+        alert('⚠️ Mode Simulation : SendGrid n\'est pas configuré.\n\nPour activer l\'envoi réel d\'emails :\n1. Ajoutez votre clé API SendGrid comme secret : SENDGRID_API_KEY\n2. Configurez l\'email expéditeur (optionnel) : SENDGRID_FROM_EMAIL');
+      } else if (response.data?.success) {
+        alert(`✅ Email envoyé avec succès à ${client.email}`);
+      } else {
+        alert(`❌ Échec d'envoi : ${response.data?.message || 'Erreur inconnue'}`);
+      }
+      
+      loadData();
+    } catch (error) {
+      alert('❌ Erreur : ' + error.message);
     }
   };
 
@@ -199,6 +228,7 @@ export function FacturesModule() {
         data={factures.map(f => ({ ...f.facture, client: f.client }))} 
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onSendEmail={handleSendEmail}
         actions={true}
       />
 

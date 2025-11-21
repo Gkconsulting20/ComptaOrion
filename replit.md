@@ -45,6 +45,7 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 -   **Notifications:** Alerts for absences, birthdays, and contract expirations.
 -   **Multi-Currency & Internationalization:** Supports over 20 currencies, 3 accounting systems (SYSCOHADA, IFRS, PCG), and custom country settings.
 -   **Compliance & Audit:** Complete audit trail for all operations, SYSCOHADA compliance, and CSV/Excel export.
+-   **Email Automation (NEW - Nov 2025):** SendGrid integration for automated invoice sending with professional HTML templates, email tracking, and delivery history. Requires SENDGRID_API_KEY secret configuration.
 
 ## External Dependencies
 
@@ -53,6 +54,7 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 -   Drizzle ORM
 -   bcrypt (password hashing)
 -   jsonwebtoken (JWT)
+-   @sendgrid/mail (email sending)
 
 ### Frontend
 -   React 18

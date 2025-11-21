@@ -1,7 +1,8 @@
 import express from 'express';
 import { db } from '../db.js';
-import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables, mouvementsStock } from '../schema.js';
+import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables, mouvementsStock, entreprises } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import emailService from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -618,6 +619,74 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la suppression de la facture',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/factures/:id/send-email
+ * Envoie une facture par email au client
+ */
+router.post('/:id/send-email', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    const [factureData] = await db
+      .select({
+        facture: factures,
+        client: clients,
+      })
+      .from(factures)
+      .leftJoin(clients, eq(factures.clientId, clients.id))
+      .where(and(
+        eq(factures.id, parseInt(id)),
+        eq(factures.entrepriseId, req.entrepriseId)
+      ))
+      .limit(1);
+
+    if (!factureData) {
+      return res.status(404).json({
+        success: false,
+        message: 'Facture non trouvée ou accès non autorisé',
+      });
+    }
+
+    if (!factureData.client?.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le client n\'a pas d\'adresse email renseignée',
+      });
+    }
+
+    const [entrepriseData] = await db
+      .select()
+      .from(entreprises)
+      .where(eq(entreprises.id, req.entrepriseId))
+      .limit(1);
+
+    if (!entrepriseData) {
+      return res.status(500).json({
+        success: false,
+        message: 'Données entreprise non disponibles',
+      });
+    }
+
+    const result = await emailService.sendInvoiceEmail({
+      facture: factureData.facture,
+      client: factureData.client,
+      entreprise: entrepriseData,
+      pdfBase64: null,
+      userId,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur POST /api/factures/:id/send-email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'envoi de l\'email',
       error: error.message,
     });
   }

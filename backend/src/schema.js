@@ -14,6 +14,7 @@ export const expenseStatusEnum = pgEnum('expense_status', ['brouillon', 'soumise
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['entree', 'sortie', 'transfert', 'ajustement']);
 export const journalTypeEnum = pgEnum('journal_type', ['achats', 'ventes', 'banque', 'caisse', 'od']);
 export const systemeComptableEnum = pgEnum('systeme_comptable', ['SYSCOHADA', 'IFRS', 'PCG']);
+export const emailStatusEnum = pgEnum('email_status', ['envoye', 'echec', 'en_attente']);
 
 // ==========================================
 // MODULE 9: MULTI-ENTREPRISE & ADMINISTRATION
@@ -1113,5 +1114,23 @@ export const saasVentes = pgTable('saas_ventes', {
   dateVente: timestamp('date_vente').defaultNow(),
   statut: varchar('statut', { length: 50 }).default('confirmée'), // confirmée, annulée
   notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ==========================================
+// MODULE EMAILS: HISTORIQUE D'ENVOI
+// ==========================================
+
+export const historiqueEmails = pgTable('historique_emails', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  factureId: integer('facture_id').references(() => factures.id),
+  destinataire: varchar('destinataire', { length: 255 }).notNull(),
+  sujet: varchar('sujet', { length: 500 }).notNull(),
+  typeEmail: varchar('type_email', { length: 50 }).default('facture'), // facture, devis, relance, etc.
+  statut: emailStatusEnum('statut').default('en_attente'),
+  messageErreur: text('message_erreur'),
+  dateEnvoi: timestamp('date_envoi').defaultNow(),
+  envoyePar: integer('envoye_par').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function Table({ columns, data = [], onEdit, onDelete, actions = true }) {
+export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, actions = true }) {
   const safeData = Array.isArray(data) ? data : [];
   
   return (
@@ -82,6 +82,18 @@ export function Table({ columns, data = [], onEdit, onDelete, actions = true }) 
                         cursor: 'pointer',
                         fontSize: '12px',
                       }}>Modifier</button>
+                    )}
+                    {onSendEmail && (
+                      <button onClick={() => onSendEmail(row)} style={{
+                        padding: '6px 12px',
+                        marginRight: '8px',
+                        backgroundColor: '#27ae60',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                      }}>📧 Envoyer</button>
                     )}
                     {onDelete && (
                       <button onClick={() => onDelete(row)} style={{
