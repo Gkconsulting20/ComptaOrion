@@ -754,7 +754,9 @@ router.post('/etat-compte/email', async (req, res) => {
     await emailService.sendEmail({
       to: client[0].email,
       subject: `État de Compte - ${client[0].nom} (${dateDebutFr} au ${dateFinFr})`,
-      html: emailHtml
+      html: emailHtml,
+      entrepriseId: req.entrepriseId,
+      typeEmail: 'etat_compte'
     });
 
     res.json({
