@@ -1,0 +1,336 @@
+🟦 1. MODULE COMPTABILITÉ GÉNÉRALE (ORION ACCOUNTING ENGINE)
+✔ Fonctions essentielles à coder
+
+Gestion du plan comptable (SYSCOHADA ou custom)
+
+CRUD comptes comptables
+
+Création des journaux (Achats, Ventes, Banque, Caisse, OD)
+
+Création d’une écriture comptable
+
+Ajout de lignes à une écriture (débit/crédit)
+
+Validation d’écriture (vérification équilibre)
+
+Modification / suppression d’écriture (avec audit)
+
+Grand Livre (filtrer par compte + période)
+
+Balance générale (total débit/crédit par compte)
+
+Balance âgée clients et fournisseurs
+
+États financiers auto :
+
+Bilan
+
+Compte de résultat (CPC)
+
+Tableau de flux de trésorerie (TAFIRE)
+
+Clôture de période et ouverture automatique
+
+Export PDF / Excel
+
+API sécurisée pour chaque fonction
+
+🟧 2. MODULE TRÉSORERIE (ORION TREASURY)
+✔ Fonctions à coder
+
+CRUD comptes bancaires
+
+Suivi solde banque + solde initial
+
+Suivi caisse
+
+Mouvements trésorerie :
+
+encaissements
+
+décaissements
+
+Catégories de flux (ventes, charges, salaires, taxes…)
+
+Prévisions :
+
+flux futurs
+
+échéances fournisseur
+
+factures clients à venir
+
+Rapprochement bancaire :
+
+import relevé CSV
+
+matching automatique
+
+validation manuelle
+
+Graphiques trésorerie (par jour / semaine / mois)
+
+Alertes solde bas
+
+Export Excel & PDF
+
+🟩 3. MODULE DÉPENSES / NOTES DE FRAIS (ORION EXPENSE)
+✔ Fonctions à coder
+
+Enregistrement d’une dépense
+
+Upload de justificatif (image/pdf)
+
+Catégories de dépenses (Transport, Fournitures…)
+
+Dépenses récurrentes
+
+Workflow d’approbation :
+
+employé → manager → comptable
+
+Remboursement employés
+
+Impact auto sur :
+
+trésorerie
+
+comptabilité (journal achats)
+
+Historique des dépenses
+
+Export Excel
+
+🟪 4. MODULE FACTURATION & VENTES (ORION SALES)
+✔ Fonctions à coder
+
+CRUD clients
+
+Création de devis
+
+Transformation devis → facture
+
+Numérotation automatique
+
+Gestion des articles / services
+
+Réductions, TVA, livraisons
+
+Factures récurrentes
+
+Génération PDF facture
+
+Envoi par email
+
+Enregistrement paiement :
+
+mobile money
+
+carte bancaire
+
+virement/cash
+
+Relance automatique (SMS / email)
+
+Impact automatique sur :
+
+comptabilité
+
+stock
+
+trésorerie
+
+🟫 5. MODULE ACHATS (ORION PURCHASING)
+✔ Fonctions à coder
+
+CRUD fournisseurs
+
+Bons de commande
+
+Réceptions de marchandises
+
+Facture fournisseur
+
+Paiement fournisseur
+
+Gestion des échéances
+
+Workflow validation achat
+
+Impact auto :
+
+stock entrée
+
+journaux comptables
+
+trésorerie
+
+Export complet
+
+🟨 6. MODULE STOCK & INVENTAIRE (ORION INVENTORY)
+✔ Fonctions à coder
+
+CRUD produits
+
+CRUD catégories
+
+Multi-entrepôts
+
+Mouvements de stock :
+
+entrée
+
+sortie
+
+transfert
+
+Suivi du stock en temps réel
+
+Inventaires tournants
+
+Alertes seuil minimum
+
+Valorisation :
+
+FIFO
+
+CMP
+
+Impact auto sur :
+
+achats
+
+ventes
+
+comptabilité (stock & COGS)
+
+🟥 7. MODULE EMPLOYÉS (ORION HR LITE)
+✔ Fonctions à coder
+
+CRUD employés
+
+Documents employés
+
+Gestion des rôles
+
+Permissions modulaires
+
+Avances sur salaire
+
+Absences
+
+Notifications RH
+
+Intégration auto dans dépenses (pour paie)
+
+🟦 8. MODULE IMMOBILISATIONS (ORION ASSETS)
+✔ Fonctions à coder
+
+CRUD immobilisations
+
+Catégories (durée de vie / méthode)
+
+Calcul amortissement :
+
+linéaire
+
+dégressif
+
+Comptabilisation automatique mensuelle
+
+Sortie / cession
+
+Registre immobilisations
+
+Export Excel / PDF
+
+🟪 9. MODULE ADMINISTRATION / MULTI-ENTREPRISE
+✔ Fonctions à coder
+
+Multi-entreprises
+
+Paramètres entreprise :
+
+TVA
+
+devise
+
+adresse
+
+numérotation factures
+
+Gestion des utilisateurs
+
+Permissions granularisées
+
+Audit Log
+
+Sécurité :
+
+JWT
+
+Refresh token
+
+RLS (Supabase)
+
+📦 10. MODULE DASHBOARD & ANALYTICS (ORION VISION)
+✔ Fonctions à coder
+
+Dashboard global :
+
+ventes du mois
+
+dépenses du mois
+
+solde bancaires
+
+factures en retard
+
+stock faible
+
+prévision trésorerie
+
+Graphiques :
+
+barres
+
+lignes
+
+camemberts
+
+KPIs avancés :
+
+marge brute
+
+cashflow
+
+délai paiement client
+
+délai paiement fournisseur
+
+Filtrage par :
+
+période
+
+type
+
+module
+
+🟧 11. MODULE AUTHENTICATION & SECURITY (ORION SECURE)
+✔ Fonctions à coder
+
+Login email + mot de passe
+
+Auth JWT
+
+Refresh token
+
+Récupération mot de passe
+
+Gestion des sessions
+
+RLS Supabase
+
+Permissions modulaires (RBAC)
+
+Audit des connexions
