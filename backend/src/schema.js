@@ -573,7 +573,7 @@ export const remboursementsEmployes = pgTable('remboursements_employes', {
 // MODULE 7: EMPLOYÉS (ORION HR LITE)
 // ==========================================
 
-// Table employés
+// Table employés (MODULE PAIE)
 export const employes = pgTable('employes', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
@@ -581,13 +581,29 @@ export const employes = pgTable('employes', {
   matricule: varchar('matricule', { length: 50 }).unique(),
   nom: varchar('nom', { length: 100 }).notNull(),
   prenom: varchar('prenom', { length: 100 }).notNull(),
-  poste: varchar('poste', { length: 100 }),
-  departement: varchar('departement', { length: 100 }),
-  salaire: decimal('salaire', { precision: 15, scale: 2 }),
-  dateEmbauche: date('date_embauche'),
+  numeroCNPS: varchar('numero_cnps', { length: 50 }),
+  dateNaissance: date('date_naissance'),
+  lieuNaissance: varchar('lieu_naissance', { length: 100 }),
+  nationalite: varchar('nationalite', { length: 50 }),
   telephone: varchar('telephone', { length: 50 }),
   email: varchar('email', { length: 255 }),
   adresse: text('adresse'),
+  poste: varchar('poste', { length: 100 }),
+  departement: varchar('departement', { length: 100 }),
+  typeContrat: varchar('type_contrat', { length: 50 }).default('CDI'),
+  dateEmbauche: date('date_embauche'),
+  dateFinContrat: date('date_fin_contrat'),
+  salaireBase: decimal('salaire_base', { precision: 15, scale: 2 }),
+  indemnitesRegulieresTransport: decimal('indemnites_regulieres_transport', { precision: 15, scale: 2 }).default('0'),
+  indemnitesRegulieresLogement: decimal('indemnites_regulieres_logement', { precision: 15, scale: 2 }).default('0'),
+  indemnitesRegulieresAutres: decimal('indemnites_regulieres_autres', { precision: 15, scale: 2 }).default('0'),
+  avantagesNatureLogement: decimal('avantages_nature_logement', { precision: 15, scale: 2 }).default('0'),
+  avantagesNatureVehicule: decimal('avantages_nature_vehicule', { precision: 15, scale: 2 }).default('0'),
+  avantagesNatureAutres: decimal('avantages_nature_autres', { precision: 15, scale: 2 }).default('0'),
+  documentsCNI: text('documents_cni'),
+  documentsContrat: text('documents_contrat'),
+  documentsCV: text('documents_cv'),
+  documentsAutres: text('documents_autres'),
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -600,9 +616,36 @@ export const avancesSalaire = pgTable('avances_salaire', {
   montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
   dateAvance: date('date_avance').notNull(),
   montantRembourse: decimal('montant_rembourse', { precision: 15, scale: 2 }).default('0'),
-  statut: varchar('statut', { length: 50 }).default('en_cours'), // en_cours, rembourse
+  statut: varchar('statut', { length: 50 }).default('en_cours'),
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Fiches de paie (bulletins de salaire)
+export const fichesPaie = pgTable('fiches_paie', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  employeId: integer('employe_id').references(() => employes.id).notNull(),
+  mois: varchar('mois', { length: 7 }).notNull(),
+  salaireBase: decimal('salaire_base', { precision: 15, scale: 2 }).notNull(),
+  indemnitesTransport: decimal('indemnites_transport', { precision: 15, scale: 2 }).default('0'),
+  indemnitesLogement: decimal('indemnites_logement', { precision: 15, scale: 2 }).default('0'),
+  indemnitesAutres: decimal('indemnites_autres', { precision: 15, scale: 2 }).default('0'),
+  avantagesNature: decimal('avantages_nature', { precision: 15, scale: 2 }).default('0'),
+  heuresSupplementaires: decimal('heures_supplementaires', { precision: 15, scale: 2 }).default('0'),
+  primes: decimal('primes', { precision: 15, scale: 2 }).default('0'),
+  salaireBrut: decimal('salaire_brut', { precision: 15, scale: 2 }).notNull(),
+  cotisationsCNPS: decimal('cotisations_cnps', { precision: 15, scale: 2 }).default('0'),
+  cotisationsIPRES: decimal('cotisations_ipres', { precision: 15, scale: 2 }).default('0'),
+  impotSurRevenu: decimal('impot_sur_revenu', { precision: 15, scale: 2 }).default('0'),
+  autresRetenues: decimal('autres_retenues', { precision: 15, scale: 2 }).default('0'),
+  avancesSalaire: decimal('avances_salaire', { precision: 15, scale: 2 }).default('0'),
+  salaireNet: decimal('salaire_net', { precision: 15, scale: 2 }).notNull(),
+  ecritureComptableId: integer('ecriture_comptable_id').references(() => ecritures.id),
+  statut: varchar('statut', { length: 50 }).default('brouillon'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // ==========================================
