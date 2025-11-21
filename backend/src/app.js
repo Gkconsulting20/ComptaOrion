@@ -21,7 +21,7 @@ import comptabiliteRoutes from './routes/comptabilite.js';
 import tresorerieRoutes from './routes/tresorerie.js';
 import auditLogsRoutes from './routes/audit-logs.js';
 import paieRoutes from './routes/paie.js';
-import { authMiddleware, entrepriseIsolation } from './auth.js';
+import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 
 const app = express();
 
@@ -31,7 +31,6 @@ app.use(express.json());
 // Routes d'authentification (publiques - pas de middleware)
 app.use('/api/auth', authRoutes);
 app.use('/api/auth-security', authSecurityRoutes);
-app.use('/api/saas-admin', saasAdminRoutes);
 
 // Route de santé (publique)
 app.get('/api/health', (req, res) => {
@@ -46,6 +45,13 @@ app.use('/api/dashboard', dashboardRoutes);
 // ===============================================
 // Toutes les routes après ce point nécessitent une authentification
 // et sont automatiquement filtrées par entreprise
+
+// ===============================================
+// ROUTES SAAS ADMIN (protégées par JWT + role admin uniquement)
+// ===============================================
+// Note: SaaS Admin routes sont montées AVANT entrepriseIsolation car elles
+// gèrent des données globales (tous clients, tous commerciaux) et non isolées par entreprise
+app.use('/api/saas-admin', authMiddleware, saasAdminOnly, saasAdminRoutes);
 
 // ✅ AUTHENTIFICATION ACTIVÉE - TOUTES LES ROUTES PROTÉGÉES
 app.use('/api', authMiddleware, entrepriseIsolation);

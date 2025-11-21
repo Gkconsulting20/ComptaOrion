@@ -12,19 +12,45 @@ const router = express.Router();
 router.get('/dashboard', async (req, res) => {
   try {
     const stats = await db.execute(sql`
+      WITH 
+        client_counts AS (
+          SELECT 
+            COUNT(*) as total_clients,
+            COUNT(CASE WHEN statut = 'actif' THEN 1 END) as clients_actifs,
+            COUNT(CASE WHEN statut = 'trial' THEN 1 END) as clients_trial
+          FROM saas_clients
+        ),
+        commercial_counts AS (
+          SELECT COUNT(*) as total_commerciaux
+          FROM saas_commerciaux
+          WHERE actif = true
+        ),
+        abonnement_stats AS (
+          SELECT 
+            COUNT(*) as total_abonnements,
+            COALESCE(SUM(CASE WHEN statut = 'actif' THEN montant_mensuel ELSE 0 END), 0) as mrr_total
+          FROM abonnements
+        ),
+        vente_stats AS (
+          SELECT 
+            COALESCE(SUM(montant_vente), 0) as ca_total,
+            COALESCE(SUM(commission), 0) as commissions_total
+          FROM saas_ventes
+          WHERE statut = 'confirmée'
+        )
       SELECT 
-        COUNT(DISTINCT sc.id) as total_clients,
-        COUNT(DISTINCT CASE WHEN sc.statut = 'actif' THEN sc.id END) as clients_actifs,
-        COUNT(DISTINCT CASE WHEN sc.statut = 'trial' THEN sc.id END) as clients_trial,
-        COUNT(DISTINCT com.id) as total_commerciaux,
-        COUNT(DISTINCT a.id) as total_abonnements,
-        COALESCE(SUM(CASE WHEN a.statut = 'actif' THEN a.montant_mensuel ELSE 0 END), 0) as mrr_total,
-        COALESCE(SUM(sv.montant_vente), 0) as ca_total,
-        COALESCE(SUM(sv.commission), 0) as commissions_total
-      FROM saas_clients sc
-      LEFT JOIN saas_commerciaux com ON com.actif = true
-      LEFT JOIN abonnements a ON a.entreprise_id = sc.entreprise_id
-      LEFT JOIN saas_ventes sv ON sv.client_id = sc.id
+        cc.total_clients,
+        cc.clients_actifs,
+        cc.clients_trial,
+        com.total_commerciaux,
+        ab.total_abonnements,
+        ab.mrr_total,
+        v.ca_total,
+        v.commissions_total
+      FROM client_counts cc
+      CROSS JOIN commercial_counts com
+      CROSS JOIN abonnement_stats ab
+      CROSS JOIN vente_stats v
     `);
 
     const derniersClients = await db.select({
