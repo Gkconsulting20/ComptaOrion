@@ -76,6 +76,8 @@ function DevisTab() {
   const [produits, setProduits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedDevis, setSelectedDevis] = useState(null);
   const [wizardStep, setWizardStep] = useState(1);
   const [devisData, setDevisData] = useState({
     clientId: '',
@@ -229,6 +231,7 @@ function DevisTab() {
       <Table 
         columns={columns} 
         data={devisList.map(d => ({ ...d.devis, client: d.client }))} 
+        onRowClick={(devis) => { setSelectedDevis(devis); setShowDetailsModal(true); }}
         actions={true}
         customActions={(devis) => (
           <div style={{ display: 'flex', gap: '5px' }}>
