@@ -8,6 +8,7 @@ import { relations } from 'drizzle-orm';
 export const userRoleEnum = pgEnum('user_role', ['admin', 'manager', 'accountant', 'employee', 'viewer']);
 export const transactionTypeEnum = pgEnum('transaction_type', ['encaissement', 'decaissement']);
 export const orderStatusEnum = pgEnum('order_status', ['brouillon', 'confirmee', 'preparee', 'livree', 'annulee']);
+export const quoteStatusEnum = pgEnum('quote_status', ['brouillon', 'envoyee', 'acceptee', 'refusee', 'expiree']);
 export const invoiceStatusEnum = pgEnum('invoice_status', ['brouillon', 'envoyee', 'payee', 'annulee', 'retard']);
 export const expenseStatusEnum = pgEnum('expense_status', ['brouillon', 'soumise', 'approuvee', 'rejetee', 'remboursee']);
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['entree', 'sortie', 'transfert', 'ajustement']);
@@ -194,6 +195,38 @@ export const bonLivraisonItems = pgTable('bon_livraison_items', {
 // MODULE 4: FACTURATION & VENTES
 // ==========================================
 
+// Table Devis
+export const devis = pgTable('devis', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  numeroDevis: varchar('numero_devis', { length: 100 }).unique(),
+  clientId: integer('client_id').references(() => clients.id).notNull(),
+  statut: quoteStatusEnum('statut').default('brouillon'),
+  dateDevis: date('date_devis').defaultNow(),
+  dateExpiration: date('date_expiration'),
+  totalHT: decimal('total_ht', { precision: 15, scale: 2 }).default('0'),
+  totalTVA: decimal('total_tva', { precision: 15, scale: 2 }).default('0'),
+  totalTTC: decimal('total_ttc', { precision: 15, scale: 2 }).default('0'),
+  notes: text('notes'),
+  conditionsVente: text('conditions_vente'),
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const devisItems = pgTable('devis_items', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  devisId: integer('devis_id').references(() => devis.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id),
+  description: text('description').notNull(),
+  quantite: decimal('quantite', { precision: 15, scale: 3 }).notNull(),
+  prixUnitaire: decimal('prix_unitaire', { precision: 15, scale: 2 }).notNull(),
+  remise: decimal('remise', { precision: 5, scale: 2 }).default('0'),
+  totalLigne: decimal('total_ligne', { precision: 15, scale: 2 }).notNull(),
+});
+
+// Table Factures
 export const factures = pgTable('factures', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
