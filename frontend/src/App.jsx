@@ -15,18 +15,18 @@ import { Login } from './pages/Login';
 import { Inscription } from './pages/Inscription';
 import api from './api';
 
-const MODULES = [
-  { id: 'dashboard', label: 'Tableau de Bord', icon: '📊' },
-  { id: 'saas-admin', label: 'Admin SaaS', icon: '🎯' },
-  { id: 'clients', label: 'Clients', icon: '👥' },
-  { id: 'fournisseurs', label: 'Fournisseurs', icon: '🏭' },
-  { id: 'tresorerie', label: 'Trésorerie', icon: '💰' },
-  { id: 'stock', label: 'Stock', icon: '📦' },
-  { id: 'comptabilite', label: 'Comptabilité', icon: '📖' },
-  { id: 'impots', label: 'Impôts', icon: '🏛️' },
-  { id: 'ia-assistant', label: 'Assistant IA', icon: '🤖' },
-  { id: 'authentication', label: 'Authentification', icon: '🔐' },
-  { id: 'parametres', label: 'Paramètres', icon: '⚙️' }
+const ALL_MODULES = [
+  { id: 'dashboard', label: 'Tableau de Bord', icon: '📊', requiresSuperAdmin: false },
+  { id: 'saas-admin', label: 'Admin SaaS', icon: '🎯', requiresSuperAdmin: true },
+  { id: 'clients', label: 'Clients', icon: '👥', requiresSuperAdmin: false },
+  { id: 'fournisseurs', label: 'Fournisseurs', icon: '🏭', requiresSuperAdmin: false },
+  { id: 'tresorerie', label: 'Trésorerie', icon: '💰', requiresSuperAdmin: false },
+  { id: 'stock', label: 'Stock', icon: '📦', requiresSuperAdmin: false },
+  { id: 'comptabilite', label: 'Comptabilité', icon: '📖', requiresSuperAdmin: false },
+  { id: 'impots', label: 'Impôts', icon: '🏛️', requiresSuperAdmin: false },
+  { id: 'ia-assistant', label: 'Assistant IA', icon: '🤖', requiresSuperAdmin: false },
+  { id: 'authentication', label: 'Authentification', icon: '🔐', requiresSuperAdmin: false },
+  { id: 'parametres', label: 'Paramètres', icon: '⚙️', requiresSuperAdmin: false }
 ];
 
 function Dashboard() {
@@ -172,6 +172,11 @@ export default function App() {
     setIsAuthenticated(true);
     setUser(userData);
   };
+
+  // Filtrer les modules selon les permissions
+  // Super Admin = entrepriseId === 1 (ComptaOrion lui-même)
+  const isSuperAdmin = user?.entrepriseId === 1;
+  const MODULES = ALL_MODULES.filter(m => !m.requiresSuperAdmin || isSuperAdmin);
 
   const handleLogout = async () => {
     const token = localStorage.getItem('token');
