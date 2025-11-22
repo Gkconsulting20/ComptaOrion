@@ -5,8 +5,7 @@ export function Login({ onLoginSuccess }) {
   const [mode, setMode] = useState('login');
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
-    entrepriseId: '1'
+    password: ''
   });
   const [registerData, setRegisterData] = useState({
     username: '',
@@ -46,7 +45,7 @@ export function Login({ onLoginSuccess }) {
       localStorage.setItem('token', data.token);
       localStorage.setItem('refreshToken', data.refreshToken);
       localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('entrepriseId', formData.entrepriseId);
+      localStorage.setItem('entrepriseId', data.user.entrepriseId); // Récupéré automatiquement depuis le backend
       if (data.session && data.session.id) {
         localStorage.setItem('sessionId', data.session.id);
       }
@@ -110,8 +109,7 @@ export function Login({ onLoginSuccess }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          email: resetEmail,
-          entrepriseId: parseInt(formData.entrepriseId)
+          email: resetEmail
         })
       });
 
@@ -244,29 +242,6 @@ export function Login({ onLoginSuccess }) {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: '2px solid #e0e0e0',
-                  borderRadius: '6px',
-                  fontSize: '16px',
-                  transition: 'border 0.3s'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
-              />
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#2c3e50' }}>
-                ID Entreprise *
-              </label>
-              <input
-                type="number"
-                value={formData.entrepriseId}
-                onChange={(e) => setFormData({ ...formData, entrepriseId: e.target.value })}
-                required
-                min="1"
                 style={{
                   width: '100%',
                   padding: '12px',
@@ -595,7 +570,7 @@ export function Login({ onLoginSuccess }) {
             )}
 
             <p style={{ color: '#7f8c8d', marginBottom: '20px' }}>
-              Entrez votre adresse email et votre ID d'entreprise pour réinitialiser votre mot de passe.
+              Entrez votre adresse email pour réinitialiser votre mot de passe.
             </p>
 
             <div style={{ marginBottom: '20px' }}>
@@ -606,25 +581,6 @@ export function Login({ onLoginSuccess }) {
                 type="email"
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
-                required
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: '2px solid #e0e0e0',
-                  borderRadius: '6px',
-                  fontSize: '16px'
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#2c3e50' }}>
-                ID Entreprise *
-              </label>
-              <input
-                type="number"
-                value={formData.entrepriseId}
-                onChange={(e) => setFormData({ ...formData, entrepriseId: e.target.value })}
                 required
                 style={{
                   width: '100%',
