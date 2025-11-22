@@ -16,7 +16,7 @@ export function ClientsModule() {
     { id: 'bons-livraison', label: '📦 Bons de Livraison', icon: '📦' },
     { id: 'paiements', label: '💳 Paiements', icon: '💳' },
     { id: 'etats-compte', label: '📋 États de Compte', icon: '📋' },
-    { id: 'relances', label: '🔔 Relances', icon: '🔔' },
+    // { id: 'relances', label: '🔔 Relances', icon: '🔔' },
     { id: 'rapports', label: '📊 Rapports', icon: '📊' },
     { id: 'parametres', label: '⚙️ Paramètres Client', icon: '⚙️' },
   ];
@@ -1257,6 +1257,16 @@ function RapportsTab() {
 
         {rapportPeriode && !loadingPeriode && (
           <div>
+            <div style={{ 
+              padding: '15px',
+              backgroundColor: '#f0f8ff',
+              borderLeft: '4px solid #3498db',
+              marginBottom: '20px',
+              borderRadius: '4px'
+            }}>
+              <strong>📅 Période sélectionnée :</strong> Du {new Date(rapportPeriode.periode.dateDebut).toLocaleDateString('fr-FR')} au {new Date(rapportPeriode.periode.dateFin).toLocaleDateString('fr-FR')}
+            </div>
+
             <div style={{ 
               display: 'grid', 
               gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
