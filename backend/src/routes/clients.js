@@ -49,6 +49,150 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * GET /api/clients/rapports
+ * Génère des rapports analytiques sur les clients
+ * IMPORTANT: Doit être avant /:id pour ne pas être capturé par la route dynamique
+ */
+router.get('/rapports', async (req, res) => {
+  try {
+    // 1. Top 10 clients par chiffre d'affaires
+    const topClients = await db
+      .select({
+        clientId: factures.clientId,
+        clientNom: clients.nom,
+        totalCA: sql`SUM(${factures.totalTTC})::numeric`,
+        nombreFactures: sql`COUNT(${factures.id})::int`
+      })
+      .from(factures)
+      .leftJoin(clients, eq(factures.clientId, clients.id))
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        sql`${factures.statut} != 'annulee'`
+      ))
+      .groupBy(factures.clientId, clients.nom)
+      .orderBy(sql`SUM(${factures.totalTTC}) DESC`)
+      .limit(10);
+
+    // 2. Clients avec retards de paiement
+    const clientsRetard = await db
+      .select({
+        clientId: factures.clientId,
+        clientNom: clients.nom,
+        clientEmail: clients.email,
+        nombreFacturesRetard: sql`COUNT(${factures.id})::int`,
+        montantRetard: sql`SUM(${factures.totalTTC})::numeric`
+      })
+      .from(factures)
+      .leftJoin(clients, eq(factures.clientId, clients.id))
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        eq(factures.statut, 'retard')
+      ))
+      .groupBy(factures.clientId, clients.nom, clients.email)
+      .orderBy(sql`SUM(${factures.totalTTC}) DESC`);
+
+    // 3. Chiffre d'affaires total
+    const [caTotal] = await db
+      .select({
+        total: sql`COALESCE(SUM(${factures.totalTTC}), 0)::numeric`
+      })
+      .from(factures)
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        sql`${factures.statut} NOT IN ('annulee', 'brouillon')`
+      ));
+
+    // 4. Analyse des échéances (factures à venir par période)
+    const now = new Date();
+    const dans7jours = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const dans30jours = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const [echeances7j] = await db
+      .select({
+        count: sql`COUNT(*)::int`,
+        montant: sql`COALESCE(SUM(${factures.totalTTC}), 0)::numeric`
+      })
+      .from(factures)
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        sql`${factures.statut} IN ('envoyee', 'partiellement_payee')`,
+        sql`${factures.dateEcheance} BETWEEN ${now.toISOString()} AND ${dans7jours.toISOString()}`
+      ));
+
+    const [echeances30j] = await db
+      .select({
+        count: sql`COUNT(*)::int`,
+        montant: sql`COALESCE(SUM(${factures.totalTTC}), 0)::numeric`
+      })
+      .from(factures)
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        sql`${factures.statut} IN ('envoyee', 'partiellement_payee')`,
+        sql`${factures.dateEcheance} BETWEEN ${now.toISOString()} AND ${dans30jours.toISOString()}`
+      ));
+
+    // 5. Distribution des paiements par client (pour graphiques)
+    const distributionPaiements = await db
+      .select({
+        clientId: paiements.clientId,
+        clientNom: clients.nom,
+        totalPaye: sql`SUM(${paiements.montant})::numeric`,
+        nombrePaiements: sql`COUNT(${paiements.id})::int`
+      })
+      .from(paiements)
+      .leftJoin(clients, eq(paiements.clientId, clients.id))
+      .where(eq(paiements.entrepriseId, req.entrepriseId))
+      .groupBy(paiements.clientId, clients.nom)
+      .orderBy(sql`SUM(${paiements.montant}) DESC`)
+      .limit(10);
+
+    res.json({
+      success: true,
+      data: {
+        topClients: topClients.map(c => ({
+          clientId: c.clientId,
+          nom: c.clientNom || 'Client inconnu',
+          chiffreAffaires: parseFloat(c.totalCA || 0),
+          nombreFactures: c.nombreFactures
+        })),
+        clientsRetard: clientsRetard.map(c => ({
+          clientId: c.clientId,
+          nom: c.clientNom || 'Client inconnu',
+          email: c.clientEmail,
+          nombreFactures: c.nombreFacturesRetard,
+          montantRetard: parseFloat(c.montantRetard || 0)
+        })),
+        chiffreAffaireTotal: parseFloat(caTotal.total || 0),
+        echeances: {
+          prochains7jours: {
+            count: echeances7j.count,
+            montant: parseFloat(echeances7j.montant || 0)
+          },
+          prochains30jours: {
+            count: echeances30j.count,
+            montant: parseFloat(echeances30j.montant || 0)
+          }
+        },
+        distributionPaiements: distributionPaiements.map(d => ({
+          clientId: d.clientId,
+          nom: d.clientNom || 'Client inconnu',
+          totalPaye: parseFloat(d.totalPaye || 0),
+          nombrePaiements: d.nombrePaiements
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Erreur GET /api/clients/rapports:', error);
+    res.json({
+      success: false,
+      message: 'Erreur lors de la génération des rapports clients',
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/clients/:id
  * Récupère un client spécifique
  */

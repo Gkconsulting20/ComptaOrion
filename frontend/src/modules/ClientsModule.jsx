@@ -1108,12 +1108,8 @@ function RapportsTab() {
 
   const loadRapports = async () => {
     try {
-      // Pour l'instant, affichage placeholder
-      setRapportData({
-        topClients: [],
-        retardsPaiement: [],
-        chiffreAffaire: 0
-      });
+      const res = await api.get('/clients/rapports');
+      setRapportData(res.data?.data || null);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -1121,42 +1117,99 @@ function RapportsTab() {
     }
   };
 
-  if (loading) return <p>Chargement...</p>;
+  if (loading) return <p>Chargement des rapports...</p>;
+  if (!rapportData) return <p>Aucune donnée disponible</p>;
+
+  const { topClients = [], clientsRetard = [], chiffreAffaireTotal = 0, echeances = { prochains7jours: { count: 0, montant: 0 }, prochains30jours: { count: 0, montant: 0 } }, distributionPaiements = [] } = rapportData;
 
   return (
     <div>
       <h3>📊 Rapports Client</h3>
-      
-      <div style={{ 
-        padding: '40px', 
-        textAlign: 'center',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '8px',
-        border: '2px dashed #dee2e6',
-        marginTop: '20px'
-      }}>
-        <div style={{ fontSize: '64px', marginBottom: '20px' }}>📊</div>
-        <h3 style={{ color: '#666', marginBottom: '10px' }}>Rapports en développement</h3>
-        <p style={{ color: '#999', fontSize: '16px' }}>
-          Les rapports clients seront disponibles prochainement.
-        </p>
-        <p style={{ color: '#999', fontSize: '14px', marginTop: '15px' }}>
-          Fonctionnalités prévues:
-        </p>
-        <ul style={{ 
-          color: '#999', 
-          fontSize: '14px', 
-          textAlign: 'left', 
-          maxWidth: '600px', 
-          margin: '10px auto',
-          lineHeight: '1.8'
-        }}>
-          <li>Chiffre d'affaires par client</li>
-          <li>Clients avec retards de paiement</li>
-          <li>Top 10 clients (CA)</li>
-          <li>Historique des transactions par client</li>
-          <li>Analyse des échéances</li>
-        </ul>
+
+      <div className="metrics-grid" style={{ marginTop: '20px' }}>
+        <div className="metric-card">
+          <div className="metric-icon">💰</div>
+          <div className="metric-info">
+            <div className="metric-label">Chiffre d'Affaires Total</div>
+            <div className="metric-value">{parseFloat(chiffreAffaireTotal || 0).toLocaleString()} FCFA</div>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-icon">⏰</div>
+          <div className="metric-info">
+            <div className="metric-label">Échéances 7 jours</div>
+            <div className="metric-value">{echeances.prochains7jours.count} factures</div>
+            <small>{parseFloat(echeances.prochains7jours.montant || 0).toLocaleString()} FCFA</small>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-icon">📅</div>
+          <div className="metric-info">
+            <div className="metric-label">Échéances 30 jours</div>
+            <div className="metric-value">{echeances.prochains30jours.count} factures</div>
+            <small>{parseFloat(echeances.prochains30jours.montant || 0).toLocaleString()} FCFA</small>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-icon">⚠️</div>
+          <div className="metric-info">
+            <div className="metric-label">Clients en Retard</div>
+            <div className="metric-value">{clientsRetard.length} clients</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '30px' }}>
+        <div className="form-card">
+          <h3>🏆 Top 10 Clients (CA)</h3>
+          {topClients && topClients.length > 0 ? (
+            <Table
+              columns={[
+                { key: 'nom', label: 'Client' },
+                { key: 'nombreFactures', label: 'Factures', render: (val) => val || 0 },
+                { key: 'chiffreAffaires', label: 'CA', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
+              ]}
+              data={topClients}
+            />
+          ) : (
+            <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>Aucune donnée disponible</p>
+          )}
+        </div>
+
+        <div className="form-card">
+          <h3>⚠️ Clients avec Retards</h3>
+          {clientsRetard && clientsRetard.length > 0 ? (
+            <Table
+              columns={[
+                { key: 'nom', label: 'Client' },
+                { key: 'nombreFactures', label: 'Factures', render: (val) => val || 0 },
+                { key: 'montantRetard', label: 'Montant', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
+              ]}
+              data={clientsRetard}
+            />
+          ) : (
+            <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>Aucun retard de paiement</p>
+          )}
+        </div>
+      </div>
+
+      <div className="form-card" style={{ marginTop: '20px' }}>
+        <h3>💳 Distribution des Paiements (Top 10)</h3>
+        {distributionPaiements && distributionPaiements.length > 0 ? (
+          <Table
+            columns={[
+              { key: 'nom', label: 'Client' },
+              { key: 'nombrePaiements', label: 'Nb Paiements', render: (val) => val || 0 },
+              { key: 'totalPaye', label: 'Total Payé', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
+            ]}
+            data={distributionPaiements}
+          />
+        ) : (
+          <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>Aucun paiement enregistré</p>
+        )}
       </div>
     </div>
   );
