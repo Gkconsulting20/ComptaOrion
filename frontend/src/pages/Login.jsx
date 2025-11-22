@@ -165,8 +165,8 @@ export function Login({ onLoginSuccess }) {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '100px',
-            height: '100px',
+            width: '140px',
+            height: '140px',
             marginBottom: '20px'
           }}>
             <img 
@@ -176,7 +176,7 @@ export function Login({ onLoginSuccess }) {
                 width: '100%',
                 height: '100%',
                 objectFit: 'contain',
-                filter: 'drop-shadow(0 10px 30px rgba(52, 152, 219, 0.3))'
+                filter: 'drop-shadow(0 10px 30px rgba(52, 152, 219, 0.4))'
               }}
             />
           </div>

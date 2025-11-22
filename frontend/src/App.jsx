@@ -200,7 +200,7 @@ export default function App() {
           <img 
             src="/logo-comptaorion.png" 
             alt="ComptaOrion" 
-            style={{ width: '80px', height: '80px', marginBottom: '15px' }}
+            style={{ width: '120px', height: '120px', marginBottom: '15px' }}
           />
           <h2>ComptaOrion</h2>
           <p>Chargement...</p>
@@ -255,8 +255,8 @@ export default function App() {
             src="/logo-comptaorion.png" 
             alt="ComptaOrion" 
             style={{
-              width: sidebarOpen ? '40px' : '32px',
-              height: sidebarOpen ? '40px' : '32px',
+              width: sidebarOpen ? '50px' : '40px',
+              height: sidebarOpen ? '50px' : '40px',
               transition: 'all 0.3s',
               objectFit: 'contain'
             }}
