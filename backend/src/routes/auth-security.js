@@ -13,21 +13,19 @@ const router = express.Router();
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password, entrepriseId } = req.body;
+    const { email, password } = req.body;
     const ipAddress = req.ip || req.connection.remoteAddress;
     const userAgent = req.get('user-agent');
 
+    // Chercher l'utilisateur SEULEMENT par email
     const user = await db.query.users.findFirst({
-      where: and(
-        eq(users.email, email),
-        eq(users.entrepriseId, parseInt(entrepriseId))
-      )
+      where: eq(users.email, email)
     });
 
     if (!user) {
       await db.insert(auditConnexions).values({
         userId: null,
-        enterpriseId: parseInt(entrepriseId),
+        enterpriseId: null,
         type: 'failed_login',
         ipAddress,
         userAgent,
@@ -41,7 +39,7 @@ router.post('/login', async (req, res) => {
     if (!passwordMatch) {
       await db.insert(auditConnexions).values({
         userId: user.id,
-        enterpriseId: parseInt(entrepriseId),
+        enterpriseId: user.entrepriseId,
         type: 'failed_login',
         ipAddress,
         userAgent,
@@ -55,10 +53,10 @@ router.post('/login', async (req, res) => {
     const refreshToken = generateRefreshToken(user);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
-    // Créer session
+    // Créer session avec l'entrepriseId de l'utilisateur trouvé
     const session = await db.insert(sessions).values({
       userId: user.id,
-      enterpriseId: parseInt(entrepriseId),
+      enterpriseId: user.entrepriseId,
       tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
       refreshTokenHash: crypto.createHash('sha256').update(refreshToken).digest('hex'),
       ipAddress,
@@ -69,7 +67,7 @@ router.post('/login', async (req, res) => {
     // Audit login réussi
     await db.insert(auditConnexions).values({
       userId: user.id,
-      enterpriseId: parseInt(entrepriseId),
+      enterpriseId: user.entrepriseId,
       type: 'login',
       ipAddress,
       userAgent,
