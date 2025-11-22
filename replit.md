@@ -29,7 +29,7 @@ Key capabilities include support for SYSCOHADA, IFRS, and PCG, multi-currency fu
 ComptaOrion is built with a modular architecture comprising 18 modules organized into 8 domains:
 
 1.  **Dashboard Global:** Real-time KPIs and system overview.
-2.  **Customer & Sales Management:** CRUD for clients, quotes, sales invoices, and payments, with automatic accounting integration. Includes delivery note generation from invoices.
+2.  **Customer & Sales Management:** CRUD for clients, quotes, sales invoices, and payments, with automatic accounting integration. Includes delivery note generation from invoices and **Aging Report** showing receivables categorized by maturity (Overdue, 0-30 days, 31-60 days, 61-90 days, 90+ days).
 3.  **Supplier & Purchase Management:** CRUD for suppliers, purchase orders, goods receipts, and supplier invoices.
 4.  **Stock & Inventory:** Multi-warehouse stock management with movement tracking and FIFO/CMP valorization.
 5.  **Accounting & Compliance:** Complete accounting system including Chart of Accounts (SYSCOHADA/IFRS/PCG), Journals, Accounting Entries, General Ledger, Trial Balance, Fixed Assets management with automatic amortization, Financial Reports, and recurrent entries management.
@@ -54,6 +54,14 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
     - Week-by-week projection for 7, 30, or 90 days
     - Automatic calculation of projected balance = current balance + receivables - payables
 -   **Account Statements (Nov 2025):** Complete account statement generation for both clients and suppliers with period filtering, automatic balance calculation, and professional email delivery via SendGrid.
+-   **Aging Report for Receivables (Nov 2025):** Professional receivables aging report in the Clients module showing outstanding invoices categorized by maturity:
+    - Overdue (past due date)
+    - 0-30 days (due within next 30 days)
+    - 31-60 days (due between 31-60 days)
+    - 61-90 days (due between 61-90 days)
+    - 90+ days (due in more than 90 days)
+    - Each category displays total amount, invoice count, and detailed invoice list
+    - Mutually exclusive categories with accurate totals for financial tracking
 -   **Hybrid Sales System (Nov 2025):** ComptaOrion supports **two sales channels**:
     - **Commercial Sales (B2B):** Sales reps prospect and create subscriptions with automatic commission calculation
     - **Web Sales (Self-Service):** Clients register and pay online via FedaPay (mobile money, cards) with automatic provisioning
