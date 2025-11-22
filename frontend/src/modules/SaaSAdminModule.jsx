@@ -8,17 +8,21 @@ export function SaaSAdminModule() {
   const [clients, setClients] = useState([]);
   const [plans, setPlans] = useState([]);
   const [ventes, setVentes] = useState([]);
+  const [abonnements, setAbonnements] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState(''); // commercial, client, plan, vente
+  const [modalType, setModalType] = useState(''); // commercial, client, plan, vente, abonnements
   const [formData, setFormData] = useState({});
+
+  const [entreprises, setEntreprises] = useState([]);
 
   const TABS = [
     { id: 'dashboard', label: '📊 Dashboard' },
     { id: 'clients', label: '🏢 Clients SaaS' },
     { id: 'commerciaux', label: '👔 Commerciaux' },
     { id: 'plans', label: '💳 Plans Tarifaires' },
+    { id: 'abonnements', label: '📋 Abonnements' },
     { id: 'ventes', label: '💰 Ventes' }
   ];
 
@@ -41,6 +45,9 @@ export function SaaSAdminModule() {
       } else if (activeTab === 'plans') {
         const data = await api.get('/saas-admin/plans');
         setPlans(data);
+      } else if (activeTab === 'abonnements') {
+        const data = await api.get('/saas-admin/abonnements');
+        setAbonnements(data);
       } else if (activeTab === 'ventes') {
         const data = await api.get('/saas-admin/ventes');
         setVentes(data);
@@ -52,10 +59,32 @@ export function SaaSAdminModule() {
     }
   };
 
-  const openModal = (type, data = {}) => {
+  const loadEntreprises = async () => {
+    try {
+      const data = await api.get('/entreprises');
+      setEntreprises(data?.data || []);
+    } catch (error) {
+      console.error('Erreur chargement entreprises:', error);
+    }
+  };
+
+  const openModal = async (type, data = {}) => {
     setModalType(type);
     setFormData(data);
     setShowModal(true);
+    
+    if (type === 'abonnements') {
+      await loadEntreprises();
+      // Charger aussi les plans si pas déjà chargés
+      if (plans.length === 0) {
+        try {
+          const data = await api.get('/saas-admin/plans');
+          setPlans(data);
+        } catch (error) {
+          console.error('Erreur chargement plans:', error);
+        }
+      }
+    }
   };
 
   const closeModal = () => {
@@ -71,7 +100,11 @@ export function SaaSAdminModule() {
         await api.put(`/saas-admin/${modalType}/${formData.id}`, formData);
       } else {
         // Create
-        await api.post(`/saas-admin/${modalType}`, formData);
+        const result = await api.post(`/saas-admin/${modalType}`, formData);
+        
+        if (modalType === 'abonnements' && result.message) {
+          alert(result.message);
+        }
       }
       closeModal();
       loadData();
@@ -314,9 +347,80 @@ export function SaaSAdminModule() {
     </div>
   );
 
+  const renderAbonnements = () => (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3 style={{ margin: 0 }}>Abonnements Actifs</h3>
+        <button
+          onClick={() => openModal('abonnements', { dateDebut: new Date().toISOString().split('T')[0], dureeEnMois: 1 })}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#27ae60',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          + Nouvel Abonnement
+        </button>
+      </div>
+      
+      <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '15px' }}>
+        <div style={{ fontSize: '13px', color: '#7f8c8d' }}>
+          💡 <strong>Automatisation activée :</strong> Lorsque vous créez un abonnement payant pour un client SaaS, 
+          une vente sera automatiquement enregistrée dans l'onglet "Ventes" avec le commercial assigné.
+        </div>
+      </div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+        <thead>
+          <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Entreprise</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Plan</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Montant/mois</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Date Début</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Date Expiration</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+          {abonnements.map(abo => (
+            <tr key={abo.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+              <td style={{ padding: '12px' }}>{abo.entreprise}</td>
+              <td style={{ padding: '12px' }}>{abo.plan}</td>
+              <td style={{ padding: '12px' }}>{parseFloat(abo.montantMensuel).toLocaleString()} XOF</td>
+              <td style={{ padding: '12px' }}>{new Date(abo.dateDebut).toLocaleDateString('fr-FR')}</td>
+              <td style={{ padding: '12px' }}>{new Date(abo.dateExpiration).toLocaleDateString('fr-FR')}</td>
+              <td style={{ padding: '12px' }}>
+                <span style={{
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  backgroundColor: abo.statut === 'actif' ? '#d4edda' : '#f8d7da',
+                  color: abo.statut === 'actif' ? '#155724' : '#721c24'
+                }}>
+                  {abo.statut}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
   const renderVentes = () => (
     <div>
       <h3 style={{ marginBottom: '20px' }}>Historique des Ventes</h3>
+      
+      <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '15px' }}>
+        <div style={{ fontSize: '13px', color: '#7f8c8d' }}>
+          ✨ <strong>Ventes automatiques :</strong> Les ventes se créent automatiquement lorsqu'un client SaaS souscrit à un abonnement payant.
+        </div>
+      </div>
+
       <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
         <thead>
           <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
@@ -380,7 +484,12 @@ export function SaaSAdminModule() {
           overflow: 'auto'
         }}>
           <h3 style={{ marginTop: 0 }}>
-            {formData.id ? 'Modifier' : 'Ajouter'} {modalType === 'commerciaux' ? 'Commercial' : modalType === 'plans' ? 'Plan' : 'Vente'}
+            {formData.id ? 'Modifier' : 'Ajouter'} {
+              modalType === 'commerciaux' ? 'Commercial' : 
+              modalType === 'plans' ? 'Plan' : 
+              modalType === 'abonnements' ? 'Abonnement' :
+              'Vente'
+            }
           </h3>
           
           <form onSubmit={handleSubmit}>
@@ -484,6 +593,76 @@ export function SaaSAdminModule() {
               </>
             )}
 
+            {modalType === 'abonnements' && (
+              <>
+                <div style={{ backgroundColor: '#e3f2fd', padding: '15px', borderRadius: '6px', marginBottom: '15px' }}>
+                  <div style={{ fontSize: '13px', color: '#1565c0', marginBottom: '5px' }}>
+                    ✨ <strong>Automatisation activée</strong>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#424242' }}>
+                    Une vente sera automatiquement créée pour le commercial assigné au client.
+                  </div>
+                </div>
+
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>
+                  Entreprise Cliente *
+                </label>
+                <select
+                  value={formData.entrepriseId || ''}
+                  onChange={(e) => setFormData({ ...formData, entrepriseId: e.target.value })}
+                  required
+                  style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
+                >
+                  <option value="">Sélectionnez une entreprise</option>
+                  {entreprises.map(e => (
+                    <option key={e.id} value={e.id}>{e.nom}</option>
+                  ))}
+                </select>
+
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>
+                  Plan Tarifaire *
+                </label>
+                <select
+                  value={formData.planId || ''}
+                  onChange={(e) => setFormData({ ...formData, planId: e.target.value })}
+                  required
+                  style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
+                >
+                  <option value="">Sélectionnez un plan</option>
+                  {plans.map(p => (
+                    <option key={p.id} value={p.id}>{p.nom} - {parseFloat(p.prix).toLocaleString()} {p.devise}/{p.periode}</option>
+                  ))}
+                </select>
+
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>
+                  Date de Début *
+                </label>
+                <input
+                  type="date"
+                  value={formData.dateDebut || ''}
+                  onChange={(e) => setFormData({ ...formData, dateDebut: e.target.value })}
+                  required
+                  style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '14px' }}>
+                  Durée (en mois) *
+                </label>
+                <select
+                  value={formData.dureeEnMois || 1}
+                  onChange={(e) => setFormData({ ...formData, dureeEnMois: e.target.value })}
+                  required
+                  style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
+                >
+                  <option value="1">1 mois</option>
+                  <option value="3">3 mois</option>
+                  <option value="6">6 mois</option>
+                  <option value="12">12 mois (1 an)</option>
+                  <option value="24">24 mois (2 ans)</option>
+                </select>
+              </>
+            )}
+
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               <button
                 type="submit"
@@ -560,6 +739,7 @@ export function SaaSAdminModule() {
             {activeTab === 'commerciaux' && renderCommerciaux()}
             {activeTab === 'clients' && renderClients()}
             {activeTab === 'plans' && renderPlans()}
+            {activeTab === 'abonnements' && renderAbonnements()}
             {activeTab === 'ventes' && renderVentes()}
           </>
         )}

@@ -36,7 +36,7 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 6.  **Treasury & Finance:** Bank balances, cash management, reconciliation, expense management, and **cash flow forecasting with automated predictions**. Includes bank account management with accounting linkage, and advanced treasury forecasts based on outstanding invoices (both receivables and payables).
 7.  **Configuration & Security:** Currency management, accounting system settings, country-specific parameters, authentication (JWT, RBAC), Row-Level Security (RLS), a comprehensive audit log, and customizable invoice branding (logo, colors, footer).
 8.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI.
-9.  **SaaS Administration:** Complete commercialization platform with sales team management, client tracking, subscription plans, invoicing, and revenue analytics (MRR tracking).
+9.  **SaaS Administration:** Complete commercialization platform with sales team management, client tracking, subscription plans, subscription management with **automated sales tracking**, invoicing, and revenue analytics (MRR tracking).
 
 ### Cross-Modular Functionalities
 -   **Automated Accounting:** Transactions automatically generate accounting entries.
@@ -54,6 +54,11 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
     - Week-by-week projection for 7, 30, or 90 days
     - Automatic calculation of projected balance = current balance + receivables - payables
 -   **Account Statements (Nov 2025):** Complete account statement generation for both clients and suppliers with period filtering, automatic balance calculation, and professional email delivery via SendGrid.
+-   **Automated Sales Tracking (Nov 2025):** When a client SaaS subscribes to a paid plan, a sale is automatically created in the SaaS Admin "Ventes" tab. The sale includes:
+    - Commercial commission calculation based on their rate
+    - Total amount = plan price × subscription duration
+    - Automatic client status update to "actif"
+    - Complete audit trail with notes indicating automatic creation
 
 ## External Dependencies
 

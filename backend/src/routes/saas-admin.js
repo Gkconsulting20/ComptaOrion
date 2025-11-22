@@ -261,6 +261,133 @@ router.put('/plans/:id', async (req, res) => {
 });
 
 // ===========================================
+// GESTION DES ABONNEMENTS
+// ===========================================
+
+router.get('/abonnements', async (req, res) => {
+  try {
+    const abonnementsList = await db.select({
+      id: abonnements.id,
+      entreprise: entreprises.nom,
+      plan: plansAbonnement.nom,
+      statut: abonnements.statut,
+      dateDebut: abonnements.dateDebut,
+      dateExpiration: abonnements.dateExpiration,
+      montantMensuel: abonnements.montantMensuel
+    })
+    .from(abonnements)
+    .leftJoin(entreprises, eq(abonnements.entrepriseId, entreprises.id))
+    .leftJoin(plansAbonnement, eq(abonnements.planId, plansAbonnement.id))
+    .orderBy(desc(abonnements.createdAt));
+
+    res.json(abonnementsList);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/abonnements', async (req, res) => {
+  try {
+    const { entrepriseId, planId, dateDebut, dureeEnMois } = req.body;
+
+    // Vérifier que l'entreprise existe et a un client SaaS associé
+    const [clientSaas] = await db.select()
+      .from(saasClients)
+      .where(eq(saasClients.entrepriseId, parseInt(entrepriseId)))
+      .limit(1);
+
+    if (!clientSaas) {
+      return res.status(400).json({ 
+        error: 'Cette entreprise n\'est pas enregistrée comme client SaaS. Veuillez d\'abord créer un client SaaS pour cette entreprise.' 
+      });
+    }
+
+    if (!clientSaas.commercialId) {
+      return res.status(400).json({ 
+        error: 'Ce client SaaS n\'a pas de commercial assigné. L\'automatisation des ventes requiert un commercial assigné.' 
+      });
+    }
+
+    // Récupérer le plan pour obtenir le prix
+    const [plan] = await db.select()
+      .from(plansAbonnement)
+      .where(eq(plansAbonnement.id, parseInt(planId)))
+      .limit(1);
+
+    if (!plan) {
+      return res.status(404).json({ error: 'Plan non trouvé' });
+    }
+
+    // Calculer la date d'expiration
+    const debut = new Date(dateDebut);
+    const expiration = new Date(debut);
+    expiration.setMonth(expiration.getMonth() + (dureeEnMois || 1));
+
+    // Créer l'abonnement
+    const [abonnement] = await db.insert(abonnements).values({
+      entrepriseId: parseInt(entrepriseId),
+      planId: parseInt(planId),
+      statut: 'actif',
+      dateDebut: debut,
+      dateExpiration: expiration,
+      prochainRenouvellement: expiration,
+      montantMensuel: plan.prix
+    }).returning();
+
+    // Récupérer le commercial pour obtenir son taux de commission
+    const [commercial] = await db.select()
+      .from(saasCommerciaux)
+      .where(eq(saasCommerciaux.id, clientSaas.commercialId))
+      .limit(1);
+
+    const tauxCommission = commercial ? parseFloat(commercial.commission) / 100 : 0.10;
+    const montantVente = parseFloat(plan.prix) * (dureeEnMois || 1);
+    const commission = montantVente * tauxCommission;
+
+    // ✨ CRÉER AUTOMATIQUEMENT UNE VENTE
+    await db.insert(saasVentes).values({
+      commercialId: clientSaas.commercialId,
+      clientId: clientSaas.id,
+      abonnementId: abonnement.id,
+      montantVente: montantVente,
+      commission: commission,
+      statut: 'confirmée',
+      notes: `Vente automatique - Abonnement ${plan.nom} (${dureeEnMois || 1} mois)`
+    });
+
+    // Mettre à jour le statut du client SaaS
+    await db.update(saasClients)
+      .set({ statut: 'actif', updatedAt: new Date() })
+      .where(eq(saasClients.id, clientSaas.id));
+
+    res.json({
+      success: true,
+      message: 'Abonnement créé avec succès. Vente enregistrée automatiquement.',
+      abonnement
+    });
+  } catch (error) {
+    console.error('Erreur création abonnement:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/abonnements/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const [abonnement] = await db.update(abonnements)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(abonnements.id, parseInt(id)))
+      .returning();
+
+    res.json(abonnement);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===========================================
 // GESTION DES VENTES
 // ===========================================
 
