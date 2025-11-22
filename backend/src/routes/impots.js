@@ -1,0 +1,303 @@
+import express from 'express';
+import { db } from '../db.js';
+import { parametresFiscaux, declarationsFiscales, factures, comptesComptables } from '../schema.js';
+import { eq, and, sql, gte, lte } from 'drizzle-orm';
+import crypto from 'crypto';
+
+const router = express.Router();
+
+const ENCRYPTION_KEY = process.env.FISCAL_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+const IV_LENGTH = 16;
+
+function encrypt(text) {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY.slice(0, 64), 'hex'), iv);
+  let encrypted = cipher.update(text);
+  encrypted = Buffer.concat([encrypted, cipher.final()]);
+  return iv.toString('hex') + ':' + encrypted.toString('hex');
+}
+
+function decrypt(text) {
+  try {
+    const textParts = text.split(':');
+    const iv = Buffer.from(textParts.shift(), 'hex');
+    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY.slice(0, 64), 'hex'), iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+  } catch (error) {
+    console.error('Erreur décryptage:', error);
+    return null;
+  }
+}
+
+router.get('/parametres', async (req, res) => {
+  try {
+    const [params] = await db
+      .select()
+      .from(parametresFiscaux)
+      .where(eq(parametresFiscaux.entrepriseId, req.entrepriseId))
+      .limit(1);
+
+    if (!params) {
+      return res.json({
+        success: true,
+        data: null
+      });
+    }
+
+    const paramsDecryptes = {
+      ...params,
+      apiCleSecrete: params.apiCleSecrete ? '••••••••' : null
+    };
+
+    res.json({
+      success: true,
+      data: paramsDecryptes
+    });
+  } catch (error) {
+    console.error('Erreur GET /api/impots/parametres:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des paramètres fiscaux',
+      error: error.message
+    });
+  }
+});
+
+router.post('/parametres', async (req, res) => {
+  try {
+    const {
+      pays,
+      administrationNom,
+      numeroIFU,
+      numeroNIF,
+      centreImpots,
+      regimeImposition,
+      apiUrl,
+      apiIdentifiant,
+      apiCleSecrete
+    } = req.body;
+
+    if (!pays) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le pays est requis'
+      });
+    }
+
+    const [existing] = await db
+      .select()
+      .from(parametresFiscaux)
+      .where(eq(parametresFiscaux.entrepriseId, req.entrepriseId))
+      .limit(1);
+
+    const dataToSave = {
+      entrepriseId: req.entrepriseId,
+      pays,
+      administrationNom,
+      numeroIFU,
+      numeroNIF,
+      centreImpots,
+      regimeImposition,
+      apiUrl,
+      apiIdentifiant,
+      apiCleSecrete: apiCleSecrete && apiCleSecrete !== '••••••••' ? encrypt(apiCleSecrete) : existing?.apiCleSecrete,
+      connexionActive: false,
+      updatedAt: new Date()
+    };
+
+    let savedParams;
+
+    if (existing) {
+      [savedParams] = await db
+        .update(parametresFiscaux)
+        .set(dataToSave)
+        .where(eq(parametresFiscaux.id, existing.id))
+        .returning();
+    } else {
+      [savedParams] = await db
+        .insert(parametresFiscaux)
+        .values(dataToSave)
+        .returning();
+    }
+
+    res.json({
+      success: true,
+      message: 'Paramètres fiscaux enregistrés avec succès',
+      data: {
+        ...savedParams,
+        apiCleSecrete: savedParams.apiCleSecrete ? '••••••••' : null
+      }
+    });
+  } catch (error) {
+    console.error('Erreur POST /api/impots/parametres:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'enregistrement des paramètres fiscaux',
+      error: error.message
+    });
+  }
+});
+
+router.post('/parametres/tester-connexion', async (req, res) => {
+  try {
+    const [params] = await db
+      .select()
+      .from(parametresFiscaux)
+      .where(eq(parametresFiscaux.entrepriseId, req.entrepriseId))
+      .limit(1);
+
+    if (!params) {
+      return res.status(404).json({
+        success: false,
+        message: 'Aucun paramètre fiscal configuré'
+      });
+    }
+
+    await db
+      .update(parametresFiscaux)
+      .set({
+        connexionActive: true,
+        derniereConnexion: new Date()
+      })
+      .where(eq(parametresFiscaux.id, params.id));
+
+    res.json({
+      success: true,
+      message: `Connexion simulée avec succès à ${params.administrationNom || params.pays}`,
+      data: {
+        pays: params.pays,
+        administration: params.administrationNom,
+        statut: 'connecte'
+      }
+    });
+  } catch (error) {
+    console.error('Erreur test connexion:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors du test de connexion',
+      error: error.message
+    });
+  }
+});
+
+router.get('/declarations', async (req, res) => {
+  try {
+    const declarations = await db
+      .select()
+      .from(declarationsFiscales)
+      .where(eq(declarationsFiscales.entrepriseId, req.entrepriseId))
+      .orderBy(sql`${declarationsFiscales.createdAt} DESC`)
+      .limit(50);
+
+    res.json({
+      success: true,
+      count: declarations.length,
+      data: declarations
+    });
+  } catch (error) {
+    console.error('Erreur GET /api/impots/declarations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des déclarations',
+      error: error.message
+    });
+  }
+});
+
+router.post('/declarations/tva', async (req, res) => {
+  try {
+    const { periode, notes } = req.body;
+
+    if (!periode) {
+      return res.status(400).json({
+        success: false,
+        message: 'La période est requise (format: YYYY-MM)'
+      });
+    }
+
+    const [params] = await db
+      .select()
+      .from(parametresFiscaux)
+      .where(eq(parametresFiscaux.entrepriseId, req.entrepriseId))
+      .limit(1);
+
+    if (!params || !params.connexionActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Aucune connexion active à l\'administration fiscale. Veuillez configurer et tester la connexion dans les paramètres.'
+      });
+    }
+
+    const [annee, mois] = periode.split('-');
+    const dateDebut = new Date(parseInt(annee), parseInt(mois) - 1, 1);
+    const dateFin = new Date(parseInt(annee), parseInt(mois), 0, 23, 59, 59);
+
+    const facturesPeriode = await db
+      .select({
+        totalTTC: factures.totalTTC,
+        totalHT: factures.totalHT,
+        montantTVA: factures.montantTVA
+      })
+      .from(factures)
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        gte(factures.dateFacture, dateDebut),
+        lte(factures.dateFacture, dateFin),
+        sql`${factures.statut} IN ('envoyee', 'payee', 'retard')`
+      ));
+
+    const tvaCollectee = facturesPeriode.reduce((sum, f) => sum + parseFloat(f.montantTVA || 0), 0);
+    const montantHT = facturesPeriode.reduce((sum, f) => sum + parseFloat(f.totalHT || 0), 0);
+
+    const [declaration] = await db
+      .insert(declarationsFiscales)
+      .values({
+        entrepriseId: req.entrepriseId,
+        type: 'tva',
+        periode,
+        montant: tvaCollectee.toString(),
+        statut: 'soumise',
+        numeroDeclaration: `TVA-${periode}-${Date.now()}`,
+        dateDeclaration: new Date(),
+        dateSoumission: new Date(),
+        reponseAdministration: JSON.stringify({
+          success: true,
+          message: 'Déclaration simulée acceptée',
+          administration: params.administrationNom,
+          pays: params.pays
+        }),
+        notes
+      })
+      .returning();
+
+    await db
+      .update(parametresFiscaux)
+      .set({ derniereSynchronisation: new Date() })
+      .where(eq(parametresFiscaux.id, params.id));
+
+    res.json({
+      success: true,
+      message: 'Déclaration TVA créée avec succès',
+      data: {
+        ...declaration,
+        calculs: {
+          montantHT,
+          tvaCollectee,
+          nombreFactures: facturesPeriode.length
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erreur POST /api/impots/declarations/tva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de la déclaration TVA',
+      error: error.message
+    });
+  }
+});
+
+export default router;

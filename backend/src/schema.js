@@ -677,6 +677,48 @@ export const auditLogs = pgTable('audit_logs', {
 });
 
 // ==========================================
+// MODULE 13B: PARAMETRES FISCAUX
+// ==========================================
+
+export const parametresFiscaux = pgTable('parametres_fiscaux', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  pays: varchar('pays', { length: 50 }).notNull(), // benin, senegal, cotedivoire, togo, mali, burkina
+  administrationNom: varchar('administration_nom', { length: 255 }), // e-Tax, SIGTAS, e-Impôts, OTR, DGI
+  numeroIFU: varchar('numero_ifu', { length: 100 }), // Identifiant Fiscal Unique
+  numeroNIF: varchar('numero_nif', { length: 100 }), // Numéro d'Identification Fiscale
+  centreImpots: varchar('centre_impots', { length: 255 }),
+  regimeImposition: varchar('regime_imposition', { length: 100 }), // reel-normal, reel-simplifie, micro
+  apiUrl: varchar('api_url', { length: 500 }), // URL base de l'API fiscale
+  apiIdentifiant: varchar('api_identifiant', { length: 255 }), // Identifiant API
+  apiCleSecrete: text('api_cle_secrete'), // Clé API cryptée
+  connexionActive: boolean('connexion_active').default(false),
+  derniereConnexion: timestamp('derniere_connexion'),
+  derniereSynchronisation: timestamp('derniere_synchronisation'),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Historique des déclarations fiscales
+export const declarationsFiscales = pgTable('declarations_fiscales', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  type: varchar('type', { length: 50 }).notNull(), // tva, is, ir, autre
+  periode: varchar('periode', { length: 50 }).notNull(), // 2024-01, 2024-Q1, 2024
+  montant: decimal('montant', { precision: 15, scale: 2 }),
+  statut: varchar('statut', { length: 50 }).default('brouillon'), // brouillon, soumise, acceptee, rejetee
+  numeroDeclaration: varchar('numero_declaration', { length: 255 }),
+  dateDeclaration: date('date_declaration'),
+  dateSoumission: timestamp('date_soumission'),
+  reponseAdministration: text('reponse_administration'), // JSON de la réponse API
+  erreurs: text('erreurs'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// ==========================================
 // MODULE 14: ORION SECURE - AUTHENTICATION & SECURITY
 // ==========================================
 

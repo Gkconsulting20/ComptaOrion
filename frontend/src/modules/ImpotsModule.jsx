@@ -6,9 +6,15 @@ export function ImpotsModule() {
   const [loading, setLoading] = useState(false);
   const [declarations, setDeclarations] = useState([]);
   const [parametres, setParametres] = useState({
-    regimeImposition: 'reel-normal',
+    pays: '',
+    administrationNom: '',
     numeroIFU: '',
-    centreImpots: ''
+    numeroNIF: '',
+    centreImpots: '',
+    regimeImposition: 'reel-normal',
+    apiUrl: '',
+    apiIdentifiant: '',
+    apiCleSecrete: ''
   });
 
   useEffect(() => {
@@ -19,11 +25,65 @@ export function ImpotsModule() {
     setLoading(true);
     try {
       if (activeTab === 'declarations') {
-        // Les déclarations seront chargées depuis l'API
-        setDeclarations([]);
+        const res = await api.get('/impots/declarations');
+        setDeclarations(res.data || []);
+      } else if (activeTab === 'parametres') {
+        const res = await api.get('/impots/parametres');
+        if (res.data) {
+          setParametres({
+            ...parametres,
+            ...res.data
+          });
+        }
       }
     } catch (error) {
       console.error('Erreur chargement impôts:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sauvegarderParametres = async () => {
+    try {
+      setLoading(true);
+      await api.post('/impots/parametres', parametres);
+      alert('Paramètres fiscaux enregistrés avec succès !');
+    } catch (error) {
+      console.error('Erreur sauvegarde:', error);
+      alert('Erreur lors de l\'enregistrement des paramètres');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testerConnexion = async () => {
+    try {
+      setLoading(true);
+      const res = await api.post('/impots/parametres/tester-connexion');
+      alert(res.message || 'Connexion réussie !');
+      loadData();
+    } catch (error) {
+      console.error('Erreur test connexion:', error);
+      alert('Erreur lors du test de connexion');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const declarerTVA = async (periode) => {
+    if (!periode) {
+      alert('Veuillez sélectionner une période');
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await api.post('/impots/declarations/tva', { periode });
+      alert(res.message || 'Déclaration TVA créée avec succès !');
+      setActiveTab('declarations');
+      loadData();
+    } catch (error) {
+      console.error('Erreur déclaration TVA:', error);
+      alert(error.response?.data?.message || 'Erreur lors de la déclaration TVA');
     } finally {
       setLoading(false);
     }
@@ -84,35 +144,78 @@ export function ImpotsModule() {
     </div>
   );
 
-  const renderTVA = () => (
-    <div>
-      <h3 style={{ marginBottom: '20px' }}>Gestion de la TVA</h3>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-        <div style={{ padding: '20px', backgroundColor: '#3498db', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
-          <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Collectée</div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>0 XOF</div>
-          <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur ventes</div>
+  const renderTVA = () => {
+    const [periodeDeclaration, setPeriodeDeclaration] = useState(new Date().toISOString().slice(0, 7));
+
+    return (
+      <div>
+        <h3 style={{ marginBottom: '20px' }}>Gestion de la TVA</h3>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+          <div style={{ padding: '20px', backgroundColor: '#3498db', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Collectée</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>0 XOF</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur ventes</div>
+          </div>
+
+          <div style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Déductible</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>0 XOF</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur achats</div>
+          </div>
+
+          <div style={{ padding: '20px', backgroundColor: '#27ae60', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA à Décaisser</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>0 XOF</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Collectée - Déductible</div>
+          </div>
         </div>
 
-        <div style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
-          <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Déductible</div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>0 XOF</div>
-          <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur achats</div>
-        </div>
+        <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginTop: '20px' }}>
+          <h4 style={{ marginTop: 0 }}>📤 Télédéclaration TVA</h4>
+          <p style={{ color: '#7f8c8d', marginBottom: '15px' }}>
+            Déclarez votre TVA directement auprès de l'administration fiscale configurée dans les paramètres.
+          </p>
 
-        <div style={{ padding: '20px', backgroundColor: '#27ae60', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
-          <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA à Décaisser</div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>0 XOF</div>
-          <div style={{ fontSize: '12px', opacity: 0.8 }}>Collectée - Déductible</div>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Période de déclaration</label>
+            <input
+              type="month"
+              value={periodeDeclaration}
+              onChange={(e) => setPeriodeDeclaration(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+
+          <button
+            onClick={() => declarerTVA(periodeDeclaration)}
+            disabled={loading}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: loading ? '#95a5a6' : '#27ae60',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontWeight: '500'
+            }}
+          >
+            {loading ? 'Traitement...' : '📤 Soumettre la déclaration TVA'}
+          </button>
+
+          <p style={{ padding: '15px', backgroundColor: '#fff3cd', borderRadius: '6px', color: '#856404', marginTop: '15px' }}>
+            ℹ️ Les montants de TVA seront calculés automatiquement à partir de vos factures et écritures comptables.
+          </p>
         </div>
       </div>
-
-      <p style={{ padding: '15px', backgroundColor: '#fff3cd', borderRadius: '6px', color: '#856404' }}>
-        ℹ️ Les montants de TVA seront calculés automatiquement à partir de vos factures et écritures comptables.
-      </p>
-    </div>
-  );
+    );
+  };
 
   const renderIS = () => (
     <div>
@@ -251,6 +354,8 @@ export function ImpotsModule() {
         <div style={{ marginBottom: '20px' }}>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Pays</label>
           <select
+            value={parametres.pays}
+            onChange={(e) => setParametres({...parametres, pays: e.target.value})}
             style={{
               width: '100%',
               padding: '10px',
@@ -270,9 +375,28 @@ export function ImpotsModule() {
         </div>
 
         <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>URL API</label>
+          <input
+            type="text"
+            value={parametres.apiUrl}
+            onChange={(e) => setParametres({...parametres, apiUrl: e.target.value})}
+            placeholder="https://api.administration-fiscale.gouv"
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Identifiant API / NIF</label>
           <input
             type="text"
+            value={parametres.apiIdentifiant}
+            onChange={(e) => setParametres({...parametres, apiIdentifiant: e.target.value})}
             placeholder="Votre identifiant sur le portail fiscal"
             style={{
               width: '100%',
@@ -288,6 +412,8 @@ export function ImpotsModule() {
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Clé API / Mot de passe</label>
           <input
             type="password"
+            value={parametres.apiCleSecrete}
+            onChange={(e) => setParametres({...parametres, apiCleSecrete: e.target.value})}
             placeholder="Clé secrète fournie par l'administration"
             style={{
               width: '100%',
@@ -306,30 +432,34 @@ export function ImpotsModule() {
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
+            onClick={testerConnexion}
+            disabled={loading}
             style={{
               padding: '10px 20px',
-              backgroundColor: '#27ae60',
+              backgroundColor: loading ? '#95a5a6' : '#27ae60',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              cursor: 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
               fontWeight: '500'
             }}
           >
-            Tester la connexion
+            {loading ? 'Test...' : 'Tester la connexion'}
           </button>
           <button
+            onClick={sauvegarderParametres}
+            disabled={loading}
             style={{
               padding: '10px 20px',
-              backgroundColor: '#3498db',
+              backgroundColor: loading ? '#95a5a6' : '#3498db',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              cursor: 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
               fontWeight: '500'
             }}
           >
-            Enregistrer la configuration
+            {loading ? 'Enregistrement...' : 'Enregistrer la configuration'}
           </button>
         </div>
       </div>

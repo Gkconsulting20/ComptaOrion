@@ -211,7 +211,6 @@ export function ModuleComptabilite() {
     { id: 'grandlivre', label: '📖 Grand Livre', icon: '📖' },
     { id: 'balance', label: '⚖️ Balance', icon: '⚖️' },
     { id: 'immobilisations', label: '🏢 Immobilisations', icon: '🏢' },
-    { id: 'taxes', label: '💳 Taxes/TVA', icon: '💳' },
     { id: 'rapports', label: '📊 Rapports', icon: '📊' },
     { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
   ];
