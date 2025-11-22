@@ -206,6 +206,33 @@ Réponse attendue :
 
 ---
 
+## ⚠️ Limitations et Bonnes Pratiques
+
+### Email et Multi-Entreprises
+
+**IMPORTANT** : Chaque entreprise doit utiliser un **email unique** :
+- ✅ **Recommandé** : Utilisez des emails différents pour chaque entreprise
+- ❌ **Non supporté** : Créer plusieurs entreprises avec le même email
+
+**Exemple** :
+```
+Entreprise A : contact@entrepriseA.com ✅
+Entreprise B : contact@entrepriseB.com ✅
+Entreprise A et B : contact@monemail.com ❌
+```
+
+**Pourquoi ?**
+- Le système détecte les renouvellements par email
+- Un même email créera un renouvellement au lieu d'une nouvelle entreprise
+- Pour gérer plusieurs entreprises, utilisez des emails distincts
+
+### Renouvellements
+
+Les clients existants peuvent renouveler leur abonnement directement via `/inscription` :
+- Le système détecte automatiquement les emails existants
+- Crée un nouvel abonnement sans dupliquer l'entreprise/utilisateur
+- Trackée comme vente web avec commission 0
+
 ## ✅ Checklist de Mise en Production
 
 - [ ] Compte FedaPay créé et vérifié
@@ -217,6 +244,7 @@ Réponse attendue :
 - [ ] Emails de bienvenue configurés (SendGrid)
 - [ ] Page d'inscription testée de bout en bout
 - [ ] Monitoring des transactions activé
+- [ ] Documentation email unique par entreprise communiquée aux utilisateurs
 
 ---
 

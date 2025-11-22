@@ -54,11 +54,25 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
     - Week-by-week projection for 7, 30, or 90 days
     - Automatic calculation of projected balance = current balance + receivables - payables
 -   **Account Statements (Nov 2025):** Complete account statement generation for both clients and suppliers with period filtering, automatic balance calculation, and professional email delivery via SendGrid.
--   **Automated Sales Tracking (Nov 2025):** When a client SaaS subscribes to a paid plan, a sale is automatically created in the SaaS Admin "Ventes" tab. The sale includes:
-    - Commercial commission calculation based on their rate
-    - Total amount = plan price × subscription duration
-    - Automatic client status update to "actif"
-    - Complete audit trail with notes indicating automatic creation
+-   **Hybrid Sales System (Nov 2025):** ComptaOrion supports **two sales channels**:
+    - **Commercial Sales (B2B):** Sales reps prospect and create subscriptions with automatic commission calculation
+    - **Web Sales (Self-Service):** Clients register and pay online via FedaPay (mobile money, cards) with automatic provisioning
+    
+    When a subscription is created (via commercial or web), a sale is automatically recorded with:
+    - Commercial commission (if B2B sale) or zero commission (if web sale)
+    - Total amount = plan price × subscription duration  
+    - Source tracking (commercial/web) for analytics
+    - Complete audit trail with notes
+
+-   **FedaPay Integration (Nov 2025):** Full payment gateway integration for African markets:
+    - Mobile Money (MTN, Moov, Orange Money) support
+    - HMAC signature verification for webhook security
+    - Automatic account creation after payment confirmation
+    - Idempotent webhook handling (duplicate protection via transaction_id)
+    - Renewal support for existing customers
+    - Covers 8+ West African countries (Benin, Senegal, Côte d'Ivoire, Togo, Mali, etc.)
+    - Public registration page at `/inscription` with plan selection
+    - See `GUIDE_CONFIGURATION_FEDAPAY.md` for setup instructions
 
 ## External Dependencies
 

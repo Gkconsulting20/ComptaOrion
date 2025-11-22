@@ -1135,3 +1135,24 @@ export const historiqueEmails = pgTable('historique_emails', {
   envoyePar: integer('envoye_par').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// ==========================================
+// INSCRIPTIONS EN ATTENTE (FedaPay)
+// ==========================================
+// Table pour persister les inscriptions en attente et lier transaction_id à l'intention
+export const inscriptionsEnAttente = pgTable('inscriptions_en_attente', {
+  id: serial('id').primaryKey(),
+  transactionId: varchar('transaction_id', { length: 255 }).notNull().unique(),
+  email: varchar('email', { length: 255 }).notNull(),
+  nomEntreprise: varchar('nom_entreprise', { length: 255 }).notNull(),
+  telephone: varchar('telephone', { length: 50 }),
+  pays: varchar('pays', { length: 100 }),
+  planId: integer('plan_id').notNull(),
+  dureeEnMois: integer('duree_en_mois').notNull(),
+  montantTotal: decimal('montant_total', { precision: 15, scale: 2 }).notNull(),
+  methodePaiement: varchar('methode_paiement', { length: 50 }), // fedapay, stripe, paypal
+  typeInscription: varchar('type_inscription', { length: 50 }).notNull(), // 'nouveau' ou 'renouvellement'
+  entrepriseIdPourRenouvellement: integer('entreprise_id_pour_renouvellement'), // Si renouvellement
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  traitee: boolean('traitee').default(false).notNull()
+});

@@ -1,9 +1,10 @@
 import express from 'express';
 import { db } from '../db.js';
-import { entreprises, users, plansAbonnement, abonnements, saasClients, saasVentes } from '../schema.js';
+import { entreprises, users, plansAbonnement, abonnements, saasClients, saasVentes, inscriptionsEnAttente } from '../schema.js';
 import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import FedaPay from 'fedapay';
+import crypto from 'crypto';
 
 const router = express.Router();
 
@@ -67,17 +68,14 @@ router.post('/inscription', async (req, res) => {
       });
     }
 
-    // Vérifier si l'email existe déjà
+    // Vérifier si l'utilisateur existe déjà pour déterminer le type d'inscription
     const existingUser = await db.select()
       .from(users)
       .where(eq(users.email, email.toLowerCase()))
       .limit(1);
-
-    if (existingUser.length > 0) {
-      return res.status(400).json({ 
-        error: 'Cet email est déjà utilisé. Veuillez utiliser un autre email.' 
-      });
-    }
+    
+    const typeInscription = existingUser.length > 0 ? 'renouvellement' : 'nouveau';
+    const entrepriseIdPourRenouvellement = existingUser.length > 0 ? existingUser[0].entrepriseId : null;
 
     // Récupérer le plan
     const [plan] = await db.select()
@@ -138,6 +136,21 @@ router.post('/inscription', async (req, res) => {
         const token = await transaction.generateToken();
         paymentUrl = token.url;
         transactionId = transaction.id;
+        
+        // Persister l'inscription en attente avec le transaction_id
+        await db.insert(inscriptionsEnAttente).values({
+          transactionId: transaction.id,
+          email: email.toLowerCase(),
+          nomEntreprise,
+          telephone,
+          pays,
+          planId: parseInt(planId),
+          dureeEnMois: parseInt(dureeEnMois),
+          montantTotal,
+          methodePaiement,
+          typeInscription,
+          entrepriseIdPourRenouvellement
+        });
 
       } catch (fedapayError) {
         console.error('Erreur FedaPay:', fedapayError);
@@ -170,6 +183,53 @@ router.post('/inscription', async (req, res) => {
   }
 });
 
+// Fonction de vérification de signature HMAC FedaPay
+function verifyFedaPaySignature(signatureHeader, payload, secret) {
+  if (!signatureHeader) {
+    return false;
+  }
+
+  try {
+    // Parse signature header: t=timestamp,v1=signature
+    const sigParts = {};
+    signatureHeader.split(',').forEach(item => {
+      const [key, value] = item.split('=');
+      sigParts[key] = value;
+    });
+
+    const timestamp = sigParts.t;
+    const signature = sigParts.v1;
+
+    if (!timestamp || !signature) {
+      return false;
+    }
+
+    // Vérifier timestamp (prévenir les attaques par rejeu - tolérance 5 minutes)
+    const TOLERANCE = 300; // 5 minutes
+    const currentTime = Math.floor(Date.now() / 1000);
+    if (Math.abs(currentTime - parseInt(timestamp)) > TOLERANCE) {
+      console.log('⚠️ Timestamp trop ancien - possible attaque par rejeu');
+      return false;
+    }
+
+    // Calculer la signature attendue
+    const signedPayload = `${timestamp}.${payload}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(signedPayload)
+      .digest('hex');
+
+    // Comparaison sécurisée contre les attaques temporelles
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    );
+  } catch (error) {
+    console.error('Erreur vérification signature:', error);
+    return false;
+  }
+}
+
 // POST /api/public/webhook/fedapay - Webhook FedaPay
 router.post('/webhook/fedapay', async (req, res) => {
   try {
@@ -177,22 +237,134 @@ router.post('/webhook/fedapay', async (req, res) => {
 
     console.log('Webhook FedaPay reçu:', { transaction_id, status });
 
-    if (status === 'approved') {
-      // Récupérer les détails de la transaction
-      const transaction = await FedaPay.Transaction.retrieve(transaction_id);
-      const metadata = transaction.custom_metadata;
+    // SÉCURITÉ : Vérifier que la requête vient bien de FedaPay
+    if (!FEDAPAY_SECRET_KEY) {
+      console.error('FedaPay non configuré - webhook rejeté');
+      return res.status(500).json({ error: 'FedaPay non configuré' });
+    }
 
-      if (!metadata || !metadata.email) {
-        console.error('Métadonnées manquantes dans la transaction');
-        return res.status(400).json({ error: 'Métadonnées manquantes' });
+    // Vérifier la signature HMAC du webhook (protection contre falsification)
+    const signatureHeader = req.headers['x-fedapay-signature'];
+    
+    // Vérification stricte : req.rawBody DOIT être défini
+    if (!req.rawBody) {
+      console.error('❌ rawBody manquant - webhook rejeté (middleware non configuré correctement)');
+      return res.status(500).json({ error: 'Configuration serveur invalide' });
+    }
+    
+    if (!verifyFedaPaySignature(signatureHeader, req.rawBody, FEDAPAY_SECRET_KEY)) {
+      console.error('❌ Signature FedaPay invalide - webhook rejeté');
+      return res.status(403).json({ error: 'Signature invalide' });
+    }
+
+    console.log('✅ Signature FedaPay vérifiée');
+
+    // Récupérer la transaction depuis FedaPay pour double vérification
+    let transaction;
+    try {
+      transaction = await FedaPay.Transaction.retrieve(transaction_id);
+    } catch (fedapayError) {
+      console.error('Transaction FedaPay invalide:', fedapayError);
+      return res.status(400).json({ error: 'Transaction invalide' });
+    }
+
+    // Vérifier que le statut correspond bien
+    if (transaction.status !== status) {
+      console.error('Statut webhook ne correspond pas à FedaPay');
+      return res.status(400).json({ error: 'Statut incohérent' });
+    }
+
+    if (status === 'approved') {
+      // Récupérer l'inscription en attente depuis la table
+      const [inscriptionEnAttente] = await db.select()
+        .from(inscriptionsEnAttente)
+        .where(eq(inscriptionsEnAttente.transactionId, transaction_id))
+        .limit(1);
+
+      if (!inscriptionEnAttente) {
+        console.error('Inscription en attente non trouvée pour transaction:', transaction_id);
+        return res.status(400).json({ error: 'Inscription non trouvée' });
       }
 
-      // Créer l'entreprise
+      // Vérifier si c'est un doublon (déjà traité)
+      if (inscriptionEnAttente.traitee) {
+        console.log(`Transaction ${transaction_id} déjà traitée - webhook ignoré (idempotence)`);
+        return res.json({ success: true, message: 'Transaction déjà traitée' });
+      }
+
+      // Utiliser typeInscription de la table au lieu de deviner
+      const typeInscription = inscriptionEnAttente.typeInscription;
+
+      if (typeInscription === 'renouvellement') {
+        // C'est un renouvellement
+        console.log(`Traitement renouvellement pour ${inscriptionEnAttente.email}`);
+        
+        // Vérifier que l'entrepriseId est présent
+        if (!inscriptionEnAttente.entrepriseIdPourRenouvellement) {
+          console.error('Entreprise ID manquant pour renouvellement - webhook rejeté');
+          return res.status(400).json({ error: 'Entreprise invalide' });
+        }
+        
+        // Récupérer l'entreprise
+        const entreprise = await db.select()
+          .from(entreprises)
+          .where(eq(entreprises.id, inscriptionEnAttente.entrepriseIdPourRenouvellement))
+          .limit(1);
+        
+        if (entreprise.length === 0) {
+          console.error('Entreprise non trouvée - webhook rejeté');
+          return res.status(400).json({ error: 'Entreprise introuvable' });
+        }
+
+        const clientSaas = await db.select()
+          .from(saasClients)
+          .where(eq(saasClients.entrepriseId, entreprise[0].id))
+          .limit(1);
+
+        // Créer nouvel abonnement (renouvellement)
+        const dateDebut = new Date();
+        const dateExpiration = new Date(dateDebut);
+        dateExpiration.setMonth(dateExpiration.getMonth() + inscriptionEnAttente.dureeEnMois);
+
+        const [abonnement] = await db.insert(abonnements).values({
+          entrepriseId: entreprise[0].id,
+          planId: inscriptionEnAttente.planId,
+          statut: 'actif',
+          dateDebut,
+          dateExpiration,
+          prochainRenouvellement: dateExpiration,
+          montantMensuel: inscriptionEnAttente.montantTotal / inscriptionEnAttente.dureeEnMois
+        }).returning();
+
+        // Créer la vente de renouvellement
+        await db.insert(saasVentes).values({
+          commercialId: null,
+          clientId: clientSaas[0].id,
+          abonnementId: abonnement.id,
+          montantVente: inscriptionEnAttente.montantTotal.toString(),
+          commission: 0,
+          statut: 'confirmée',
+          source: 'web',
+          notes: `Renouvellement web - FedaPay ${transaction_id}`
+        });
+        
+        // Marquer comme traitée
+        await db.update(inscriptionsEnAttente)
+          .set({ traitee: true })
+          .where(eq(inscriptionsEnAttente.id, inscriptionEnAttente.id));
+
+        console.log(`✅ Renouvellement complété pour ${inscriptionEnAttente.email}`);
+        return res.json({ success: true, message: 'Renouvellement complété avec succès' });
+      }
+
+      // Nouveau client - Créer l'entreprise
+      console.log(`Traitement nouveau client pour ${inscriptionEnAttente.email}`);
+      
       const [newEntreprise] = await db.insert(entreprises).values({
-        nom: metadata.nomEntreprise,
-        email: metadata.email,
-        telephone: metadata.telephone,
-        pays: metadata.pays || 'Bénin',
+        nom: inscriptionEnAttente.nomEntreprise,
+        email: inscriptionEnAttente.email,
+        telephone: inscriptionEnAttente.telephone,
+        pays: inscriptionEnAttente.pays || 'Bénin',
         devise: 'XOF',
         systemeComptable: 'SYSCOHADA'
       }).returning();
@@ -203,8 +375,8 @@ router.post('/webhook/fedapay', async (req, res) => {
 
       // Créer l'utilisateur admin
       const [newUser] = await db.insert(users).values({
-        nom: metadata.nomEntreprise,
-        email: metadata.email,
+        nom: inscriptionEnAttente.nomEntreprise,
+        email: inscriptionEnAttente.email,
         password: hashedPassword,
         entrepriseId: newEntreprise.id,
         role: 'admin',
@@ -223,16 +395,16 @@ router.post('/webhook/fedapay', async (req, res) => {
       // Créer l'abonnement
       const dateDebut = new Date();
       const dateExpiration = new Date(dateDebut);
-      dateExpiration.setMonth(dateExpiration.getMonth() + parseInt(metadata.dureeEnMois));
+      dateExpiration.setMonth(dateExpiration.getMonth() + inscriptionEnAttente.dureeEnMois);
 
       const [abonnement] = await db.insert(abonnements).values({
         entrepriseId: newEntreprise.id,
-        planId: parseInt(metadata.planId),
+        planId: inscriptionEnAttente.planId,
         statut: 'actif',
         dateDebut,
         dateExpiration,
         prochainRenouvellement: dateExpiration,
-        montantMensuel: metadata.montantTotal / metadata.dureeEnMois
+        montantMensuel: inscriptionEnAttente.montantTotal / inscriptionEnAttente.dureeEnMois
       }).returning();
 
       // Créer la vente (sans commercial, source: web)
@@ -240,14 +412,19 @@ router.post('/webhook/fedapay', async (req, res) => {
         commercialId: null, // Pas de commercial
         clientId: clientSaas.id,
         abonnementId: abonnement.id,
-        montantVente: metadata.montantTotal,
+        montantVente: inscriptionEnAttente.montantTotal.toString(),
         commission: 0, // Pas de commission pour vente web
         statut: 'confirmée',
         source: 'web',
-        notes: `Vente web automatique - FedaPay ${transaction_id}`
+        notes: `Inscription web - FedaPay ${transaction_id}`
       });
+      
+      // Marquer comme traitée
+      await db.update(inscriptionsEnAttente)
+        .set({ traitee: true })
+        .where(eq(inscriptionsEnAttente.id, inscriptionEnAttente.id));
 
-      console.log(`✅ Inscription complétée pour ${metadata.email}`);
+      console.log(`✅ Inscription complétée pour ${inscriptionEnAttente.email}`);
 
       // TODO: Envoyer email avec identifiants
       // sendWelcomeEmail(metadata.email, motDePasseTemporaire, newEntreprise.nom);

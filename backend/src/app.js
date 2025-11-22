@@ -37,7 +37,14 @@ const __dirname = dirname(__filename);
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+
+// Configurer express.json() pour capturer le body brut (nécessaire pour vérification signature FedaPay)
+app.use(express.json({
+  verify: (req, res, buf) => {
+    // Stocker le body brut pour la vérification de signature HMAC
+    req.rawBody = buf.toString('utf8');
+  }
+}));
 
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
