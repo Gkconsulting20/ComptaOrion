@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "Starting ComptaOrion Backend..."
-cd backend && npm start > ../backend.log 2>&1 &
+cd backend && npm start &
 
 BACKEND_PID=$!
 

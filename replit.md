@@ -54,6 +54,12 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
     - Week-by-week projection for 7, 30, or 90 days
     - Automatic calculation of projected balance = current balance + receivables - payables
 -   **Account Statements (Nov 2025):** Complete account statement generation for both clients and suppliers with period filtering, automatic balance calculation, and professional email delivery via SendGrid.
+-   **Client Period Reports (Nov 2025):** Custom client reports for any time period in the Clients module Rapports tab:
+    - Date range selection (start date / end date) with default to last month
+    - 4 KPIs: Revenue (CA), Invoices Issued, Payments Received, Outstanding Balances
+    - Top 10 clients ranking for the selected period
+    - Inline error handling and loading states
+    - Uses canonical schema columns (dateFacture, soldeRestant) for accuracy
 -   **Aging Report for Receivables (Nov 2025):** Professional receivables aging report in the Clients module showing outstanding invoices categorized by maturity:
     - Overdue (past due date)
     - 0-30 days (due within next 30 days)
