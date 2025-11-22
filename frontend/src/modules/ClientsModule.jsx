@@ -1159,16 +1159,29 @@ function RapportsTab() {
     
     setLoadingPeriode(true);
     try {
-      const params = new URLSearchParams({
-        dateDebut: dateDebut,
-        dateFin: dateFin
+      // Construire l'URL manuellement pour éviter les conflits avec api.get()
+      const url = `/api/clients/rapport-periode?dateDebut=${encodeURIComponent(dateDebut)}&dateFin=${encodeURIComponent(dateFin)}`;
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        }
       });
-      const res = await api.get(`/clients/rapport-periode?${params.toString()}`);
-      setRapportPeriode(res.data?.data || null);
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Erreur lors de la génération du rapport');
+      }
+      
+      setRapportPeriode(data?.data || null);
       setErreurPeriode(null);
     } catch (error) {
       console.error('Erreur génération rapport:', error);
-      setErreurPeriode(error.response?.data?.message || error.message || 'Erreur lors de la génération du rapport');
+      setErreurPeriode(error.message || 'Erreur lors de la génération du rapport');
       setRapportPeriode(null);
     } finally {
       setLoadingPeriode(false);
