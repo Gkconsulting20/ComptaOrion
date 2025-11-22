@@ -33,7 +33,7 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
 3.  **Supplier & Purchase Management:** CRUD for suppliers, purchase orders, goods receipts, and supplier invoices.
 4.  **Stock & Inventory:** Multi-warehouse stock management with movement tracking and FIFO/CMP valorization.
 5.  **Accounting & Compliance:** Complete accounting system including Chart of Accounts (SYSCOHADA/IFRS/PCG), Journals, Accounting Entries, General Ledger, Trial Balance, Fixed Assets management with automatic amortization, Financial Reports, and recurrent entries management.
-6.  **Treasury & Finance:** Bank balances, cash management, reconciliation, expense management, and **cash flow forecasting with automated predictions**. Includes bank account management with accounting linkage, and advanced treasury forecasts based on outstanding invoices (both receivables and payables).
+6.  **Treasury & Finance:** Bank balances, cash management, **automated bank reconciliation**, expense management, and **cash flow forecasting with automated predictions**. Includes bank account management with accounting linkage, advanced treasury forecasts based on outstanding invoices (both receivables and payables), and complete bank reconciliation workflow with transaction matching.
 7.  **Configuration & Security:** Currency management, accounting system settings, country-specific parameters, authentication (JWT, RBAC), Row-Level Security (RLS), a comprehensive audit log, and customizable invoice branding (logo, colors, footer).
 8.  **Intelligence & Assistance:** AI Assistant for intelligent Q&A and suggestions via OpenAI.
 9.  **SaaS Administration:** Complete commercialization platform with sales team management, client tracking, subscription plans, subscription management with **automated sales tracking**, invoicing, and revenue analytics (MRR tracking).
@@ -62,6 +62,15 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
     - 90+ days (due in more than 90 days)
     - Each category displays total amount, invoice count, and detailed invoice list
     - Mutually exclusive categories with accurate totals for financial tracking
+-   **Bank Reconciliation (Nov 2025):** Complete automated bank reconciliation system in the Treasury module:
+    - Create reconciliation by selecting bank account, period, and entering bank statement balance
+    - Automatic calculation of accounting balance from transactions within the period
+    - Real-time gap calculation between bank statement and accounting balance
+    - Interactive transaction matching interface with two sections: transactions to reconcile and reconciled transactions
+    - Mark/unmark transactions as reconciled with one click
+    - Validation workflow to lock completed reconciliations
+    - Full audit trail with reconciliation history, dates, statuses, and notes
+    - Visual indicators for reconciliation status (validated, in progress)
 -   **Hybrid Sales System (Nov 2025):** ComptaOrion supports **two sales channels**:
     - **Commercial Sales (B2B):** Sales reps prospect and create subscriptions with automatic commission calculation
     - **Web Sales (Self-Service):** Clients register and pay online via FedaPay (mobile money, cards) with automatic provisioning
