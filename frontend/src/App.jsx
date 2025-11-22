@@ -11,6 +11,7 @@ import { AuthenticationModule } from './modules/AuthenticationModule';
 import { SaaSAdminModule } from './modules/SaaSAdminModule';
 import { IAAssistantModule } from './modules/IAAssistantModule';
 import { Login } from './pages/Login';
+import { Inscription } from './pages/Inscription';
 import api from './api';
 
 const MODULES = [
@@ -146,6 +147,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showInscription, setShowInscription] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -154,6 +156,11 @@ export default function App() {
     if (token && storedUser) {
       setIsAuthenticated(true);
       setUser(JSON.parse(storedUser));
+    }
+    
+    const urlPath = window.location.pathname;
+    if (urlPath === '/inscription') {
+      setShowInscription(true);
     }
     
     setLoading(false);
@@ -207,6 +214,10 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (showInscription) {
+    return <Inscription />;
   }
 
   if (!isAuthenticated) {

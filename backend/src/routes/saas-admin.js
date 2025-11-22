@@ -400,7 +400,8 @@ router.get('/ventes', async (req, res) => {
       montantVente: saasVentes.montantVente,
       commission: saasVentes.commission,
       dateVente: saasVentes.dateVente,
-      statut: saasVentes.statut
+      statut: saasVentes.statut,
+      source: saasVentes.source
     })
     .from(saasVentes)
     .leftJoin(saasCommerciaux, eq(saasVentes.commercialId, saasCommerciaux.id))

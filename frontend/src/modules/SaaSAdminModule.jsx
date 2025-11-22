@@ -411,52 +411,148 @@ export function SaaSAdminModule() {
     </div>
   );
 
-  const renderVentes = () => (
-    <div>
-      <h3 style={{ marginBottom: '20px' }}>Historique des Ventes</h3>
-      
-      <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '15px' }}>
-        <div style={{ fontSize: '13px', color: '#7f8c8d' }}>
-          ✨ <strong>Ventes automatiques :</strong> Les ventes se créent automatiquement lorsqu'un client SaaS souscrit à un abonnement payant.
-        </div>
-      </div>
+  const renderVentes = () => {
+    const [filtreSource, setFiltreSource] = useState('all');
+    const ventesFiltrees = ventes.filter(v => {
+      if (filtreSource === 'all') return true;
+      return v.source === filtreSource;
+    });
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Commercial</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Client</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Montant</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Commission</th>
-            <th style={{ padding: '12px', textAlign: 'left' }}>Statut</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ventes.map(vente => (
-            <tr key={vente.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-              <td style={{ padding: '12px' }}>{new Date(vente.dateVente).toLocaleDateString('fr-FR')}</td>
-              <td style={{ padding: '12px' }}>{vente.commercial}</td>
-              <td style={{ padding: '12px' }}>{vente.client}</td>
-              <td style={{ padding: '12px' }}>{parseFloat(vente.montantVente).toLocaleString()} XOF</td>
-              <td style={{ padding: '12px' }}>{parseFloat(vente.commission).toLocaleString()} XOF</td>
-              <td style={{ padding: '12px' }}>
-                <span style={{
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  backgroundColor: vente.statut === 'confirmée' ? '#d4edda' : '#f8d7da',
-                  color: vente.statut === 'confirmée' ? '#155724' : '#721c24'
-                }}>
-                  {vente.statut}
-                </span>
-              </td>
+    const statsVentes = {
+      total: ventes.length,
+      commercial: ventes.filter(v => v.source === 'commercial').length,
+      web: ventes.filter(v => v.source === 'web').length,
+      montantCommercial: ventes.filter(v => v.source === 'commercial').reduce((sum, v) => sum + parseFloat(v.montantVente || 0), 0),
+      montantWeb: ventes.filter(v => v.source === 'web').reduce((sum, v) => sum + parseFloat(v.montantVente || 0), 0)
+    };
+
+    return (
+      <div>
+        <h3 style={{ marginBottom: '20px' }}>Historique des Ventes</h3>
+        
+        <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '15px' }}>
+          <div style={{ fontSize: '13px', color: '#7f8c8d', marginBottom: '10px' }}>
+            ✨ <strong>Système hybride :</strong> Les ventes proviennent soit des commerciaux (B2B) soit des inscriptions en ligne (self-service).
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '15px' }}>
+            <div style={{ padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '6px' }}>
+              <div style={{ fontSize: '12px', color: '#666' }}>Ventes Commerciaux</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>{statsVentes.commercial}</div>
+              <div style={{ fontSize: '11px', color: '#999' }}>{statsVentes.montantCommercial.toLocaleString()} XOF</div>
+            </div>
+            <div style={{ padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '6px' }}>
+              <div style={{ fontSize: '12px', color: '#666' }}>Ventes Web</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#388e3c' }}>{statsVentes.web}</div>
+              <div style={{ fontSize: '11px', color: '#999' }}>{statsVentes.montantWeb.toLocaleString()} XOF</div>
+            </div>
+            <div style={{ padding: '10px', backgroundColor: '#fff3e0', borderRadius: '6px' }}>
+              <div style={{ fontSize: '12px', color: '#666' }}>Total Ventes</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f57c00' }}>{statsVentes.total}</div>
+              <div style={{ fontSize: '11px', color: '#999' }}>{(statsVentes.montantCommercial + statsVentes.montantWeb).toLocaleString()} XOF</div>
+            </div>
+          </div>
+          <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => setFiltreSource('all')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: filtreSource === 'all' ? '#667eea' : '#f0f0f0',
+                color: filtreSource === 'all' ? 'white' : '#333',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              Toutes ({statsVentes.total})
+            </button>
+            <button
+              onClick={() => setFiltreSource('commercial')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: filtreSource === 'commercial' ? '#1976d2' : '#f0f0f0',
+                color: filtreSource === 'commercial' ? 'white' : '#333',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              Commerciaux ({statsVentes.commercial})
+            </button>
+            <button
+              onClick={() => setFiltreSource('web')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: filtreSource === 'web' ? '#388e3c' : '#f0f0f0',
+                color: filtreSource === 'web' ? 'white' : '#333',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              Web ({statsVentes.web})
+            </button>
+          </div>
+        </div>
+
+        <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Source</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Commercial</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Client</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Montant</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Commission</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Statut</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+          </thead>
+          <tbody>
+            {ventesFiltrees.map(vente => (
+              <tr key={vente.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                <td style={{ padding: '12px' }}>{new Date(vente.dateVente).toLocaleDateString('fr-FR')}</td>
+                <td style={{ padding: '12px' }}>
+                  <span style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    backgroundColor: vente.source === 'web' ? '#e8f5e9' : '#e3f2fd',
+                    color: vente.source === 'web' ? '#2e7d32' : '#1565c0'
+                  }}>
+                    {vente.source === 'web' ? '🌐 Web' : '👔 Commercial'}
+                  </span>
+                </td>
+                <td style={{ padding: '12px' }}>{vente.source === 'web' ? '—' : vente.commercial}</td>
+                <td style={{ padding: '12px' }}>{vente.client}</td>
+                <td style={{ padding: '12px' }}>{parseFloat(vente.montantVente).toLocaleString()} XOF</td>
+                <td style={{ padding: '12px' }}>
+                  {vente.source === 'web' ? (
+                    <span style={{ color: '#999', fontSize: '12px' }}>—</span>
+                  ) : (
+                    `${parseFloat(vente.commission).toLocaleString()} XOF`
+                  )}
+                </td>
+                <td style={{ padding: '12px' }}>
+                  <span style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    backgroundColor: vente.statut === 'confirmée' ? '#d4edda' : '#f8d7da',
+                    color: vente.statut === 'confirmée' ? '#155724' : '#721c24'
+                  }}>
+                    {vente.statut}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   const renderModal = () => {
     if (!showModal) return null;

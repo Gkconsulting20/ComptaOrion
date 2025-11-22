@@ -2,7 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { entreprises, users, plansAbonnement, abonnements, saasClients, saasVentes } from '../schema.js';
 import { eq, sql } from 'drizzle-orm';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import FedaPay from 'fedapay';
 
 const router = express.Router();
