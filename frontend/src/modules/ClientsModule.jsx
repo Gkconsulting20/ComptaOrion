@@ -1101,7 +1101,8 @@ function FacturesClientTab() {
 function RapportsTab() {
   const [rapportData, setRapportData] = useState(null);
   const [creancesData, setCreancesData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingRapports, setLoadingRapports] = useState(true);
+  const [loadingCreances, setLoadingCreances] = useState(true);
 
   useEffect(() => {
     loadRapports();
@@ -1115,154 +1116,161 @@ function RapportsTab() {
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
-      setLoading(false);
+      setLoadingRapports(false);
     }
   };
 
   const loadCreances = async () => {
     try {
       const res = await api.get('/clients/comptes-a-recevoir');
-      // L'API retourne { success: true, data: { totaux, facturesParPeriode, resume } }
       setCreancesData(res.data?.data || null);
     } catch (error) {
       console.error('Erreur chargement créances:', error);
+    } finally {
+      setLoadingCreances(false);
     }
   };
 
-  if (loading) return <p>Chargement des rapports...</p>;
-  if (!rapportData) return <p>Aucune donnée disponible</p>;
-
-  const { topClients = [], clientsRetard = [], chiffreAffaireTotal = 0, echeances = { prochains7jours: { count: 0, montant: 0 }, prochains30jours: { count: 0, montant: 0 } }, distributionPaiements = [] } = rapportData;
+  const { topClients = [], clientsRetard = [], chiffreAffaireTotal = 0, echeances = { prochains7jours: { count: 0, montant: 0 }, prochains30jours: { count: 0, montant: 0 } }, distributionPaiements = [] } = rapportData || {};
 
   return (
     <div>
       <h3>📊 Rapports Client</h3>
 
       {/* RAPPORT D'ANCIENNETÉ DES CRÉANCES */}
-      {creancesData && (
-        <div className="form-card" style={{ marginTop: '20px', backgroundColor: '#f8f9fa' }}>
-          <h3 style={{ marginBottom: '20px', color: '#2c3e50' }}>📋 Rapport d'Ancienneté des Créances</h3>
-          <p style={{ color: '#666', marginBottom: '20px' }}>
-            Soldes à payer des clients organisés par période d'échéance
-          </p>
+      <div className="form-card" style={{ marginTop: '20px', backgroundColor: '#f8f9fa' }}>
+        <h3 style={{ marginBottom: '20px', color: '#2c3e50' }}>📋 Rapport d'Ancienneté des Créances</h3>
+        {loadingCreances ? (
+          <p style={{ textAlign: 'center', padding: '20px', color: '#666' }}>Chargement du rapport...</p>
+        ) : !creancesData ? (
+          <p style={{ textAlign: 'center', padding: '20px', color: '#999' }}>Aucune donnée disponible</p>
+        ) : (
+          <>
+            <p style={{ color: '#666', marginBottom: '20px' }}>
+              Soldes à payer des clients organisés par période d'échéance
+            </p>
 
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-            gap: '15px',
-            marginBottom: '30px'
-          }}>
-            <div style={{
-              padding: '20px',
-              backgroundColor: '#d32f2f',
-              color: 'white',
-              borderRadius: '8px',
-              textAlign: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+              gap: '15px',
+              marginBottom: '30px'
             }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
-                EN RETARD
+              <div style={{
+                padding: '20px',
+                backgroundColor: '#d32f2f',
+                color: 'white',
+                borderRadius: '8px',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
+                  EN RETARD
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {parseFloat(creancesData.totaux?.enRetard || 0).toLocaleString()} FCFA
+                </div>
+                <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
+                  {creancesData.facturesParPeriode?.enRetard?.length || 0} facture(s)
+                </div>
               </div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {parseFloat(creancesData.totaux?.enRetard || 0).toLocaleString()} FCFA
+
+              <div style={{
+                padding: '20px',
+                backgroundColor: '#27ae60',
+                color: 'white',
+                borderRadius: '8px',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
+                  0-30 JOURS
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {parseFloat(creancesData.totaux?.de0a30jours || 0).toLocaleString()} FCFA
+                </div>
+                <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
+                  {creancesData.facturesParPeriode?.de0a30jours?.length || 0} facture(s)
+                </div>
               </div>
-              <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {creancesData.facturesParPeriode?.enRetard?.length || 0} facture(s)
+
+              <div style={{
+                padding: '20px',
+                backgroundColor: '#f39c12',
+                color: 'white',
+                borderRadius: '8px',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
+                  31-60 JOURS
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {parseFloat(creancesData.totaux?.de31a60jours || 0).toLocaleString()} FCFA
+                </div>
+                <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
+                  {creancesData.facturesParPeriode?.de31a60jours?.length || 0} facture(s)
+                </div>
+              </div>
+
+              <div style={{
+                padding: '20px',
+                backgroundColor: '#3498db',
+                color: 'white',
+                borderRadius: '8px',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
+                  61-90 JOURS
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {parseFloat(creancesData.totaux?.de61a90jours || 0).toLocaleString()} FCFA
+                </div>
+                <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
+                  {creancesData.facturesParPeriode?.de61a90jours?.length || 0} facture(s)
+                </div>
+              </div>
+
+              <div style={{
+                padding: '20px',
+                backgroundColor: '#95a5a6',
+                color: 'white',
+                borderRadius: '8px',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
+                  90+ JOURS
+                </div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {parseFloat(creancesData.totaux?.plus90jours || 0).toLocaleString()} FCFA
+                </div>
+                <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
+                  {creancesData.facturesParPeriode?.plus90jours?.length || 0} facture(s)
+                </div>
               </div>
             </div>
 
             <div style={{
               padding: '20px',
-              backgroundColor: '#27ae60',
+              backgroundColor: '#2c3e50',
               color: 'white',
               borderRadius: '8px',
               textAlign: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              fontWeight: 'bold',
+              fontSize: '18px'
             }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
-                0-30 JOURS
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {parseFloat(creancesData.totaux?.de0a30jours || 0).toLocaleString()} FCFA
-              </div>
-              <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {creancesData.facturesParPeriode?.de0a30jours?.length || 0} facture(s)
-              </div>
+              TOTAL CRÉANCES: {parseFloat(creancesData.totaux?.total || 0).toLocaleString()} FCFA
             </div>
+          </>
+        )}
+      </div>
 
-            <div style={{
-              padding: '20px',
-              backgroundColor: '#f39c12',
-              color: 'white',
-              borderRadius: '8px',
-              textAlign: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
-                31-60 JOURS
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {parseFloat(creancesData.totaux?.de31a60jours || 0).toLocaleString()} FCFA
-              </div>
-              <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {creancesData.facturesParPeriode?.de31a60jours?.length || 0} facture(s)
-              </div>
-            </div>
-
-            <div style={{
-              padding: '20px',
-              backgroundColor: '#3498db',
-              color: 'white',
-              borderRadius: '8px',
-              textAlign: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
-                61-90 JOURS
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {parseFloat(creancesData.totaux?.de61a90jours || 0).toLocaleString()} FCFA
-              </div>
-              <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {creancesData.facturesParPeriode?.de61a90jours?.length || 0} facture(s)
-              </div>
-            </div>
-
-            <div style={{
-              padding: '20px',
-              backgroundColor: '#95a5a6',
-              color: 'white',
-              borderRadius: '8px',
-              textAlign: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', opacity: 0.9 }}>
-                90+ JOURS
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {parseFloat(creancesData.totaux?.plus90jours || 0).toLocaleString()} FCFA
-              </div>
-              <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {creancesData.facturesParPeriode?.plus90jours?.length || 0} facture(s)
-              </div>
-            </div>
-          </div>
-
-          <div style={{
-            padding: '20px',
-            backgroundColor: '#2c3e50',
-            color: 'white',
-            borderRadius: '8px',
-            textAlign: 'center',
-            fontWeight: 'bold',
-            fontSize: '18px'
-          }}>
-            TOTAL CRÉANCES: {parseFloat(creancesData.totaux?.total || 0).toLocaleString()} FCFA
-          </div>
-        </div>
-      )}
-
-      <div className="metrics-grid" style={{ marginTop: '30px' }}>
+      {/* AUTRES STATISTIQUES */}
+      {!loadingRapports && rapportData && (
+        <>
+          <div className="metrics-grid" style={{ marginTop: '30px' }}>
         <div className="metric-card">
           <div className="metric-icon">💰</div>
           <div className="metric-info">
@@ -1332,21 +1340,23 @@ function RapportsTab() {
         </div>
       </div>
 
-      <div className="form-card" style={{ marginTop: '20px' }}>
-        <h3>💳 Distribution des Paiements (Top 10)</h3>
-        {distributionPaiements && distributionPaiements.length > 0 ? (
-          <Table
-            columns={[
-              { key: 'nom', label: 'Client' },
-              { key: 'nombrePaiements', label: 'Nb Paiements', render: (val) => val || 0 },
-              { key: 'totalPaye', label: 'Total Payé', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
-            ]}
-            data={distributionPaiements}
-          />
-        ) : (
-          <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>Aucun paiement enregistré</p>
-        )}
-      </div>
+          <div className="form-card" style={{ marginTop: '20px' }}>
+            <h3>💳 Distribution des Paiements (Top 10)</h3>
+            {distributionPaiements && distributionPaiements.length > 0 ? (
+              <Table
+                columns={[
+                  { key: 'nom', label: 'Client' },
+                  { key: 'nombrePaiements', label: 'Nb Paiements', render: (val) => val || 0 },
+                  { key: 'totalPaye', label: 'Total Payé', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
+                ]}
+                data={distributionPaiements}
+              />
+            ) : (
+              <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>Aucun paiement enregistré</p>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -231,7 +231,7 @@ router.get('/rapports', async (req, res) => {
       .from(factures)
       .where(and(
         eq(factures.entrepriseId, req.entrepriseId),
-        sql`${factures.statut} IN ('envoyee', 'partiellement_payee')`,
+        eq(factures.statut, 'envoyee'),
         sql`${factures.dateEcheance} BETWEEN ${now.toISOString()} AND ${dans7jours.toISOString()}`
       ));
 
@@ -243,7 +243,7 @@ router.get('/rapports', async (req, res) => {
       .from(factures)
       .where(and(
         eq(factures.entrepriseId, req.entrepriseId),
-        sql`${factures.statut} IN ('envoyee', 'partiellement_payee')`,
+        eq(factures.statut, 'envoyee'),
         sql`${factures.dateEcheance} BETWEEN ${now.toISOString()} AND ${dans30jours.toISOString()}`
       ));
 
