@@ -83,23 +83,23 @@ router.get('/comptes-a-recevoir', async (req, res) => {
       ))
       .orderBy(factures.dateEcheance);
 
-    // Calculer totaux par période
+    // Calculer totaux par période d'ancienneté
     const now = new Date();
     const totaux = {
       total: 0,
       enRetard: 0,
-      prochains7jours: 0,
-      prochains30jours: 0,
-      prochains90jours: 0,
-      auDela90jours: 0
+      de0a30jours: 0,
+      de31a60jours: 0,
+      de61a90jours: 0,
+      plus90jours: 0
     };
 
     const facturesParPeriode = {
       enRetard: [],
-      prochains7jours: [],
-      prochains30jours: [],
-      prochains90jours: [],
-      auDela90jours: []
+      de0a30jours: [],
+      de31a60jours: [],
+      de61a90jours: [],
+      plus90jours: []
     };
 
     facturesImpayees.forEach(facture => {
@@ -117,21 +117,27 @@ router.get('/comptes-a-recevoir', async (req, res) => {
         joursAvantEcheance
       };
 
+      // Catégorisation par ancienneté d'échéance
       if (joursAvantEcheance < 0) {
+        // En retard (échéance dépassée)
         totaux.enRetard += solde;
         facturesParPeriode.enRetard.push(factureFormatee);
-      } else if (joursAvantEcheance <= 7) {
-        totaux.prochains7jours += solde;
-        facturesParPeriode.prochains7jours.push(factureFormatee);
-      } else if (joursAvantEcheance <= 30) {
-        totaux.prochains30jours += solde;
-        facturesParPeriode.prochains30jours.push(factureFormatee);
-      } else if (joursAvantEcheance <= 90) {
-        totaux.prochains90jours += solde;
-        facturesParPeriode.prochains90jours.push(factureFormatee);
+      } else if (joursAvantEcheance >= 0 && joursAvantEcheance <= 30) {
+        // Échéance dans les 0-30 prochains jours
+        totaux.de0a30jours += solde;
+        facturesParPeriode.de0a30jours.push(factureFormatee);
+      } else if (joursAvantEcheance >= 31 && joursAvantEcheance <= 60) {
+        // Échéance dans les 31-60 prochains jours
+        totaux.de31a60jours += solde;
+        facturesParPeriode.de31a60jours.push(factureFormatee);
+      } else if (joursAvantEcheance >= 61 && joursAvantEcheance <= 90) {
+        // Échéance dans les 61-90 prochains jours
+        totaux.de61a90jours += solde;
+        facturesParPeriode.de61a90jours.push(factureFormatee);
       } else {
-        totaux.auDela90jours += solde;
-        facturesParPeriode.auDela90jours.push(factureFormatee);
+        // Échéance dans plus de 90 jours
+        totaux.plus90jours += solde;
+        facturesParPeriode.plus90jours.push(factureFormatee);
       }
     });
 

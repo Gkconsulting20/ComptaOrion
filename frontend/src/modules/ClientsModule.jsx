@@ -1122,7 +1122,8 @@ function RapportsTab() {
   const loadCreances = async () => {
     try {
       const res = await api.get('/clients/comptes-a-recevoir');
-      setCreancesData(res.data || null);
+      // L'API retourne { success: true, data: { totaux, facturesParPeriode, resume } }
+      setCreancesData(res.data?.data || null);
     } catch (error) {
       console.error('Erreur chargement créances:', error);
     }
@@ -1166,7 +1167,7 @@ function RapportsTab() {
                 {parseFloat(creancesData.totaux?.enRetard || 0).toLocaleString()} FCFA
               </div>
               <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {creancesData.factures?.enRetard?.length || 0} facture(s)
+                {creancesData.facturesParPeriode?.enRetard?.length || 0} facture(s)
               </div>
             </div>
 
@@ -1182,10 +1183,10 @@ function RapportsTab() {
                 0-30 JOURS
               </div>
               <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {parseFloat(creancesData.totaux?.prochains30jours || 0).toLocaleString()} FCFA
+                {parseFloat(creancesData.totaux?.de0a30jours || 0).toLocaleString()} FCFA
               </div>
               <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {creancesData.factures?.prochains30jours?.length || 0} facture(s)
+                {creancesData.facturesParPeriode?.de0a30jours?.length || 0} facture(s)
               </div>
             </div>
 
@@ -1201,15 +1202,10 @@ function RapportsTab() {
                 31-60 JOURS
               </div>
               <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {parseFloat(
-                  (creancesData.factures?.prochains90jours || [])
-                    .filter(f => f.joursAvantEcheance > 30 && f.joursAvantEcheance <= 60)
-                    .reduce((sum, f) => sum + parseFloat(f.soldeRestant || 0), 0)
-                ).toLocaleString()} FCFA
+                {parseFloat(creancesData.totaux?.de31a60jours || 0).toLocaleString()} FCFA
               </div>
               <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {(creancesData.factures?.prochains90jours || [])
-                  .filter(f => f.joursAvantEcheance > 30 && f.joursAvantEcheance <= 60).length} facture(s)
+                {creancesData.facturesParPeriode?.de31a60jours?.length || 0} facture(s)
               </div>
             </div>
 
@@ -1225,15 +1221,10 @@ function RapportsTab() {
                 61-90 JOURS
               </div>
               <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {parseFloat(
-                  (creancesData.factures?.prochains90jours || [])
-                    .filter(f => f.joursAvantEcheance > 60 && f.joursAvantEcheance <= 90)
-                    .reduce((sum, f) => sum + parseFloat(f.soldeRestant || 0), 0)
-                ).toLocaleString()} FCFA
+                {parseFloat(creancesData.totaux?.de61a90jours || 0).toLocaleString()} FCFA
               </div>
               <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {(creancesData.factures?.prochains90jours || [])
-                  .filter(f => f.joursAvantEcheance > 60 && f.joursAvantEcheance <= 90).length} facture(s)
+                {creancesData.facturesParPeriode?.de61a90jours?.length || 0} facture(s)
               </div>
             </div>
 
@@ -1249,10 +1240,10 @@ function RapportsTab() {
                 90+ JOURS
               </div>
               <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                {parseFloat(creancesData.totaux?.auDela90jours || 0).toLocaleString()} FCFA
+                {parseFloat(creancesData.totaux?.plus90jours || 0).toLocaleString()} FCFA
               </div>
               <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
-                {creancesData.factures?.auDela90jours?.length || 0} facture(s)
+                {creancesData.facturesParPeriode?.plus90jours?.length || 0} facture(s)
               </div>
             </div>
           </div>
