@@ -500,8 +500,26 @@ export const transactionsTresorerie = pgTable('transactions_tresorerie', {
   numeroPiece: varchar('numero_piece', { length: 100 }),
   modePaiement: varchar('mode_paiement', { length: 100 }),
   rapproche: boolean('rapproche').default(false),
+  rapprochementId: integer('rapprochement_id').references(() => rapprochementsBancaires.id),
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const rapprochementsBancaires = pgTable('rapprochements_bancaires', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  compteBancaireId: integer('compte_bancaire_id').references(() => comptesBancaires.id).notNull(),
+  dateRapprochement: date('date_rapprochement').defaultNow(),
+  dateDebut: date('date_debut').notNull(),
+  dateFin: date('date_fin').notNull(),
+  soldeReleve: decimal('solde_releve', { precision: 15, scale: 2 }).notNull(),
+  soldeComptable: decimal('solde_comptable', { precision: 15, scale: 2 }).notNull(),
+  ecart: decimal('ecart', { precision: 15, scale: 2 }).default('0'),
+  statut: varchar('statut', { length: 50 }).default('en_cours'),
+  notes: text('notes'),
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // ==========================================

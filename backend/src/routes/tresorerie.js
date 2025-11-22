@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, employes, comptesComptables } from '../schema.js';
-import { eq, and, like, inArray, or, ne, notInArray } from 'drizzle-orm';
+import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, employes, comptesComptables, rapprochementsBancaires } from '../schema.js';
+import { eq, and, like, inArray, or, ne, notInArray, between, sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -378,6 +378,196 @@ router.get('/comptes-comptables', async (req, res) => {
     res.json(comptes);
   } catch (err) {
     console.error('Erreur récupération comptes comptables:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// RAPPROCHEMENTS BANCAIRES
+// ==========================================
+
+// GET tous les rapprochements bancaires
+router.get('/rapprochements', async (req, res) => {
+  try {
+    const rapprochements = await db
+      .select({
+        id: rapprochementsBancaires.id,
+        compteBancaireId: rapprochementsBancaires.compteBancaireId,
+        nomCompte: comptesBancaires.nomCompte,
+        banque: comptesBancaires.banque,
+        dateRapprochement: rapprochementsBancaires.dateRapprochement,
+        dateDebut: rapprochementsBancaires.dateDebut,
+        dateFin: rapprochementsBancaires.dateFin,
+        soldeReleve: rapprochementsBancaires.soldeReleve,
+        soldeComptable: rapprochementsBancaires.soldeComptable,
+        ecart: rapprochementsBancaires.ecart,
+        statut: rapprochementsBancaires.statut,
+        notes: rapprochementsBancaires.notes,
+        createdAt: rapprochementsBancaires.createdAt,
+      })
+      .from(rapprochementsBancaires)
+      .leftJoin(comptesBancaires, eq(rapprochementsBancaires.compteBancaireId, comptesBancaires.id))
+      .where(eq(rapprochementsBancaires.entrepriseId, req.entrepriseId))
+      .orderBy(rapprochementsBancaires.createdAt);
+
+    res.json(rapprochements);
+  } catch (err) {
+    console.error('Erreur récupération rapprochements:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST créer un nouveau rapprochement bancaire
+router.post('/rapprochements', async (req, res) => {
+  try {
+    const { compteBancaireId, dateDebut, dateFin, soldeReleve, notes } = req.body;
+
+    // Récupérer le compte bancaire
+    const compte = await db.select().from(comptesBancaires)
+      .where(and(
+        eq(comptesBancaires.id, parseInt(compteBancaireId)),
+        eq(comptesBancaires.entrepriseId, req.entrepriseId)
+      ))
+      .limit(1);
+
+    if (compte.length === 0) {
+      return res.status(404).json({ error: 'Compte bancaire non trouvé' });
+    }
+
+    // Calculer le solde comptable pour la période
+    const transactions = await db.select().from(transactionsTresorerie)
+      .where(and(
+        eq(transactionsTresorerie.compteBancaireId, parseInt(compteBancaireId)),
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
+        between(transactionsTresorerie.dateTransaction, dateDebut, dateFin)
+      ));
+
+    let soldeComptable = parseFloat(compte[0].soldeInitial || 0);
+    
+    // Ajouter toutes les transactions jusqu'à la date de fin
+    const toutesTransactions = await db.select().from(transactionsTresorerie)
+      .where(and(
+        eq(transactionsTresorerie.compteBancaireId, parseInt(compteBancaireId)),
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
+        sql`${transactionsTresorerie.dateTransaction} <= ${dateFin}`
+      ));
+
+    toutesTransactions.forEach(t => {
+      if (t.type === 'encaissement') {
+        soldeComptable += parseFloat(t.montant || 0);
+      } else {
+        soldeComptable -= parseFloat(t.montant || 0);
+      }
+    });
+
+    const ecart = parseFloat(soldeReleve) - soldeComptable;
+
+    // Créer le rapprochement
+    const [rapprochement] = await db.insert(rapprochementsBancaires).values({
+      entrepriseId: req.entrepriseId,
+      compteBancaireId: parseInt(compteBancaireId),
+      dateDebut,
+      dateFin,
+      soldeReleve: soldeReleve.toString(),
+      soldeComptable: soldeComptable.toString(),
+      ecart: ecart.toString(),
+      statut: Math.abs(ecart) < 0.01 ? 'valide' : 'en_cours',
+      notes,
+      userId: req.userId,
+    }).returning();
+
+    res.json({ 
+      success: true, 
+      rapprochement,
+      transactionsCount: transactions.length 
+    });
+  } catch (err) {
+    console.error('Erreur création rapprochement:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET un rapprochement avec ses transactions
+router.get('/rapprochements/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [rapprochement] = await db
+      .select()
+      .from(rapprochementsBancaires)
+      .where(and(
+        eq(rapprochementsBancaires.id, parseInt(id)),
+        eq(rapprochementsBancaires.entrepriseId, req.entrepriseId)
+      ));
+
+    if (!rapprochement) {
+      return res.status(404).json({ error: 'Rapprochement non trouvé' });
+    }
+
+    // Récupérer toutes les transactions de la période
+    const transactions = await db.select().from(transactionsTresorerie)
+      .where(and(
+        eq(transactionsTresorerie.compteBancaireId, rapprochement.compteBancaireId),
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
+        between(transactionsTresorerie.dateTransaction, rapprochement.dateDebut, rapprochement.dateFin)
+      ))
+      .orderBy(transactionsTresorerie.dateTransaction);
+
+    res.json({
+      rapprochement,
+      transactions: transactions.map(t => ({
+        ...t,
+        montant: parseFloat(t.montant || 0),
+        rapproche: t.rapproche || false,
+      }))
+    });
+  } catch (err) {
+    console.error('Erreur récupération rapprochement:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT marquer une transaction comme rapprochée
+router.put('/rapprochements/:id/transactions/:transactionId', async (req, res) => {
+  try {
+    const { id, transactionId } = req.params;
+    const { rapproche } = req.body;
+
+    await db.update(transactionsTresorerie)
+      .set({ 
+        rapproche,
+        rapprochementId: rapproche ? parseInt(id) : null 
+      })
+      .where(and(
+        eq(transactionsTresorerie.id, parseInt(transactionId)),
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId)
+      ));
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erreur mise à jour transaction:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT valider un rapprochement
+router.put('/rapprochements/:id/valider', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await db.update(rapprochementsBancaires)
+      .set({ 
+        statut: 'valide',
+        updatedAt: new Date() 
+      })
+      .where(and(
+        eq(rapprochementsBancaires.id, parseInt(id)),
+        eq(rapprochementsBancaires.entrepriseId, req.entrepriseId)
+      ));
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erreur validation rapprochement:', err);
     res.status(500).json({ error: err.message });
   }
 });

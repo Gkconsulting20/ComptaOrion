@@ -15,6 +15,9 @@ export function TresorerieModule() {
   const [formData, setFormData] = useState({});
   const [comptesComptables, setComptesComptables] = useState([]);
   const [editingCompte, setEditingCompte] = useState(null);
+  const [rapprochements, setRapprochements] = useState([]);
+  const [rapprochementActif, setRapprochementActif] = useState(null);
+  const [showRapprochementModal, setShowRapprochementModal] = useState(false);
   
   const ENTREPRISE_ID = parseInt(localStorage.getItem('entrepriseId')) || 1;
 
@@ -55,7 +58,7 @@ export function TresorerieModule() {
       } else if (activeTab === 'previsions') {
         await loadPrevisions();
       } else if (activeTab === 'rapprochement') {
-        await loadTransactions();
+        await loadRapprochements();
       } else if (activeTab === 'parametres') {
         await loadComptes();
         await loadComptesComptables();
@@ -115,6 +118,16 @@ export function TresorerieModule() {
     } catch (err) {
       setError(err.message || 'Erreur lors du chargement des prévisions');
       setPrevisions(null);
+    }
+  };
+
+  const loadRapprochements = async () => {
+    try {
+      setError(null);
+      const data = await api.get('/tresorerie/rapprochements');
+      setRapprochements(data);
+    } catch (err) {
+      setError(err.message || 'Erreur lors du chargement des rapprochements');
     }
   };
 
@@ -895,54 +908,302 @@ export function TresorerieModule() {
     </div>
   );
 
+  const handleCreerRapprochement = async () => {
+    try {
+      const data = await api.post('/tresorerie/rapprochements', formData);
+      setShowRapprochementModal(false);
+      setFormData({});
+      await loadRapprochements();
+      setRapprochementActif(data.rapprochement.id);
+    } catch (err) {
+      alert('Erreur lors de la création du rapprochement: ' + err.message);
+    }
+  };
+
+  const handleToggletransactionRapprochee = async (rapprochementId, transactionId, rapproche) => {
+    try {
+      await api.put(`/tresorerie/rapprochements/${rapprochementId}/transactions/${transactionId}`, { rapproche: !rapproche });
+      const data = await api.get(`/tresorerie/rapprochements/${rapprochementId}`);
+      setRapprochementActif(data);
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    }
+  };
+
+  const handleValiderRapprochement = async (rapprochementId) => {
+    try {
+      await api.put(`/tresorerie/rapprochements/${rapprochementId}/valider`);
+      await loadRapprochements();
+      setRapprochementActif(null);
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    }
+  };
+
   const renderRapprochement = () => {
-    const transactionsNonRapprochees = transactions.filter(t => !t.rapproche);
-    
+    if (rapprochementActif) {
+      const { rapprochement, transactions: transactionsRapprochement } = rapprochementActif;
+      const transactionsRapprochees = transactionsRapprochement.filter(t => t.rapproche);
+      const transactionsNonRapprochees = transactionsRapprochement.filter(t => !t.rapproche);
+      const totalRapproche = transactionsRapprochees.reduce((sum, t) => {
+        return sum + (t.type === 'encaissement' ? parseFloat(t.montant) : -parseFloat(t.montant));
+      }, 0);
+
+      return (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h3 style={{ margin: 0 }}>Rapprochement - {rapprochement.nomCompte || rapprochement.banque}</h3>
+            <button
+              onClick={() => setRapprochementActif(null)}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#95a5a6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              ← Retour
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '20px' }}>
+            <div style={{ padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#1976d2', marginBottom: '5px' }}>Solde Relevé</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+                {parseFloat(rapprochement.soldeReleve || 0).toLocaleString()} FCFA
+              </div>
+            </div>
+            <div style={{ padding: '15px', backgroundColor: '#f3e5f5', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#7b1fa2', marginBottom: '5px' }}>Solde Comptable</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#7b1fa2' }}>
+                {parseFloat(rapprochement.soldeComptable || 0).toLocaleString()} FCFA
+              </div>
+            </div>
+            <div style={{ padding: '15px', backgroundColor: parseFloat(rapprochement.ecart) === 0 ? '#e8f5e9' : '#fff3e0', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: parseFloat(rapprochement.ecart) === 0 ? '#388e3c' : '#f57c00', marginBottom: '5px' }}>Écart</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: parseFloat(rapprochement.ecart) === 0 ? '#388e3c' : '#f57c00' }}>
+                {parseFloat(rapprochement.ecart || 0).toLocaleString()} FCFA
+              </div>
+            </div>
+            <div style={{ padding: '15px', backgroundColor: '#fce4ec', borderRadius: '8px' }}>
+              <div style={{ fontSize: '12px', color: '#c2185b', marginBottom: '5px' }}>Statut</div>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#c2185b' }}>
+                {rapprochement.statut === 'valide' ? '✓ Validé' : '⏳ En cours'}
+              </div>
+            </div>
+          </div>
+
+          <h4 style={{ marginTop: '30px', marginBottom: '15px' }}>Transactions à rapprocher ({transactionsNonRapprochees.length})</h4>
+          <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+                <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
+                <th style={{ padding: '12px', textAlign: 'left' }}>Description</th>
+                <th style={{ padding: '12px', textAlign: 'right' }}>Montant</th>
+                <th style={{ padding: '12px', textAlign: 'center' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactionsNonRapprochees.map(t => (
+                <tr key={t.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                  <td style={{ padding: '12px' }}>{new Date(t.dateTransaction).toLocaleDateString('fr-FR')}</td>
+                  <td style={{ padding: '12px' }}>
+                    <span style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: t.type === 'encaissement' ? '#e8f5e9' : '#ffebee',
+                      color: t.type === 'encaissement' ? '#388e3c' : '#d32f2f',
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }}>
+                      {t.type}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px' }}>{t.description || '-'}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
+                    {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString()} FCFA
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => handleToggletransactionRapprochee(rapprochement.id, t.id, t.rapproche)}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#27ae60',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      ✓ Rapprocher
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {transactionsNonRapprochees.length === 0 && (
+                <tr>
+                  <td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#27ae60', fontWeight: 'bold' }}>
+                    ✅ Toutes les transactions sont rapprochées
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          <h4 style={{ marginTop: '30px', marginBottom: '15px' }}>Transactions rapprochées ({transactionsRapprochees.length})</h4>
+          <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#e8f5e9', borderBottom: '2px solid #388e3c' }}>
+                <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+                <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
+                <th style={{ padding: '12px', textAlign: 'left' }}>Description</th>
+                <th style={{ padding: '12px', textAlign: 'right' }}>Montant</th>
+                <th style={{ padding: '12px', textAlign: 'center' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactionsRapprochees.map(t => (
+                <tr key={t.id} style={{ borderBottom: '1px solid #dee2e6', backgroundColor: '#f1f8f4' }}>
+                  <td style={{ padding: '12px' }}>{new Date(t.dateTransaction).toLocaleDateString('fr-FR')}</td>
+                  <td style={{ padding: '12px' }}>
+                    <span style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: t.type === 'encaissement' ? '#c8e6c9' : '#ffcdd2',
+                      color: t.type === 'encaissement' ? '#2e7d32' : '#c62828',
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }}>
+                      {t.type}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px' }}>{t.description || '-'}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
+                    {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString()} FCFA
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => handleToggletransactionRapprochee(rapprochement.id, t.id, t.rapproche)}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#e74c3c',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      ✗ Annuler
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {rapprochement.statut !== 'valide' && (
+            <div style={{ marginTop: '20px', textAlign: 'right' }}>
+              <button
+                onClick={() => handleValiderRapprochement(rapprochement.id)}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#27ae60',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                ✓ Valider le rapprochement
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div>
-        <h3 style={{ marginBottom: '20px' }}>Rapprochement Bancaire</h3>
-        
-        <div style={{ padding: '20px', backgroundColor: '#fff3e0', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ffb74d' }}>
-          <p style={{ margin: 0, fontWeight: 'bold', color: '#f57c00' }}>
-            📋 {transactionsNonRapprochees.length} transaction(s) en attente de rapprochement
-          </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h3 style={{ margin: 0 }}>Rapprochements Bancaires</h3>
+          <button
+            onClick={() => {
+              loadComptes();
+              setShowRapprochementModal(true);
+              setFormData({
+                dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+                dateFin: new Date().toISOString().split('T')[0]
+              });
+            }}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#667eea',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            ➕ Nouveau Rapprochement
+          </button>
         </div>
 
         <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
           <thead>
             <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
               <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
-              <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
-              <th style={{ padding: '12px', textAlign: 'left' }}>Description</th>
-              <th style={{ padding: '12px', textAlign: 'right' }}>Montant</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Compte</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Période</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Solde Relevé</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Solde Comptable</th>
+              <th style={{ padding: '12px', textAlign: 'right' }}>Écart</th>
+              <th style={{ padding: '12px', textAlign: 'center' }}>Statut</th>
               <th style={{ padding: '12px', textAlign: 'center' }}>Action</th>
             </tr>
           </thead>
           <tbody>
-            {transactionsNonRapprochees.map(transaction => (
-              <tr key={transaction.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                <td style={{ padding: '12px' }}>{new Date(transaction.dateTransaction).toLocaleDateString('fr-FR')}</td>
+            {rapprochements.map(r => (
+              <tr key={r.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                <td style={{ padding: '12px' }}>{new Date(r.dateRapprochement).toLocaleDateString('fr-FR')}</td>
+                <td style={{ padding: '12px', fontWeight: 'bold' }}>{r.nomCompte}</td>
                 <td style={{ padding: '12px' }}>
+                  {new Date(r.dateDebut).toLocaleDateString('fr-FR')} - {new Date(r.dateFin).toLocaleDateString('fr-FR')}
+                </td>
+                <td style={{ padding: '12px', textAlign: 'right' }}>{parseFloat(r.soldeReleve || 0).toLocaleString()} FCFA</td>
+                <td style={{ padding: '12px', textAlign: 'right' }}>{parseFloat(r.soldeComptable || 0).toLocaleString()} FCFA</td>
+                <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: parseFloat(r.ecart) === 0 ? '#27ae60' : '#e74c3c' }}>
+                  {parseFloat(r.ecart || 0).toLocaleString()} FCFA
+                </td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>
                   <span style={{
                     padding: '4px 8px',
                     borderRadius: '4px',
-                    backgroundColor: transaction.type === 'encaissement' ? '#e8f5e9' : '#ffebee',
-                    color: transaction.type === 'encaissement' ? '#388e3c' : '#d32f2f',
+                    backgroundColor: r.statut === 'valide' ? '#e8f5e9' : '#fff3e0',
+                    color: r.statut === 'valide' ? '#388e3c' : '#f57c00',
                     fontSize: '12px',
                     fontWeight: 'bold'
                   }}>
-                    {transaction.type}
+                    {r.statut === 'valide' ? '✓ Validé' : '⏳ En cours'}
                   </span>
-                </td>
-                <td style={{ padding: '12px' }}>{transaction.description || '-'}</td>
-                <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
-                  {parseFloat(transaction.montant || 0).toLocaleString()} XOF
                 </td>
                 <td style={{ padding: '12px', textAlign: 'center' }}>
                   <button
+                    onClick={async () => {
+                      const data = await api.get(`/tresorerie/rapprochements/${r.id}`);
+                      setRapprochementActif(data);
+                    }}
                     style={{
                       padding: '6px 12px',
-                      backgroundColor: '#27ae60',
+                      backgroundColor: '#3498db',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
@@ -950,20 +1211,165 @@ export function TresorerieModule() {
                       fontSize: '12px'
                     }}
                   >
-                    ✓ Rapprocher
+                    👁️ Voir
                   </button>
                 </td>
               </tr>
             ))}
-            {transactionsNonRapprochees.length === 0 && (
+            {rapprochements.length === 0 && (
               <tr>
-                <td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#27ae60', fontWeight: 'bold' }}>
-                  ✅ Toutes les transactions sont rapprochées
+                <td colSpan="8" style={{ padding: '20px', textAlign: 'center', color: '#95a5a6' }}>
+                  Aucun rapprochement créé. Cliquez sur "Nouveau Rapprochement" pour commencer.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+
+        {showRapprochementModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '30px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}>
+              <h3 style={{ marginBottom: '20px' }}>Nouveau Rapprochement Bancaire</h3>
+
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Compte Bancaire</label>
+                <select
+                  value={formData.compteBancaireId || ''}
+                  onChange={(e) => setFormData({ ...formData, compteBancaireId: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                >
+                  <option value="">Sélectionner un compte</option>
+                  {comptes.filter(c => c.actif).map(c => (
+                    <option key={c.id} value={c.id}>{c.nomCompte} - {c.banque}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Date Début</label>
+                <input
+                  type="date"
+                  value={formData.dateDebut || ''}
+                  onChange={(e) => setFormData({ ...formData, dateDebut: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Date Fin</label>
+                <input
+                  type="date"
+                  value={formData.dateFin || ''}
+                  onChange={(e) => setFormData({ ...formData, dateFin: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Solde Relevé Bancaire</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.soldeReleve || ''}
+                  onChange={(e) => setFormData({ ...formData, soldeReleve: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                  placeholder="Montant selon le relevé bancaire"
+                />
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Notes (optionnel)</label>
+                <textarea
+                  value={formData.notes || ''}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd',
+                    minHeight: '80px'
+                  }}
+                  placeholder="Notes ou remarques..."
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={handleCreerRapprochement}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    backgroundColor: '#27ae60',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ✓ Créer
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRapprochementModal(false);
+                    setFormData({});
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    backgroundColor: '#95a5a6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ✗ Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
