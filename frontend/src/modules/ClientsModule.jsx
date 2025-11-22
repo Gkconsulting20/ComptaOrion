@@ -1101,15 +1101,27 @@ function FacturesClientTab() {
 function RapportsTab() {
   const [rapportData, setRapportData] = useState(null);
   const [creancesData, setCreancesData] = useState(null);
+  const [rapportPeriode, setRapportPeriode] = useState(null);
   const [loadingRapports, setLoadingRapports] = useState(true);
   const [loadingCreances, setLoadingCreances] = useState(true);
+  const [loadingPeriode, setLoadingPeriode] = useState(true);
+  const [erreurPeriode, setErreurPeriode] = useState(null);
+  
+  const [dateDebut, setDateDebut] = useState(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 1);
+    return date.toISOString().split('T')[0];
+  });
+  const [dateFin, setDateFin] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
-    loadRapports();
     loadCreances();
+    loadRapports();
+    genererRapportPeriode();
   }, []);
 
   const loadRapports = async () => {
+    setLoadingRapports(true);
     try {
       const res = await api.get('/clients/rapports');
       setRapportData(res.data?.data || null);
@@ -1121,6 +1133,7 @@ function RapportsTab() {
   };
 
   const loadCreances = async () => {
+    setLoadingCreances(true);
     try {
       const res = await api.get('/clients/comptes-a-recevoir');
       setCreancesData(res.data?.data || null);
@@ -1131,11 +1144,206 @@ function RapportsTab() {
     }
   };
 
+  const genererRapportPeriode = async () => {
+    setErreurPeriode(null);
+    
+    if (!dateDebut || !dateFin) {
+      setErreurPeriode('Veuillez sélectionner une période');
+      return;
+    }
+    
+    if (new Date(dateDebut) > new Date(dateFin)) {
+      setErreurPeriode('La date de début doit être antérieure à la date de fin');
+      return;
+    }
+    
+    setLoadingPeriode(true);
+    try {
+      const params = new URLSearchParams({
+        dateDebut: dateDebut,
+        dateFin: dateFin
+      });
+      const res = await api.get(`/clients/rapport-periode?${params.toString()}`);
+      setRapportPeriode(res.data?.data || null);
+      setErreurPeriode(null);
+    } catch (error) {
+      console.error('Erreur génération rapport:', error);
+      setErreurPeriode(error.response?.data?.message || error.message || 'Erreur lors de la génération du rapport');
+      setRapportPeriode(null);
+    } finally {
+      setLoadingPeriode(false);
+    }
+  };
+
   const { topClients = [], clientsRetard = [], chiffreAffaireTotal = 0, echeances = { prochains7jours: { count: 0, montant: 0 }, prochains30jours: { count: 0, montant: 0 } }, distributionPaiements = [] } = rapportData || {};
 
   return (
     <div>
       <h3>📊 Rapports Client</h3>
+
+      {/* RAPPORT PAR PÉRIODE */}
+      <div className="form-card" style={{ marginTop: '20px', backgroundColor: '#fff' }}>
+        <h3 style={{ marginBottom: '20px', color: '#2c3e50' }}>📅 Rapport Client par Période</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '15px', marginBottom: '20px' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Date de début</label>
+            <input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Date de fin</label>
+            <input
+              type="date"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button
+              onClick={genererRapportPeriode}
+              disabled={loadingPeriode}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#3498db',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: loadingPeriode ? 'not-allowed' : 'pointer',
+                fontWeight: '500',
+                fontSize: '14px'
+              }}
+            >
+              {loadingPeriode ? 'Chargement...' : '🔍 Générer'}
+            </button>
+          </div>
+        </div>
+
+        {erreurPeriode && (
+          <div style={{
+            padding: '15px',
+            backgroundColor: '#fee',
+            border: '1px solid #fcc',
+            borderRadius: '4px',
+            color: '#c33',
+            marginTop: '15px',
+            marginBottom: '15px'
+          }}>
+            ⚠️ {erreurPeriode}
+          </div>
+        )}
+
+        {loadingPeriode && !rapportPeriode && !erreurPeriode && (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+            <div style={{ fontSize: '18px', marginBottom: '10px' }}>⏳ Génération du rapport en cours...</div>
+          </div>
+        )}
+
+        {rapportPeriode && !loadingPeriode && (
+          <div>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+              gap: '15px',
+              marginBottom: '30px'
+            }}>
+              <div style={{
+                padding: '20px',
+                backgroundColor: '#3498db',
+                color: 'white',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>CHIFFRE D'AFFAIRES</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {parseFloat(rapportPeriode.chiffreAffaires || 0).toLocaleString()} FCFA
+                </div>
+              </div>
+
+              <div style={{
+                padding: '20px',
+                backgroundColor: '#27ae60',
+                color: 'white',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>FACTURES ÉMISES</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {rapportPeriode.nombreFactures || 0}
+                </div>
+              </div>
+
+              <div style={{
+                padding: '20px',
+                backgroundColor: '#f39c12',
+                color: 'white',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>PAIEMENTS REÇUS</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {parseFloat(rapportPeriode.paiementsRecus || 0).toLocaleString()} FCFA
+                </div>
+              </div>
+
+              <div style={{
+                padding: '20px',
+                backgroundColor: '#e74c3c',
+                color: 'white',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>SOLDES IMPAYÉS</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {parseFloat(rapportPeriode.soldesImpayes || 0).toLocaleString()} FCFA
+                </div>
+              </div>
+            </div>
+
+            {rapportPeriode.topClients && rapportPeriode.topClients.length > 0 && (
+              <div style={{ marginTop: '30px' }}>
+                <h4 style={{ marginBottom: '15px' }}>Top Clients de la Période</h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Client</th>
+                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Factures</th>
+                      <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>CA (FCFA)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rapportPeriode.topClients.map((client, index) => (
+                      <tr key={index} style={{ borderBottom: '1px solid #dee2e6' }}>
+                        <td style={{ padding: '12px' }}>{client.nom}</td>
+                        <td style={{ padding: '12px', textAlign: 'right' }}>{client.nombreFactures}</td>
+                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: '500' }}>
+                          {parseFloat(client.chiffreAffaires || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* RAPPORT D'ANCIENNETÉ DES CRÉANCES */}
       <div className="form-card" style={{ marginTop: '20px', backgroundColor: '#f8f9fa' }}>

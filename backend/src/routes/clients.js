@@ -309,6 +309,127 @@ router.get('/rapports', async (req, res) => {
 });
 
 /**
+ * GET /api/clients/rapport-periode
+ * Génère un rapport client pour une période donnée
+ */
+router.get('/rapport-periode', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+
+    if (!dateDebut || !dateFin) {
+      return res.status(400).json({
+        success: false,
+        message: 'Les dates de début et fin sont requises'
+      });
+    }
+
+    // Valider le format des dates
+    const dateDebutObj = new Date(dateDebut);
+    const dateFinObj = new Date(dateFin);
+    
+    if (isNaN(dateDebutObj.getTime()) || isNaN(dateFinObj.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Format de date invalide. Utilisez le format YYYY-MM-DD'
+      });
+    }
+
+    if (dateDebutObj > dateFinObj) {
+      return res.status(400).json({
+        success: false,
+        message: 'La date de début doit être antérieure à la date de fin'
+      });
+    }
+
+    // 1. Chiffre d'affaires de la période
+    const [caData] = await db
+      .select({
+        chiffreAffaires: sql`COALESCE(SUM(${factures.totalTTC}), 0)::numeric`,
+        nombreFactures: sql`COUNT(${factures.id})::int`
+      })
+      .from(factures)
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        sql`${factures.statut} NOT IN ('annulee', 'brouillon')`,
+        sql`${factures.dateFacture} BETWEEN ${dateDebut} AND ${dateFin}`
+      ));
+
+    // 2. Paiements reçus durant la période
+    const [paiementsData] = await db
+      .select({
+        paiementsRecus: sql`COALESCE(SUM(${paiements.montant}), 0)::numeric`,
+        nombrePaiements: sql`COUNT(${paiements.id})::int`
+      })
+      .from(paiements)
+      .where(and(
+        eq(paiements.entrepriseId, req.entrepriseId),
+        sql`${paiements.datePaiement} BETWEEN ${dateDebut} AND ${dateFin}`
+      ));
+
+    // 3. Soldes impayés (factures de la période non encore payées)
+    const [soldesData] = await db
+      .select({
+        soldesImpayes: sql`COALESCE(SUM(COALESCE(${factures.soldeRestant}, 0)), 0)::numeric`
+      })
+      .from(factures)
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        sql`${factures.statut} IN ('envoyee', 'retard')`,
+        sql`${factures.dateFacture} BETWEEN ${dateDebut} AND ${dateFin}`,
+        sql`COALESCE(${factures.soldeRestant}, 0) > 0`
+      ));
+
+    // 4. Top clients de la période
+    const topClients = await db
+      .select({
+        clientId: factures.clientId,
+        clientNom: clients.nom,
+        chiffreAffaires: sql`SUM(${factures.totalTTC})::numeric`,
+        nombreFactures: sql`COUNT(${factures.id})::int`
+      })
+      .from(factures)
+      .leftJoin(clients, eq(factures.clientId, clients.id))
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        sql`${factures.statut} NOT IN ('annulee', 'brouillon')`,
+        sql`${factures.dateFacture} BETWEEN ${dateDebut} AND ${dateFin}`
+      ))
+      .groupBy(factures.clientId, clients.nom)
+      .orderBy(sql`SUM(${factures.totalTTC}) DESC`)
+      .limit(10);
+
+    res.json({
+      success: true,
+      data: {
+        chiffreAffaires: parseFloat(caData.chiffreAffaires || 0),
+        nombreFactures: caData.nombreFactures || 0,
+        paiementsRecus: parseFloat(paiementsData.paiementsRecus || 0),
+        nombrePaiements: paiementsData.nombrePaiements || 0,
+        soldesImpayes: parseFloat(soldesData.soldesImpayes || 0),
+        topClients: topClients.map(c => ({
+          clientId: c.clientId,
+          nom: c.clientNom || 'Client inconnu',
+          chiffreAffaires: parseFloat(c.chiffreAffaires || 0),
+          nombreFactures: c.nombreFactures
+        })),
+        periode: {
+          dateDebut,
+          dateFin
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Erreur GET /api/clients/rapport-periode:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la génération du rapport par période',
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/clients/:id
  * Récupère un client spécifique
  */
