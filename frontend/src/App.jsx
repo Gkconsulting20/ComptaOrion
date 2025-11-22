@@ -148,16 +148,21 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [entreprise, setEntreprise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showInscription, setShowInscription] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
+    const storedEntreprise = localStorage.getItem('entreprise');
     
     if (token && storedUser) {
       setIsAuthenticated(true);
       setUser(JSON.parse(storedUser));
+      if (storedEntreprise) {
+        setEntreprise(JSON.parse(storedEntreprise));
+      }
     }
     
     const urlPath = window.location.pathname;
@@ -351,7 +356,7 @@ export default function App() {
               ☰
             </button>
             <h1 style={{margin: 0, fontSize: '24px', color: '#2c3e50', fontWeight: '600'}}>
-              ComptaOrion ERP
+              {entreprise?.nom || 'ComptaOrion ERP'}
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>

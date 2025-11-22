@@ -45,7 +45,10 @@ export function Login({ onLoginSuccess }) {
       localStorage.setItem('token', data.token);
       localStorage.setItem('refreshToken', data.refreshToken);
       localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('entrepriseId', data.user.entrepriseId); // Récupéré automatiquement depuis le backend
+      localStorage.setItem('entrepriseId', data.user.entrepriseId);
+      if (data.entreprise) {
+        localStorage.setItem('entreprise', JSON.stringify(data.entreprise));
+      }
       if (data.session && data.session.id) {
         localStorage.setItem('sessionId', data.session.id);
       }
