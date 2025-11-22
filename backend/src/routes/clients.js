@@ -57,7 +57,9 @@ router.get('/comptes-a-recevoir', async (req, res) => {
   try {
     const { periode } = req.query; // '7j', '30j', '90j', 'tout'
     
-    // Récupérer toutes les factures impayées ou partiellement payées
+    // Récupérer toutes les factures avec solde restant > 0 (impayées ou partiellement payées)
+    // Note: L'enum invoice_status contient: 'brouillon', 'envoyee', 'payee', 'annulee', 'retard'
+    // Les factures partiellement payées ont toujours statut 'envoyee' ou 'retard' avec soldeRestant > 0
     const facturesImpayees = await db
       .select({
         factureId: factures.id,
@@ -76,7 +78,7 @@ router.get('/comptes-a-recevoir', async (req, res) => {
       .leftJoin(clients, eq(factures.clientId, clients.id))
       .where(and(
         eq(factures.entrepriseId, req.entrepriseId),
-        sql`${factures.statut} IN ('envoyee', 'partiellement_payee', 'retard')`,
+        sql`${factures.statut} IN ('envoyee', 'retard')`,
         sql`${factures.soldeRestant} > 0`
       ))
       .orderBy(factures.dateEcheance);

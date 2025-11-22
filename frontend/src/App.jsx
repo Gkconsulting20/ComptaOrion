@@ -10,7 +10,6 @@ import { ParametresModule } from './modules/ParametresModule';
 import { AuthenticationModule } from './modules/AuthenticationModule';
 import { SaaSAdminModule } from './modules/SaaSAdminModule';
 import { IAAssistantModule } from './modules/IAAssistantModule';
-import RapportsClientsModule from './modules/RapportsClientsModule';
 import { ImpotsModule } from './modules/ImpotsModule';
 import { Login } from './pages/Login';
 import { Inscription } from './pages/Inscription';
@@ -20,7 +19,6 @@ const MODULES = [
   { id: 'dashboard', label: 'Tableau de Bord', icon: '📊' },
   { id: 'saas-admin', label: 'Admin SaaS', icon: '🎯' },
   { id: 'clients', label: 'Clients', icon: '👥' },
-  { id: 'rapports-clients', label: 'Rapports Clients', icon: '📈' },
   { id: 'fournisseurs', label: 'Fournisseurs', icon: '🏭' },
   { id: 'tresorerie', label: 'Trésorerie', icon: '💰' },
   { id: 'stock', label: 'Stock', icon: '📦' },
@@ -233,12 +231,11 @@ export default function App() {
       case 'dashboard': return <Dashboard />;
       case 'saas-admin': return <SaaSAdminModule />;
       case 'clients': return <ClientsModule />;
-      case 'rapports-clients': return <RapportsClientsModule />;
       case 'fournisseurs': return <GestionFournisseurs />;
       case 'tresorerie': return <TresorerieModule />;
       case 'stock': return <StockInventaire />;
       case 'comptabilite': return <ModuleComptabilite />;
-      case 'impots': return <div style={{padding: '20px'}}><h2>🏛️ Module Impôts</h2><p>Module en cours de développement...</p></div>;
+      case 'impots': return <ImpotsModule />;
       case 'ia-assistant': return <IAAssistantModule />;
       case 'authentication': return <AuthenticationModule />;
       case 'parametres': return <ParametresModule />;

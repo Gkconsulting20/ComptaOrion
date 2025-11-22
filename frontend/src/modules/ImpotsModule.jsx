@@ -171,7 +171,9 @@ export function ImpotsModule() {
     <div>
       <h3 style={{ marginBottom: '20px' }}>Paramètres Fiscaux</h3>
 
-      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '20px' }}>
+        <h4 style={{ marginTop: 0 }}>Informations Fiscales</h4>
+        
         <div style={{ marginBottom: '20px' }}>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Régime d'imposition</label>
           <select
@@ -238,6 +240,98 @@ export function ImpotsModule() {
         >
           Enregistrer les paramètres
         </button>
+      </div>
+
+      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+        <h4 style={{ marginTop: 0 }}>🌐 Connexion API Administration Fiscale</h4>
+        <p style={{ color: '#7f8c8d', marginBottom: '15px' }}>
+          Connectez-vous directement à l'administration fiscale de votre pays pour déclarer vos impôts en ligne.
+        </p>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Pays</label>
+          <select
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
+          >
+            <option value="">Sélectionner un pays</option>
+            <option value="benin">Bénin (e-Tax)</option>
+            <option value="senegal">Sénégal (SIGTAS)</option>
+            <option value="cotedivoire">Côte d'Ivoire (e-Impôts)</option>
+            <option value="togo">Togo (OTR)</option>
+            <option value="mali">Mali (DGI)</option>
+            <option value="burkina">Burkina Faso</option>
+          </select>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Identifiant API / NIF</label>
+          <input
+            type="text"
+            placeholder="Votre identifiant sur le portail fiscal"
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Clé API / Mot de passe</label>
+          <input
+            type="password"
+            placeholder="Clé secrète fournie par l'administration"
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
+          />
+        </div>
+
+        <div style={{ padding: '15px', backgroundColor: '#fff3cd', borderRadius: '6px', marginBottom: '15px' }}>
+          <strong>ℹ️ Information :</strong> Cette connexion permettra la télédéclaration automatique de vos impôts et taxes.
+          Consultez le portail de votre administration fiscale pour obtenir vos identifiants API.
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#27ae60',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
+            Tester la connexion
+          </button>
+          <button
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#3498db',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
+            Enregistrer la configuration
+          </button>
+        </div>
       </div>
     </div>
   );
