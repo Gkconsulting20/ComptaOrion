@@ -25,6 +25,7 @@ import bonsLivraisonRoutes from './routes/bons-livraison.js';
 import uploadRoutes from './routes/upload.js';
 import ecrituresRecurrentesRoutes from './routes/ecritures-recurrentes.js';
 import iaAssistantRoutes from './routes/ia-assistant.js';
+import publicInscriptionRoutes from './routes/public-inscription.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -43,6 +44,9 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Routes d'authentification (publiques - pas de middleware)
 app.use('/api/auth', authRoutes);
 app.use('/api/auth-security', authSecurityRoutes);
+
+// Routes publiques d'inscription (pas d'authentification requise)
+app.use('/api/public', publicInscriptionRoutes);
 
 // Route de santé (publique)
 app.get('/api/health', (req, res) => {

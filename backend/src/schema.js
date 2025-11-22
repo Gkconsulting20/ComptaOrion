@@ -1106,13 +1106,14 @@ export const saasClients = pgTable('saas_clients', {
 // Ventes (tracking des ventes par commercial)
 export const saasVentes = pgTable('saas_ventes', {
   id: serial('id').primaryKey(),
-  commercialId: integer('commercial_id').references(() => saasCommerciaux.id).notNull(),
+  commercialId: integer('commercial_id').references(() => saasCommerciaux.id), // Nullable pour ventes web
   clientId: integer('client_id').references(() => saasClients.id).notNull(),
   abonnementId: integer('abonnement_id').references(() => abonnements.id),
   montantVente: decimal('montant_vente', { precision: 15, scale: 2 }).notNull(),
-  commission: decimal('commission', { precision: 15, scale: 2 }).notNull(),
+  commission: decimal('commission', { precision: 15, scale: 2 }).default('0'), // 0 pour ventes web
   dateVente: timestamp('date_vente').defaultNow(),
   statut: varchar('statut', { length: 50 }).default('confirmée'), // confirmée, annulée
+  source: varchar('source', { length: 50 }).default('commercial'), // commercial, web, api
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
 });
