@@ -82,6 +82,7 @@ Vous avez souscrit au plan Starter et pouvez dès maintenant accéder
 à votre espace de gestion.
 
 🔐 Vos Identifiants de Connexion
+ID Entreprise : 42
 Email : client@entreprise.com
 Mot de passe temporaire : abc123xyz9
 
@@ -221,9 +222,11 @@ En cas d'erreur :
 
 2. **Vérifier les logs serveur**
    ```
-   ⚠️ SendGrid non configuré - Email de bienvenue non envoyé (simulation)
+   ⚠️ SendGrid non configuré - Email de bienvenue NON ENVOYÉ
+   ❌ ERREUR CRITIQUE: Impossible d'envoyer l'email de bienvenue
    ```
-   → Ajoutez SENDGRID_API_KEY dans les secrets
+   → **IMPORTANT**: En production, SendGrid DOIT être configuré
+   → Ajoutez SENDGRID_API_KEY dans les secrets immédiatement
 
 3. **Vérifier l'email du client**
    - Est-ce une adresse valide ?
@@ -316,18 +319,20 @@ Utiliser les fonctionnalités de tracking de SendGrid pour savoir si l'email a �
 
 Avant de passer en production :
 
-- [ ] `SENDGRID_API_KEY` configurée dans les secrets
+- [ ] **OBLIGATOIRE:** `SENDGRID_API_KEY` configurée dans les secrets
 - [ ] `SENDGRID_FROM_EMAIL` configuré (email vérifié dans SendGrid)
 - [ ] `SENDGRID_FROM_NAME` configuré
 - [ ] Test d'inscription effectué en mode sandbox
-- [ ] Email de bienvenue bien reçu
+- [ ] Email de bienvenue bien reçu avec ID entreprise, email et mot de passe
+- [ ] ID entreprise présent dans l'email
 - [ ] Mot de passe temporaire fonctionnel
-- [ ] Connexion réussie avec les identifiants
+- [ ] Connexion réussie avec les identifiants (email + mot de passe)
 - [ ] Changement de mot de passe testé
 - [ ] Email ne va pas en spam
 - [ ] Domaine d'expéditeur authentifié (SPF/DKIM)
 - [ ] Contenu personnalisé à votre marque
 - [ ] Coordonnées de support mises à jour
+- [ ] **SÉCURITÉ:** Aucun mot de passe n'apparaît dans les logs serveur
 
 ---
 

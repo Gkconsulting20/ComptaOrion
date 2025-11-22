@@ -32,7 +32,7 @@ if (FEDAPAY_SECRET_KEY) {
 /**
  * Envoie un email de bienvenue avec les identifiants de connexion
  */
-async function envoyerEmailBienvenue(email, nomEntreprise, motDePasse, planId) {
+async function envoyerEmailBienvenue(email, nomEntreprise, motDePasse, planId, entrepriseId) {
   // Récupérer les infos du plan
   const [plan] = await db.select()
     .from(plansAbonnement)
@@ -76,6 +76,7 @@ async function envoyerEmailBienvenue(email, nomEntreprise, motDePasse, planId) {
           
           <div class="credentials">
             <h3 style="margin-top: 0; color: #667eea;">🔐 Vos Identifiants de Connexion</h3>
+            <p><strong>ID Entreprise :</strong> <code style="background: #f0f0f0; padding: 5px 10px; border-radius: 3px; font-size: 16px;">${entrepriseId}</code></p>
             <p><strong>Email :</strong> ${email}</p>
             <p><strong>Mot de passe temporaire :</strong> <code style="background: #f0f0f0; padding: 5px 10px; border-radius: 3px; font-size: 16px;">${motDePasse}</code></p>
           </div>
@@ -120,10 +121,13 @@ async function envoyerEmailBienvenue(email, nomEntreprise, motDePasse, planId) {
   const apiKey = process.env.SENDGRID_API_KEY;
   
   if (!apiKey) {
-    console.log('⚠️ SendGrid non configuré - Email de bienvenue non envoyé (simulation)');
-    console.log(`📧 Email qui serait envoyé à: ${email}`);
-    console.log(`🔑 Mot de passe: ${motDePasse}`);
-    return;
+    console.warn('⚠️ SendGrid non configuré - Email de bienvenue NON ENVOYÉ');
+    console.warn(`📧 Destinataire: ${email}`);
+    console.warn(`🏢 Entreprise ID: ${entrepriseId}`);
+    console.warn(`⚠️ IMPORTANT: Le client ne recevra PAS ses identifiants par email !`);
+    // SÉCURITÉ: Ne jamais logger le mot de passe en clair
+    // En production, SendGrid DOIT être configuré
+    throw new Error('SENDGRID_API_KEY non configuré - impossible d\'envoyer l\'email de bienvenue');
   }
 
   sgMail.setApiKey(apiKey);
@@ -555,12 +559,16 @@ router.post('/webhook/fedapay', async (req, res) => {
           inscriptionEnAttente.email,
           inscriptionEnAttente.nomEntreprise,
           motDePasseTemporaire,
-          inscriptionEnAttente.planId
+          inscriptionEnAttente.planId,
+          newEntreprise.id // Ajouter l'ID de l'entreprise créée
         );
-        console.log(`📧 Email de bienvenue envoyé à ${inscriptionEnAttente.email}`);
+        console.log(`✅ Email de bienvenue envoyé avec succès à ${inscriptionEnAttente.email}`);
       } catch (emailError) {
-        console.error('❌ Erreur envoi email de bienvenue:', emailError);
-        // Ne pas bloquer l'inscription si l'email échoue
+        console.error('❌ ERREUR CRITIQUE: Impossible d\'envoyer l\'email de bienvenue:', emailError.message);
+        console.error(`⚠️ Le client (ID ${newEntreprise.id}) n'a PAS reçu ses identifiants !`);
+        // IMPORTANT: En production, ceci est un échec critique
+        // L'inscription est créée mais le client ne peut pas se connecter
+        // Action requise: Contactez manuellement le client ou réinitialisez son mot de passe
       }
 
       res.json({ success: true, message: 'Inscription complétée avec succès' });
