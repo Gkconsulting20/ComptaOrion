@@ -68,11 +68,12 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
     - Mobile Money (MTN, Moov, Orange Money) support
     - HMAC signature verification for webhook security
     - Automatic account creation after payment confirmation
+    - **Automated welcome email with login credentials** sent immediately upon account creation
     - Idempotent webhook handling (duplicate protection via transaction_id)
     - Renewal support for existing customers
     - Covers 8+ West African countries (Benin, Senegal, Côte d'Ivoire, Togo, Mali, etc.)
     - Public registration page at `/inscription` with plan selection
-    - See `GUIDE_CONFIGURATION_FEDAPAY.md` for setup instructions
+    - See `GUIDE_CONFIGURATION_FEDAPAY.md` and `GUIDE_EMAILS_INSCRIPTION.md` for setup instructions
 
 ## External Dependencies
 

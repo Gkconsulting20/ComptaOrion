@@ -101,7 +101,7 @@ Voici ce qui se passe lorsqu'un client s'inscrit en ligne :
    ├─ Client SaaS (statut: actif, source: web)
    ├─ Abonnement (actif pour la durée choisie)
    └─ Vente (commission: 0, source: web)
-5. 📧 Email envoyé avec identifiants (TODO: À activer avec SendGrid)
+5. 📧 Email automatique envoyé avec identifiants de connexion
 ```
 
 ---
