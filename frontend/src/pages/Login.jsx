@@ -165,14 +165,20 @@ export function Login({ onLoginSuccess }) {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '80px',
-            height: '80px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            marginBottom: '20px',
-            boxShadow: '0 10px 30px rgba(102,126,234,0.3)'
+            width: '100px',
+            height: '100px',
+            marginBottom: '20px'
           }}>
-            <span style={{ fontSize: '40px' }}>✨</span>
+            <img 
+              src="/logo-comptaorion.png" 
+              alt="ComptaOrion" 
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 10px 30px rgba(52, 152, 219, 0.3))'
+              }}
+            />
           </div>
           <h1 style={{ 
             margin: '0 0 10px 0', 

@@ -197,7 +197,12 @@ export default function App() {
         backgroundColor: '#f5f5f5'
       }}>
         <div style={{ textAlign: 'center' }}>
-          <h2>🌟 ComptaOrion</h2>
+          <img 
+            src="/logo-comptaorion.png" 
+            alt="ComptaOrion" 
+            style={{ width: '80px', height: '80px', marginBottom: '15px' }}
+          />
+          <h2>ComptaOrion</h2>
           <p>Chargement...</p>
         </div>
       </div>
@@ -243,11 +248,24 @@ export default function App() {
           alignItems: 'center',
           marginBottom: '30px',
           paddingBottom: '20px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)'
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          gap: '10px'
         }}>
-          <h2 style={{margin: 0, fontSize: sidebarOpen ? '20px' : '0', transition: 'font-size 0.3s'}}>
-            🌟 {sidebarOpen && 'ComptaOrion'}
-          </h2>
+          <img 
+            src="/logo-comptaorion.png" 
+            alt="ComptaOrion" 
+            style={{
+              width: sidebarOpen ? '40px' : '32px',
+              height: sidebarOpen ? '40px' : '32px',
+              transition: 'all 0.3s',
+              objectFit: 'contain'
+            }}
+          />
+          {sidebarOpen && (
+            <h2 style={{margin: 0, fontSize: '20px'}}>
+              ComptaOrion
+            </h2>
+          )}
         </div>
         <nav>
           {MODULES.map(m => (
