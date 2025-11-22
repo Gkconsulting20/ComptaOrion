@@ -41,12 +41,12 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 36297
-externalPort = 3001
+localPort = 35873
+externalPort = 3002
 
 [[ports]]
-localPort = 39185
-externalPort = 3002
+localPort = 36297
+externalPort = 3001
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -57,3 +57,4 @@ run = ["bash", "start.sh"]
 [userenv.shared]
 JWT_SECRET = "orion_production_jwt_secret_2025_ultra_securise_change_me"
 JWT_REFRESH_SECRET = "orion_production_refresh_secret_2025_ultra_securise_change_me"
+FEDAPAY_ENVIRONMENT = "sandbox"

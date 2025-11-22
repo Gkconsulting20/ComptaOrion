@@ -3,8 +3,13 @@ import { db } from '../db.js';
 import { entreprises, users, plansAbonnement, abonnements, saasClients, saasVentes, inscriptionsEnAttente } from '../schema.js';
 import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import FedaPay from 'fedapay';
+import { createRequire } from 'module';
 import crypto from 'crypto';
+
+const require = createRequire(import.meta.url);
+const fedapayModule = require('fedapay');
+const FedaPay = fedapayModule.FedaPay;
+const Transaction = fedapayModule.Transaction;
 
 const router = express.Router();
 
@@ -116,7 +121,7 @@ router.post('/inscription', async (req, res) => {
       }
 
       try {
-        const transaction = await FedaPay.Transaction.create({
+        const transaction = await Transaction.create({
           description: `ComptaOrion - ${plan.nom} (${dureeEnMois} mois)`,
           amount: montantTotal,
           currency: { iso: plan.devise || 'XOF' },
