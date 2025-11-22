@@ -504,7 +504,7 @@ router.post('/webhook/fedapay', async (req, res) => {
       const [newUser] = await db.insert(users).values({
         nom: inscriptionEnAttente.nomEntreprise,
         email: inscriptionEnAttente.email,
-        password: hashedPassword,
+        passwordHash: hashedPassword,  // CORRECTION: passwordHash au lieu de password
         entrepriseId: newEntreprise.id,
         role: 'admin',
         actif: true
