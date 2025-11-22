@@ -49,6 +49,114 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * GET /api/clients/comptes-a-recevoir
+ * Génère un rapport détaillé des comptes à recevoir avec échéances
+ * IMPORTANT: Doit être avant /:id pour ne pas être capturé par la route dynamique
+ */
+router.get('/comptes-a-recevoir', async (req, res) => {
+  try {
+    const { periode } = req.query; // '7j', '30j', '90j', 'tout'
+    
+    // Récupérer toutes les factures impayées ou partiellement payées
+    const facturesImpayees = await db
+      .select({
+        factureId: factures.id,
+        numeroFacture: factures.numeroFacture,
+        clientId: factures.clientId,
+        clientNom: clients.nom,
+        clientEmail: clients.email,
+        dateFacture: factures.dateFacture,
+        dateEcheance: factures.dateEcheance,
+        totalTTC: factures.totalTTC,
+        montantPaye: factures.montantPaye,
+        soldeRestant: factures.soldeRestant,
+        statut: factures.statut
+      })
+      .from(factures)
+      .leftJoin(clients, eq(factures.clientId, clients.id))
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        sql`${factures.statut} IN ('envoyee', 'partiellement_payee', 'retard')`,
+        sql`${factures.soldeRestant} > 0`
+      ))
+      .orderBy(factures.dateEcheance);
+
+    // Calculer totaux par période
+    const now = new Date();
+    const totaux = {
+      total: 0,
+      enRetard: 0,
+      prochains7jours: 0,
+      prochains30jours: 0,
+      prochains90jours: 0,
+      auDela90jours: 0
+    };
+
+    const facturesParPeriode = {
+      enRetard: [],
+      prochains7jours: [],
+      prochains30jours: [],
+      prochains90jours: [],
+      auDela90jours: []
+    };
+
+    facturesImpayees.forEach(facture => {
+      const solde = parseFloat(facture.soldeRestant || 0);
+      totaux.total += solde;
+      
+      const echeance = new Date(facture.dateEcheance);
+      const joursAvantEcheance = Math.ceil((echeance - now) / (1000 * 60 * 60 * 24));
+
+      const factureFormatee = {
+        ...facture,
+        soldeRestant: solde,
+        totalTTC: parseFloat(facture.totalTTC || 0),
+        montantPaye: parseFloat(facture.montantPaye || 0),
+        joursAvantEcheance
+      };
+
+      if (joursAvantEcheance < 0) {
+        totaux.enRetard += solde;
+        facturesParPeriode.enRetard.push(factureFormatee);
+      } else if (joursAvantEcheance <= 7) {
+        totaux.prochains7jours += solde;
+        facturesParPeriode.prochains7jours.push(factureFormatee);
+      } else if (joursAvantEcheance <= 30) {
+        totaux.prochains30jours += solde;
+        facturesParPeriode.prochains30jours.push(factureFormatee);
+      } else if (joursAvantEcheance <= 90) {
+        totaux.prochains90jours += solde;
+        facturesParPeriode.prochains90jours.push(factureFormatee);
+      } else {
+        totaux.auDela90jours += solde;
+        facturesParPeriode.auDela90jours.push(factureFormatee);
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totaux,
+        facturesParPeriode,
+        resume: {
+          nombreFacturesImpayees: facturesImpayees.length,
+          montantTotal: totaux.total,
+          tauxRecouvrement: 0 // TODO: Calculer basé sur historique
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Erreur GET /api/clients/comptes-a-recevoir:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la génération du rapport de comptes à recevoir',
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/clients/rapports
  * Génère des rapports analytiques sur les clients
  * IMPORTANT: Doit être avant /:id pour ne pas être capturé par la route dynamique

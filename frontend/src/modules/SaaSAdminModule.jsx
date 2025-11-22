@@ -16,6 +16,7 @@ export function SaaSAdminModule() {
   const [formData, setFormData] = useState({});
 
   const [entreprises, setEntreprises] = useState([]);
+  const [filtreSource, setFiltreSource] = useState('all'); // Fix: Hook déplacé de renderVentes
 
   const TABS = [
     { id: 'dashboard', label: '📊 Dashboard' },
@@ -256,7 +257,27 @@ export function SaaSAdminModule() {
 
   const renderClients = () => (
     <div>
-      <h3 style={{ marginBottom: '20px' }}>Clients SaaS</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3 style={{ margin: 0 }}>Clients SaaS</h3>
+        <button
+          onClick={() => openModal('clients')}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#27ae60',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: '500',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <span>+</span>
+          Ajouter Client
+        </button>
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
         <thead>
           <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
@@ -412,7 +433,6 @@ export function SaaSAdminModule() {
   );
 
   const renderVentes = () => {
-    const [filtreSource, setFiltreSource] = useState('all');
     const ventesFiltrees = ventes.filter(v => {
       if (filtreSource === 'all') return true;
       return v.source === filtreSource;
