@@ -11,10 +11,29 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+// Utiliser le connection pooler de Neon pour éviter "too many connections"
+function getPooledConnectionString(url) {
+  try {
+    const parsed = new URL(url);
+    // Ajouter -pooler au hostname si pas déjà présent
+    if (!parsed.hostname.includes('-pooler')) {
+      parsed.hostname = parsed.hostname.replace(
+        /^([^.]+)(\..*)/,
+        '$1-pooler$2'
+      );
+    }
+    return parsed.toString();
+  } catch (e) {
+    return url;
+  }
+}
+
+const connectionString = getPooledConnectionString(process.env.DATABASE_URL);
+
 export const pool = new Pool({ 
-  connectionString: process.env.DATABASE_URL,
-  max: 5,
-  idleTimeoutMillis: 30000,
+  connectionString,
+  max: 3,
+  idleTimeoutMillis: 20000,
   connectionTimeoutMillis: 10000
 });
 export const db = drizzle({ client: pool, schema });
