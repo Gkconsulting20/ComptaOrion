@@ -17,10 +17,12 @@ router.post('/login', async (req, res) => {
     const ipAddress = req.ip || req.connection.remoteAddress;
     const userAgent = req.get('user-agent');
 
-    // Chercher l'utilisateur SEULEMENT par email
-    const user = await db.query.users.findFirst({
-      where: eq(users.email, email)
-    });
+    // Chercher l'utilisateur par email (insensible à la casse)
+    const emailLower = email?.toLowerCase().trim();
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, emailLower));
 
     if (!user) {
       await db.insert(auditConnexions).values({
