@@ -19,17 +19,11 @@ router.post('/login', async (req, res) => {
 
     // Chercher l'utilisateur par email (insensible à la casse)
     const emailLower = email?.toLowerCase().trim();
-    console.log('[LOGIN DEBUG] Recherche email:', emailLower);
-    
-    const allUsers = await db.select().from(users);
-    console.log('[LOGIN DEBUG] Tous les emails:', allUsers.map(u => u.email));
     
     const [user] = await db
       .select()
       .from(users)
       .where(eq(users.email, emailLower));
-
-    console.log('[LOGIN DEBUG] Utilisateur trouvé:', user ? user.email : 'AUCUN');
 
     if (!user) {
       await db.insert(auditConnexions).values({
