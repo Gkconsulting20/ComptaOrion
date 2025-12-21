@@ -98,6 +98,16 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
     - Public registration page at `/inscription` with plan selection
     - See `GUIDE_CONFIGURATION_FEDAPAY.md` and `GUIDE_EMAILS_INSCRIPTION.md` for setup instructions
 
+-   **Commercial Referral Links (Dec 2025):** Sales representatives can now generate personalized referral links:
+    - Link format: `/inscription?ref=COMMERCIAL_ID`
+    - Admin SaaS > Commerciaux: "Copier le lien" button for each commercial
+    - When a client uses a referral link:
+      - The commercial is automatically associated with the new client
+      - Commission is calculated based on the commercial's rate
+      - Source is tracked as "commercial" for analytics
+      - Full audit trail with commercial attribution in notes
+    - Supports both new subscriptions and renewals
+
 ## External Dependencies
 
 ### Backend
