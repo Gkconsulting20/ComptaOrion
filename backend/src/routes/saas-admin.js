@@ -93,15 +93,16 @@ router.post('/commerciaux', async (req, res) => {
   try {
     const { nom, prenom, email, telephone, region, commission, objectifMensuel, password } = req.body;
 
-    let passwordHash = null;
-    if (password) {
-      passwordHash = await bcrypt.hash(password, 10);
+    if (!password) {
+      return res.status(400).json({ error: 'Le mot de passe est obligatoire pour créer un commercial' });
     }
+
+    const passwordHash = await bcrypt.hash(password, 10);
 
     const [commercial] = await db.insert(saasCommerciaux).values({
       nom,
       prenom,
-      email,
+      email: email ? email.toLowerCase() : null,
       telephone,
       passwordHash,
       region,
@@ -123,6 +124,10 @@ router.put('/commerciaux/:id', async (req, res) => {
 
     if (password) {
       updates.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    if (updates.email) {
+      updates.email = updates.email.toLowerCase();
     }
 
     const [commercial] = await db.update(saasCommerciaux)
