@@ -95,6 +95,7 @@ app.get('/api/setup-admin', async (req, res) => {
     
     await db.insert(users).values({
       email: 'admin@comptaorion.com',
+      username: 'admin',
       passwordHash: passwordHash,
       nom: 'Administrateur',
       prenom: 'Système',
