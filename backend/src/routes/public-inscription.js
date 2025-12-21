@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { entreprises, users, plansAbonnement, abonnements, saasClients, saasVentes, inscriptionsEnAttente } from '../schema.js';
+import { entreprises, users, plansAbonnement, abonnements, saasClients, saasVentes, saasCommerciaux, inscriptionsEnAttente } from '../schema.js';
 import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
@@ -150,6 +150,35 @@ async function envoyerEmailBienvenue(email, nomEntreprise, motDePasse, planId, e
 // ROUTES PUBLIQUES (sans authentification)
 // ===========================================
 
+// GET /api/public/commercial/:id - Récupérer les infos d'un commercial (pour lien parrainage)
+router.get('/commercial/:id', async (req, res) => {
+  try {
+    const commercialId = parseInt(req.params.id);
+    if (!commercialId || isNaN(commercialId)) {
+      return res.status(400).json({ error: 'ID commercial invalide' });
+    }
+
+    const [commercial] = await db.select({
+      id: saasCommerciaux.id,
+      nom: saasCommerciaux.nom,
+      prenom: saasCommerciaux.prenom,
+      region: saasCommerciaux.region
+    })
+    .from(saasCommerciaux)
+    .where(eq(saasCommerciaux.id, commercialId))
+    .limit(1);
+
+    if (!commercial || !commercial.id) {
+      return res.status(404).json({ error: 'Commercial non trouvé' });
+    }
+
+    res.json(commercial);
+  } catch (error) {
+    console.error('Erreur récupération commercial:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/public/plans - Récupérer les plans tarifaires publics
 router.get('/plans', async (req, res) => {
   try {
@@ -185,7 +214,8 @@ router.post('/inscription', async (req, res) => {
       pays,
       planId,
       dureeEnMois,
-      methodePaiement // fedapay, stripe, paypal
+      methodePaiement, // fedapay, stripe, paypal
+      commercialId // ID du commercial référent (lien parrainage)
     } = req.body;
 
     // Validation
@@ -276,6 +306,7 @@ router.post('/inscription', async (req, res) => {
           montantTotal,
           methodePaiement,
           typeInscription,
+          commercialId: commercialId ? parseInt(commercialId) : null,
           entrepriseIdPourRenouvellement
         });
 
@@ -510,13 +541,28 @@ router.post('/webhook/fedapay', async (req, res) => {
         actif: true
       }).returning();
 
-      // Créer le client SaaS (source: web, pas de commercial)
+      // Récupérer le commercial si un lien parrainage a été utilisé
+      let commercialData = null;
+      if (inscriptionEnAttente.commercialId) {
+        const [commercial] = await db.select()
+          .from(saasCommerciaux)
+          .where(eq(saasCommerciaux.id, inscriptionEnAttente.commercialId))
+          .limit(1);
+        if (commercial) {
+          commercialData = commercial;
+          console.log(`📣 Inscription via parrainage commercial: ${commercial.nom} ${commercial.prenom}`);
+        }
+      }
+
+      // Créer le client SaaS
       const [clientSaas] = await db.insert(saasClients).values({
         entrepriseId: newEntreprise.id,
-        commercialId: null, // Pas de commercial pour inscription web
-        statut: 'actif', // Directement actif après paiement
-        source: 'web',
-        notes: `Inscription web - Paiement FedaPay ${transaction_id}`
+        commercialId: commercialData ? commercialData.id : null,
+        statut: 'actif',
+        source: commercialData ? 'commercial' : 'web',
+        notes: commercialData 
+          ? `Inscription via lien parrainage ${commercialData.nom} ${commercialData.prenom} - FedaPay ${transaction_id}`
+          : `Inscription web - Paiement FedaPay ${transaction_id}`
       }).returning();
 
       // Créer l'abonnement
@@ -534,16 +580,23 @@ router.post('/webhook/fedapay', async (req, res) => {
         montantMensuel: inscriptionEnAttente.montantTotal / inscriptionEnAttente.dureeEnMois
       }).returning();
 
-      // Créer la vente (sans commercial, source: web)
+      // Calculer la commission si parrainage
+      const commissionAmount = commercialData 
+        ? parseFloat(inscriptionEnAttente.montantTotal) * parseFloat(commercialData.commission || 10) / 100
+        : 0;
+
+      // Créer la vente
       await db.insert(saasVentes).values({
-        commercialId: null, // Pas de commercial
+        commercialId: commercialData ? commercialData.id : null,
         clientId: clientSaas.id,
         abonnementId: abonnement.id,
         montantVente: inscriptionEnAttente.montantTotal.toString(),
-        commission: 0, // Pas de commission pour vente web
+        commission: commissionAmount,
         statut: 'confirmée',
-        source: 'web',
-        notes: `Inscription web - FedaPay ${transaction_id}`
+        source: commercialData ? 'commercial' : 'web',
+        notes: commercialData 
+          ? `Vente via lien parrainage ${commercialData.nom} ${commercialData.prenom} - FedaPay ${transaction_id}`
+          : `Inscription web - FedaPay ${transaction_id}`
       });
       
       // Marquer comme traitée
