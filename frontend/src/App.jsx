@@ -166,7 +166,7 @@ export default function App() {
     }
     
     const urlPath = window.location.pathname;
-    if (urlPath === '/inscription') {
+    if (urlPath === '/inscription' || urlPath.startsWith('/inscription')) {
       setShowInscription(true);
     }
     

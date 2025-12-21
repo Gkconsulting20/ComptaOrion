@@ -531,11 +531,15 @@ router.post('/webhook/fedapay', async (req, res) => {
       const motDePasseTemporaire = Math.random().toString(36).slice(-10);
       const hashedPassword = await bcrypt.hash(motDePasseTemporaire, 10);
 
+      // Générer un username unique à partir de l'email
+      const username = inscriptionEnAttente.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') + '_' + Date.now().toString(36);
+
       // Créer l'utilisateur admin
       const [newUser] = await db.insert(users).values({
         nom: inscriptionEnAttente.nomEntreprise,
         email: inscriptionEnAttente.email,
-        passwordHash: hashedPassword,  // CORRECTION: passwordHash au lieu de password
+        username: username,
+        passwordHash: hashedPassword,
         entrepriseId: newEntreprise.id,
         role: 'admin',
         actif: true
