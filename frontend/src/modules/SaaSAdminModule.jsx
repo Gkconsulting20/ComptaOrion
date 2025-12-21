@@ -223,6 +223,7 @@ export function SaaSAdminModule() {
             <th style={{ padding: '12px', textAlign: 'left' }}>Région</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Commission</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Objectif mensuel</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Lien Parrainage</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Actions</th>
           </tr>
         </thead>
@@ -234,6 +235,19 @@ export function SaaSAdminModule() {
               <td style={{ padding: '12px' }}>{com.region}</td>
               <td style={{ padding: '12px' }}>{com.commission}%</td>
               <td style={{ padding: '12px' }}>{parseFloat(com.objectifMensuel || 0).toLocaleString()} XOF</td>
+              <td style={{ padding: '12px' }}>
+                <button
+                  onClick={() => {
+                    const baseUrl = window.location.origin;
+                    const lien = `${baseUrl}/inscription?ref=${com.id}`;
+                    navigator.clipboard.writeText(lien);
+                    alert(`Lien copié !\n\n${lien}`);
+                  }}
+                  style={{ padding: '6px 12px', backgroundColor: '#9b59b6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                >
+                  Copier le lien
+                </button>
+              </td>
               <td style={{ padding: '12px' }}>
                 <button
                   onClick={() => openModal('commerciaux', com)}
