@@ -5,6 +5,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 export function Inscription() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [commercialInfo, setCommercialInfo] = useState(null);
   const [formData, setFormData] = useState({
     nomEntreprise: '',
     email: '',
@@ -12,10 +13,27 @@ export function Inscription() {
     pays: 'Bénin',
     planId: '',
     dureeEnMois: 12,
-    methodePaiement: 'fedapay'
+    methodePaiement: 'fedapay',
+    commercialId: null
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const refId = urlParams.get('ref');
+    if (refId) {
+      setFormData(prev => ({ ...prev, commercialId: parseInt(refId) }));
+      fetch(`${API_BASE}/api/public/commercial/${refId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.nom) {
+            setCommercialInfo(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const PAYS_AFRIQUE = [
     'Bénin', 'Burkina Faso', 'Cameroun', 'Congo-Brazzaville', 'Congo-Kinshasa',
@@ -121,6 +139,17 @@ export function Inscription() {
           <p style={{ margin: 0, fontSize: '18px', opacity: 0.95 }}>
             L'ERP professionnel pour l'Afrique
           </p>
+          {commercialInfo && (
+            <div style={{
+              marginTop: '15px',
+              padding: '10px 20px',
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              borderRadius: '20px',
+              display: 'inline-block'
+            }}>
+              Recommandé par <strong>{commercialInfo.nom} {commercialInfo.prenom}</strong>
+            </div>
+          )}
         </div>
 
         {/* Corps */}

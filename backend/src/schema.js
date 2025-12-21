@@ -1213,6 +1213,7 @@ export const inscriptionsEnAttente = pgTable('inscriptions_en_attente', {
   methodePaiement: varchar('methode_paiement', { length: 50 }), // fedapay, stripe, paypal
   typeInscription: varchar('type_inscription', { length: 50 }).notNull(), // 'nouveau' ou 'renouvellement'
   entrepriseIdPourRenouvellement: integer('entreprise_id_pour_renouvellement'), // Si renouvellement
+  commercialId: integer('commercial_id'), // ID du commercial référent (lien parrainage)
   createdAt: timestamp('created_at').defaultNow().notNull(),
   traitee: boolean('traitee').default(false).notNull()
 });
