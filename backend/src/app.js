@@ -61,6 +61,59 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'ComptaOrion serveur opérationnel' });
 });
 
+// Route temporaire pour créer l'admin (à supprimer après utilisation)
+app.get('/api/setup-admin', async (req, res) => {
+  try {
+    const { db } = await import('./db.js');
+    const { users, entreprises } = await import('./schema.js');
+    const { eq } = await import('drizzle-orm');
+    const bcrypt = await import('bcrypt');
+    
+    const existingAdmin = await db.select().from(users).where(eq(users.email, 'admin@comptaorion.com')).limit(1);
+    
+    if (existingAdmin.length > 0) {
+      return res.json({ success: true, message: 'Admin existe déjà', email: 'admin@comptaorion.com' });
+    }
+    
+    let entreprise = await db.select().from(entreprises).where(eq(entreprises.id, 1)).limit(1);
+    
+    if (entreprise.length === 0) {
+      await db.insert(entreprises).values({
+        id: 1,
+        nom: 'ComptaOrion',
+        email: 'contact@comptaorion.com',
+        telephone: '+221 77 000 0000',
+        adresse: 'Dakar, Sénégal',
+        pays: 'Sénégal',
+        devise: 'XOF',
+        systemeComptable: 'SYSCOHADA',
+        actif: true
+      });
+    }
+    
+    const passwordHash = await bcrypt.default.hash('Admin123!', 10);
+    
+    await db.insert(users).values({
+      email: 'admin@comptaorion.com',
+      passwordHash: passwordHash,
+      nom: 'Administrateur',
+      prenom: 'Système',
+      role: 'admin',
+      entrepriseId: 1,
+      actif: true
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Admin créé avec succès!',
+      email: 'admin@comptaorion.com',
+      password: 'Admin123!'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Dashboard (publique - pas d'authentification requise)
 app.use('/api/dashboard', dashboardRoutes);
 
