@@ -197,6 +197,32 @@ export function SaaSAdminModule() {
 
   const renderCommerciaux = () => (
     <div>
+      <div style={{ backgroundColor: '#f0e6f6', border: '1px solid #9b59b6', borderRadius: '8px', padding: '15px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <strong style={{ color: '#9b59b6' }}>Espace Commercial</strong>
+          <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#666' }}>
+            Les commerciaux se connectent sur cette page avec leur email et mot de passe
+          </p>
+        </div>
+        <a
+          href="/commercial"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#9b59b6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            textDecoration: 'none'
+          }}
+        >
+          Ouvrir l'Espace Commercial
+        </a>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h3 style={{ margin: 0 }}>Gestion des Commerciaux</h3>
         <button
