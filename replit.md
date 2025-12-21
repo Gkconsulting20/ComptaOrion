@@ -108,6 +108,18 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
       - Full audit trail with commercial attribution in notes
     - Supports both new subscriptions and renewals
 
+-   **Commercial Portal (Dec 2025):** Dedicated self-service portal for sales representatives at `/commercial`:
+    - Separate JWT authentication system (independent from main app)
+    - Password set by admin in Admin SaaS > Commerciaux form
+    - Emails normalized to lowercase for consistent login
+    - Dashboard features:
+      - Personal referral link with one-click copy
+      - Real-time statistics (total clients, active clients, monthly/total revenue and commissions)
+      - Complete client list with subscription status and dates
+      - Complete sales history with amounts and commissions
+    - Commission rate displayed (modifiable only by admin in Admin SaaS)
+    - No access to main ERP system - commercials only see their own data
+
 ## External Dependencies
 
 ### Backend
