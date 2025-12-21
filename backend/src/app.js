@@ -252,4 +252,20 @@ app.post('/api/ia/chat', (req, res) => {
   });
 });
 
+// ===============================================
+// SPA FALLBACK POUR PRODUCTION
+// ===============================================
+// Servir les fichiers statiques du frontend buildé
+const frontendDistPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendDistPath));
+
+// Fallback SPA : toutes les routes non-API retournent index.html
+app.get('*', (req, res) => {
+  // Ne pas intercepter les routes API
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'Route non trouvée' });
+  }
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
+});
+
 export default app;
