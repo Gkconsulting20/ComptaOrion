@@ -13,6 +13,7 @@ import { IAAssistantModule } from './modules/IAAssistantModule';
 import { ImpotsModule } from './modules/ImpotsModule';
 import { Login } from './pages/Login';
 import { Inscription } from './pages/Inscription';
+import { CommercialPortal } from './pages/CommercialPortal';
 import api from './api';
 
 const ALL_MODULES = [
@@ -151,6 +152,7 @@ export default function App() {
   const [entreprise, setEntreprise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showInscription, setShowInscription] = useState(false);
+  const [showCommercialPortal, setShowCommercialPortal] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -168,6 +170,8 @@ export default function App() {
     const urlPath = window.location.pathname;
     if (urlPath === '/inscription' || urlPath.startsWith('/inscription')) {
       setShowInscription(true);
+    } else if (urlPath === '/commercial' || urlPath.startsWith('/commercial')) {
+      setShowCommercialPortal(true);
     }
     
     setLoading(false);
@@ -230,6 +234,10 @@ export default function App() {
 
   if (showInscription) {
     return <Inscription />;
+  }
+
+  if (showCommercialPortal) {
+    return <CommercialPortal />;
   }
 
   if (!isAuthenticated) {

@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { saasCommerciaux, saasClients, saasVentes, plansAbonnement, abonnements, facturesAbonnement, entreprises } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
+import bcrypt from 'bcrypt';
 
 const router = express.Router();
 
@@ -90,13 +91,19 @@ router.get('/commerciaux', async (req, res) => {
 
 router.post('/commerciaux', async (req, res) => {
   try {
-    const { nom, prenom, email, telephone, region, commission, objectifMensuel } = req.body;
+    const { nom, prenom, email, telephone, region, commission, objectifMensuel, password } = req.body;
+
+    let passwordHash = null;
+    if (password) {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
 
     const [commercial] = await db.insert(saasCommerciaux).values({
       nom,
       prenom,
       email,
       telephone,
+      passwordHash,
       region,
       commission: commission || 10,
       objectifMensuel,
@@ -112,7 +119,11 @@ router.post('/commerciaux', async (req, res) => {
 router.put('/commerciaux/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const { password, ...updates } = req.body;
+
+    if (password) {
+      updates.passwordHash = await bcrypt.hash(password, 10);
+    }
 
     const [commercial] = await db.update(saasCommerciaux)
       .set({ ...updates, updatedAt: new Date() })

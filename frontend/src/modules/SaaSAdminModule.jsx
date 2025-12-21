@@ -677,6 +677,22 @@ export function SaaSAdminModule() {
                   onChange={(e) => setFormData({ ...formData, objectifMensuel: e.target.value })}
                   style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
                 />
+                <div style={{ backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '6px', marginBottom: '15px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
+                    Mot de passe Espace Commercial
+                  </label>
+                  <input
+                    type="password"
+                    placeholder={formData.id ? "Nouveau mot de passe (laisser vide pour ne pas changer)" : "Mot de passe *"}
+                    value={formData.password || ''}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    required={!formData.id}
+                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box' }}
+                  />
+                  <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#666' }}>
+                    Ce mot de passe permet au commercial d'acceder a son espace personnel sur /commercial
+                  </p>
+                </div>
               </>
             )}
 

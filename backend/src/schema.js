@@ -1140,8 +1140,9 @@ export const saasCommerciaux = pgTable('saas_commerciaux', {
   prenom: varchar('prenom', { length: 255 }).notNull(),
   email: varchar('email', { length: 255 }).notNull().unique(),
   telephone: varchar('telephone', { length: 50 }),
+  passwordHash: varchar('password_hash', { length: 255 }), // Pour authentification espace commercial
   region: varchar('region', { length: 100 }), // Afrique de l'Ouest, Centrale, etc.
-  commission: decimal('commission', { precision: 5, scale: 2 }).default('10'), // % de commission
+  commission: decimal('commission', { precision: 5, scale: 2 }).default('10'), // % de commission - modifiable par admin uniquement
   objectifMensuel: decimal('objectif_mensuel', { precision: 15, scale: 2 }),
   nbClientsActifs: integer('nb_clients_actifs').default(0),
   actif: boolean('actif').default(true),

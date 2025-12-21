@@ -26,6 +26,7 @@ import uploadRoutes from './routes/upload.js';
 import ecrituresRecurrentesRoutes from './routes/ecritures-recurrentes.js';
 import iaAssistantRoutes from './routes/ia-assistant.js';
 import publicInscriptionRoutes from './routes/public-inscription.js';
+import commercialPortalRoutes from './routes/commercial-portal.js';
 import impotsRoutes from './routes/impots.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 import path from 'path';
@@ -55,6 +56,9 @@ app.use('/api/auth-security', authSecurityRoutes);
 
 // Routes publiques d'inscription (pas d'authentification requise)
 app.use('/api/public', publicInscriptionRoutes);
+
+// Espace commercial (authentification séparée via JWT commercial)
+app.use('/api/commercial', commercialPortalRoutes);
 
 // Route de santé (publique)
 app.get('/api/health', (req, res) => {
