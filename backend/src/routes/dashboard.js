@@ -94,8 +94,8 @@ router.get('/global', async (req, res) => {
 // Ventes par mois (historique 12 mois)
 router.get('/ventes-mensuelles', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
-    const eId = parseInt(entrepriseId);
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const data = [];
 
     for (let i = 11; i >= 0; i--) {
@@ -128,8 +128,8 @@ router.get('/ventes-mensuelles', async (req, res) => {
 // Répartition dépenses par catégorie
 router.get('/depenses-categories', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
-    const eId = parseInt(entrepriseId);
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
 
     const depenses = await db.query.facturesAchat.findMany({
       where: eq(facturesAchat.entrepriseId, eId)
@@ -156,8 +156,8 @@ router.get('/depenses-categories', async (req, res) => {
 // KPIs avancés
 router.get('/kpis', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
-    const eId = parseInt(entrepriseId);
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
 
     // Délai paiement client (jours entre facture et paiement)
     const factulesClients = await db.query.factures.findMany({
@@ -407,8 +407,8 @@ router.get('/detail/cashflow', async (req, res) => {
 // Drill-down: Marge brute détaillée
 router.get('/detail/marge', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
-    const eId = parseInt(entrepriseId);
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const { debut, fin } = getMonthDates();
     
     // Ventes du mois
@@ -447,8 +447,9 @@ router.get('/detail/marge', async (req, res) => {
 // Drill-down: Ventes d'un mois spécifique
 router.get('/detail/ventes-mois', async (req, res) => {
   try {
-    const { entrepriseId, mois } = req.query;
-    const eId = parseInt(entrepriseId);
+    const { mois } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     
     // Parser le mois (format: "janv. 24")
     const moisMap = {
@@ -507,8 +508,9 @@ router.get('/detail/ventes-mois', async (req, res) => {
 // Drill-down: Dépenses par catégorie
 router.get('/detail/depenses-categorie', async (req, res) => {
   try {
-    const { entrepriseId, categorie } = req.query;
-    const eId = parseInt(entrepriseId);
+    const { categorie } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const { debut, fin } = getMonthDates();
     
     let whereCondition = and(

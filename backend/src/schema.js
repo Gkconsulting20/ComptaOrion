@@ -270,12 +270,10 @@ export const mouvementsStock = pgTable('mouvements_stock', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   produitId: integer('produit_id').references(() => produits.id).notNull(),
-  entrepotId: integer('entrepot_id').references(() => entrepots.id),
   type: stockMovementTypeEnum('type').notNull(), // entree, sortie, transfert, ajustement
   quantite: decimal('quantite', { precision: 15, scale: 3 }).notNull(),
   prixUnitaire: decimal('prix_unitaire', { precision: 15, scale: 2 }),
-  entrepotDestinationId: integer('entrepot_destination_id').references(() => entrepots.id),
-  reference: varchar('reference', { length: 255 }), // référence commande, facture, etc.
+  reference: varchar('reference', { length: 255 }),
   notes: text('notes'),
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
