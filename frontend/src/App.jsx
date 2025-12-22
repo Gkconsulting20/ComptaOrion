@@ -11,6 +11,7 @@ import { AuthenticationModule } from './modules/AuthenticationModule';
 import { SaaSAdminModule } from './modules/SaaSAdminModule';
 import { IAAssistantModule } from './modules/IAAssistantModule';
 import { ImpotsModule } from './modules/ImpotsModule';
+import IntegrationsModule from './modules/IntegrationsModule';
 import { Login } from './pages/Login';
 import { Inscription } from './pages/Inscription';
 import { CommercialPortal } from './pages/CommercialPortal';
@@ -25,6 +26,7 @@ const ALL_MODULES = [
   { id: 'stock', label: 'Stock', icon: '📦', requiresSuperAdmin: false },
   { id: 'comptabilite', label: 'Comptabilité', icon: '📖', requiresSuperAdmin: false },
   { id: 'impots', label: 'Impôts', icon: '🏛️', requiresSuperAdmin: false },
+  { id: 'integrations', label: 'Intégrations', icon: '🔗', requiresSuperAdmin: false },
   { id: 'ia-assistant', label: 'Assistant IA', icon: '🤖', requiresSuperAdmin: false },
   { id: 'authentication', label: 'Authentification', icon: '🔐', requiresSuperAdmin: false },
   { id: 'parametres', label: 'Paramètres', icon: '⚙️', requiresSuperAdmin: false }
@@ -254,6 +256,7 @@ export default function App() {
       case 'stock': return <StockInventaire />;
       case 'comptabilite': return <ModuleComptabilite />;
       case 'impots': return <ImpotsModule />;
+      case 'integrations': return <IntegrationsModule />;
       case 'ia-assistant': return <IAAssistantModule />;
       case 'authentication': return <AuthenticationModule />;
       case 'parametres': return <ParametresModule />;

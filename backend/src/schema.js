@@ -1218,3 +1218,106 @@ export const inscriptionsEnAttente = pgTable('inscriptions_en_attente', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   traitee: boolean('traitee').default(false).notNull()
 });
+
+// ==========================================
+// MODULE INTEGRATIONS: API, WEBHOOKS, BACKUPS
+// ==========================================
+
+// Clés API pour accès externe
+export const apiKeys = pgTable('api_keys', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  keyHash: varchar('key_hash', { length: 255 }).notNull(),
+  keyPrefix: varchar('key_prefix', { length: 20 }).notNull(),
+  permissions: jsonb('permissions').default('["read"]'),
+  ipAllowlist: jsonb('ip_allowlist'),
+  lastUsedAt: timestamp('last_used_at'),
+  expiresAt: timestamp('expires_at'),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  createdBy: integer('created_by').references(() => users.id),
+});
+
+// Abonnements aux webhooks
+export const webhookSubscriptions = pgTable('webhook_subscriptions', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  url: text('url').notNull(),
+  secret: varchar('secret', { length: 255 }).notNull(),
+  evenements: jsonb('evenements').default('[]'),
+  actif: boolean('actif').default(true),
+  lastDeliveryAt: timestamp('last_delivery_at'),
+  lastDeliveryStatus: varchar('last_delivery_status', { length: 50 }),
+  failureCount: integer('failure_count').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Historique des livraisons de webhooks
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  id: serial('id').primaryKey(),
+  subscriptionId: integer('subscription_id').references(() => webhookSubscriptions.id).notNull(),
+  evenement: varchar('evenement', { length: 100 }).notNull(),
+  payload: jsonb('payload').notNull(),
+  responseStatus: integer('response_status'),
+  responseBody: text('response_body'),
+  durationMs: integer('duration_ms'),
+  tentative: integer('tentative').default(1),
+  statut: varchar('statut', { length: 50 }).default('pending'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Configuration des sauvegardes programmées
+export const backupConfigs = pgTable('backup_configs', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  destination: varchar('destination', { length: 50 }).notNull(),
+  configDestination: jsonb('config_destination').notNull(),
+  format: varchar('format', { length: 20 }).default('json'),
+  frequence: varchar('frequence', { length: 50 }).default('weekly'),
+  heureExecution: varchar('heure_execution', { length: 10 }).default('02:00'),
+  domainesInclus: jsonb('domaines_inclus').default('["all"]'),
+  chiffrement: boolean('chiffrement').default(true),
+  actif: boolean('actif').default(true),
+  dernierBackup: timestamp('dernier_backup'),
+  prochainBackup: timestamp('prochain_backup'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Historique des jobs de backup
+export const backupJobs = pgTable('backup_jobs', {
+  id: serial('id').primaryKey(),
+  configId: integer('config_id').references(() => backupConfigs.id),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  type: varchar('type', { length: 50 }).default('scheduled'),
+  format: varchar('format', { length: 20 }).notNull(),
+  domainesExportes: jsonb('domaines_exportes').notNull(),
+  tailleFichier: integer('taille_fichier'),
+  checksum: varchar('checksum', { length: 64 }),
+  destination: varchar('destination', { length: 50 }),
+  urlTelechargement: text('url_telechargement'),
+  expirationUrl: timestamp('expiration_url'),
+  statut: varchar('statut', { length: 50 }).default('pending'),
+  messageErreur: text('message_erreur'),
+  demarreAt: timestamp('demarre_at'),
+  termineAt: timestamp('termine_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Historique des exports manuels
+export const exportHistory = pgTable('export_history', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  domaine: varchar('domaine', { length: 100 }).notNull(),
+  format: varchar('format', { length: 20 }).notNull(),
+  filtres: jsonb('filtres'),
+  nombreEnregistrements: integer('nombre_enregistrements'),
+  tailleFichier: integer('taille_fichier'),
+  ipAddress: varchar('ip_address', { length: 50 }),
+  createdAt: timestamp('created_at').defaultNow(),
+});

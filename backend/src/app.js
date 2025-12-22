@@ -28,6 +28,7 @@ import iaAssistantRoutes from './routes/ia-assistant.js';
 import publicInscriptionRoutes from './routes/public-inscription.js';
 import commercialPortalRoutes from './routes/commercial-portal.js';
 import impotsRoutes from './routes/impots.js';
+import integrationsRoutes from './routes/integrations.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -141,6 +142,9 @@ app.use('/api/ia', iaAssistantRoutes);
 
 // Module Impôts & Taxes
 app.use('/api/impots', impotsRoutes);
+
+// Module Intégrations & Sauvegardes
+app.use('/api/integrations', integrationsRoutes);
 
 // ===============================================
 // ROUTE INFO API
