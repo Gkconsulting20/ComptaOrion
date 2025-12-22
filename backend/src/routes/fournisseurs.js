@@ -670,4 +670,129 @@ router.post('/etat-compte/email', async (req, res) => {
   }
 });
 
+// ==========================================
+// DRILL-DOWN ENDPOINTS
+// ==========================================
+
+/**
+ * GET /api/fournisseurs/detail/fournisseurs
+ * Liste détaillée des fournisseurs
+ */
+router.get('/detail/fournisseurs', async (req, res) => {
+  try {
+    const eId = req.entrepriseId;
+    
+    const fournisseursData = await db
+      .select({
+        id: fournisseurs.id,
+        nom: fournisseurs.nom,
+        email: fournisseurs.email,
+        telephone: fournisseurs.telephone,
+        ville: fournisseurs.ville,
+        evaluation: fournisseurs.evaluation,
+        actif: fournisseurs.actif
+      })
+      .from(fournisseurs)
+      .where(eq(fournisseurs.entrepriseId, eId))
+      .orderBy(desc(fournisseurs.createdAt));
+    
+    res.json(fournisseursData);
+  } catch (error) {
+    console.error('Erreur drill-down fournisseurs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/fournisseurs/detail/achats
+ * Détail des commandes d'achat
+ */
+router.get('/detail/achats', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId;
+    
+    let whereConditions = [eq(facturesAchat.entrepriseId, eId)];
+    if (dateDebut) whereConditions.push(gte(facturesAchat.dateFacture, new Date(dateDebut)));
+    if (dateFin) whereConditions.push(lte(facturesAchat.dateFacture, new Date(dateFin)));
+    
+    const achatsData = await db
+      .select({
+        id: facturesAchat.id,
+        numero: facturesAchat.numero,
+        date: facturesAchat.dateFacture,
+        montant: facturesAchat.totalHT,
+        statut: facturesAchat.statut,
+        fournisseurId: facturesAchat.fournisseurId
+      })
+      .from(facturesAchat)
+      .where(and(...whereConditions))
+      .orderBy(desc(facturesAchat.dateFacture));
+    
+    // Récupérer les noms des fournisseurs
+    const fournisseurIds = [...new Set(achatsData.map(a => a.fournisseurId))];
+    const fournisseursData = fournisseurIds.length > 0 ? await db
+      .select({ id: fournisseurs.id, nom: fournisseurs.nom })
+      .from(fournisseurs)
+      .where(eq(fournisseurs.entrepriseId, eId)) : [];
+    
+    const fournisseurMap = {};
+    fournisseursData.forEach(f => fournisseurMap[f.id] = f.nom);
+    
+    res.json(achatsData.map(a => ({
+      ...a,
+      fournisseur: fournisseurMap[a.fournisseurId] || 'Fournisseur inconnu'
+    })));
+  } catch (error) {
+    console.error('Erreur drill-down achats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/fournisseurs/detail/paiements
+ * Détail des paiements aux fournisseurs
+ */
+router.get('/detail/paiements', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId;
+    
+    let whereConditions = [eq(paiementsFournisseurs.entrepriseId, eId)];
+    if (dateDebut) whereConditions.push(gte(paiementsFournisseurs.datePaiement, new Date(dateDebut)));
+    if (dateFin) whereConditions.push(lte(paiementsFournisseurs.datePaiement, new Date(dateFin)));
+    
+    const paiementsData = await db
+      .select({
+        id: paiementsFournisseurs.id,
+        date: paiementsFournisseurs.datePaiement,
+        montant: paiementsFournisseurs.montant,
+        modePaiement: paiementsFournisseurs.modePaiement,
+        reference: paiementsFournisseurs.reference,
+        fournisseurId: paiementsFournisseurs.fournisseurId
+      })
+      .from(paiementsFournisseurs)
+      .where(and(...whereConditions))
+      .orderBy(desc(paiementsFournisseurs.datePaiement));
+    
+    // Récupérer les noms des fournisseurs
+    const fournisseurIds = [...new Set(paiementsData.map(p => p.fournisseurId))];
+    const fournisseursData = fournisseurIds.length > 0 ? await db
+      .select({ id: fournisseurs.id, nom: fournisseurs.nom })
+      .from(fournisseurs)
+      .where(eq(fournisseurs.entrepriseId, eId)) : [];
+    
+    const fournisseurMap = {};
+    fournisseursData.forEach(f => fournisseurMap[f.id] = f.nom);
+    
+    res.json(paiementsData.map(p => ({
+      ...p,
+      fournisseur: fournisseurMap[p.fournisseurId] || 'Fournisseur inconnu'
+    })));
+  } catch (error) {
+    console.error('Erreur drill-down paiements fournisseurs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

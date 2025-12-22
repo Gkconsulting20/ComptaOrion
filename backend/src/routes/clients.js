@@ -1196,7 +1196,11 @@ router.get('/detail/chiffre-affaires', async (req, res) => {
     const { dateDebut, dateFin } = req.query;
     const eId = req.entrepriseId;
     
-    let facturesQuery = db
+    let whereConditions = [eq(factures.entrepriseId, eId)];
+    if (dateDebut) whereConditions.push(gte(factures.dateFacture, new Date(dateDebut)));
+    if (dateFin) whereConditions.push(lte(factures.dateFacture, new Date(dateFin)));
+    
+    const facturesData = await db
       .select({
         id: factures.id,
         numero: factures.numero,
@@ -1206,16 +1210,8 @@ router.get('/detail/chiffre-affaires', async (req, res) => {
         clientId: factures.clientId
       })
       .from(factures)
-      .where(eq(factures.entrepriseId, eId));
-    
-    if (dateDebut) {
-      facturesQuery = facturesQuery.where(gte(factures.dateFacture, new Date(dateDebut)));
-    }
-    if (dateFin) {
-      facturesQuery = facturesQuery.where(lte(factures.dateFacture, new Date(dateFin)));
-    }
-    
-    const facturesData = await facturesQuery.orderBy(desc(factures.dateFacture));
+      .where(and(...whereConditions))
+      .orderBy(desc(factures.dateFacture));
     
     // Récupérer les noms des clients
     const clientIds = [...new Set(facturesData.map(f => f.clientId))];

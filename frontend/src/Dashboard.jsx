@@ -186,8 +186,78 @@ export function DashboardView() {
             </tr>
           )
         };
+      case 'marge':
+        return {
+          columns: ['Type', 'Description', 'Montant', 'Impact'],
+          renderRow: (item, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+              <td style={{ padding: '10px' }}>{item.type}</td>
+              <td style={{ padding: '10px' }}>{item.description}</td>
+              <td style={{ padding: '10px', fontWeight: 'bold', color: item.montant >= 0 ? '#28a745' : '#dc3545' }}>{formatMoney(item.montant)}</td>
+              <td style={{ padding: '10px' }}>{item.impact}</td>
+            </tr>
+          )
+        };
+      case 'ventes-mois':
+        return {
+          columns: ['Date', 'N° Facture', 'Client', 'Montant TTC', 'Statut'],
+          renderRow: (item, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+              <td style={{ padding: '10px' }}>{formatDate(item.dateFacture)}</td>
+              <td style={{ padding: '10px' }}>{item.numero}</td>
+              <td style={{ padding: '10px' }}>{item.clientNom || '-'}</td>
+              <td style={{ padding: '10px', fontWeight: 'bold', color: '#28a745' }}>{formatMoney(item.montantTTC)}</td>
+              <td style={{ padding: '10px' }}>
+                <span style={{
+                  padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
+                  backgroundColor: item.statut === 'payee' ? '#d4edda' : item.statut === 'partielle' ? '#fff3cd' : '#f8d7da',
+                  color: item.statut === 'payee' ? '#155724' : item.statut === 'partielle' ? '#856404' : '#721c24'
+                }}>{item.statut}</span>
+              </td>
+            </tr>
+          )
+        };
+      case 'depenses-categorie':
+        return {
+          columns: ['Date', 'Description', 'Catégorie', 'Montant'],
+          renderRow: (item, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+              <td style={{ padding: '10px' }}>{formatDate(item.date)}</td>
+              <td style={{ padding: '10px' }}>{item.description}</td>
+              <td style={{ padding: '10px' }}>{item.categorie || '-'}</td>
+              <td style={{ padding: '10px', fontWeight: 'bold', color: '#dc3545' }}>{formatMoney(item.montant)}</td>
+            </tr>
+          )
+        };
       default:
         return { columns: [], renderRow: () => null };
+    }
+  };
+
+  const handleBarClick = async (data) => {
+    if (data && data.activePayload && data.activePayload[0]) {
+      const mois = data.activePayload[0].payload.mois;
+      setDrillDown({ open: true, type: 'ventes-mois', title: `Ventes - ${mois}`, data: [], loading: true });
+      try {
+        const result = await api.get(`/dashboard/detail/ventes-mois?mois=${encodeURIComponent(mois)}`);
+        setDrillDown(prev => ({ ...prev, data: result || [], loading: false }));
+      } catch (error) {
+        console.error('Erreur drill-down mois:', error);
+        setDrillDown(prev => ({ ...prev, data: [], loading: false }));
+      }
+    }
+  };
+
+  const handlePieClick = async (data) => {
+    if (data && data.categorie) {
+      setDrillDown({ open: true, type: 'depenses-categorie', title: `Dépenses - ${data.categorie}`, data: [], loading: true });
+      try {
+        const result = await api.get(`/dashboard/detail/depenses-categorie?categorie=${encodeURIComponent(data.categorie)}`);
+        setDrillDown(prev => ({ ...prev, data: result || [], loading: false }));
+      } catch (error) {
+        console.error('Erreur drill-down catégorie:', error);
+        setDrillDown(prev => ({ ...prev, data: [], loading: false }));
+      }
     }
   };
 
@@ -243,6 +313,7 @@ export function DashboardView() {
           value={`${kpis?.margeBrute || 0}%`} 
           color="#17a2b8"
           icon="💹"
+          onClick={() => openDrillDown('marge', 'Détail de la marge brute')}
         />
         <KpiCard 
           title="Cashflow" 
@@ -270,9 +341,12 @@ export function DashboardView() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
         <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '16px', color: '#333' }}>Évolution des ventes (12 mois)</h3>
+          <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '16px', color: '#333' }}>
+            Évolution des ventes (12 mois)
+            <span style={{ fontSize: '11px', color: '#999', fontWeight: 'normal', marginLeft: '10px' }}>Cliquer sur une barre pour détails</span>
+          </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={ventesMensuelles}>
+            <BarChart data={ventesMensuelles} onClick={handleBarClick} style={{ cursor: 'pointer' }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="mois" fontSize={12} />
               <YAxis fontSize={12} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
@@ -283,7 +357,10 @@ export function DashboardView() {
         </div>
 
         <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '16px', color: '#333' }}>Répartition des dépenses</h3>
+          <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '16px', color: '#333' }}>
+            Répartition des dépenses
+            <span style={{ fontSize: '11px', color: '#999', fontWeight: 'normal', marginLeft: '10px' }}>Cliquer sur une tranche pour détails</span>
+          </h3>
           {depensesCategories.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -297,6 +374,8 @@ export function DashboardView() {
                   fill="#8884d8"
                   dataKey="montant"
                   nameKey="categorie"
+                  onClick={handlePieClick}
+                  style={{ cursor: 'pointer' }}
                 >
                   {depensesCategories.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

@@ -400,4 +400,155 @@ router.get('/detail/cashflow', async (req, res) => {
   }
 });
 
+// Drill-down: Marge brute détaillée
+router.get('/detail/marge', async (req, res) => {
+  try {
+    const { entrepriseId } = req.query;
+    const eId = parseInt(entrepriseId);
+    const { debut, fin } = getMonthDates();
+    
+    // Ventes du mois
+    const ventesData = await db.query.factures.findMany({
+      where: and(
+        eq(factures.entrepriseId, eId),
+        gte(factures.createdAt, debut),
+        lte(factures.createdAt, fin)
+      )
+    });
+    const ventesMois = ventesData.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
+
+    // Dépenses du mois
+    const depensesData = await db.query.facturesAchat.findMany({
+      where: and(
+        eq(facturesAchat.entrepriseId, eId),
+        gte(facturesAchat.createdAt, debut),
+        lte(facturesAchat.createdAt, fin)
+      )
+    });
+    const depensesMois = depensesData.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
+    
+    const marge = ventesMois - depensesMois;
+    const margePercent = ventesMois > 0 ? ((marge / ventesMois) * 100).toFixed(2) : 0;
+    
+    res.json([
+      { type: 'Chiffre d\'affaires', description: `Total des ventes du mois (${ventesData.length} factures)`, montant: ventesMois, impact: '+' },
+      { type: 'Coût des ventes', description: `Achats fournisseurs (${depensesData.length} factures)`, montant: -depensesMois, impact: '-' },
+      { type: 'Marge brute', description: `Résultat: ${margePercent}% de marge`, montant: marge, impact: '=' }
+    ]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Drill-down: Ventes d'un mois spécifique
+router.get('/detail/ventes-mois', async (req, res) => {
+  try {
+    const { entrepriseId, mois } = req.query;
+    const eId = parseInt(entrepriseId);
+    
+    // Parser le mois (format: "janv. 24")
+    const moisMap = {
+      'janv.': 0, 'févr.': 1, 'mars': 2, 'avr.': 3, 'mai': 4, 'juin': 5,
+      'juil.': 6, 'août': 7, 'sept.': 8, 'oct.': 9, 'nov.': 10, 'déc.': 11
+    };
+    
+    let targetYear, targetMonth;
+    if (mois) {
+      const parts = mois.split(' ');
+      const moisNom = parts[0];
+      const annee = parts[1] ? parseInt('20' + parts[1]) : new Date().getFullYear();
+      targetMonth = moisMap[moisNom] !== undefined ? moisMap[moisNom] : new Date().getMonth();
+      targetYear = annee;
+    } else {
+      const now = new Date();
+      targetMonth = now.getMonth();
+      targetYear = now.getFullYear();
+    }
+    
+    const debut = new Date(targetYear, targetMonth, 1);
+    const fin = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+    
+    const ventesData = await db.query.factures.findMany({
+      where: and(
+        eq(factures.entrepriseId, eId),
+        gte(factures.createdAt, debut),
+        lte(factures.createdAt, fin)
+      ),
+      orderBy: [desc(factures.createdAt)]
+    });
+    
+    // Récupérer les noms des clients
+    const { clients } = await import('../schema.js');
+    const clientsData = await db.query.clients.findMany({
+      where: eq(clients.entrepriseId, eId)
+    });
+    const clientMap = {};
+    clientsData.forEach(c => clientMap[c.id] = c.nom);
+    
+    const result = ventesData.map(f => ({
+      id: f.id,
+      numero: f.numero,
+      dateFacture: f.dateFacture || f.createdAt,
+      clientNom: clientMap[f.clientId] || 'Client inconnu',
+      montantTTC: parseFloat(f.totalTTC || 0),
+      statut: f.statut
+    }));
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Drill-down: Dépenses par catégorie
+router.get('/detail/depenses-categorie', async (req, res) => {
+  try {
+    const { entrepriseId, categorie } = req.query;
+    const eId = parseInt(entrepriseId);
+    const { debut, fin } = getMonthDates();
+    
+    let whereCondition = and(
+      eq(facturesAchat.entrepriseId, eId),
+      gte(facturesAchat.createdAt, debut),
+      lte(facturesAchat.createdAt, fin)
+    );
+    
+    // Si une catégorie est spécifiée, filtrer par catégorie
+    if (categorie && categorie !== 'Autre') {
+      whereCondition = and(
+        whereCondition,
+        eq(facturesAchat.categorie, categorie)
+      );
+    } else if (categorie === 'Autre') {
+      // Catégorie null ou vide
+    }
+    
+    const depensesData = await db.query.facturesAchat.findMany({
+      where: whereCondition,
+      orderBy: [desc(facturesAchat.createdAt)]
+    });
+    
+    // Récupérer les noms des fournisseurs
+    const { fournisseurs } = await import('../schema.js');
+    const fournisseursData = await db.query.fournisseurs.findMany({
+      where: eq(fournisseurs.entrepriseId, eId)
+    });
+    const fournisseurMap = {};
+    fournisseursData.forEach(f => fournisseurMap[f.id] = f.nom);
+    
+    const result = depensesData.map(f => ({
+      id: f.id,
+      date: f.dateFacture || f.createdAt,
+      description: f.description || `Facture ${f.numero || f.id}`,
+      categorie: f.categorie || 'Autre',
+      fournisseur: fournisseurMap[f.fournisseurId] || 'Fournisseur inconnu',
+      montant: parseFloat(f.totalTTC || 0)
+    }));
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

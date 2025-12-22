@@ -30,6 +30,19 @@ export function GestionFournisseurs() {
     dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     dateFin: new Date().toISOString().split('T')[0]
   });
+  const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], loading: false, type: null });
+
+  const openDrillDown = async (type, title) => {
+    setDrillModal({ open: true, title, data: [], loading: true, type });
+    try {
+      const params = `?dateDebut=${periode.dateDebut}&dateFin=${periode.dateFin}`;
+      const result = await api.get(`/fournisseurs/detail/${type}${params}`);
+      setDrillModal(prev => ({ ...prev, data: result.data || result || [], loading: false }));
+    } catch (error) {
+      console.error('Erreur drill-down fournisseurs:', error);
+      setDrillModal(prev => ({ ...prev, data: [], loading: false }));
+    }
+  };
 
   useEffect(() => {
     loadAllData();
@@ -418,17 +431,35 @@ export function GestionFournisseurs() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
-            <div style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px' }}>
+            <div 
+              onClick={() => openDrillDown('fournisseurs', 'Liste des fournisseurs')}
+              style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px', cursor: 'pointer', transition: 'transform 0.2s' }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
+            >
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL FOURNISSEURS</p>
               <h2 style={{ margin: '10px 0 0 0', color: '#1976d2' }}>{data.fournisseurs.length}</h2>
+              <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#999' }}>Cliquer pour détails</p>
             </div>
-            <div style={{ padding: '20px', background: '#fff3e0', borderRadius: '8px' }}>
+            <div 
+              onClick={() => openDrillDown('achats', 'Détail des achats')}
+              style={{ padding: '20px', background: '#fff3e0', borderRadius: '8px', cursor: 'pointer', transition: 'transform 0.2s' }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
+            >
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL ACHATS</p>
               <h2 style={{ margin: '10px 0 0 0', color: '#f57c00' }}>{totalAchats.toLocaleString()} FCFA</h2>
+              <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#999' }}>Cliquer pour détails</p>
             </div>
-            <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px' }}>
+            <div 
+              onClick={() => openDrillDown('paiements', 'Détail des paiements')}
+              style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px', cursor: 'pointer', transition: 'transform 0.2s' }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
+            >
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL PAIEMENTS</p>
               <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{totalPaiements.toLocaleString()} FCFA</h2>
+              <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#999' }}>Cliquer pour détails</p>
             </div>
           </div>
 
@@ -758,6 +789,117 @@ export function GestionFournisseurs() {
             }
           ]}
         />
+      )}
+
+      {/* Modal Drill-Down */}
+      {drillModal.open && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', width: '90%', maxWidth: '900px',
+            maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid #eee',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '18px' }}>{drillModal.title}</h3>
+              <button onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false, type: null })} style={{
+                background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666'
+              }}>&times;</button>
+            </div>
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              {drillModal.loading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Chargement...</div>
+              ) : drillModal.data?.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>Aucune donnée pour cette période</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                      {drillModal.type === 'fournisseurs' ? (
+                        <>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Nom</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Email</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Téléphone</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Ville</th>
+                          <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Évaluation</th>
+                        </>
+                      ) : drillModal.type === 'achats' ? (
+                        <>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>N° Commande</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Fournisseur</th>
+                          <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Montant HT</th>
+                          <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Statut</th>
+                        </>
+                      ) : (
+                        <>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Fournisseur</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Mode</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Référence</th>
+                          <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Montant</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drillModal.data?.map((item, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                        {drillModal.type === 'fournisseurs' ? (
+                          <>
+                            <td style={{ padding: '10px' }}>{item.nom}</td>
+                            <td style={{ padding: '10px' }}>{item.email || '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.telephone || '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.ville || '-'}</td>
+                            <td style={{ padding: '10px', textAlign: 'center' }}>{'⭐'.repeat(item.evaluation || 3)}</td>
+                          </>
+                        ) : drillModal.type === 'achats' ? (
+                          <>
+                            <td style={{ padding: '10px' }}>{item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.numero}</td>
+                            <td style={{ padding: '10px' }}>{item.fournisseur || '-'}</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#f57c00' }}>{parseFloat(item.montant || 0).toLocaleString()} FCFA</td>
+                            <td style={{ padding: '10px', textAlign: 'center' }}>{item.statut || '-'}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td style={{ padding: '10px' }}>{item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.fournisseur || '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.modePaiement || '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.reference || '-'}</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#388e3c' }}>{parseFloat(item.montant || 0).toLocaleString()} FCFA</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                  {drillModal.type !== 'fournisseurs' && (
+                    <tfoot>
+                      <tr style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
+                        <td colSpan={3} style={{ padding: '12px' }}>TOTAL</td>
+                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                          {drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || 0), 0).toLocaleString()} FCFA
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              )}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#666', fontSize: '13px' }}>{drillModal.data?.length || 0} élément(s)</span>
+              <Button variant="secondary" onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false, type: null })}>
+                Fermer
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
