@@ -100,7 +100,11 @@ export default function ImportWizard({ onClose }) {
   const loadBatches = async () => {
     try {
       const res = await api.get('/import/batches');
-      setBatches(res.data || []);
+      let data = res.data || res;
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        data = data.batches || [];
+      }
+      setBatches(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Erreur chargement batches:', err);
     }
@@ -121,17 +125,29 @@ export default function ImportWizard({ onClose }) {
       formData.append('sourceLogiciel', source);
       formData.append('typeEntite', entityType);
       
-      const res = await api.post('/import/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/import/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
       });
       
-      setBatchId(res.data.batchId);
-      setHeaders(res.data.headers);
-      setPreviewRows(res.data.previewRows);
-      setTotalRows(res.data.totalRows);
+      const res = await response.json();
+      
+      if (!response.ok || !res.success) {
+        throw new Error(res.error || 'Erreur lors du téléchargement');
+      }
+      
+      const uploadData = res.data;
+      setBatchId(uploadData.batchId);
+      setHeaders(uploadData.headers);
+      setPreviewRows(uploadData.previewRows);
+      setTotalRows(uploadData.totalRows);
       
       const initialMapping = {};
-      res.data.headers.forEach(h => {
+      uploadData.headers.forEach(h => {
         const normalized = h.toLowerCase().replace(/[^a-z]/g, '');
         const fields = Object.keys(FIELD_LABELS[entityType] || {});
         const match = fields.find(f => f.toLowerCase() === normalized);
@@ -159,7 +175,7 @@ export default function ImportWizard({ onClose }) {
       });
       
       const res = await api.post(`/import/batches/${batchId}/validate`);
-      setValidationResult(res.data);
+      setValidationResult(res.data || res);
       setStep(4);
     } catch (err) {
       setError(err.message || 'Erreur lors de la validation');
@@ -175,7 +191,7 @@ export default function ImportWizard({ onClose }) {
     
     try {
       const res = await api.post(`/import/batches/${batchId}/commit`);
-      setCommitResult(res.data);
+      setCommitResult(res.data || res);
       setStep(5);
       loadBatches();
     } catch (err) {

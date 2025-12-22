@@ -16,6 +16,7 @@ export function ImpotsModule() {
     apiIdentifiant: '',
     apiCleSecrete: ''
   });
+  const [periodeDeclaration, setPeriodeDeclaration] = useState(new Date().toISOString().slice(0, 7));
 
   useEffect(() => {
     loadData();
@@ -145,8 +146,6 @@ export function ImpotsModule() {
   );
 
   const renderTVA = () => {
-    const [periodeDeclaration, setPeriodeDeclaration] = useState(new Date().toISOString().slice(0, 7));
-
     return (
       <div>
         <h3 style={{ marginBottom: '20px' }}>Gestion de la TVA</h3>
