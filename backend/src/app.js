@@ -29,6 +29,7 @@ import publicInscriptionRoutes from './routes/public-inscription.js';
 import commercialPortalRoutes from './routes/commercial-portal.js';
 import impotsRoutes from './routes/impots.js';
 import integrationsRoutes from './routes/integrations.js';
+import importRoutes from './routes/import.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -145,6 +146,9 @@ app.use('/api/impots', impotsRoutes);
 
 // Module Intégrations & Sauvegardes
 app.use('/api/integrations', integrationsRoutes);
+
+// Module Import de données externes (QuickBooks, Sage, etc.)
+app.use('/api/import', importRoutes);
 
 // ===============================================
 // ROUTE INFO API

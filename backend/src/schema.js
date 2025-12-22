@@ -1321,3 +1321,104 @@ export const exportHistory = pgTable('export_history', {
   ipAddress: varchar('ip_address', { length: 50 }),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// ==========================================
+// MODULE: IMPORT DE DONNÉES EXTERNES
+// ==========================================
+
+// Statut des imports: brouillon, en_cours, validation, termine, echec
+export const importStatusEnum = pgEnum('import_status', ['brouillon', 'en_cours', 'validation', 'termine', 'echec']);
+
+// Batch d'import (une session d'import complète)
+export const importBatches = pgTable('import_batches', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  
+  // Source et format
+  sourceLogiciel: varchar('source_logiciel', { length: 100 }).notNull(), // quickbooks, sage100, excel, csv
+  formatFichier: varchar('format_fichier', { length: 50 }).notNull(), // csv, xlsx, iif, xml
+  nomFichier: varchar('nom_fichier', { length: 255 }),
+  tailleFichier: integer('taille_fichier'),
+  
+  // Type de données importées
+  typeEntite: varchar('type_entite', { length: 100 }).notNull(), // clients, fournisseurs, plan_comptable, factures, ecritures, etc.
+  
+  // Configuration de mapping
+  mappingColonnes: jsonb('mapping_colonnes'), // { colonneFichier: champDestination }
+  optionsImport: jsonb('options_import'), // { ignoreDoublons: true, mettreAJour: false, etc. }
+  
+  // Statistiques
+  nombreLignesTotal: integer('nombre_lignes_total').default(0),
+  nombreLignesValides: integer('nombre_lignes_valides').default(0),
+  nombreLignesErreurs: integer('nombre_lignes_erreurs').default(0),
+  nombreLignesImportees: integer('nombre_lignes_importees').default(0),
+  
+  // Statut
+  statut: varchar('statut', { length: 50 }).default('brouillon'),
+  messageErreur: text('message_erreur'),
+  
+  // Timestamps
+  demarreAt: timestamp('demarre_at'),
+  termineAt: timestamp('termine_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Enregistrements individuels en staging avant commit
+export const importRecords = pgTable('import_records', {
+  id: serial('id').primaryKey(),
+  batchId: integer('batch_id').references(() => importBatches.id).notNull(),
+  
+  // Numéro de ligne dans le fichier source
+  ligneFichier: integer('ligne_fichier').notNull(),
+  
+  // Données brutes du fichier
+  donneesOriginales: jsonb('donnees_originales').notNull(),
+  
+  // Données transformées prêtes pour import
+  donneesTransformees: jsonb('donnees_transformees'),
+  
+  // Identifiant externe (pour éviter doublons)
+  identifiantExterne: varchar('identifiant_externe', { length: 255 }),
+  
+  // Validation
+  estValide: boolean('est_valide').default(false),
+  erreursValidation: jsonb('erreurs_validation'), // [{ champ: 'email', message: 'Format invalide' }]
+  avertissements: jsonb('avertissements'),
+  
+  // Après import réussi
+  entiteCreeeId: integer('entite_creee_id'),
+  entiteCreeeType: varchar('entite_creee_type', { length: 100 }),
+  
+  // Statut
+  statut: varchar('statut', { length: 50 }).default('en_attente'), // en_attente, valide, erreur, importe, ignore
+  
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Templates de mapping pour différents logiciels sources
+export const importMappingTemplates = pgTable('import_mapping_templates', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id),
+  
+  // Identification du template
+  nom: varchar('nom', { length: 255 }).notNull(),
+  sourceLogiciel: varchar('source_logiciel', { length: 100 }).notNull(),
+  typeEntite: varchar('type_entite', { length: 100 }).notNull(),
+  
+  // Configuration de mapping
+  mappingColonnes: jsonb('mapping_colonnes').notNull(),
+  transformations: jsonb('transformations'), // Règles de transformation des données
+  validationsPersonnalisees: jsonb('validations_personnalisees'),
+  
+  // Mapping spécifique pour plan comptable (SYSCOHADA)
+  mappingComptes: jsonb('mapping_comptes'), // { compteSource: compteDestinationSYSCOHADA }
+  
+  // Template système ou personnalisé
+  estSysteme: boolean('est_systeme').default(false),
+  actif: boolean('actif').default(true),
+  
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});

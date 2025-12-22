@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
+import ImportWizard from '../components/ImportWizard';
 
 const Button = ({ children, onClick, variant = 'primary', disabled, style = {} }) => {
   const baseStyle = {
@@ -27,7 +28,7 @@ const Button = ({ children, onClick, variant = 'primary', disabled, style = {} }
 };
 
 export default function IntegrationsModule() {
-  const [activeTab, setActiveTab] = useState('exports');
+  const [activeTab, setActiveTab] = useState('imports');
   const [loading, setLoading] = useState(false);
   const [apiKeys, setApiKeys] = useState([]);
   const [webhooks, setWebhooks] = useState([]);
@@ -194,6 +195,7 @@ export default function IntegrationsModule() {
   };
 
   const tabs = [
+    { id: 'imports', label: 'Import de Données', icon: '📤' },
     { id: 'exports', label: 'Exports de Données', icon: '📥' },
     { id: 'api-keys', label: 'Clés API', icon: '🔑' },
     { id: 'webhooks', label: 'Webhooks', icon: '🔔' },
@@ -228,6 +230,10 @@ export default function IntegrationsModule() {
       </div>
 
       {loading && <div style={{ padding: '40px', textAlign: 'center' }}>Chargement...</div>}
+
+      {!loading && activeTab === 'imports' && (
+        <ImportWizard />
+      )}
 
       {!loading && activeTab === 'exports' && (
         <div>
