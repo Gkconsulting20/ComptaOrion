@@ -8,6 +8,446 @@ import { eq, and, desc, gte, lte, sum, sql } from 'drizzle-orm';
 
 const router = express.Router();
 
+// Plan comptable SYSCOHADA complet
+const PLAN_SYSCOHADA = [
+  // Classe 1 - Comptes de ressources durables
+  { numero: '101', nom: 'Capital social', categorie: 'Capitaux propres', classe: '1' },
+  { numero: '106', nom: 'Réserves', categorie: 'Capitaux propres', classe: '1' },
+  { numero: '109', nom: 'Actionnaires, capital souscrit non appelé', categorie: 'Capitaux propres', classe: '1' },
+  { numero: '110', nom: 'Report à nouveau', categorie: 'Capitaux propres', classe: '1' },
+  { numero: '120', nom: 'Résultat de l\'exercice (bénéfice)', categorie: 'Capitaux propres', classe: '1' },
+  { numero: '129', nom: 'Résultat de l\'exercice (perte)', categorie: 'Capitaux propres', classe: '1' },
+  { numero: '130', nom: 'Résultat en instance d\'affectation', categorie: 'Capitaux propres', classe: '1' },
+  { numero: '140', nom: 'Subventions d\'investissement', categorie: 'Capitaux propres', classe: '1' },
+  { numero: '160', nom: 'Emprunts et dettes assimilées', categorie: 'Passif', classe: '1' },
+  { numero: '161', nom: 'Emprunts obligataires', categorie: 'Passif', classe: '1' },
+  { numero: '162', nom: 'Emprunts auprès des établissements de crédit', categorie: 'Passif', classe: '1' },
+  { numero: '165', nom: 'Dépôts et cautionnements reçus', categorie: 'Passif', classe: '1' },
+  { numero: '170', nom: 'Dettes de crédit-bail et contrats assimilés', categorie: 'Passif', classe: '1' },
+  { numero: '180', nom: 'Dettes liées à des participations', categorie: 'Passif', classe: '1' },
+  { numero: '190', nom: 'Provisions financières pour risques et charges', categorie: 'Passif', classe: '1' },
+  
+  // Classe 2 - Comptes d'actif immobilisé
+  { numero: '201', nom: 'Frais d\'établissement', categorie: 'Actif', classe: '2' },
+  { numero: '211', nom: 'Terrains', categorie: 'Actif', classe: '2' },
+  { numero: '212', nom: 'Agencements et aménagements de terrains', categorie: 'Actif', classe: '2' },
+  { numero: '213', nom: 'Constructions', categorie: 'Actif', classe: '2' },
+  { numero: '215', nom: 'Installations techniques', categorie: 'Actif', classe: '2' },
+  { numero: '218', nom: 'Autres immobilisations corporelles', categorie: 'Actif', classe: '2' },
+  { numero: '221', nom: 'Brevets, licences, logiciels', categorie: 'Actif', classe: '2' },
+  { numero: '231', nom: 'Immobilisations corporelles en cours', categorie: 'Actif', classe: '2' },
+  { numero: '241', nom: 'Matériel de transport', categorie: 'Actif', classe: '2' },
+  { numero: '244', nom: 'Mobilier et matériel de bureau', categorie: 'Actif', classe: '2' },
+  { numero: '245', nom: 'Matériel informatique', categorie: 'Actif', classe: '2' },
+  { numero: '260', nom: 'Participations et créances rattachées', categorie: 'Actif', classe: '2' },
+  { numero: '270', nom: 'Autres immobilisations financières', categorie: 'Actif', classe: '2' },
+  { numero: '280', nom: 'Amortissements des immobilisations', categorie: 'Actif', classe: '2' },
+  { numero: '290', nom: 'Provisions pour dépréciation', categorie: 'Actif', classe: '2' },
+  
+  // Classe 3 - Comptes de stocks
+  { numero: '310', nom: 'Marchandises', categorie: 'Actif', classe: '3' },
+  { numero: '320', nom: 'Matières premières et fournitures liées', categorie: 'Actif', classe: '3' },
+  { numero: '330', nom: 'Autres approvisionnements', categorie: 'Actif', classe: '3' },
+  { numero: '340', nom: 'Produits en cours', categorie: 'Actif', classe: '3' },
+  { numero: '350', nom: 'Services en cours', categorie: 'Actif', classe: '3' },
+  { numero: '360', nom: 'Produits finis', categorie: 'Actif', classe: '3' },
+  { numero: '370', nom: 'Produits intermédiaires', categorie: 'Actif', classe: '3' },
+  { numero: '380', nom: 'Stocks à l\'extérieur', categorie: 'Actif', classe: '3' },
+  { numero: '390', nom: 'Dépréciations des stocks', categorie: 'Actif', classe: '3' },
+  
+  // Classe 4 - Comptes de tiers
+  { numero: '401', nom: 'Fournisseurs', categorie: 'Passif', classe: '4' },
+  { numero: '408', nom: 'Fournisseurs - Factures non parvenues', categorie: 'Passif', classe: '4' },
+  { numero: '409', nom: 'Fournisseurs débiteurs', categorie: 'Actif', classe: '4' },
+  { numero: '411', nom: 'Clients', categorie: 'Actif', classe: '4' },
+  { numero: '412', nom: 'Clients - Effets à recevoir', categorie: 'Actif', classe: '4' },
+  { numero: '416', nom: 'Clients douteux ou litigieux', categorie: 'Actif', classe: '4' },
+  { numero: '418', nom: 'Clients - Produits non encore facturés', categorie: 'Actif', classe: '4' },
+  { numero: '419', nom: 'Clients créditeurs', categorie: 'Passif', classe: '4' },
+  { numero: '421', nom: 'Personnel - Rémunérations dues', categorie: 'Passif', classe: '4' },
+  { numero: '422', nom: 'Personnel - Avances et acomptes', categorie: 'Actif', classe: '4' },
+  { numero: '431', nom: 'Sécurité sociale', categorie: 'Passif', classe: '4' },
+  { numero: '441', nom: 'État - Impôts sur les bénéfices', categorie: 'Passif', classe: '4' },
+  { numero: '442', nom: 'État - Autres impôts et taxes', categorie: 'Passif', classe: '4' },
+  { numero: '443', nom: 'État - TVA facturée', categorie: 'Passif', classe: '4' },
+  { numero: '445', nom: 'État - TVA récupérable', categorie: 'Actif', classe: '4' },
+  { numero: '447', nom: 'État - Impôts retenus à la source', categorie: 'Passif', classe: '4' },
+  { numero: '449', nom: 'État - Créances et dettes diverses', categorie: 'Passif', classe: '4' },
+  { numero: '471', nom: 'Comptes d\'attente à régulariser', categorie: 'Actif', classe: '4' },
+  { numero: '476', nom: 'Charges constatées d\'avance', categorie: 'Actif', classe: '4' },
+  { numero: '477', nom: 'Produits constatés d\'avance', categorie: 'Passif', classe: '4' },
+  { numero: '490', nom: 'Dépréciations des comptes de tiers', categorie: 'Actif', classe: '4' },
+  
+  // Classe 5 - Comptes de trésorerie
+  { numero: '512', nom: 'Banques', categorie: 'Actif', classe: '5' },
+  { numero: '513', nom: 'Chèques à encaisser', categorie: 'Actif', classe: '5' },
+  { numero: '514', nom: 'Chèques à l\'encaissement', categorie: 'Actif', classe: '5' },
+  { numero: '515', nom: 'Caisse', categorie: 'Actif', classe: '5' },
+  { numero: '517', nom: 'Régies d\'avances et accréditifs', categorie: 'Actif', classe: '5' },
+  { numero: '518', nom: 'Virements de fonds', categorie: 'Actif', classe: '5' },
+  { numero: '520', nom: 'Banques, découverts', categorie: 'Passif', classe: '5' },
+  { numero: '530', nom: 'Établissements financiers', categorie: 'Actif', classe: '5' },
+  { numero: '560', nom: 'Banques, crédits de trésorerie', categorie: 'Passif', classe: '5' },
+  { numero: '570', nom: 'Caisses', categorie: 'Actif', classe: '5' },
+  { numero: '580', nom: 'Virements internes', categorie: 'Actif', classe: '5' },
+  { numero: '590', nom: 'Dépréciations des titres de placement', categorie: 'Actif', classe: '5' },
+  
+  // Classe 6 - Comptes de charges
+  { numero: '601', nom: 'Achats de marchandises', categorie: 'Charges', classe: '6' },
+  { numero: '602', nom: 'Achats de matières premières', categorie: 'Charges', classe: '6' },
+  { numero: '604', nom: 'Achats d\'études et prestations de services', categorie: 'Charges', classe: '6' },
+  { numero: '605', nom: 'Autres achats', categorie: 'Charges', classe: '6' },
+  { numero: '608', nom: 'Frais accessoires d\'achat', categorie: 'Charges', classe: '6' },
+  { numero: '610', nom: 'Transports sur achats', categorie: 'Charges', classe: '6' },
+  { numero: '612', nom: 'Transports sur ventes', categorie: 'Charges', classe: '6' },
+  { numero: '613', nom: 'Locations et charges locatives', categorie: 'Charges', classe: '6' },
+  { numero: '614', nom: 'Charges locatives et de copropriété', categorie: 'Charges', classe: '6' },
+  { numero: '616', nom: 'Primes d\'assurance', categorie: 'Charges', classe: '6' },
+  { numero: '618', nom: 'Autres services extérieurs', categorie: 'Charges', classe: '6' },
+  { numero: '621', nom: 'Personnel extérieur à l\'entreprise', categorie: 'Charges', classe: '6' },
+  { numero: '622', nom: 'Rémunérations d\'intermédiaires et honoraires', categorie: 'Charges', classe: '6' },
+  { numero: '623', nom: 'Publicité, publications, relations publiques', categorie: 'Charges', classe: '6' },
+  { numero: '624', nom: 'Frais de transport et de déplacements', categorie: 'Charges', classe: '6' },
+  { numero: '625', nom: 'Frais de télécommunication', categorie: 'Charges', classe: '6' },
+  { numero: '626', nom: 'Frais bancaires', categorie: 'Charges', classe: '6' },
+  { numero: '627', nom: 'Services bancaires et assimilés', categorie: 'Charges', classe: '6' },
+  { numero: '628', nom: 'Divers services extérieurs', categorie: 'Charges', classe: '6' },
+  { numero: '631', nom: 'Impôts, taxes et versements assimilés', categorie: 'Charges', classe: '6' },
+  { numero: '641', nom: 'Rémunérations du personnel', categorie: 'Charges', classe: '6' },
+  { numero: '645', nom: 'Charges de sécurité sociale', categorie: 'Charges', classe: '6' },
+  { numero: '646', nom: 'Charges sociales sur congés à payer', categorie: 'Charges', classe: '6' },
+  { numero: '651', nom: 'Pertes sur créances clients', categorie: 'Charges', classe: '6' },
+  { numero: '654', nom: 'Pertes sur créances', categorie: 'Charges', classe: '6' },
+  { numero: '658', nom: 'Charges diverses de gestion courante', categorie: 'Charges', classe: '6' },
+  { numero: '661', nom: 'Intérêts des emprunts', categorie: 'Charges', classe: '6' },
+  { numero: '665', nom: 'Escomptes accordés', categorie: 'Charges', classe: '6' },
+  { numero: '671', nom: 'Intérêts des emprunts et dettes', categorie: 'Charges', classe: '6' },
+  { numero: '675', nom: 'Pertes de change', categorie: 'Charges', classe: '6' },
+  { numero: '681', nom: 'Dotations aux amortissements d\'exploitation', categorie: 'Charges', classe: '6' },
+  { numero: '686', nom: 'Dotations aux provisions financières', categorie: 'Charges', classe: '6' },
+  { numero: '691', nom: 'Impôts sur les bénéfices', categorie: 'Charges', classe: '6' },
+  
+  // Classe 7 - Comptes de produits
+  { numero: '701', nom: 'Ventes de marchandises', categorie: 'Produits', classe: '7' },
+  { numero: '702', nom: 'Ventes de produits finis', categorie: 'Produits', classe: '7' },
+  { numero: '703', nom: 'Ventes de produits intermédiaires', categorie: 'Produits', classe: '7' },
+  { numero: '704', nom: 'Ventes de travaux', categorie: 'Produits', classe: '7' },
+  { numero: '705', nom: 'Ventes d\'études et prestations de services', categorie: 'Produits', classe: '7' },
+  { numero: '706', nom: 'Produits des activités annexes', categorie: 'Produits', classe: '7' },
+  { numero: '707', nom: 'Produits accessoires', categorie: 'Produits', classe: '7' },
+  { numero: '708', nom: 'Produits des opérations faites en commun', categorie: 'Produits', classe: '7' },
+  { numero: '711', nom: 'Subventions d\'exploitation', categorie: 'Produits', classe: '7' },
+  { numero: '721', nom: 'Production immobilisée', categorie: 'Produits', classe: '7' },
+  { numero: '736', nom: 'Variation des stocks de produits finis', categorie: 'Produits', classe: '7' },
+  { numero: '754', nom: 'Redevances pour brevets et licences', categorie: 'Produits', classe: '7' },
+  { numero: '758', nom: 'Produits divers de gestion courante', categorie: 'Produits', classe: '7' },
+  { numero: '761', nom: 'Revenus des participations', categorie: 'Produits', classe: '7' },
+  { numero: '762', nom: 'Revenus des autres immobilisations financières', categorie: 'Produits', classe: '7' },
+  { numero: '765', nom: 'Escomptes obtenus', categorie: 'Produits', classe: '7' },
+  { numero: '771', nom: 'Intérêts des prêts et créances', categorie: 'Produits', classe: '7' },
+  { numero: '775', nom: 'Gains de change', categorie: 'Produits', classe: '7' },
+  { numero: '781', nom: 'Reprises sur amortissements et provisions', categorie: 'Produits', classe: '7' },
+  { numero: '786', nom: 'Reprises de provisions financières', categorie: 'Produits', classe: '7' },
+  { numero: '791', nom: 'Reprises de provisions d\'exploitation', categorie: 'Produits', classe: '7' },
+  
+  // Classe 8 - Comptes spéciaux
+  { numero: '801', nom: 'Résultat d\'exploitation', categorie: 'Résultat', classe: '8' },
+  { numero: '810', nom: 'Résultat financier', categorie: 'Résultat', classe: '8' },
+  { numero: '820', nom: 'Résultat des activités ordinaires', categorie: 'Résultat', classe: '8' },
+  { numero: '830', nom: 'Résultat hors activités ordinaires', categorie: 'Résultat', classe: '8' },
+  { numero: '840', nom: 'Impôts sur le résultat', categorie: 'Résultat', classe: '8' },
+  { numero: '850', nom: 'Résultat net de l\'exercice', categorie: 'Résultat', classe: '8' },
+];
+
+// Initialiser le plan comptable SYSCOHADA
+router.post('/init-syscohada', async (req, res) => {
+  try {
+    const { entrepriseId } = req.body;
+    const eId = parseInt(entrepriseId);
+    
+    // Vérifier si des comptes existent déjà
+    const existingComptes = await db.query.comptes.findMany({
+      where: eq(comptes.entrepriseId, eId)
+    });
+    
+    if (existingComptes.length > 10) {
+      return res.status(400).json({ 
+        error: 'Le plan comptable est déjà initialisé',
+        count: existingComptes.length 
+      });
+    }
+    
+    // Insérer tous les comptes SYSCOHADA
+    const insertedComptes = [];
+    for (const compte of PLAN_SYSCOHADA) {
+      try {
+        const result = await db.insert(comptes).values({
+          entrepriseId: eId,
+          numero: compte.numero,
+          nom: compte.nom,
+          categorie: compte.categorie,
+          sousCategorie: compte.classe,
+          devise: 'XOF',
+          solde: 0,
+          actif: true
+        }).returning();
+        insertedComptes.push(result[0]);
+      } catch (err) {
+        // Ignorer les doublons
+        console.log(`Compte ${compte.numero} existe déjà`);
+      }
+    }
+    
+    // Créer les journaux de base
+    const journauxBase = [
+      { code: 'AC', nom: 'Journal des Achats', type: 'achats' },
+      { code: 'VE', nom: 'Journal des Ventes', type: 'ventes' },
+      { code: 'BQ', nom: 'Journal de Banque', type: 'banque' },
+      { code: 'CA', nom: 'Journal de Caisse', type: 'caisse' },
+      { code: 'OD', nom: 'Journal des Opérations Diverses', type: 'od' },
+      { code: 'SA', nom: 'Journal des Salaires', type: 'od' },
+      { code: 'AN', nom: 'Journal à Nouveaux', type: 'od' }
+    ];
+    
+    for (const journal of journauxBase) {
+      try {
+        await db.insert(journaux).values({
+          entrepriseId: eId,
+          code: journal.code,
+          nom: journal.nom,
+          type: journal.type,
+          actif: true
+        });
+      } catch (err) {
+        console.log(`Journal ${journal.code} existe déjà`);
+      }
+    }
+    
+    res.json({ 
+      message: 'Plan comptable SYSCOHADA initialisé',
+      comptesCreés: insertedComptes.length,
+      total: PLAN_SYSCOHADA.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bilan comptable
+router.get('/rapports/bilan', async (req, res) => {
+  try {
+    const { entrepriseId, dateDebut, dateFin } = req.query;
+    const eId = parseInt(entrepriseId);
+    
+    // Récupérer tous les comptes avec leurs soldes
+    const allComptes = await db.query.comptes.findMany({
+      where: eq(comptes.entrepriseId, eId)
+    });
+    
+    // Calculer les soldes à partir des écritures
+    const ecrituresData = await db.execute(sql`
+      SELECT le.compte_id, 
+             SUM(COALESCE(le.debit, 0)) as total_debit,
+             SUM(COALESCE(le.credit, 0)) as total_credit
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      WHERE e.entreprise_id = ${eId}
+      ${dateDebut ? sql`AND e.date >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date <= ${dateFin}` : sql``}
+      GROUP BY le.compte_id
+    `);
+    
+    const soldesMap = {};
+    const rows = ecrituresData.rows || ecrituresData || [];
+    rows.forEach(row => {
+      soldesMap[row.compte_id] = {
+        debit: parseFloat(row.total_debit || 0),
+        credit: parseFloat(row.total_credit || 0)
+      };
+    });
+    
+    // Structurer le bilan
+    const actif = { immobilise: [], circulant: [], tresorerie: [], total: 0 };
+    const passif = { capitaux: [], dettes: [], total: 0 };
+    
+    allComptes.forEach(compte => {
+      const solde = soldesMap[compte.id] || { debit: 0, credit: 0 };
+      const soldeFinal = solde.debit - solde.credit;
+      
+      const compteData = {
+        numero: compte.numero,
+        nom: compte.nom,
+        solde: Math.abs(soldeFinal)
+      };
+      
+      if (compte.numero.startsWith('2')) {
+        actif.immobilise.push(compteData);
+        actif.total += soldeFinal > 0 ? soldeFinal : 0;
+      } else if (compte.numero.startsWith('3') || compte.numero.startsWith('4')) {
+        if (compte.categorie === 'Actif') {
+          actif.circulant.push(compteData);
+          actif.total += soldeFinal > 0 ? soldeFinal : 0;
+        } else {
+          passif.dettes.push(compteData);
+          passif.total += soldeFinal < 0 ? Math.abs(soldeFinal) : 0;
+        }
+      } else if (compte.numero.startsWith('5')) {
+        actif.tresorerie.push(compteData);
+        actif.total += soldeFinal > 0 ? soldeFinal : 0;
+      } else if (compte.numero.startsWith('1')) {
+        passif.capitaux.push(compteData);
+        passif.total += Math.abs(soldeFinal);
+      }
+    });
+    
+    res.json({
+      actif,
+      passif,
+      equilibre: Math.abs(actif.total - passif.total) < 0.01
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Compte de résultat
+router.get('/rapports/resultat', async (req, res) => {
+  try {
+    const { entrepriseId, dateDebut, dateFin } = req.query;
+    const eId = parseInt(entrepriseId);
+    
+    const allComptes = await db.query.comptes.findMany({
+      where: eq(comptes.entrepriseId, eId)
+    });
+    
+    const ecrituresData = await db.execute(sql`
+      SELECT le.compte_id, 
+             SUM(COALESCE(le.debit, 0)) as total_debit,
+             SUM(COALESCE(le.credit, 0)) as total_credit
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      WHERE e.entreprise_id = ${eId}
+      ${dateDebut ? sql`AND e.date >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date <= ${dateFin}` : sql``}
+      GROUP BY le.compte_id
+    `);
+    
+    const soldesMap = {};
+    const rows = ecrituresData.rows || ecrituresData || [];
+    rows.forEach(row => {
+      soldesMap[row.compte_id] = {
+        debit: parseFloat(row.total_debit || 0),
+        credit: parseFloat(row.total_credit || 0)
+      };
+    });
+    
+    const charges = { exploitation: [], financieres: [], exceptionnelles: [], total: 0 };
+    const produits = { exploitation: [], financiers: [], exceptionnels: [], total: 0 };
+    
+    allComptes.forEach(compte => {
+      const solde = soldesMap[compte.id] || { debit: 0, credit: 0 };
+      
+      const compteData = {
+        numero: compte.numero,
+        nom: compte.nom,
+        montant: 0
+      };
+      
+      if (compte.numero.startsWith('6')) {
+        compteData.montant = solde.debit;
+        if (compte.numero.startsWith('66') || compte.numero.startsWith('67')) {
+          charges.financieres.push(compteData);
+        } else {
+          charges.exploitation.push(compteData);
+        }
+        charges.total += compteData.montant;
+      } else if (compte.numero.startsWith('7')) {
+        compteData.montant = solde.credit;
+        if (compte.numero.startsWith('76') || compte.numero.startsWith('77')) {
+          produits.financiers.push(compteData);
+        } else {
+          produits.exploitation.push(compteData);
+        }
+        produits.total += compteData.montant;
+      }
+    });
+    
+    const resultatExploitation = produits.exploitation.reduce((s, p) => s + p.montant, 0) - 
+                                  charges.exploitation.reduce((s, c) => s + c.montant, 0);
+    const resultatFinancier = produits.financiers.reduce((s, p) => s + p.montant, 0) - 
+                              charges.financieres.reduce((s, c) => s + c.montant, 0);
+    const resultatNet = produits.total - charges.total;
+    
+    res.json({
+      charges,
+      produits,
+      resultatExploitation,
+      resultatFinancier,
+      resultatNet,
+      benefice: resultatNet > 0
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Export CSV des comptes
+router.get('/export/comptes', async (req, res) => {
+  try {
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!entrepriseId || isNaN(entrepriseId)) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+    const allComptes = await db.query.comptes.findMany({
+      where: eq(comptes.entrepriseId, entrepriseId)
+    });
+    
+    const csv = [
+      'Numero;Nom;Categorie;Solde;Devise',
+      ...allComptes.map(c => `${c.numero};${c.nom};${c.categorie};${c.solde};${c.devise}`)
+    ].join('\n');
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=plan_comptable.csv');
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Export CSV des écritures
+router.get('/export/ecritures', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId || isNaN(eId)) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+    
+    let query = eq(ecritures.entrepriseId, eId);
+    
+    const allEcritures = await db.query.ecritures.findMany({
+      where: query,
+      with: { lignes: true }
+    });
+    
+    const csv = [
+      'Date;Journal;Numero;Libelle;Compte;Debit;Credit',
+      ...allEcritures.flatMap(e => 
+        (e.lignes || []).map(l => 
+          `${e.date};${e.journalId};${e.numeroPiece};${e.libelle};${l.compteId};${l.debit};${l.credit}`
+        )
+      )
+    ].join('\n');
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=ecritures.csv');
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==========================================
 // GESTION DU PLAN COMPTABLE
 // ==========================================

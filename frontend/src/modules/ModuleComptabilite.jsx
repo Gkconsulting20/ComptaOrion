@@ -252,8 +252,36 @@ export function ModuleComptabilite() {
       {activeTab === 'plan' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3>📋 Plan Comptable</h3>
-            <Button onClick={() => openModal('compte')}>+ Nouveau Compte</Button>
+            <h3>📋 Plan Comptable ({data.comptes.length} comptes)</h3>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {data.comptes.length < 20 && (
+                <Button variant="success" onClick={async () => {
+                  if (!confirm('Initialiser le plan comptable SYSCOHADA complet (120+ comptes) ?')) return;
+                  try {
+                    const result = await api.post('/comptabilite/init-syscohada', {});
+                    alert(`Plan SYSCOHADA initialisé : ${result.comptesCreés} comptes créés`);
+                    loadAllData();
+                  } catch (err) {
+                    alert('Erreur: ' + err.message);
+                  }
+                }}>Initialiser SYSCOHADA</Button>
+              )}
+              <Button variant="secondary" onClick={async () => {
+                try {
+                  const response = await api.get('/comptabilite/export/comptes', {}, { responseType: 'text' });
+                  const blob = new Blob([response], { type: 'text/csv;charset=utf-8' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'plan_comptable.csv';
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                } catch (err) {
+                  alert('Erreur export: ' + err.message);
+                }
+              }}>Export CSV</Button>
+              <Button onClick={() => openModal('compte')}>+ Nouveau Compte</Button>
+            </div>
           </div>
           <Table
             columns={[
@@ -488,8 +516,19 @@ export function ModuleComptabilite() {
             <div style={{ padding: '30px', background: '#e3f2fd', borderRadius: '8px', cursor: 'pointer' }}
               onClick={async () => {
                 try {
-                  const bilan = await api.get('/comptabilite/bilan', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                  alert(`Bilan généré:\nActif Total: ${bilan.actif.total.toLocaleString()} FCFA\nPassif Total: ${bilan.passif.total.toLocaleString()} FCFA`);
+                  const bilan = await api.get('/comptabilite/rapports/bilan', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                  let msg = `📄 BILAN COMPTABLE\n\n`;
+                  msg += `═══ ACTIF ═══\n`;
+                  msg += `Immobilisations: ${(bilan.actif.immobilise || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
+                  msg += `Actif Circulant: ${(bilan.actif.circulant || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
+                  msg += `Trésorerie: ${(bilan.actif.tresorerie || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
+                  msg += `TOTAL ACTIF: ${(bilan.actif.total || 0).toLocaleString()} FCFA\n\n`;
+                  msg += `═══ PASSIF ═══\n`;
+                  msg += `Capitaux Propres: ${(bilan.passif.capitaux || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
+                  msg += `Dettes: ${(bilan.passif.dettes || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
+                  msg += `TOTAL PASSIF: ${(bilan.passif.total || 0).toLocaleString()} FCFA\n\n`;
+                  msg += bilan.equilibre ? '✅ Bilan équilibré' : '⚠️ Bilan non équilibré';
+                  alert(msg);
                 } catch (err) {
                   alert('Erreur génération Bilan: ' + err.message);
                 }
@@ -503,8 +542,22 @@ export function ModuleComptabilite() {
             <div style={{ padding: '30px', background: '#f3e5f5', borderRadius: '8px', cursor: 'pointer' }}
               onClick={async () => {
                 try {
-                  const resultat = await api.get('/comptabilite/compte-resultat', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                  alert(`Compte de Résultat:\nProduits: ${resultat.produits.total.toLocaleString()} FCFA\nCharges: ${resultat.charges.total.toLocaleString()} FCFA\nRésultat Net: ${resultat.resultatNet.toLocaleString()} FCFA`);
+                  const resultat = await api.get('/comptabilite/rapports/resultat', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                  let msg = `📊 COMPTE DE RÉSULTAT\n\n`;
+                  msg += `═══ PRODUITS ═══\n`;
+                  msg += `Exploitation: ${(resultat.produits.exploitation || []).reduce((s,c) => s + c.montant, 0).toLocaleString()} FCFA\n`;
+                  msg += `Financiers: ${(resultat.produits.financiers || []).reduce((s,c) => s + c.montant, 0).toLocaleString()} FCFA\n`;
+                  msg += `TOTAL PRODUITS: ${(resultat.produits.total || 0).toLocaleString()} FCFA\n\n`;
+                  msg += `═══ CHARGES ═══\n`;
+                  msg += `Exploitation: ${(resultat.charges.exploitation || []).reduce((s,c) => s + c.montant, 0).toLocaleString()} FCFA\n`;
+                  msg += `Financières: ${(resultat.charges.financieres || []).reduce((s,c) => s + c.montant, 0).toLocaleString()} FCFA\n`;
+                  msg += `TOTAL CHARGES: ${(resultat.charges.total || 0).toLocaleString()} FCFA\n\n`;
+                  msg += `═══ RÉSULTATS ═══\n`;
+                  msg += `Résultat d'Exploitation: ${(resultat.resultatExploitation || 0).toLocaleString()} FCFA\n`;
+                  msg += `Résultat Financier: ${(resultat.resultatFinancier || 0).toLocaleString()} FCFA\n`;
+                  msg += `RÉSULTAT NET: ${(resultat.resultatNet || 0).toLocaleString()} FCFA\n\n`;
+                  msg += resultat.benefice ? '✅ Bénéfice' : '❌ Perte';
+                  alert(msg);
                 } catch (err) {
                   alert('Erreur génération Compte de Résultat: ' + err.message);
                 }

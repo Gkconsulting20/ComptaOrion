@@ -1155,4 +1155,32 @@ router.post('/etat-compte/email', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/clients/export/csv
+ * Export CSV de tous les clients
+ */
+router.get('/export/csv', async (req, res) => {
+  try {
+    const clientsList = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.entrepriseId, req.entrepriseId))
+      .orderBy(desc(clients.createdAt));
+
+    const csv = [
+      'Nom;Email;Telephone;Adresse;Ville;Pays;NIF;Date Creation',
+      ...clientsList.map(c => 
+        `${c.nom || ''};${c.email || ''};${c.telephone || ''};${c.adresse || ''};${c.ville || ''};${c.pays || ''};${c.nif || ''};${c.createdAt ? new Date(c.createdAt).toLocaleDateString('fr-FR') : ''}`
+      )
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=clients.csv');
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    console.error('Erreur export clients:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

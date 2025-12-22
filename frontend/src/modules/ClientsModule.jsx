@@ -2212,9 +2212,29 @@ function ParametresTab() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h4>👥 Gestion Clients</h4>
-            <Button variant="primary" onClick={handleNewClient}>
-              ➕ Nouveau Client
-            </Button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <Button variant="secondary" onClick={async () => {
+                try {
+                  const response = await fetch('/api/clients/export/csv', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                  });
+                  const blob = await response.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'clients.csv';
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                } catch (err) {
+                  alert('Erreur export: ' + err.message);
+                }
+              }}>
+                Export CSV
+              </Button>
+              <Button variant="primary" onClick={handleNewClient}>
+                ➕ Nouveau Client
+              </Button>
+            </div>
           </div>
 
           <div style={{ 

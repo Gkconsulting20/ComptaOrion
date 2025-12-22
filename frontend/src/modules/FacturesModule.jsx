@@ -224,9 +224,29 @@ export function FacturesModule() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2>💵 Factures Ventes</h2>
-        <Button onClick={() => { resetForm(); setEditingFacture(null); setShowModal(true); }}>
-          + Nouvelle Facture
-        </Button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <Button variant="secondary" onClick={async () => {
+            try {
+              const response = await fetch('/api/factures/export/csv', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+              });
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'factures.csv';
+              a.click();
+              window.URL.revokeObjectURL(url);
+            } catch (err) {
+              alert('Erreur export: ' + err.message);
+            }
+          }}>
+            Export CSV
+          </Button>
+          <Button onClick={() => { resetForm(); setEditingFacture(null); setShowModal(true); }}>
+            + Nouvelle Facture
+          </Button>
+        </div>
       </div>
 
       <Table 

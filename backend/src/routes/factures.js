@@ -692,4 +692,36 @@ router.post('/:id/send-email', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/factures/export/csv
+ * Export CSV de toutes les factures
+ */
+router.get('/export/csv', async (req, res) => {
+  try {
+    const facturesList = await db
+      .select({
+        facture: factures,
+        client: { nom: clients.nom }
+      })
+      .from(factures)
+      .leftJoin(clients, eq(factures.clientId, clients.id))
+      .where(eq(factures.entrepriseId, req.entrepriseId))
+      .orderBy(desc(factures.createdAt));
+
+    const csv = [
+      'Numero;Client;Date;Echeance;Total HT;Total TTC;Paye;Solde;Statut',
+      ...facturesList.map(f => 
+        `${f.facture.numeroFacture || ''};${f.client?.nom || ''};${f.facture.dateFacture ? new Date(f.facture.dateFacture).toLocaleDateString('fr-FR') : ''};${f.facture.dateEcheance ? new Date(f.facture.dateEcheance).toLocaleDateString('fr-FR') : ''};${f.facture.totalHT || 0};${f.facture.totalTTC || 0};${f.facture.montantPaye || 0};${f.facture.soldeRestant || 0};${f.facture.statut || ''}`
+      )
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=factures.csv');
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    console.error('Erreur export factures:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
