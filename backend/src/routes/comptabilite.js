@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db.js';
 import { 
-  plansComptables, comptes, journaux, ecritures, lignesEcritures, 
+  plansComptables, comptes, comptesComptables, journaux, ecritures, lignesEcritures, 
   soldesComptes, auditLogs, entreprises 
 } from '../schema.js';
 import { eq, and, desc, gte, lte, sum, sql } from 'drizzle-orm';
@@ -566,12 +566,17 @@ router.post('/comptes', async (req, res) => {
 
 router.get('/comptes', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
-    const accounts = await db.query.comptes.findMany({
-      where: eq(comptes.entrepriseId, parseInt(entrepriseId))
+    const entrepriseId = req.entrepriseId || req.query.entrepriseId;
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+    const accounts = await db.query.comptesComptables.findMany({
+      where: eq(comptesComptables.entrepriseId, parseInt(entrepriseId)),
+      orderBy: (comptesComptables, { asc }) => [asc(comptesComptables.numero)]
     });
     res.json(accounts);
   } catch (error) {
+    console.error('Erreur GET /comptes:', error);
     res.status(500).json({ error: error.message });
   }
 });

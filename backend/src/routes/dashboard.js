@@ -16,8 +16,12 @@ function getMonthDates() {
 // Dashboard global - tous les KPIs
 router.get('/global', async (req, res) => {
   try {
-    const { entrepriseId, startDate, endDate } = req.query;
-    const eId = parseInt(entrepriseId);
+    const { startDate, endDate } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    
+    if (!eId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
     
     const { debut, fin } = getMonthDates();
     const dateStart = startDate ? new Date(startDate) : debut;
