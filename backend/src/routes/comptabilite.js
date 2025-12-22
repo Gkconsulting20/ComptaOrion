@@ -449,6 +449,55 @@ router.get('/export/ecritures', async (req, res) => {
 });
 
 // ==========================================
+// DRILL-DOWN: Écritures par compte
+// ==========================================
+
+router.get('/compte/:compteId/ecritures', async (req, res) => {
+  try {
+    const { compteId } = req.params;
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    
+    if (!eId || isNaN(eId)) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+    
+    // Récupérer les lignes d'écritures pour ce compte
+    const lignes = await db.query.lignesEcritures.findMany({
+      where: eq(lignesEcritures.compteId, parseInt(compteId)),
+      with: {
+        ecriture: true
+      }
+    });
+    
+    // Filtrer par entreprise et par dates si fournies
+    let filteredLignes = lignes.filter(l => l.ecriture?.entrepriseId === eId);
+    
+    if (dateDebut) {
+      const start = new Date(dateDebut);
+      filteredLignes = filteredLignes.filter(l => new Date(l.ecriture?.dateEcriture || l.ecriture?.date) >= start);
+    }
+    if (dateFin) {
+      const end = new Date(dateFin);
+      filteredLignes = filteredLignes.filter(l => new Date(l.ecriture?.dateEcriture || l.ecriture?.date) <= end);
+    }
+    
+    const result = filteredLignes.map(l => ({
+      id: l.id,
+      date: l.ecriture?.dateEcriture || l.ecriture?.date || l.ecriture?.createdAt,
+      libelle: l.description || l.ecriture?.libelle || l.ecriture?.description,
+      reference: l.ecriture?.reference || l.ecriture?.numeroPiece,
+      debit: l.type === 'debit' ? parseFloat(l.montant || 0) : 0,
+      credit: l.type === 'credit' ? parseFloat(l.montant || 0) : 0
+    })).sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // GESTION DU PLAN COMPTABLE
 // ==========================================
 

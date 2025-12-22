@@ -22,6 +22,8 @@ export function ModuleComptabilite() {
     dateDebut: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
     dateFin: new Date().toISOString().split('T')[0]
   });
+  const [rapportModal, setRapportModal] = useState({ open: false, type: null, data: null, loading: false });
+  const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], loading: false });
 
   useEffect(() => {
     loadAllData();
@@ -515,21 +517,12 @@ export function ModuleComptabilite() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '30px' }}>
             <div style={{ padding: '30px', background: '#e3f2fd', borderRadius: '8px', cursor: 'pointer' }}
               onClick={async () => {
+                setRapportModal({ open: true, type: 'bilan', data: null, loading: true });
                 try {
                   const bilan = await api.get('/comptabilite/rapports/bilan', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                  let msg = `📄 BILAN COMPTABLE\n\n`;
-                  msg += `═══ ACTIF ═══\n`;
-                  msg += `Immobilisations: ${(bilan.actif.immobilise || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
-                  msg += `Actif Circulant: ${(bilan.actif.circulant || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
-                  msg += `Trésorerie: ${(bilan.actif.tresorerie || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
-                  msg += `TOTAL ACTIF: ${(bilan.actif.total || 0).toLocaleString()} FCFA\n\n`;
-                  msg += `═══ PASSIF ═══\n`;
-                  msg += `Capitaux Propres: ${(bilan.passif.capitaux || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
-                  msg += `Dettes: ${(bilan.passif.dettes || []).reduce((s,c) => s + c.solde, 0).toLocaleString()} FCFA\n`;
-                  msg += `TOTAL PASSIF: ${(bilan.passif.total || 0).toLocaleString()} FCFA\n\n`;
-                  msg += bilan.equilibre ? '✅ Bilan équilibré' : '⚠️ Bilan non équilibré';
-                  alert(msg);
+                  setRapportModal({ open: true, type: 'bilan', data: bilan, loading: false });
                 } catch (err) {
+                  setRapportModal({ open: false, type: null, data: null, loading: false });
                   alert('Erreur génération Bilan: ' + err.message);
                 }
               }}>
@@ -541,24 +534,12 @@ export function ModuleComptabilite() {
 
             <div style={{ padding: '30px', background: '#f3e5f5', borderRadius: '8px', cursor: 'pointer' }}
               onClick={async () => {
+                setRapportModal({ open: true, type: 'resultat', data: null, loading: true });
                 try {
                   const resultat = await api.get('/comptabilite/rapports/resultat', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                  let msg = `📊 COMPTE DE RÉSULTAT\n\n`;
-                  msg += `═══ PRODUITS ═══\n`;
-                  msg += `Exploitation: ${(resultat.produits.exploitation || []).reduce((s,c) => s + c.montant, 0).toLocaleString()} FCFA\n`;
-                  msg += `Financiers: ${(resultat.produits.financiers || []).reduce((s,c) => s + c.montant, 0).toLocaleString()} FCFA\n`;
-                  msg += `TOTAL PRODUITS: ${(resultat.produits.total || 0).toLocaleString()} FCFA\n\n`;
-                  msg += `═══ CHARGES ═══\n`;
-                  msg += `Exploitation: ${(resultat.charges.exploitation || []).reduce((s,c) => s + c.montant, 0).toLocaleString()} FCFA\n`;
-                  msg += `Financières: ${(resultat.charges.financieres || []).reduce((s,c) => s + c.montant, 0).toLocaleString()} FCFA\n`;
-                  msg += `TOTAL CHARGES: ${(resultat.charges.total || 0).toLocaleString()} FCFA\n\n`;
-                  msg += `═══ RÉSULTATS ═══\n`;
-                  msg += `Résultat d'Exploitation: ${(resultat.resultatExploitation || 0).toLocaleString()} FCFA\n`;
-                  msg += `Résultat Financier: ${(resultat.resultatFinancier || 0).toLocaleString()} FCFA\n`;
-                  msg += `RÉSULTAT NET: ${(resultat.resultatNet || 0).toLocaleString()} FCFA\n\n`;
-                  msg += resultat.benefice ? '✅ Bénéfice' : '❌ Perte';
-                  alert(msg);
+                  setRapportModal({ open: true, type: 'resultat', data: resultat, loading: false });
                 } catch (err) {
+                  setRapportModal({ open: false, type: null, data: null, loading: false });
                   alert('Erreur génération Compte de Résultat: ' + err.message);
                 }
               }}>
@@ -1230,6 +1211,409 @@ export function ModuleComptabilite() {
           )}
         </form>
       </Modal>
+
+      {/* Modal Rapport Bilan/Résultat */}
+      {rapportModal.open && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', width: '95%', maxWidth: '1100px',
+            maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid #eee',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              backgroundColor: rapportModal.type === 'bilan' ? '#e3f2fd' : '#f3e5f5'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '18px', color: rapportModal.type === 'bilan' ? '#1976d2' : '#7b1fa2' }}>
+                {rapportModal.type === 'bilan' ? '📄 Bilan Comptable' : '📊 Compte de Résultat'}
+              </h3>
+              <button onClick={() => setRapportModal({ open: false, type: null, data: null, loading: false })} style={{
+                background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666'
+              }}>&times;</button>
+            </div>
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              {rapportModal.loading ? (
+                <div style={{ textAlign: 'center', padding: '60px', color: '#666' }}>Chargement du rapport...</div>
+              ) : rapportModal.type === 'bilan' && rapportModal.data ? (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+                    {/* ACTIF */}
+                    <div>
+                      <h4 style={{ color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '10px' }}>ACTIF</h4>
+                      
+                      <div style={{ marginBottom: '20px' }}>
+                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Immobilisations</h5>
+                        {(rapportModal.data.actif?.immobilise || []).map((c, i) => (
+                          <div key={i} onClick={async () => {
+                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
+                            try {
+                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
+                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
+                          }} style={{ 
+                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
+                            borderBottom: '1px solid #eee', cursor: 'pointer', 
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                            <span>{c.numero} - {c.nom}</span>
+                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '5px' }}>
+                          <span>Sous-total Immobilisations</span>
+                          <span>{(rapportModal.data.actif?.immobilise || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: '20px' }}>
+                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Actif Circulant</h5>
+                        {(rapportModal.data.actif?.circulant || []).map((c, i) => (
+                          <div key={i} onClick={async () => {
+                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
+                            try {
+                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
+                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
+                          }} style={{ 
+                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
+                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                            <span>{c.numero} - {c.nom}</span>
+                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '5px' }}>
+                          <span>Sous-total Actif Circulant</span>
+                          <span>{(rapportModal.data.actif?.circulant || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: '20px' }}>
+                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Trésorerie</h5>
+                        {(rapportModal.data.actif?.tresorerie || []).map((c, i) => (
+                          <div key={i} onClick={async () => {
+                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
+                            try {
+                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
+                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
+                          }} style={{ 
+                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
+                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                            <span>{c.numero} - {c.nom}</span>
+                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '5px' }}>
+                          <span>Sous-total Trésorerie</span>
+                          <span>{(rapportModal.data.actif?.tresorerie || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#1976d2', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
+                        <span>TOTAL ACTIF</span>
+                        <span>{parseFloat(rapportModal.data.actif?.total || 0).toLocaleString()} FCFA</span>
+                      </div>
+                    </div>
+
+                    {/* PASSIF */}
+                    <div>
+                      <h4 style={{ color: '#7b1fa2', borderBottom: '2px solid #7b1fa2', paddingBottom: '10px' }}>PASSIF</h4>
+                      
+                      <div style={{ marginBottom: '20px' }}>
+                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Capitaux Propres</h5>
+                        {(rapportModal.data.passif?.capitaux || []).map((c, i) => (
+                          <div key={i} onClick={async () => {
+                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
+                            try {
+                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
+                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
+                          }} style={{ 
+                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
+                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fce4ec'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                            <span>{c.numero} - {c.nom}</span>
+                            <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '5px' }}>
+                          <span>Sous-total Capitaux</span>
+                          <span>{(rapportModal.data.passif?.capitaux || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: '20px' }}>
+                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Dettes</h5>
+                        {(rapportModal.data.passif?.dettes || []).map((c, i) => (
+                          <div key={i} onClick={async () => {
+                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
+                            try {
+                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
+                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
+                          }} style={{ 
+                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
+                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fce4ec'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                            <span>{c.numero} - {c.nom}</span>
+                            <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '5px' }}>
+                          <span>Sous-total Dettes</span>
+                          <span>{(rapportModal.data.passif?.dettes || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#7b1fa2', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
+                        <span>TOTAL PASSIF</span>
+                        <span>{parseFloat(rapportModal.data.passif?.total || 0).toLocaleString()} FCFA</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ marginTop: '20px', padding: '15px', backgroundColor: rapportModal.data.equilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                    {rapportModal.data.equilibre 
+                      ? <span style={{ color: '#2e7d32', fontWeight: 'bold' }}>✅ Bilan équilibré</span>
+                      : <span style={{ color: '#c62828', fontWeight: 'bold' }}>⚠️ Bilan non équilibré (écart: {Math.abs(rapportModal.data.actif?.total - rapportModal.data.passif?.total).toLocaleString()} FCFA)</span>
+                    }
+                  </div>
+                </div>
+              ) : rapportModal.type === 'resultat' && rapportModal.data ? (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+                    {/* PRODUITS */}
+                    <div>
+                      <h4 style={{ color: '#2e7d32', borderBottom: '2px solid #2e7d32', paddingBottom: '10px' }}>PRODUITS</h4>
+                      
+                      <div style={{ marginBottom: '20px' }}>
+                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Exploitation</h5>
+                        {(rapportModal.data.produits?.exploitation || []).map((c, i) => (
+                          <div key={i} onClick={async () => {
+                            setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
+                            try {
+                              const ecritures = await api.get(`/comptabilite/compte/${c.compteId}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
+                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
+                          }} style={{ 
+                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
+                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e8f5e9'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                            <span>{c.compte}</span>
+                            <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{parseFloat(c.montant).toLocaleString()} FCFA</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ marginBottom: '20px' }}>
+                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Financiers</h5>
+                        {(rapportModal.data.produits?.financiers || []).map((c, i) => (
+                          <div key={i} onClick={async () => {
+                            setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
+                            try {
+                              const ecritures = await api.get(`/comptabilite/compte/${c.compteId}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
+                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
+                          }} style={{ 
+                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
+                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e8f5e9'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                            <span>{c.compte}</span>
+                            <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{parseFloat(c.montant).toLocaleString()} FCFA</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#2e7d32', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
+                        <span>TOTAL PRODUITS</span>
+                        <span>{parseFloat(rapportModal.data.produits?.total || 0).toLocaleString()} FCFA</span>
+                      </div>
+                    </div>
+
+                    {/* CHARGES */}
+                    <div>
+                      <h4 style={{ color: '#c62828', borderBottom: '2px solid #c62828', paddingBottom: '10px' }}>CHARGES</h4>
+                      
+                      <div style={{ marginBottom: '20px' }}>
+                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Exploitation</h5>
+                        {(rapportModal.data.charges?.exploitation || []).map((c, i) => (
+                          <div key={i} onClick={async () => {
+                            setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
+                            try {
+                              const ecritures = await api.get(`/comptabilite/compte/${c.compteId}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
+                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
+                          }} style={{ 
+                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
+                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffebee'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                            <span>{c.compte}</span>
+                            <span style={{ fontWeight: 'bold', color: '#c62828' }}>{parseFloat(c.montant).toLocaleString()} FCFA</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ marginBottom: '20px' }}>
+                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Financières</h5>
+                        {(rapportModal.data.charges?.financieres || []).map((c, i) => (
+                          <div key={i} onClick={async () => {
+                            setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
+                            try {
+                              const ecritures = await api.get(`/comptabilite/compte/${c.compteId}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
+                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
+                          }} style={{ 
+                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
+                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffebee'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                            <span>{c.compte}</span>
+                            <span style={{ fontWeight: 'bold', color: '#c62828' }}>{parseFloat(c.montant).toLocaleString()} FCFA</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#c62828', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
+                        <span>TOTAL CHARGES</span>
+                        <span>{parseFloat(rapportModal.data.charges?.total || 0).toLocaleString()} FCFA</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ marginTop: '20px', padding: '20px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+                    <h4 style={{ margin: '0 0 15px 0', color: '#333' }}>Résultats</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                      <div style={{ textAlign: 'center', padding: '15px', backgroundColor: 'white', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat Exploitation</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.resultatExploitation >= 0 ? '#2e7d32' : '#c62828' }}>
+                          {parseFloat(rapportModal.data.resultatExploitation || 0).toLocaleString()} FCFA
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: '15px', backgroundColor: 'white', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat Financier</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.resultatFinancier >= 0 ? '#2e7d32' : '#c62828' }}>
+                          {parseFloat(rapportModal.data.resultatFinancier || 0).toLocaleString()} FCFA
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: '15px', backgroundColor: rapportModal.data.benefice ? '#e8f5e9' : '#ffebee', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat Net</div>
+                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: rapportModal.data.benefice ? '#2e7d32' : '#c62828' }}>
+                          {parseFloat(rapportModal.data.resultatNet || 0).toLocaleString()} FCFA
+                        </div>
+                        <div style={{ fontSize: '12px', marginTop: '5px' }}>
+                          {rapportModal.data.benefice ? '✅ Bénéfice' : '❌ Perte'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', textAlign: 'right' }}>
+              <Button variant="secondary" onClick={() => setRapportModal({ open: false, type: null, data: null, loading: false })}>
+                Fermer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Drill-Down Écritures d'un compte */}
+      {drillModal.open && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', zIndex: 1001
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', width: '90%', maxWidth: '800px',
+            maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid #eee',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              backgroundColor: '#f5f5f5'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>{drillModal.title}</h3>
+              <button onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false })} style={{
+                background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666'
+              }}>&times;</button>
+            </div>
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              {drillModal.loading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Chargement...</div>
+              ) : drillModal.data.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>Aucune écriture trouvée pour cette période</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                      <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
+                      <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Libellé</th>
+                      <th style={{ padding: '10px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Débit</th>
+                      <th style={{ padding: '10px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Crédit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drillModal.data.map((e, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '10px' }}>{e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td style={{ padding: '10px' }}>{e.libelle || e.description || '-'}</td>
+                        <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2', fontWeight: e.debit > 0 ? 'bold' : 'normal' }}>
+                          {e.debit > 0 ? parseFloat(e.debit).toLocaleString() + ' FCFA' : '-'}
+                        </td>
+                        <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2', fontWeight: e.credit > 0 ? 'bold' : 'normal' }}>
+                          {e.credit > 0 ? parseFloat(e.credit).toLocaleString() + ' FCFA' : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
+                      <td colSpan="2" style={{ padding: '10px' }}>TOTAL</td>
+                      <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2' }}>
+                        {drillModal.data.reduce((s, e) => s + parseFloat(e.debit || 0), 0).toLocaleString()} FCFA
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2' }}>
+                        {drillModal.data.reduce((s, e) => s + parseFloat(e.credit || 0), 0).toLocaleString()} FCFA
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#666', fontSize: '13px' }}>{drillModal.data.length} écriture(s)</span>
+              <Button variant="secondary" onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false })}>
+                Fermer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

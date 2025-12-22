@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db.js';
 import { clients, factures, paiements } from '../schema.js';
-import { eq, and, desc, sql, gte, lte, between } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, lte, between, gt } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import emailService from '../services/emailService.js';
 
@@ -1179,6 +1179,202 @@ router.get('/export/csv', async (req, res) => {
     res.send('\uFEFF' + csv);
   } catch (error) {
     console.error('Erreur export clients:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// DRILL-DOWN ENDPOINTS
+// ==========================================
+
+/**
+ * GET /api/clients/detail/chiffre-affaires
+ * Détail des factures pour le chiffre d'affaires
+ */
+router.get('/detail/chiffre-affaires', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId;
+    
+    let facturesQuery = db
+      .select({
+        id: factures.id,
+        numero: factures.numero,
+        date: factures.dateFacture,
+        montant: factures.totalTTC,
+        statut: factures.statut,
+        clientId: factures.clientId
+      })
+      .from(factures)
+      .where(eq(factures.entrepriseId, eId));
+    
+    if (dateDebut) {
+      facturesQuery = facturesQuery.where(gte(factures.dateFacture, new Date(dateDebut)));
+    }
+    if (dateFin) {
+      facturesQuery = facturesQuery.where(lte(factures.dateFacture, new Date(dateFin)));
+    }
+    
+    const facturesData = await facturesQuery.orderBy(desc(factures.dateFacture));
+    
+    // Récupérer les noms des clients
+    const clientIds = [...new Set(facturesData.map(f => f.clientId))];
+    const clientsData = clientIds.length > 0 ? await db
+      .select({ id: clients.id, nom: clients.nom })
+      .from(clients)
+      .where(eq(clients.entrepriseId, eId)) : [];
+    
+    const clientMap = {};
+    clientsData.forEach(c => clientMap[c.id] = c.nom);
+    
+    const result = facturesData.map(f => ({
+      ...f,
+      client: clientMap[f.clientId] || 'Client inconnu'
+    }));
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur drill-down CA:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/clients/detail/factures
+ * Détail des factures émises
+ */
+router.get('/detail/factures', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId;
+    
+    let whereConditions = [eq(factures.entrepriseId, eId)];
+    if (dateDebut) whereConditions.push(gte(factures.dateFacture, new Date(dateDebut)));
+    if (dateFin) whereConditions.push(lte(factures.dateFacture, new Date(dateFin)));
+    
+    const facturesData = await db
+      .select({
+        id: factures.id,
+        numero: factures.numero,
+        date: factures.dateFacture,
+        montant: factures.totalTTC,
+        statut: factures.statut,
+        clientId: factures.clientId
+      })
+      .from(factures)
+      .where(and(...whereConditions))
+      .orderBy(desc(factures.dateFacture));
+    
+    const clientIds = [...new Set(facturesData.map(f => f.clientId))];
+    const clientsData = clientIds.length > 0 ? await db
+      .select({ id: clients.id, nom: clients.nom })
+      .from(clients)
+      .where(eq(clients.entrepriseId, eId)) : [];
+    
+    const clientMap = {};
+    clientsData.forEach(c => clientMap[c.id] = c.nom);
+    
+    res.json(facturesData.map(f => ({ ...f, client: clientMap[f.clientId] || 'Client inconnu' })));
+  } catch (error) {
+    console.error('Erreur drill-down factures:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/clients/detail/paiements
+ * Détail des paiements reçus
+ */
+router.get('/detail/paiements', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId;
+    
+    let whereConditions = [eq(paiements.entrepriseId, eId)];
+    if (dateDebut) whereConditions.push(gte(paiements.datePaiement, new Date(dateDebut)));
+    if (dateFin) whereConditions.push(lte(paiements.datePaiement, new Date(dateFin)));
+    
+    const paiementsData = await db
+      .select({
+        id: paiements.id,
+        date: paiements.datePaiement,
+        montant: paiements.montant,
+        modePaiement: paiements.modePaiement,
+        reference: paiements.reference,
+        factureId: paiements.factureId
+      })
+      .from(paiements)
+      .where(and(...whereConditions))
+      .orderBy(desc(paiements.datePaiement));
+    
+    // Récupérer les factures pour avoir les clients
+    const factureIds = [...new Set(paiementsData.map(p => p.factureId))];
+    const facturesData = factureIds.length > 0 ? await db
+      .select({ id: factures.id, clientId: factures.clientId })
+      .from(factures)
+      .where(eq(factures.entrepriseId, eId)) : [];
+    
+    const clientIds = [...new Set(facturesData.map(f => f.clientId))];
+    const clientsData = clientIds.length > 0 ? await db
+      .select({ id: clients.id, nom: clients.nom })
+      .from(clients)
+      .where(eq(clients.entrepriseId, eId)) : [];
+    
+    const factureMap = {};
+    facturesData.forEach(f => factureMap[f.id] = f.clientId);
+    const clientMap = {};
+    clientsData.forEach(c => clientMap[c.id] = c.nom);
+    
+    res.json(paiementsData.map(p => ({
+      ...p,
+      client: clientMap[factureMap[p.factureId]] || 'Client inconnu'
+    })));
+  } catch (error) {
+    console.error('Erreur drill-down paiements:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/clients/detail/impayes
+ * Détail des soldes impayés
+ */
+router.get('/detail/impayes', async (req, res) => {
+  try {
+    const eId = req.entrepriseId;
+    
+    const facturesData = await db
+      .select({
+        id: factures.id,
+        numero: factures.numero,
+        date: factures.dateFacture,
+        echeance: factures.dateEcheance,
+        solde: factures.soldeRestant,
+        clientId: factures.clientId,
+        statut: factures.statut
+      })
+      .from(factures)
+      .where(and(
+        eq(factures.entrepriseId, eId),
+        gt(factures.soldeRestant, 0)
+      ))
+      .orderBy(desc(factures.dateEcheance));
+    
+    const clientIds = [...new Set(facturesData.map(f => f.clientId))];
+    const clientsData = clientIds.length > 0 ? await db
+      .select({ id: clients.id, nom: clients.nom })
+      .from(clients)
+      .where(eq(clients.entrepriseId, eId)) : [];
+    
+    const clientMap = {};
+    clientsData.forEach(c => clientMap[c.id] = c.nom);
+    
+    res.json(facturesData.map(f => ({
+      ...f,
+      client: clientMap[f.clientId] || 'Client inconnu'
+    })));
+  } catch (error) {
+    console.error('Erreur drill-down impayés:', error);
     res.status(500).json({ error: error.message });
   }
 });

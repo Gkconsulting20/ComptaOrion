@@ -206,4 +206,198 @@ router.get('/kpis', async (req, res) => {
   }
 });
 
+// =====================
+// DRILL-DOWN ENDPOINTS
+// =====================
+
+// Détail ventes du mois
+router.get('/detail/ventes', async (req, res) => {
+  try {
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
+    
+    const { debut, fin } = getMonthDates();
+    
+    const ventesData = await db.query.factures.findMany({
+      where: and(
+        eq(factures.entrepriseId, eId),
+        gte(factures.createdAt, debut),
+        lte(factures.createdAt, fin)
+      ),
+      with: { client: true },
+      orderBy: [desc(factures.createdAt)]
+    });
+    
+    const result = ventesData.map(f => ({
+      id: f.id,
+      numero: f.numero,
+      dateFacture: f.dateFacture || f.createdAt,
+      clientNom: f.client?.nom || f.client?.raisonSociale || 'Client inconnu',
+      montantTTC: parseFloat(f.totalTTC || f.montantTTC || 0),
+      statut: f.statut
+    }));
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Détail dépenses du mois
+router.get('/detail/depenses', async (req, res) => {
+  try {
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
+    
+    const { debut, fin } = getMonthDates();
+    
+    const depensesData = await db.query.facturesAchat.findMany({
+      where: and(
+        eq(facturesAchat.entrepriseId, eId),
+        gte(facturesAchat.createdAt, debut),
+        lte(facturesAchat.createdAt, fin)
+      ),
+      with: { fournisseur: true },
+      orderBy: [desc(facturesAchat.createdAt)]
+    });
+    
+    const result = depensesData.map(f => ({
+      id: f.id,
+      date: f.dateFacture || f.createdAt,
+      description: f.numero || `Facture #${f.id}`,
+      categorie: f.fournisseur?.nom || 'Fournisseur',
+      montant: parseFloat(f.totalTTC || 0)
+    }));
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Détail factures en retard
+router.get('/detail/factures-retard', async (req, res) => {
+  try {
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
+    
+    const now = new Date();
+    
+    const facturesRetard = await db.query.factures.findMany({
+      where: and(
+        eq(factures.entrepriseId, eId),
+        eq(factures.statut, 'retard')
+      ),
+      with: { client: true },
+      orderBy: [desc(factures.dateEcheance)]
+    });
+    
+    const result = facturesRetard.map(f => {
+      const echeance = new Date(f.dateEcheance);
+      const joursRetard = Math.max(0, Math.floor((now - echeance) / (1000 * 60 * 60 * 24)));
+      return {
+        id: f.id,
+        numero: f.numero,
+        dateFacture: f.dateFacture || f.createdAt,
+        clientNom: f.client?.nom || f.client?.raisonSociale || 'Client inconnu',
+        dateEcheance: f.dateEcheance,
+        joursRetard,
+        soldeRestant: parseFloat(f.soldeRestant || f.totalTTC || 0)
+      };
+    });
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Détail stock faible
+router.get('/detail/stock-faible', async (req, res) => {
+  try {
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
+    
+    const allProduits = await db.query.produits.findMany({
+      where: eq(produits.entrepriseId, eId)
+    });
+    
+    const produitsFaibles = allProduits
+      .filter(p => parseFloat(p.quantite || 0) < parseFloat(p.stockMinimum || 0))
+      .map(p => ({
+        id: p.id,
+        reference: p.reference || p.code,
+        nom: p.nom || p.designation,
+        quantite: parseFloat(p.quantite || 0),
+        seuilMin: parseFloat(p.stockMinimum || 0),
+        entrepot: p.entrepot || 'Principal'
+      }));
+    
+    res.json(produitsFaibles);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Détail cashflow
+router.get('/detail/cashflow', async (req, res) => {
+  try {
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
+    
+    const { debut, fin } = getMonthDates();
+    
+    // Récupérer paiements clients (entrées)
+    const paiementsClients = await db.query.paiements.findMany({
+      where: and(
+        eq(paiements.entrepriseId, eId),
+        gte(paiements.datePaiement, debut),
+        lte(paiements.datePaiement, fin)
+      ),
+      orderBy: [desc(paiements.datePaiement)]
+    });
+    
+    // Récupérer paiements fournisseurs (sorties)
+    const paiementsFourn = await db.query.paiementsFournisseurs.findMany({
+      where: and(
+        eq(paiementsFournisseurs.entrepriseId, eId),
+        gte(paiementsFournisseurs.datePaiement, debut),
+        lte(paiementsFournisseurs.datePaiement, fin)
+      ),
+      orderBy: [desc(paiementsFournisseurs.datePaiement)]
+    });
+    
+    // Combiner et trier par date
+    const mouvements = [
+      ...paiementsClients.map(p => ({
+        id: p.id,
+        date: p.datePaiement,
+        type: 'Encaissement client',
+        description: `Paiement ${p.reference || '#' + p.id}`,
+        entree: parseFloat(p.montant || 0),
+        sortie: 0
+      })),
+      ...paiementsFourn.map(p => ({
+        id: 'f' + p.id,
+        date: p.datePaiement,
+        type: 'Paiement fournisseur',
+        description: `Règlement ${p.reference || '#' + p.id}`,
+        entree: 0,
+        sortie: parseFloat(p.montant || 0)
+      }))
+    ].sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    // Calculer solde cumulé
+    let solde = 0;
+    const result = mouvements.map(m => {
+      solde += m.entree - m.sortie;
+      return { ...m, solde };
+    });
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

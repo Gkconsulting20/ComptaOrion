@@ -1106,6 +1106,7 @@ function RapportsTab() {
   const [loadingCreances, setLoadingCreances] = useState(true);
   const [loadingPeriode, setLoadingPeriode] = useState(true);
   const [erreurPeriode, setErreurPeriode] = useState(null);
+  const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], loading: false, type: null });
   
   const [dateDebut, setDateDebut] = useState(() => {
     const date = new Date();
@@ -1113,6 +1114,17 @@ function RapportsTab() {
     return date.toISOString().split('T')[0];
   });
   const [dateFin, setDateFin] = useState(new Date().toISOString().split('T')[0]);
+
+  const openDrillDown = async (type, title) => {
+    setDrillModal({ open: true, title, data: [], loading: true, type });
+    try {
+      const res = await api.get(`/clients/detail/${type}`, { dateDebut, dateFin });
+      setDrillModal({ open: true, title, data: res || [], loading: false, type });
+    } catch (error) {
+      console.error('Erreur drill-down:', error);
+      setDrillModal(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   useEffect(() => {
     loadCreances();
@@ -1291,12 +1303,18 @@ function RapportsTab() {
                 backgroundColor: '#3498db',
                 color: 'white',
                 borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-              }}>
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'transform 0.2s'
+              }}
+              onClick={() => openDrillDown('chiffre-affaires', 'Détail du Chiffre d\'Affaires')}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}>
                 <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>CHIFFRE D'AFFAIRES</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
                   {parseFloat(rapportPeriode.chiffreAffaires || 0).toLocaleString()} FCFA
                 </div>
+                <div style={{ fontSize: '10px', marginTop: '8px', opacity: 0.7 }}>Cliquer pour détails</div>
               </div>
 
               <div style={{
@@ -1304,12 +1322,18 @@ function RapportsTab() {
                 backgroundColor: '#27ae60',
                 color: 'white',
                 borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-              }}>
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'transform 0.2s'
+              }}
+              onClick={() => openDrillDown('factures', 'Détail des Factures Émises')}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}>
                 <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>FACTURES ÉMISES</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
                   {rapportPeriode.nombreFactures || 0}
                 </div>
+                <div style={{ fontSize: '10px', marginTop: '8px', opacity: 0.7 }}>Cliquer pour détails</div>
               </div>
 
               <div style={{
@@ -1317,12 +1341,18 @@ function RapportsTab() {
                 backgroundColor: '#f39c12',
                 color: 'white',
                 borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-              }}>
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'transform 0.2s'
+              }}
+              onClick={() => openDrillDown('paiements', 'Détail des Paiements Reçus')}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}>
                 <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>PAIEMENTS REÇUS</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
                   {parseFloat(rapportPeriode.paiementsRecus || 0).toLocaleString()} FCFA
                 </div>
+                <div style={{ fontSize: '10px', marginTop: '8px', opacity: 0.7 }}>Cliquer pour détails</div>
               </div>
 
               <div style={{
@@ -1330,12 +1360,18 @@ function RapportsTab() {
                 backgroundColor: '#e74c3c',
                 color: 'white',
                 borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-              }}>
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'transform 0.2s'
+              }}
+              onClick={() => openDrillDown('impayes', 'Détail des Soldes Impayés')}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}>
                 <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>SOLDES IMPAYÉS</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
                   {parseFloat(rapportPeriode.soldesImpayes || 0).toLocaleString()} FCFA
                 </div>
+                <div style={{ fontSize: '10px', marginTop: '8px', opacity: 0.7 }}>Cliquer pour détails</div>
               </div>
             </div>
 
@@ -1587,6 +1623,121 @@ function RapportsTab() {
             )}
           </div>
         </>
+      )}
+
+      {/* Modal Drill-Down */}
+      {drillModal.open && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', width: '90%', maxWidth: '900px',
+            maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid #eee',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '18px' }}>{drillModal.title}</h3>
+              <button onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false, type: null })} style={{
+                background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666'
+              }}>&times;</button>
+            </div>
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              {drillModal.loading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Chargement...</div>
+              ) : drillModal.data?.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>Aucune donnée pour cette période</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                      {drillModal.type === 'chiffre-affaires' || drillModal.type === 'factures' ? (
+                        <>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>N° Facture</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Client</th>
+                          <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Montant TTC</th>
+                          <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Statut</th>
+                        </>
+                      ) : drillModal.type === 'paiements' ? (
+                        <>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Client</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Mode</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Référence</th>
+                          <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Montant</th>
+                        </>
+                      ) : (
+                        <>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>N° Facture</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Client</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Échéance</th>
+                          <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Solde Restant</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drillModal.data?.map((item, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                        {drillModal.type === 'chiffre-affaires' || drillModal.type === 'factures' ? (
+                          <>
+                            <td style={{ padding: '10px' }}>{item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.numero}</td>
+                            <td style={{ padding: '10px' }}>{item.client || '-'}</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#3498db' }}>{parseFloat(item.montant || 0).toLocaleString()} FCFA</td>
+                            <td style={{ padding: '10px', textAlign: 'center' }}>
+                              <span style={{
+                                padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
+                                backgroundColor: item.statut === 'payee' ? '#d4edda' : item.statut === 'envoyee' ? '#fff3cd' : '#f8d7da',
+                                color: item.statut === 'payee' ? '#155724' : item.statut === 'envoyee' ? '#856404' : '#721c24'
+                              }}>{item.statut}</span>
+                            </td>
+                          </>
+                        ) : drillModal.type === 'paiements' ? (
+                          <>
+                            <td style={{ padding: '10px' }}>{item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.client || '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.modePaiement || '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.reference || '-'}</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>{parseFloat(item.montant || 0).toLocaleString()} FCFA</td>
+                          </>
+                        ) : (
+                          <>
+                            <td style={{ padding: '10px' }}>{item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '10px' }}>{item.numero}</td>
+                            <td style={{ padding: '10px' }}>{item.client || '-'}</td>
+                            <td style={{ padding: '10px', color: '#e74c3c' }}>{item.echeance ? new Date(item.echeance).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#e74c3c' }}>{parseFloat(item.solde || 0).toLocaleString()} FCFA</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
+                      <td colSpan={drillModal.type === 'paiements' ? 4 : 3} style={{ padding: '12px' }}>TOTAL</td>
+                      <td style={{ padding: '12px', textAlign: 'right', color: drillModal.type === 'impayes' ? '#e74c3c' : '#333' }}>
+                        {drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || item.solde || 0), 0).toLocaleString()} FCFA
+                      </td>
+                      {(drillModal.type === 'chiffre-affaires' || drillModal.type === 'factures') && <td></td>}
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#666', fontSize: '13px' }}>{drillModal.data?.length || 0} élément(s)</span>
+              <Button variant="secondary" onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false, type: null })}>
+                Fermer
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
