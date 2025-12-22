@@ -120,6 +120,14 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
     - Commission rate displayed (modifiable only by admin in Admin SaaS)
     - No access to main ERP system - commercials only see their own data
 
+-   **Integrations Module (Dec 2025):** Complete external connectivity and data security system:
+    - **Data Export:** Manual exports by domain (12 domains: clients, fournisseurs, factures, paiements, écritures, comptes, produits, mouvements_stock, comptes_bancaires, transactions, employes, depenses) in JSON/CSV formats, plus full backup export
+    - **API Keys:** Secure key generation with SHA-256 hashing, permissions management (read/write), IP allowlisting, and activation toggle. Key format: `co_{prefix}_{key}`
+    - **Webhooks:** Subscription management with HMAC-SHA256 signature signing, 14 available events (facture.created/paid/sent, paiement.received/created, client/fournisseur created/updated, ecriture.posted/validated, stock.alert/movement, backup.completed/failed), test functionality, and delivery tracking. Secrets encrypted at rest with AES-256-CBC.
+    - **Scheduled Backups:** Configuration for automated backups (daily/weekly/monthly) with multiple destinations (URL/SFTP/S3), format selection (JSON/CSV), and optional encryption
+    - **Security:** Multi-tenant isolation via entrepriseId, encrypted webhook secrets (requires WEBHOOK_ENCRYPTION_KEY in production), complete audit logging for all export/API operations
+    - **Database Tables:** api_keys, webhook_subscriptions, webhook_deliveries, backup_configs, backup_jobs, export_history
+
 ## External Dependencies
 
 ### Backend
