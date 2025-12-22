@@ -144,7 +144,7 @@ router.get('/dashboard', authenticateCommercial, async (req, res) => {
     .where(eq(saasVentes.commercialId, commercialId))
     .orderBy(desc(saasVentes.dateVente));
 
-    const [stats] = await db.execute(sql`
+    const statsResult = await db.execute(sql`
       SELECT 
         COUNT(DISTINCT sc.id) as total_clients,
         COUNT(DISTINCT CASE WHEN sc.statut = 'actif' THEN sc.id END) as clients_actifs,
@@ -157,6 +157,7 @@ router.get('/dashboard', authenticateCommercial, async (req, res) => {
       LEFT JOIN saas_ventes sv ON sv.commercial_id = c.id AND sv.statut = 'confirmée'
       WHERE c.id = ${commercialId}
     `);
+    const stats = statsResult.rows?.[0] || statsResult[0] || {};
 
     res.json({
       stats: stats || {},
