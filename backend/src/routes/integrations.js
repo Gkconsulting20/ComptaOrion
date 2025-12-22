@@ -29,6 +29,38 @@ function generateWebhookSecret() {
   return 'whsec_' + crypto.randomBytes(32).toString('hex');
 }
 
+// Chiffrement symétrique pour les secrets webhook
+// En production, WEBHOOK_ENCRYPTION_KEY doit être défini dans l'environnement
+const getEncryptionKey = () => {
+  if (process.env.WEBHOOK_ENCRYPTION_KEY) {
+    return crypto.createHash('sha256').update(process.env.WEBHOOK_ENCRYPTION_KEY).digest();
+  }
+  // En développement uniquement - génère une clé basée sur DATABASE_URL
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn('AVERTISSEMENT: WEBHOOK_ENCRYPTION_KEY non défini. Utilisation d\'une clé dérivée (développement uniquement).');
+    return crypto.createHash('sha256').update(process.env.DATABASE_URL || 'dev-fallback-key').digest();
+  }
+  throw new Error('WEBHOOK_ENCRYPTION_KEY doit être défini en production');
+};
+const ENCRYPTION_KEY = getEncryptionKey();
+
+function encryptSecret(plaintext) {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(plaintext, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+function decryptSecret(encryptedData) {
+  const [ivHex, encrypted] = encryptedData.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
 function signPayload(payload, secret) {
   const timestamp = Math.floor(Date.now() / 1000);
   const payloadString = JSON.stringify(payload);
@@ -196,13 +228,14 @@ router.post('/webhooks', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Nom et URL requis' });
     }
     
-    const secret = generateWebhookSecret();
+    const plaintextSecret = generateWebhookSecret();
+    const encryptedSecret = encryptSecret(plaintextSecret);
     
     const [webhook] = await db.insert(webhookSubscriptions).values({
       entrepriseId: req.entrepriseId,
       nom,
       url,
-      secret,
+      secret: encryptedSecret,
       evenements: JSON.stringify(evenements)
     }).returning();
     
@@ -214,12 +247,13 @@ router.post('/webhooks', async (req, res) => {
       newValues: { nom, url, evenements }
     });
     
+    // Retourner le secret en clair UNE SEULE FOIS - l'utilisateur doit le sauvegarder
     res.json({ 
       success: true, 
       data: { 
         ...webhook,
-        secret,
-        message: 'Conservez ce secret pour vérifier les signatures.'
+        secret: plaintextSecret,
+        message: 'IMPORTANT: Conservez ce secret maintenant - il ne sera plus jamais affiché.'
       }
     });
   } catch (error) {
@@ -258,14 +292,25 @@ router.delete('/webhooks/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    await db.delete(webhookDeliveries)
-      .where(eq(webhookDeliveries.subscriptionId, parseInt(id)));
-    
-    await db.delete(webhookSubscriptions)
+    // Vérifier que le webhook appartient à cette entreprise AVANT de supprimer
+    const [webhook] = await db.select({ id: webhookSubscriptions.id })
+      .from(webhookSubscriptions)
       .where(and(
         eq(webhookSubscriptions.id, parseInt(id)),
         eq(webhookSubscriptions.entrepriseId, req.entrepriseId)
       ));
+    
+    if (!webhook) {
+      return res.status(404).json({ success: false, error: 'Webhook non trouvé' });
+    }
+    
+    // Supprimer les deliveries liées
+    await db.delete(webhookDeliveries)
+      .where(eq(webhookDeliveries.subscriptionId, parseInt(id)));
+    
+    // Supprimer le webhook
+    await db.delete(webhookSubscriptions)
+      .where(eq(webhookSubscriptions.id, parseInt(id)));
     
     res.json({ success: true, message: 'Webhook supprimé' });
   } catch (error) {
@@ -277,6 +322,18 @@ router.delete('/webhooks/:id', async (req, res) => {
 router.get('/webhooks/:id/deliveries', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Vérifier que le webhook appartient à cette entreprise
+    const [webhook] = await db.select({ id: webhookSubscriptions.id })
+      .from(webhookSubscriptions)
+      .where(and(
+        eq(webhookSubscriptions.id, parseInt(id)),
+        eq(webhookSubscriptions.entrepriseId, req.entrepriseId)
+      ));
+    
+    if (!webhook) {
+      return res.status(404).json({ success: false, error: 'Webhook non trouvé' });
+    }
     
     const deliveries = await db.select()
       .from(webhookDeliveries)
@@ -311,7 +368,9 @@ router.post('/webhooks/:id/test', async (req, res) => {
       data: { message: 'Test de connexion depuis ComptaOrion', timestamp: new Date().toISOString() }
     };
     
-    const { timestamp, signature } = signPayload(testPayload, webhook.secret);
+    // Déchiffrer le secret pour signer le payload
+    const decryptedSecret = decryptSecret(webhook.secret);
+    const { timestamp, signature } = signPayload(testPayload, decryptedSecret);
     
     const startTime = Date.now();
     let response, responseStatus, responseBody, durationMs;
