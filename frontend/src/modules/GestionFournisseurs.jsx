@@ -822,11 +822,11 @@ export function GestionFournisseurs() {
                     <tr style={{ backgroundColor: '#f8f9fa' }}>
                       {drillModal.type === 'fournisseurs' ? (
                         <>
-                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Nom</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Raison Sociale</th>
                           <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Email</th>
                           <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Téléphone</th>
-                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Ville</th>
-                          <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Évaluation</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Catégorie</th>
+                          <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Statut</th>
                         </>
                       ) : drillModal.type === 'achats' ? (
                         <>
@@ -852,18 +852,28 @@ export function GestionFournisseurs() {
                       <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
                         {drillModal.type === 'fournisseurs' ? (
                           <>
-                            <td style={{ padding: '10px' }}>{item.nom}</td>
+                            <td style={{ padding: '10px', fontWeight: 'bold' }}>{item.nom}</td>
                             <td style={{ padding: '10px' }}>{item.email || '-'}</td>
                             <td style={{ padding: '10px' }}>{item.telephone || '-'}</td>
-                            <td style={{ padding: '10px' }}>{item.ville || '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'center' }}>{'⭐'.repeat(item.evaluation || 3)}</td>
+                            <td style={{ padding: '10px' }}>{item.categorie || '-'}</td>
+                            <td style={{ padding: '10px', textAlign: 'center' }}>
+                              <span style={{ 
+                                padding: '4px 8px', 
+                                borderRadius: '4px', 
+                                fontSize: '12px',
+                                backgroundColor: item.actif ? '#e8f5e9' : '#ffebee',
+                                color: item.actif ? '#2e7d32' : '#c62828'
+                              }}>
+                                {item.actif ? 'Actif' : 'Inactif'}
+                              </span>
+                            </td>
                           </>
                         ) : drillModal.type === 'achats' ? (
                           <>
                             <td style={{ padding: '10px' }}>{item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}</td>
                             <td style={{ padding: '10px' }}>{item.numero}</td>
                             <td style={{ padding: '10px' }}>{item.fournisseur || '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#f57c00' }}>{parseFloat(item.montant || 0).toLocaleString()} FCFA</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#f57c00' }}>{parseFloat(item.montant || 0).toLocaleString('fr-FR')} FCFA</td>
                             <td style={{ padding: '10px', textAlign: 'center' }}>{item.statut || '-'}</td>
                           </>
                         ) : (
@@ -872,7 +882,7 @@ export function GestionFournisseurs() {
                             <td style={{ padding: '10px' }}>{item.fournisseur || '-'}</td>
                             <td style={{ padding: '10px' }}>{item.modePaiement || '-'}</td>
                             <td style={{ padding: '10px' }}>{item.reference || '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#388e3c' }}>{parseFloat(item.montant || 0).toLocaleString()} FCFA</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#388e3c' }}>{parseFloat(item.montant || 0).toLocaleString('fr-FR')} FCFA</td>
                           </>
                         )}
                       </tr>
@@ -883,7 +893,7 @@ export function GestionFournisseurs() {
                       <tr style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
                         <td colSpan={3} style={{ padding: '12px' }}>TOTAL</td>
                         <td style={{ padding: '12px', textAlign: 'right' }}>
-                          {drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || 0), 0).toLocaleString()} FCFA
+                          {drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || 0), 0).toLocaleString('fr-FR')} FCFA
                         </td>
                         <td></td>
                       </tr>

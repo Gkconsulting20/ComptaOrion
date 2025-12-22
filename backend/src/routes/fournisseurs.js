@@ -685,16 +685,16 @@ router.get('/detail/fournisseurs', async (req, res) => {
     const fournisseursData = await db
       .select({
         id: fournisseurs.id,
-        nom: fournisseurs.nom,
+        nom: fournisseurs.raisonSociale,
         email: fournisseurs.email,
         telephone: fournisseurs.telephone,
-        ville: fournisseurs.ville,
-        evaluation: fournisseurs.evaluation,
+        ville: fournisseurs.adresse,
+        categorie: fournisseurs.categorie,
         actif: fournisseurs.actif
       })
       .from(fournisseurs)
       .where(eq(fournisseurs.entrepriseId, eId))
-      .orderBy(desc(fournisseurs.createdAt));
+      .orderBy(desc(fournisseurs.raisonSociale));
     
     res.json(fournisseursData);
   } catch (error) {
