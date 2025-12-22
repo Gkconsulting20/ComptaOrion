@@ -977,26 +977,25 @@ export const ecritures = pgTable('ecritures', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   journalId: integer('journal_id').references(() => journaux.id).notNull(),
+  numeroEcriture: varchar('numero_ecriture', { length: 100 }),
   dateEcriture: date('date_ecriture').notNull(),
-  reference: varchar('reference', { length: 100 }),
-  description: text('description'),
-  statut: varchar('statut', { length: 50 }).default('brouillon'), // brouillon, validée, clôturée
-  totalDebit: decimal('total_debit', { precision: 15, scale: 2 }).default('0'),
-  totalCredit: decimal('total_credit', { precision: 15, scale: 2 }).default('0'),
+  libelle: text('libelle'),
+  numeroPiece: varchar('numero_piece', { length: 100 }),
+  valide: boolean('valide').default(false),
+  userId: integer('user_id'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Lignes d'écritures (débit/crédit)
-export const lignesEcritures = pgTable('lignes_ecritures', {
+export const lignesEcritures = pgTable('lignes_ecriture', {
   id: serial('id').primaryKey(),
-  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   ecritureId: integer('ecriture_id').references(() => ecritures.id).notNull(),
-  compteId: integer('compte_id').references(() => comptes.id).notNull(),
-  montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
-  type: varchar('type', { length: 20 }), // debit, credit
-  description: text('description'),
-  createdAt: timestamp('created_at').defaultNow(),
+  compteComptableId: integer('compte_comptable_id').references(() => comptesComptables.id).notNull(),
+  debit: decimal('debit', { precision: 15, scale: 2 }).default('0'),
+  credit: decimal('credit', { precision: 15, scale: 2 }).default('0'),
+  libelle: text('libelle'),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id),
 });
 
 // Soldes comptables (cache)

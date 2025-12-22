@@ -865,63 +865,43 @@ router.get('/balance', async (req, res) => {
 // Bilan Comptable
 router.get('/bilan', async (req, res) => {
   try {
-    const { entrepriseId, dateDebut, dateFin } = req.query;
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const { dateDebut, dateFin } = req.query;
     
-    // Récupérer tous les comptes et leurs soldes
-    const comptesData = await db.query.comptes.findMany({
-      where: eq(comptes.entrepriseId, parseInt(entrepriseId))
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+
+    // Récupérer tous les comptes comptables
+    const comptesData = await db.query.comptesComptables.findMany({
+      where: eq(comptesComptables.entrepriseId, entrepriseId)
     });
 
-    // Calculer les soldes basés sur les écritures validées avec JOIN
-    let query = db
+    // Calculer les soldes basés sur les écritures validées
+    const conditions = [eq(lignesEcritures.entrepriseId, entrepriseId)];
+    if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
+    if (dateFin) conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
+
+    const lignes = await db
       .select({
-        compteId: lignesEcritures.compteId,
-        montant: lignesEcritures.montant,
-        type: lignesEcritures.type
+        compteId: lignesEcritures.compteComptableId,
+        debit: lignesEcritures.debit,
+        credit: lignesEcritures.credit
       })
       .from(lignesEcritures)
       .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
-      .where(
-        and(
-          eq(lignesEcritures.entrepriseId, parseInt(entrepriseId)),
-          eq(ecritures.statut, 'validée')
-        )
-      );
-    
-    if (dateDebut) {
-      query = query.where(
-        and(
-          eq(lignesEcritures.entrepriseId, parseInt(entrepriseId)),
-          eq(ecritures.statut, 'validée'),
-          gte(ecritures.dateEcriture, new Date(dateDebut))
-        )
-      );
-    }
-    if (dateFin) {
-      const conditions = [
-        eq(lignesEcritures.entrepriseId, parseInt(entrepriseId)),
-        eq(ecritures.statut, 'validée'),
-        lte(ecritures.dateEcriture, new Date(dateFin))
-      ];
-      if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
-      query = query.where(and(...conditions));
-    }
-    
-    const lignes = await query;
+      .where(and(...conditions));
 
-    const soldesComptes = {};
+    // Calculer les soldes par compte (débit - crédit)
+    const soldesMap = {};
     lignes.forEach(ligne => {
-      if (!soldesComptes[ligne.compteId]) {
-        soldesComptes[ligne.compteId] = 0;
+      if (!soldesMap[ligne.compteId]) {
+        soldesMap[ligne.compteId] = 0;
       }
-      if (ligne.type === 'debit') {
-        soldesComptes[ligne.compteId] += parseFloat(ligne.montant);
-      } else {
-        soldesComptes[ligne.compteId] -= parseFloat(ligne.montant);
-      }
+      soldesMap[ligne.compteId] += parseFloat(ligne.debit || 0) - parseFloat(ligne.credit || 0);
     });
 
-    // Classifier les comptes
+    // Classifier les comptes selon SYSCOHADA
     const bilan = {
       actif: {
         immobilisations: [],
@@ -937,23 +917,38 @@ router.get('/bilan', async (req, res) => {
     };
 
     comptesData.forEach(compte => {
-      const solde = soldesComptes[compte.id] || 0;
-      const item = { compte: compte.numero, nom: compte.nom, montant: solde };
+      const solde = soldesMap[compte.id] || 0;
+      if (solde === 0) return;
+      
+      const item = { compte: compte.numero, nom: compte.nom, montant: Math.abs(solde) };
 
-      if (compte.categorie === 'Actif') {
-        if (compte.numero.startsWith('2')) bilan.actif.immobilisations.push(item);
-        else if (compte.numero.startsWith('3') || compte.numero.startsWith('4')) bilan.actif.stocksCreances.push(item);
-        else if (compte.numero.startsWith('5')) bilan.actif.tresorerie.push(item);
+      // Classes SYSCOHADA: 1=Capitaux, 2=Immob, 3=Stocks, 4=Tiers, 5=Trésorerie, 6=Charges, 7=Produits
+      const classe = compte.numero.charAt(0);
+      
+      if (['2'].includes(classe)) {
+        bilan.actif.immobilisations.push(item);
+        bilan.actif.total += Math.abs(solde);
+      } else if (['3'].includes(classe)) {
+        bilan.actif.stocksCreances.push(item);
+        bilan.actif.total += Math.abs(solde);
+      } else if (['4'].includes(classe) && solde > 0) {
+        bilan.actif.stocksCreances.push(item);
         bilan.actif.total += solde;
-      } else if (compte.categorie === 'Passif' || compte.categorie === 'Capitaux propres') {
-        if (compte.numero.startsWith('1')) bilan.passif.capitauxPropres.push(item);
-        else bilan.passif.dettes.push(item);
+      } else if (['4'].includes(classe) && solde < 0) {
+        bilan.passif.dettes.push(item);
+        bilan.passif.total += Math.abs(solde);
+      } else if (['5'].includes(classe)) {
+        bilan.actif.tresorerie.push(item);
+        bilan.actif.total += Math.abs(solde);
+      } else if (['1'].includes(classe)) {
+        bilan.passif.capitauxPropres.push(item);
         bilan.passif.total += Math.abs(solde);
       }
     });
 
     res.json(bilan);
   } catch (error) {
+    console.error('Erreur bilan:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -961,40 +956,42 @@ router.get('/bilan', async (req, res) => {
 // Compte de Résultat
 router.get('/compte-resultat', async (req, res) => {
   try {
-    const { entrepriseId, dateDebut, dateFin } = req.query;
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const { dateDebut, dateFin } = req.query;
 
-    const comptesData = await db.query.comptes.findMany({
-      where: eq(comptes.entrepriseId, parseInt(entrepriseId))
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+
+    // Récupérer tous les comptes comptables
+    const comptesData = await db.query.comptesComptables.findMany({
+      where: eq(comptesComptables.entrepriseId, entrepriseId)
     });
 
     // Construire les conditions de filtrage
-    const conditions = [
-      eq(lignesEcritures.entrepriseId, parseInt(entrepriseId)),
-      eq(ecritures.statut, 'validée')
-    ];
+    const conditions = [eq(lignesEcritures.entrepriseId, entrepriseId)];
     if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
     if (dateFin) conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
 
     const lignes = await db
       .select({
-        compteId: lignesEcritures.compteId,
-        montant: lignesEcritures.montant,
-        type: lignesEcritures.type
+        compteId: lignesEcritures.compteComptableId,
+        debit: lignesEcritures.debit,
+        credit: lignesEcritures.credit
       })
       .from(lignesEcritures)
       .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
       .where(and(...conditions));
 
-    const soldesComptes = {};
+    // Calculer les soldes par compte
+    const soldesMap = {};
     lignes.forEach(ligne => {
-      if (!soldesComptes[ligne.compteId]) {
-        soldesComptes[ligne.compteId] = 0;
+      if (!soldesMap[ligne.compteId]) {
+        soldesMap[ligne.compteId] = 0;
       }
-      if (ligne.type === 'debit') {
-        soldesComptes[ligne.compteId] += parseFloat(ligne.montant);
-      } else {
-        soldesComptes[ligne.compteId] -= parseFloat(ligne.montant);
-      }
+      // Pour les produits (classe 7): crédit - débit = solde positif
+      // Pour les charges (classe 6): débit - crédit = solde positif
+      soldesMap[ligne.compteId] += parseFloat(ligne.credit || 0) - parseFloat(ligne.debit || 0);
     });
 
     const resultat = {
@@ -1015,20 +1012,26 @@ router.get('/compte-resultat', async (req, res) => {
     };
 
     comptesData.forEach(compte => {
-      const solde = Math.abs(soldesComptes[compte.id] || 0);
-      const item = { compte: compte.numero, nom: compte.nom, montant: solde };
+      const solde = soldesMap[compte.id] || 0;
+      if (solde === 0) return;
+      
+      const classe = compte.numero.charAt(0);
+      const item = { compte: compte.numero, nom: compte.nom, montant: Math.abs(solde) };
 
-      if (compte.categorie === 'Produits') {
+      // Classe 7 = Produits (solde créditeur)
+      if (classe === '7') {
         if (compte.numero.startsWith('70')) resultat.produits.ventesMarchandises.push(item);
         else if (compte.numero.startsWith('71') || compte.numero.startsWith('72')) resultat.produits.prestationsServices.push(item);
         else resultat.produits.autresProduits.push(item);
-        resultat.produits.total += solde;
-      } else if (compte.categorie === 'Charges') {
+        resultat.produits.total += Math.abs(solde);
+      }
+      // Classe 6 = Charges (solde débiteur)
+      else if (classe === '6') {
         if (compte.numero.startsWith('60')) resultat.charges.achats.push(item);
         else if (compte.numero.startsWith('61') || compte.numero.startsWith('62')) resultat.charges.services.push(item);
         else if (compte.numero.startsWith('63') || compte.numero.startsWith('64')) resultat.charges.personnel.push(item);
         else resultat.charges.autresCharges.push(item);
-        resultat.charges.total += solde;
+        resultat.charges.total += Math.abs(solde);
       }
     });
 
@@ -1036,6 +1039,7 @@ router.get('/compte-resultat', async (req, res) => {
 
     res.json(resultat);
   } catch (error) {
+    console.error('Erreur compte-resultat:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1043,12 +1047,20 @@ router.get('/compte-resultat', async (req, res) => {
 // Rapport des Journaux
 router.get('/rapport-journaux', async (req, res) => {
   try {
-    const { entrepriseId, dateDebut, dateFin } = req.query;
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const { dateDebut, dateFin } = req.query;
 
-    const conditions = [
-      eq(ecritures.entrepriseId, parseInt(entrepriseId)),
-      eq(ecritures.statut, 'validée')
-    ];
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+
+    // Récupérer les journaux
+    const journauxData = await db.query.journaux.findMany({
+      where: eq(journaux.entrepriseId, entrepriseId)
+    });
+
+    // Récupérer les écritures avec leurs lignes
+    const conditions = [eq(ecritures.entrepriseId, entrepriseId)];
     if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
     if (dateFin) conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
 
@@ -1056,19 +1068,36 @@ router.get('/rapport-journaux', async (req, res) => {
       .select({
         id: ecritures.id,
         journalId: ecritures.journalId,
+        numeroEcriture: ecritures.numeroEcriture,
         dateEcriture: ecritures.dateEcriture,
-        reference: ecritures.reference,
-        description: ecritures.description,
-        totalDebit: ecritures.totalDebit,
-        totalCredit: ecritures.totalCredit
+        libelle: ecritures.libelle,
+        numeroPiece: ecritures.numeroPiece,
+        valide: ecritures.valide
       })
       .from(ecritures)
       .where(and(...conditions));
 
-    const journauxData = await db.query.journaux.findMany({
-      where: eq(journaux.entrepriseId, parseInt(entrepriseId))
+    // Récupérer les totaux des lignes par écriture
+    const lignesData = await db
+      .select({
+        ecritureId: lignesEcritures.ecritureId,
+        debit: lignesEcritures.debit,
+        credit: lignesEcritures.credit
+      })
+      .from(lignesEcritures)
+      .where(eq(lignesEcritures.entrepriseId, entrepriseId));
+
+    // Calculer les totaux par écriture
+    const totauxParEcriture = {};
+    lignesData.forEach(l => {
+      if (!totauxParEcriture[l.ecritureId]) {
+        totauxParEcriture[l.ecritureId] = { debit: 0, credit: 0 };
+      }
+      totauxParEcriture[l.ecritureId].debit += parseFloat(l.debit || 0);
+      totauxParEcriture[l.ecritureId].credit += parseFloat(l.credit || 0);
     });
 
+    // Construire le rapport par journal
     const rapportParJournal = {};
     journauxData.forEach(journal => {
       rapportParJournal[journal.id] = {
@@ -1083,22 +1112,31 @@ router.get('/rapport-journaux', async (req, res) => {
 
     ecrituresData.forEach(ecriture => {
       if (rapportParJournal[ecriture.journalId]) {
-        rapportParJournal[ecriture.journalId].ecritures.push(ecriture);
-        rapportParJournal[ecriture.journalId].totalDebit += parseFloat(ecriture.totalDebit || 0);
-        rapportParJournal[ecriture.journalId].totalCredit += parseFloat(ecriture.totalCredit || 0);
+        const totaux = totauxParEcriture[ecriture.id] || { debit: 0, credit: 0 };
+        rapportParJournal[ecriture.journalId].ecritures.push({
+          ...ecriture,
+          totalDebit: totaux.debit,
+          totalCredit: totaux.credit
+        });
+        rapportParJournal[ecriture.journalId].totalDebit += totaux.debit;
+        rapportParJournal[ecriture.journalId].totalCredit += totaux.credit;
         rapportParJournal[ecriture.journalId].nombreEcritures++;
       }
     });
 
+    const totalDebit = Object.values(rapportParJournal).reduce((s, j) => s + j.totalDebit, 0);
+    const totalCredit = Object.values(rapportParJournal).reduce((s, j) => s + j.totalCredit, 0);
+
     res.json({
       journaux: Object.values(rapportParJournal),
       totaux: {
-        debit: ecrituresData.reduce((sum, e) => sum + parseFloat(e.totalDebit || 0), 0),
-        credit: ecrituresData.reduce((sum, e) => sum + parseFloat(e.totalCredit || 0), 0),
+        debit: totalDebit,
+        credit: totalCredit,
         nombreEcritures: ecrituresData.length
       }
     });
   } catch (error) {
+    console.error('Erreur rapport-journaux:', error);
     res.status(500).json({ error: error.message });
   }
 });
