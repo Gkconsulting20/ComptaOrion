@@ -4,10 +4,9 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: |
-      cd frontend && npm install && npm run build
-      cd ../backend && npm install
-    startCommand: cd backend && node src/main.js
+    rootDir: .
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV

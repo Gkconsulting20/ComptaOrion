@@ -1,13 +1,20 @@
 {
-  "name": "workspace",
+  "name": "comptaorion",
   "version": "1.0.0",
-  "description": "ComptaOrion Architecture Skeleton",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "description": "ComptaOrion - ERP Léger pour l'Afrique",
+  "main": "backend/src/main.js",
+  "type": "module",
+  "engines": {
+    "node": "20.x"
   },
-  "keywords": [],
-  "author": "",
+  "scripts": {
+    "start": "cd backend && node src/main.js",
+    "build": "cd frontend && npm install && npm run build",
+    "install:all": "cd frontend && npm install && cd ../backend && npm install",
+    "dev": "bash start.sh"
+  },
+  "keywords": ["erp", "accounting", "africa", "syscohada"],
+  "author": "GKConsulting",
   "license": "ISC",
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
