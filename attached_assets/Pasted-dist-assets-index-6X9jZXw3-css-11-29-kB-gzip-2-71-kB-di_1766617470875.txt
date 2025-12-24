@@ -1,0 +1,125 @@
+dist/assets/index-6X9jZXw3.css   11.29 kB │ gzip:   2.71 kB
+dist/assets/index-Cdm8w6TM.js   534.25 kB │ gzip: 114.16 kB
+✓ built in 1.58s
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+==> Uploading build...
+==> Uploaded in 3.9s. Compression took 1.6s
+==> Build successful 🎉
+==> Running 'npm start'
+> comptaorion@1.0.0 start
+> cd backend && node src/main.js
+✅ Base de données PostgreSQL connectée
+⚠️  SENDGRID_API_KEY non configurée - Les emails ne seront pas envoyés
+file:///opt/render/project/src/backend/node_modules/openai/index.mjs:48
+            throw new Errors.OpenAIError("The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).");
+                  ^
+OpenAIError: The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).
+    at new OpenAI (file:///opt/render/project/src/backend/node_modules/openai/index.mjs:48:19)
+    at file:///opt/render/project/src/backend/src/routes/ia-assistant.js:6:16
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Node.js v20.19.6
+==> Running 'npm start'
+> comptaorion@1.0.0 start
+> cd backend && node src/main.js
+✅ Base de données PostgreSQL connectée
+⚠️  SENDGRID_API_KEY non configurée - Les emails ne seront pas envoyés
+file:///opt/render/project/src/backend/node_modules/openai/index.mjs:48
+            throw new Errors.OpenAIError("The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).");
+                  ^
+OpenAIError: The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).
+    at new OpenAI (file:///opt/render/project/src/backend/node_modules/openai/index.mjs:48:19)
+    at file:///opt/render/project/src/backend/src/routes/ia-assistant.js:6:16
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Node.js v20.19.6
+==> Cloning from https://github.com/Gkconsulting20/ComptaOrion
+==> Checking out commit 9c19c40ec9b34bae747fd894fa9f66bd101da7ed in branch main
+==> Requesting Node.js version 20.x
+==> Using Node.js version 20.19.6 via /opt/render/project/src/package.json
+==> Docs on specifying a Node.js version: https://render.com/docs/node-version
+==> Running build command 'rm -rf node_modules backend/node_modules frontend/node_modules && npm run install:all && npm run build'...
+> comptaorion@1.0.0 install:all
+> cd frontend && npm install && cd ../backend && npm install
+added 66 packages, and audited 67 packages in 2s
+7 packages are looking for funding
+  run `npm fund` for details
+2 moderate severity vulnerabilities
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+Run `npm audit` for details.
+added 176 packages, and audited 177 packages in 3s
+21 packages are looking for funding
+  run `npm fund` for details
+8 vulnerabilities (4 moderate, 4 high)
+To address issues that do not require attention, run:
+  npm audit fix
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+Some issues need review, and may require choosing
+a different dependency.
+Run `npm audit` for details.
+> comptaorion@1.0.0 build
+> cd frontend && npm install && npm run build
+up to date, audited 67 packages in 655ms
+7 packages are looking for funding
+  run `npm fund` for details
+2 moderate severity vulnerabilities
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+Run `npm audit` for details.
+> comptaorion-frontend@1.0.0 build
+> vite build
+vite v5.4.21 building for production...
+transforming...
+✓ 54 modules transformed.
+rendering chunks...
+computing gzip size...
+(!) Some chunks are larger than 500 kB after minification. Consider:
+dist/index.html                   0.60 kB │ gzip:   0.36 kB
+- Using dynamic import() to code-split the application
+dist/assets/index-6X9jZXw3.css   11.29 kB │ gzip:   2.71 kB
+dist/assets/index-Cdm8w6TM.js   534.25 kB │ gzip: 114.16 kB
+✓ built in 1.58s
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+==> Uploading build...
+==> Uploaded in 3.9s. Compression took 1.6s
+==> Build successful 🎉
+==> Setting WEB_CONCURRENCY=1 by default, based on available CPUs in the instance
+==> Deploying...
+==> Running 'npm start'
+> comptaorion@1.0.0 start
+> cd backend && node src/main.js
+✅ Base de données PostgreSQL connectée
+⚠️  SENDGRID_API_KEY non configurée - Les emails ne seront pas envoyés
+file:///opt/render/project/src/backend/node_modules/openai/index.mjs:48
+            throw new Errors.OpenAIError("The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).");
+                  ^
+OpenAIError: The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).
+    at new OpenAI (file:///opt/render/project/src/backend/node_modules/openai/index.mjs:48:19)
+    at file:///opt/render/project/src/backend/src/routes/ia-assistant.js:6:16
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Node.js v20.19.6
+==> Exited with status 1
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+==> Running 'npm start'
+> comptaorion@1.0.0 start
+> cd backend && node src/main.js
+✅ Base de données PostgreSQL connectée
+⚠️  SENDGRID_API_KEY non configurée - Les emails ne seront pas envoyés
+file:///opt/render/project/src/backend/node_modules/openai/index.mjs:48
+            throw new Errors.OpenAIError("The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).");
+                  ^
+OpenAIError: The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).
+    at new OpenAI (file:///opt/render/project/src/backend/node_modules/openai/index.mjs:48:19)
+    at file:///opt/render/project/src/backend/src/routes/ia-assistant.js:6:16
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Node.js v20.19.6

@@ -3,13 +3,27 @@ import OpenAI from 'openai';
 
 const router = Router();
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
-});
+let openai = null;
+const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+
+if (apiKey) {
+  openai = new OpenAI({
+    apiKey: apiKey,
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
+  });
+  console.log('✅ OpenAI configuré avec succès');
+} else {
+  console.log('⚠️  OPENAI_API_KEY non configurée - L\'assistant IA sera désactivé');
+}
 
 router.post('/chat', async (req, res) => {
   try {
+    if (!openai) {
+      return res.status(503).json({ 
+        error: 'L\'assistant IA n\'est pas configuré. Veuillez ajouter OPENAI_API_KEY dans les variables d\'environnement.' 
+      });
+    }
+
     const { message, conversationHistory = [] } = req.body;
     const { entrepriseId } = req;
 
