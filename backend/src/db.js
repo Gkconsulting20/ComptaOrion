@@ -1,9 +1,9 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
+import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
+import { drizzle as drizzleNeon } from 'drizzle-orm/neon-serverless';
+import pg from 'pg';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import ws from 'ws';
 import * as schema from './schema.js';
-
-neonConfig.webSocketConstructor = ws;
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -11,29 +11,46 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Utiliser le connection pooler de Neon pour éviter "too many connections"
-function getPooledConnectionString(url) {
-  try {
-    const parsed = new URL(url);
-    // Ajouter -pooler au hostname si pas déjà présent
-    if (!parsed.hostname.includes('-pooler')) {
-      parsed.hostname = parsed.hostname.replace(
-        /^([^.]+)(\..*)/,
-        '$1-pooler$2'
-      );
+const isNeon = process.env.DATABASE_URL.includes('neon.tech');
+const isProduction = process.env.NODE_ENV === 'production';
+
+let pool;
+let db;
+
+if (isNeon) {
+  neonConfig.webSocketConstructor = ws;
+  
+  function getPooledConnectionString(url) {
+    try {
+      const parsed = new URL(url);
+      if (!parsed.hostname.includes('-pooler')) {
+        parsed.hostname = parsed.hostname.replace(/^([^.]+)(.*)/, '$1-pooler$2');
+      }
+      return parsed.toString();
+    } catch (e) {
+      return url;
     }
-    return parsed.toString();
-  } catch (e) {
-    return url;
   }
+  
+  const connectionString = getPooledConnectionString(process.env.DATABASE_URL);
+  pool = new NeonPool({ 
+    connectionString,
+    max: 3,
+    idleTimeoutMillis: 20000,
+    connectionTimeoutMillis: 10000
+  });
+  db = drizzleNeon({ client: pool, schema });
+  console.log('✅ Base de données Neon connectée');
+} else {
+  pool = new pg.Pool({ 
+    connectionString: process.env.DATABASE_URL,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+    ssl: isProduction ? { rejectUnauthorized: false } : false
+  });
+  db = drizzlePg({ client: pool, schema });
+  console.log('✅ Base de données PostgreSQL connectée');
 }
 
-const connectionString = getPooledConnectionString(process.env.DATABASE_URL);
-
-export const pool = new Pool({ 
-  connectionString,
-  max: 3,
-  idleTimeoutMillis: 20000,
-  connectionTimeoutMillis: 10000
-});
-export const db = drizzle({ client: pool, schema });
+export { pool, db };
