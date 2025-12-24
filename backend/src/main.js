@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 
 const isProduction = process.env.NODE_ENV === 'production';
-const PORT = isProduction ? 5000 : (process.env.BACKEND_PORT || 3000);
+const PORT = process.env.PORT || (isProduction ? 5000 : 3000);
 
 async function ensureAdminExists() {
   try {
