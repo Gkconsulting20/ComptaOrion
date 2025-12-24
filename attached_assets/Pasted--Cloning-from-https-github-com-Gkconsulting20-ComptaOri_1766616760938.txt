@@ -1,0 +1,60 @@
+==> Cloning from https://github.com/Gkconsulting20/ComptaOrion
+==> Checking out commit ace7c3d5c502daeeb130a0881913cbc37a724834 in branch main
+==> Requesting Node.js version 20.x
+==> Using Node.js version 20.19.6 via /opt/render/project/src/package.json
+==> Docs on specifying a Node.js version: https://render.com/docs/node-version
+==> Running build command 'npm run install:all && npm run build'...
+> comptaorion@1.0.0 install:all
+> cd frontend && npm install && cd ../backend && npm install
+added 8 packages, and audited 9 packages in 672ms
+found 0 vulnerabilities
+added 176 packages, and audited 177 packages in 3s
+21 packages are looking for funding
+  run `npm fund` for details
+8 vulnerabilities (4 moderate, 4 high)
+To address issues that do not require attention, run:
+  npm audit fix
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+Some issues need review, and may require choosing
+a different dependency.
+Run `npm audit` for details.
+> comptaorion@1.0.0 build
+> cd frontend && npm install && npm run build
+up to date, audited 9 packages in 574ms
+found 0 vulnerabilities
+> comptaorion-frontend@1.0.0 build
+> vite build
+sh: 1: vite: not found
+==> Build failed 😞
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+==> Cloning from https://github.com/Gkconsulting20/ComptaOrion
+==> Checking out commit ace7c3d5c502daeeb130a0881913cbc37a724834 in branch main
+==> Requesting Node.js version 20.x
+==> Using Node.js version 20.19.6 via /opt/render/project/src/package.json
+==> Docs on specifying a Node.js version: https://render.com/docs/node-version
+==> Running build command 'npm run install:all && npm run build'...
+> comptaorion@1.0.0 install:all
+> cd frontend && npm install && cd ../backend && npm install
+added 8 packages, and audited 9 packages in 672ms
+found 0 vulnerabilities
+added 176 packages, and audited 177 packages in 3s
+21 packages are looking for funding
+  run `npm fund` for details
+8 vulnerabilities (4 moderate, 4 high)
+To address issues that do not require attention, run:
+  npm audit fix
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+Some issues need review, and may require choosing
+a different dependency.
+Run `npm audit` for details.
+> comptaorion@1.0.0 build
+> cd frontend && npm install && npm run build
+up to date, audited 9 packages in 574ms
+found 0 vulnerabilities
+> comptaorion-frontend@1.0.0 build
+> vite build
+sh: 1: vite: not found
+==> Build failed 😞
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
