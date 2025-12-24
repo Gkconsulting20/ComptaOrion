@@ -2,7 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { saasCommerciaux, saasClients, saasVentes, plansAbonnement, abonnements, facturesAbonnement, entreprises } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 

@@ -16,13 +16,5 @@
   "keywords": ["erp", "accounting", "africa", "syscohada"],
   "author": "GKConsulting",
   "license": "ISC",
-  "dependencies": {
-    "@sendgrid/mail": "^8.1.6",
-    "bcrypt": "^6.0.0",
-    "fedapay": "^1.2.5",
-    "multer": "^2.0.2",
-    "openai": "^6.9.1",
-    "recharts": "^3.4.1",
-    "xlsx": "^0.18.5"
-  }
+  "dependencies": {}
 }

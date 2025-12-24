@@ -2,7 +2,7 @@ import app from './app.js';
 import { db } from './db.js';
 import { users, entreprises } from './schema.js';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = process.env.PORT || (isProduction ? 5000 : 3000);
