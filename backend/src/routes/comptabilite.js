@@ -236,31 +236,31 @@ router.post('/init-syscohada', async (req, res) => {
 // Bilan comptable
 router.get('/rapports/bilan', async (req, res) => {
   try {
-    const { entrepriseId, dateDebut, dateFin } = req.query;
-    const eId = parseInt(entrepriseId);
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
     
-    // Récupérer tous les comptes avec leurs soldes
-    const allComptes = await db.query.comptes.findMany({
-      where: eq(comptes.entrepriseId, eId)
+    // Récupérer tous les comptes comptables
+    const allComptes = await db.query.comptesComptables.findMany({
+      where: eq(comptesComptables.entrepriseId, eId)
     });
     
     // Calculer les soldes à partir des écritures
     const ecrituresData = await db.execute(sql`
-      SELECT le.compte_id, 
+      SELECT le.compte_comptable_id, 
              SUM(COALESCE(le.debit, 0)) as total_debit,
              SUM(COALESCE(le.credit, 0)) as total_credit
       FROM lignes_ecriture le
       JOIN ecritures e ON le.ecriture_id = e.id
       WHERE e.entreprise_id = ${eId}
-      ${dateDebut ? sql`AND e.date >= ${dateDebut}` : sql``}
-      ${dateFin ? sql`AND e.date <= ${dateFin}` : sql``}
-      GROUP BY le.compte_id
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      GROUP BY le.compte_comptable_id
     `);
     
     const soldesMap = {};
     const rows = ecrituresData.rows || ecrituresData || [];
     rows.forEach(row => {
-      soldesMap[row.compte_id] = {
+      soldesMap[row.compte_comptable_id] = {
         debit: parseFloat(row.total_debit || 0),
         credit: parseFloat(row.total_credit || 0)
       };
@@ -313,29 +313,29 @@ router.get('/rapports/bilan', async (req, res) => {
 // Compte de résultat
 router.get('/rapports/resultat', async (req, res) => {
   try {
-    const { entrepriseId, dateDebut, dateFin } = req.query;
-    const eId = parseInt(entrepriseId);
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
     
-    const allComptes = await db.query.comptes.findMany({
-      where: eq(comptes.entrepriseId, eId)
+    const allComptes = await db.query.comptesComptables.findMany({
+      where: eq(comptesComptables.entrepriseId, eId)
     });
     
     const ecrituresData = await db.execute(sql`
-      SELECT le.compte_id, 
+      SELECT le.compte_comptable_id, 
              SUM(COALESCE(le.debit, 0)) as total_debit,
              SUM(COALESCE(le.credit, 0)) as total_credit
       FROM lignes_ecriture le
       JOIN ecritures e ON le.ecriture_id = e.id
       WHERE e.entreprise_id = ${eId}
-      ${dateDebut ? sql`AND e.date >= ${dateDebut}` : sql``}
-      ${dateFin ? sql`AND e.date <= ${dateFin}` : sql``}
-      GROUP BY le.compte_id
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      GROUP BY le.compte_comptable_id
     `);
     
     const soldesMap = {};
     const rows = ecrituresData.rows || ecrituresData || [];
     rows.forEach(row => {
-      soldesMap[row.compte_id] = {
+      soldesMap[row.compte_comptable_id] = {
         debit: parseFloat(row.total_debit || 0),
         credit: parseFloat(row.total_credit || 0)
       };
