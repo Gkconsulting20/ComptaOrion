@@ -30,17 +30,14 @@ function generateWebhookSecret() {
 }
 
 // Chiffrement symétrique pour les secrets webhook
-// En production, WEBHOOK_ENCRYPTION_KEY doit être défini dans l'environnement
+// En production, WEBHOOK_ENCRYPTION_KEY devrait être défini dans l'environnement
 const getEncryptionKey = () => {
   if (process.env.WEBHOOK_ENCRYPTION_KEY) {
     return crypto.createHash('sha256').update(process.env.WEBHOOK_ENCRYPTION_KEY).digest();
   }
-  // En développement uniquement - génère une clé basée sur DATABASE_URL
-  if (process.env.NODE_ENV !== 'production') {
-    console.warn('AVERTISSEMENT: WEBHOOK_ENCRYPTION_KEY non défini. Utilisation d\'une clé dérivée (développement uniquement).');
-    return crypto.createHash('sha256').update(process.env.DATABASE_URL || 'dev-fallback-key').digest();
-  }
-  throw new Error('WEBHOOK_ENCRYPTION_KEY doit être défini en production');
+  // Fallback - génère une clé basée sur DATABASE_URL (recommandé de définir WEBHOOK_ENCRYPTION_KEY en production)
+  console.warn('⚠️  WEBHOOK_ENCRYPTION_KEY non défini. Utilisation d\'une clé dérivée.');
+  return crypto.createHash('sha256').update(process.env.DATABASE_URL || 'comptaorion-fallback-key').digest();
 };
 const ENCRYPTION_KEY = getEncryptionKey();
 

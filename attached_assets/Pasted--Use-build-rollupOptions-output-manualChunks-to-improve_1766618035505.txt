@@ -1,0 +1,42 @@
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.43s
+==> Uploading build...
+==> Uploaded in 4.6s. Compression took 2.4s
+==> Build successful 🎉
+==> Setting WEB_CONCURRENCY=1 by default, based on available CPUs in the instance
+==> Deploying...
+==> Running 'npm start'
+> comptaorion@1.0.0 start
+> cd backend && node src/main.js
+✅ Base de données PostgreSQL connectée
+⚠️  SENDGRID_API_KEY non configurée - Les emails ne seront pas envoyés
+⚠️  OPENAI_API_KEY non configurée - L'assistant IA sera désactivé
+file:///opt/render/project/src/backend/src/routes/integrations.js:43
+  throw new Error('WEBHOOK_ENCRYPTION_KEY doit être défini en production');
+        ^
+Error: WEBHOOK_ENCRYPTION_KEY doit être défini en production
+    at getEncryptionKey (file:///opt/render/project/src/backend/src/routes/integrations.js:43:9)
+    at file:///opt/render/project/src/backend/src/routes/integrations.js:45:24
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Node.js v20.19.6
+==> Exited with status 1
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+==> Running 'npm start'
+> comptaorion@1.0.0 start
+> cd backend && node src/main.js
+✅ Base de données PostgreSQL connectée
+⚠️  SENDGRID_API_KEY non configurée - Les emails ne seront pas envoyés
+⚠️  OPENAI_API_KEY non configurée - L'assistant IA sera désactivé
+file:///opt/render/project/src/backend/src/routes/integrations.js:43
+  throw new Error('WEBHOOK_ENCRYPTION_KEY doit être défini en production');
+        ^
+Error: WEBHOOK_ENCRYPTION_KEY doit être défini en production
+    at getEncryptionKey (file:///opt/render/project/src/backend/src/routes/integrations.js:43:9)
+    at file:///opt/render/project/src/backend/src/routes/integrations.js:45:24
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Node.js v20.19.6
