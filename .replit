@@ -42,7 +42,8 @@ externalPort = 80
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["bash", "start.sh"]
+run = ["bash", "-c", "cd backend && NODE_ENV=production node src/main.js"]
+build = ["bash", "-c", "cd frontend && npm run build"]
 
 [userenv]
 

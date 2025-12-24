@@ -4,7 +4,8 @@ import { users, entreprises } from './schema.js';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 
-const PORT = process.env.BACKEND_PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
+const PORT = isProduction ? 5000 : (process.env.BACKEND_PORT || 3000);
 
 async function ensureAdminExists() {
   try {
@@ -52,7 +53,8 @@ async function ensureAdminExists() {
   }
 }
 
-app.listen(PORT, '127.0.0.1', async () => {
-  console.log(`ComptaOrion Backend running on http://127.0.0.1:${PORT}`);
+const HOST = isProduction ? '0.0.0.0' : '127.0.0.1';
+app.listen(PORT, HOST, async () => {
+  console.log(`ComptaOrion Backend running on http://${HOST}:${PORT} (${isProduction ? 'production' : 'development'})`);
   await ensureAdminExists();
 });
