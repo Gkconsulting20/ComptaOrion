@@ -1228,12 +1228,30 @@ export function ModuleComptabilite() {
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               backgroundColor: rapportModal.type === 'bilan' ? '#e3f2fd' : '#f3e5f5'
             }}>
-              <h3 style={{ margin: 0, fontSize: '18px', color: rapportModal.type === 'bilan' ? '#1976d2' : '#7b1fa2' }}>
-                {rapportModal.type === 'bilan' ? '📄 Bilan Comptable' : '📊 Compte de Résultat'}
-              </h3>
-              <button onClick={() => setRapportModal({ open: false, type: null, data: null, loading: false })} style={{
-                background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666'
-              }}>&times;</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                {rapportModal.data?.entreprise?.logo && (
+                  <img src={rapportModal.data.entreprise.logo} alt="Logo" 
+                    style={{ height: '45px', width: 'auto', objectFit: 'contain', borderRadius: '4px' }} />
+                )}
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', color: rapportModal.type === 'bilan' ? '#1976d2' : '#7b1fa2' }}>
+                    {rapportModal.type === 'bilan' ? '📄 Bilan Comptable' : '📊 Compte de Résultat'}
+                  </h3>
+                  {rapportModal.data?.entreprise?.nom && (
+                    <div style={{ fontSize: '13px', color: '#666', marginTop: '2px' }}>
+                      {rapportModal.data.entreprise.nom}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '12px', color: '#888', background: '#f5f5f5', padding: '4px 10px', borderRadius: '4px' }}>
+                  {periode.dateDebut} au {periode.dateFin}
+                </span>
+                <button onClick={() => setRapportModal({ open: false, type: null, data: null, loading: false })} style={{
+                  background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666'
+                }}>&times;</button>
+              </div>
             </div>
             <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
               {rapportModal.loading ? (
@@ -1408,7 +1426,7 @@ export function ModuleComptabilite() {
                           <div key={i} onClick={async () => {
                             setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
                             try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.compteId}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
                               setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
                             } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
                           }} style={{ 
@@ -1429,7 +1447,7 @@ export function ModuleComptabilite() {
                           <div key={i} onClick={async () => {
                             setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
                             try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.compteId}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
                               setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
                             } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
                           }} style={{ 
@@ -1460,7 +1478,7 @@ export function ModuleComptabilite() {
                           <div key={i} onClick={async () => {
                             setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
                             try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.compteId}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
                               setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
                             } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
                           }} style={{ 
@@ -1481,7 +1499,7 @@ export function ModuleComptabilite() {
                           <div key={i} onClick={async () => {
                             setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
                             try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.compteId}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
                               setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
                             } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
                           }} style={{ 

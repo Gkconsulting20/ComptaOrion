@@ -274,7 +274,11 @@ router.get('/rapports/bilan', async (req, res) => {
       const solde = soldesMap[compte.id] || { debit: 0, credit: 0 };
       const soldeFinal = solde.debit - solde.credit;
       
+      // Ignorer les comptes sans solde
+      if (soldeFinal === 0) return;
+      
       const compteData = {
+        id: compte.id,
         numero: compte.numero,
         nom: compte.nom,
         solde: Math.abs(soldeFinal)
@@ -300,7 +304,16 @@ router.get('/rapports/bilan', async (req, res) => {
       }
     });
     
+    // Récupérer les infos de l'entreprise pour le logo
+    const entreprise = await db.query.entreprises.findFirst({
+      where: eq(entreprises.id, eId)
+    });
+    
     res.json({
+      entreprise: {
+        nom: entreprise?.nom,
+        logo: entreprise?.logo
+      },
       actif,
       passif,
       equilibre: Math.abs(actif.total - passif.total) < 0.01
@@ -348,13 +361,15 @@ router.get('/rapports/resultat', async (req, res) => {
       const solde = soldesMap[compte.id] || { debit: 0, credit: 0 };
       
       const compteData = {
-        numero: compte.numero,
+        id: compte.id,
+        compte: compte.numero,
         nom: compte.nom,
         montant: 0
       };
       
       if (compte.numero.startsWith('6')) {
         compteData.montant = solde.debit;
+        if (compteData.montant === 0) return;
         if (compte.numero.startsWith('66') || compte.numero.startsWith('67')) {
           charges.financieres.push(compteData);
         } else {
@@ -363,6 +378,7 @@ router.get('/rapports/resultat', async (req, res) => {
         charges.total += compteData.montant;
       } else if (compte.numero.startsWith('7')) {
         compteData.montant = solde.credit;
+        if (compteData.montant === 0) return;
         if (compte.numero.startsWith('76') || compte.numero.startsWith('77')) {
           produits.financiers.push(compteData);
         } else {
@@ -378,7 +394,16 @@ router.get('/rapports/resultat', async (req, res) => {
                               charges.financieres.reduce((s, c) => s + c.montant, 0);
     const resultatNet = produits.total - charges.total;
     
+    // Récupérer les infos de l'entreprise pour le logo
+    const entreprise = await db.query.entreprises.findFirst({
+      where: eq(entreprises.id, eId)
+    });
+    
     res.json({
+      entreprise: {
+        nom: entreprise?.nom,
+        logo: entreprise?.logo
+      },
       charges,
       produits,
       resultatExploitation,
@@ -462,36 +487,35 @@ router.get('/compte/:compteId/ecritures', async (req, res) => {
       return res.status(400).json({ error: 'entrepriseId requis' });
     }
     
-    // Récupérer les lignes d'écritures pour ce compte
-    const lignes = await db.query.lignesEcritures.findMany({
-      where: eq(lignesEcritures.compteId, parseInt(compteId)),
-      with: {
-        ecriture: true
-      }
-    });
+    // Requête SQL directe pour récupérer les écritures du compte
+    const result = await db.execute(sql`
+      SELECT 
+        le.id,
+        e.date_ecriture as date,
+        e.libelle,
+        e.numero_piece as reference,
+        le.debit,
+        le.credit
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      WHERE le.compte_comptable_id = ${parseInt(compteId)}
+        AND e.entreprise_id = ${eId}
+        ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+        ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      ORDER BY e.date_ecriture
+    `);
     
-    // Filtrer par entreprise et par dates si fournies
-    let filteredLignes = lignes.filter(l => l.ecriture?.entrepriseId === eId);
+    const rows = result.rows || result || [];
+    const ecritures = rows.map(r => ({
+      id: r.id,
+      date: r.date,
+      libelle: r.libelle,
+      reference: r.reference,
+      debit: parseFloat(r.debit || 0),
+      credit: parseFloat(r.credit || 0)
+    }));
     
-    if (dateDebut) {
-      const start = new Date(dateDebut);
-      filteredLignes = filteredLignes.filter(l => new Date(l.ecriture?.dateEcriture || l.ecriture?.date) >= start);
-    }
-    if (dateFin) {
-      const end = new Date(dateFin);
-      filteredLignes = filteredLignes.filter(l => new Date(l.ecriture?.dateEcriture || l.ecriture?.date) <= end);
-    }
-    
-    const result = filteredLignes.map(l => ({
-      id: l.id,
-      date: l.ecriture?.dateEcriture || l.ecriture?.date || l.ecriture?.createdAt,
-      libelle: l.description || l.ecriture?.libelle || l.ecriture?.description,
-      reference: l.ecriture?.reference || l.ecriture?.numeroPiece,
-      debit: l.type === 'debit' ? parseFloat(l.montant || 0) : 0,
-      credit: l.type === 'credit' ? parseFloat(l.montant || 0) : 0
-    })).sort((a, b) => new Date(a.date) - new Date(b.date));
-    
-    res.json(result);
+    res.json(ecritures);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
