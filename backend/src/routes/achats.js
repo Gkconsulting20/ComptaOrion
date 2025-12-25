@@ -13,6 +13,7 @@ import {
   produits
 } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
+import { createEcritureFactureAchat, createEcriturePaiementFournisseur } from '../services/comptabiliteService.js';
 
 const router = express.Router();
 
@@ -772,6 +773,48 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
         SET montant_reel = ${cout.montant.toFixed(2)}, ecart_montant = ${cout.montant} - montant_estime
         WHERE facture_achat_id = ${newFacture.id} AND type = ${cout.type}
       `);
+    }
+
+    // *** INTÉGRATION COMPTABLE AUTOMATIQUE ***
+    // Calculer le montant pending (estimé à la réception) pour régulariser le compte 408
+    const pendingResult = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(sp.valeur_estimee), 0) as total_stock_pending,
+        COALESCE(SUM(lp.montant_estime), 0) as total_logistique_pending
+      FROM (
+        SELECT COALESCE(SUM(valeur_estimee), 0) as valeur_estimee 
+        FROM stock_pending WHERE facture_achat_id = ${newFacture.id}
+      ) sp,
+      (
+        SELECT COALESCE(SUM(montant_estime), 0) as montant_estime 
+        FROM logistique_pending WHERE facture_achat_id = ${newFacture.id}
+      ) lp
+    `);
+    
+    const totalPending = parseFloat(pendingResult.rows?.[0]?.total_stock_pending || 0) + parseFloat(pendingResult.rows?.[0]?.total_logistique_pending || 0);
+    const ecartPrix = totalHT - totalPending;
+
+    try {
+      const ecriture = await createEcritureFactureAchat({
+        entrepriseId: req.entrepriseId,
+        numeroFacture: numeroFacture,
+        dateFacture: dateFacture || new Date().toISOString().split('T')[0],
+        fournisseurNom: fournisseur.raison_sociale || fournisseur.nom,
+        fournisseurCompteId: fournisseur.compte_comptable_id,
+        totalHT,
+        totalTVA,
+        totalTTC,
+        montantPending: totalPending,
+        ecartPrix
+      });
+
+      if (ecriture) {
+        await db.execute(sql`
+          UPDATE factures_achat SET ecriture_comptable_id = ${ecriture.id} WHERE id = ${newFacture.id}
+        `);
+      }
+    } catch (comptaError) {
+      console.warn('Avertissement: Écriture comptable non générée:', comptaError.message);
     }
 
     res.status(201).json({
