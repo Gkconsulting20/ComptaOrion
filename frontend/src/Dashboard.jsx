@@ -339,6 +339,54 @@ export function DashboardView() {
         />
       </div>
 
+      <div style={{ marginBottom: '24px' }}>
+        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#666' }}>Cycle de Trésorerie</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+          <KpiCard 
+            title="Délai paiement clients (DSO)" 
+            value={`${kpis?.dso || 0} jours`} 
+            color="#6f42c1"
+            icon="📅"
+            small
+          />
+          <KpiCard 
+            title="Délai paiement fournisseurs (DPO)" 
+            value={`${kpis?.dpo || 0} jours`} 
+            color="#20c997"
+            icon="🏭"
+            small
+          />
+          <KpiCard 
+            title="Rotation stock (DIO)" 
+            value={`${kpis?.dio || 0} jours`} 
+            color="#fd7e14"
+            icon="📦"
+            small
+          />
+          <KpiCard 
+            title="Cycle conversion tréso (CCC)" 
+            value={`${kpis?.ccc || 0} jours`} 
+            color={kpis?.ccc > 60 ? '#dc3545' : kpis?.ccc > 30 ? '#ffc107' : '#28a745'}
+            icon="🔄"
+            small
+          />
+          <KpiCard 
+            title="Valeur stock" 
+            value={formatMoney(kpis?.valeurStock)} 
+            color="#17a2b8"
+            icon="📊"
+            small
+          />
+          <KpiCard 
+            title="CMV (Coût Marchandises)" 
+            value={formatMoney(kpis?.cmv)} 
+            color="#6c757d"
+            icon="💵"
+            small
+          />
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
         <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
           <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '16px', color: '#333' }}>
@@ -431,14 +479,14 @@ export function DashboardView() {
   );
 }
 
-function KpiCard({ title, value, subtitle, color, icon, onClick }) {
+function KpiCard({ title, value, subtitle, color, icon, onClick, small }) {
   return (
     <div 
       onClick={onClick}
       style={{ 
         backgroundColor: 'white', 
         borderRadius: '8px', 
-        padding: '20px', 
+        padding: small ? '12px 16px' : '20px', 
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         borderLeft: `4px solid ${color}`,
         cursor: onClick ? 'pointer' : 'default',
@@ -457,13 +505,13 @@ function KpiCard({ title, value, subtitle, color, icon, onClick }) {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>{title}</div>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: color }}>{value}</div>
+          <div style={{ fontSize: small ? '11px' : '14px', color: '#666', marginBottom: small ? '4px' : '8px' }}>{title}</div>
+          <div style={{ fontSize: small ? '18px' : '24px', fontWeight: 'bold', color: color }}>{value}</div>
           {subtitle && <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>{subtitle}</div>}
         </div>
-        <div style={{ fontSize: '28px' }}>{icon}</div>
+        <div style={{ fontSize: small ? '20px' : '28px' }}>{icon}</div>
       </div>
-      {onClick && <div style={{ fontSize: '11px', color: '#999', marginTop: '8px' }}>Cliquer pour détails</div>}
+      {onClick && !small && <div style={{ fontSize: '11px', color: '#999', marginTop: '8px' }}>Cliquer pour détails</div>}
     </div>
   );
 }

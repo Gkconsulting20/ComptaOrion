@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db.js';
-import { factures, paiements, facturesAchat, paiementsFournisseurs, stockParEntrepot, produits, mouvementsStock } from '../schema.js';
-import { eq, and, gte, lte, desc } from 'drizzle-orm';
+import { factures, paiements, facturesAchat, paiementsFournisseurs, stockParEntrepot, produits, mouvementsStock, factureItems } from '../schema.js';
+import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 
 const router = express.Router();
 
@@ -65,11 +65,116 @@ router.get('/global', async (req, res) => {
       return parseFloat(p.quantite || 0) < parseFloat(p.stockMinimum || 0);
     });
 
-    // Marge brute = (Ventes - Coût des ventes) / Ventes
-    const margeBrute = ventesMois > 0 ? ((ventesMois - depensesMois) / ventesMois * 100).toFixed(2) : 0;
+    // Calcul du VRAI Coût des Marchandises Vendues (CMV)
+    // CMV = somme (quantité vendue × prix d'achat du produit)
+    const facturesIds = ventesData.map(f => f.id);
+    let cmv = 0;
+    
+    if (facturesIds.length > 0) {
+      // Récupérer tous les produits pour avoir leurs prix d'achat
+      const produitsMap = {};
+      const allProduits = await db.query.produits.findMany({
+        where: eq(produits.entrepriseId, eId)
+      });
+      allProduits.forEach(p => { produitsMap[p.id] = parseFloat(p.prixAchat || 0); });
+      
+      // Calculer le CMV à partir des lignes de factures
+      const itemsResult = await db.execute(sql.raw(`
+        SELECT fi.produit_id, fi.quantite, fi.prix_unitaire
+        FROM facture_items fi
+        WHERE fi.entreprise_id = ${eId}
+        AND fi.facture_id IN (${facturesIds.join(',') || 0})
+      `));
+      
+      (itemsResult.rows || []).forEach(item => {
+        const prixAchat = produitsMap[item.produit_id] || 0;
+        const quantite = parseFloat(item.quantite || 0);
+        cmv += quantite * prixAchat;
+      });
+    }
+
+    // Marge brute = (Ventes HT - CMV) / Ventes HT × 100
+    // On utilise ventesMois (TTC) - approximation acceptable, ou on calcule le HT
+    const ventesHT = ventesData.reduce((sum, f) => sum + parseFloat(f.totalHT || f.totalTTC * 0.82 || 0), 0);
+    const margeBrute = ventesHT > 0 ? ((ventesHT - cmv) / ventesHT * 100).toFixed(2) : 0;
 
     // Cashflow = Ventes - Dépenses
     const cashflow = ventesMois - depensesMois;
+
+    // =====================
+    // CALCUL DES KPIs CYCLE DE TRÉSORERIE
+    // =====================
+    
+    // DSO (Days Sales Outstanding) - Délai moyen de paiement clients
+    // Utilise la DERNIÈRE date de paiement pour les factures avec paiements multiples
+    const paiementsClients = await db.query.paiements.findMany({
+      where: eq(paiements.entrepriseId, eId)
+    });
+    
+    // Grouper les paiements par facture et prendre la dernière date
+    const dernierPaiementClient = {};
+    paiementsClients.forEach(p => {
+      if (p.factureId && p.datePaiement) {
+        const datePaiement = new Date(p.datePaiement);
+        if (!dernierPaiementClient[p.factureId] || datePaiement > dernierPaiementClient[p.factureId]) {
+          dernierPaiementClient[p.factureId] = datePaiement;
+        }
+      }
+    });
+    
+    let dsoTotal = 0, dsoCount = 0;
+    ventesData.forEach(f => {
+      const dernierePaiementDate = dernierPaiementClient[f.id];
+      if (dernierePaiementDate) {
+        const dateFacture = new Date(f.dateFacture || f.createdAt);
+        const delai = (dernierePaiementDate - dateFacture) / (1000 * 60 * 60 * 24);
+        if (delai > 0) { dsoTotal += delai; dsoCount++; }
+      }
+    });
+    const dso = dsoCount > 0 ? Math.round(dsoTotal / dsoCount) : 0;
+    
+    // DPO (Days Payable Outstanding) - Délai moyen de paiement fournisseurs
+    // Utilise la DERNIÈRE date de paiement pour les factures avec paiements multiples
+    const paiementsFourn = await db.query.paiementsFournisseurs.findMany({
+      where: eq(paiementsFournisseurs.entrepriseId, eId)
+    });
+    
+    // Grouper les paiements par facture et prendre la dernière date
+    const dernierPaiementFourn = {};
+    paiementsFourn.forEach(p => {
+      if (p.factureId && p.datePaiement) {
+        const datePaiement = new Date(p.datePaiement);
+        if (!dernierPaiementFourn[p.factureId] || datePaiement > dernierPaiementFourn[p.factureId]) {
+          dernierPaiementFourn[p.factureId] = datePaiement;
+        }
+      }
+    });
+    
+    let dpoTotal = 0, dpoCount = 0;
+    depensesData.forEach(f => {
+      const dernierePaiementDate = dernierPaiementFourn[f.id];
+      if (dernierePaiementDate) {
+        const dateFacture = new Date(f.dateFacture || f.createdAt);
+        const delai = (dernierePaiementDate - dateFacture) / (1000 * 60 * 60 * 24);
+        if (delai > 0) { dpoTotal += delai; dpoCount++; }
+      }
+    });
+    const dpo = dpoCount > 0 ? Math.round(dpoTotal / dpoCount) : 0;
+    
+    // DIO (Days Inventory Outstanding) - Rotation des stocks
+    // DIO = (Stock moyen / CMV) × nombre de jours de la période
+    const stockActuel = await db.query.produits.findMany({
+      where: eq(produits.entrepriseId, eId)
+    });
+    const valeurStockActuel = stockActuel.reduce((sum, p) => {
+      return sum + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || 0));
+    }, 0);
+    const nombreJours = Math.ceil((dateEnd - dateStart) / (1000 * 60 * 60 * 24)) || 30;
+    const dio = cmv > 0 ? Math.round((valeurStockActuel / cmv) * nombreJours) : 0;
+    
+    // CCC (Cash Conversion Cycle) - Cycle de conversion de trésorerie
+    // CCC = DSO + DIO - DPO
+    const ccc = dso + dio - dpo;
 
     res.json({
       ventesMois: parseFloat(ventesMois).toFixed(2),
@@ -83,8 +188,16 @@ router.get('/global', async (req, res) => {
         produits: produitsFaibles.slice(0, 5)
       },
       margeBrute: parseFloat(margeBrute),
+      cmv: Math.round(cmv),
+      ventesHT: Math.round(ventesHT),
       cashflow: parseFloat(cashflow).toFixed(2),
-      dateRange: { debut: dateStart, fin: dateEnd }
+      dateRange: { debut: dateStart, fin: dateEnd },
+      // KPIs du cycle de trésorerie
+      dso, // Délai paiement clients (jours)
+      dpo, // Délai paiement fournisseurs (jours)
+      dio, // Rotation stock (jours)
+      ccc, // Cycle de conversion trésorerie (jours)
+      valeurStock: Math.round(valeurStockActuel)
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
