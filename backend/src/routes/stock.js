@@ -618,7 +618,31 @@ router.post('/receptions/:id/valider', async (req, res) => {
       VALUES (${req.entrepriseId}, ${ecritureId}, ${comptePontId}, ${'Stock non facturé ' + bon.numero}, 0, ${bon.total_ht})
     `);
 
-    // 3. Mettre à jour le bon de réception
+    // 4. Créer les enregistrements stock_pending pour chaque ligne
+    for (const ligne of lignes) {
+      const valeurEstimee = parseFloat(ligne.quantite_recue) * parseFloat(ligne.prix_unitaire_estime || 0);
+      await db.execute(sql`
+        INSERT INTO stock_pending (entreprise_id, bon_reception_id, ligne_reception_id, produit_id, fournisseur_id, quantite_pending, prix_estime, valeur_estimee, date_reception, entrepot_id, statut)
+        VALUES (${req.entrepriseId}, ${bonId}, ${ligne.id}, ${ligne.produit_id}, ${bon.fournisseur_id}, ${ligne.quantite_recue}, ${ligne.prix_unitaire_estime || 0}, ${valeurEstimee}, ${bon.date_reception}, ${bon.entrepot_id}, 'pending')
+      `);
+    }
+
+    // 5. Créer les enregistrements logistique_pending si commande d'achat associée
+    if (bon.commande_achat_id) {
+      const coutsResult = await db.execute(sql`
+        SELECT * FROM couts_logistiques_commande WHERE commande_achat_id = ${bon.commande_achat_id}
+      `);
+      
+      const coutsLogistiques = coutsResult.rows || [];
+      for (const cout of coutsLogistiques) {
+        await db.execute(sql`
+          INSERT INTO logistique_pending (entreprise_id, bon_reception_id, commande_achat_id, fournisseur_id, type, description, montant_estime, date_reception, statut)
+          VALUES (${req.entrepriseId}, ${bonId}, ${bon.commande_achat_id}, ${bon.fournisseur_id}, ${cout.type}, ${cout.description}, ${cout.montant}, ${bon.date_reception}, 'pending')
+        `);
+      }
+    }
+
+    // 6. Mettre à jour le bon de réception
     await db.execute(sql`
       UPDATE bons_reception 
       SET statut = 'validee', ecriture_stock_id = ${ecritureId}, updated_at = NOW()

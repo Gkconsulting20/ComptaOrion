@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { commandesAchat, commandesAchatItems, produits, fournisseurs, mouvementsStock } from '../schema.js';
+import { commandesAchat, commandesAchatItems, produits, fournisseurs, mouvementsStock, coutsLogistiquesCommande } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 
 const router = express.Router();
@@ -122,12 +122,19 @@ router.get('/:id', async (req, res) => {
       .leftJoin(produits, eq(commandesAchatItems.produitId, produits.id))
       .where(eq(commandesAchatItems.commandeId, parseInt(id)));
 
+    // Récupérer les coûts logistiques
+    const couts = await db
+      .select()
+      .from(coutsLogistiquesCommande)
+      .where(eq(coutsLogistiquesCommande.commandeAchatId, parseInt(id)));
+
     return res.json({
       success: true,
       data: {
         ...commande.commande,
         fournisseur: commande.fournisseur,
-        items: items.map(i => ({ ...i.item, produit: i.produit }))
+        items: items.map(i => ({ ...i.item, produit: i.produit })),
+        coutsLogistiques: couts
       }
     });
   } catch (error) {
@@ -148,6 +155,7 @@ router.post('/', async (req, res) => {
       dateCommande,
       dateLivraisonPrevue,
       items,
+      coutsLogistiques,
       notes,
       conditionsLivraison,
       modeLivraison
@@ -190,17 +198,26 @@ router.post('/', async (req, res) => {
     // Générer numéro de commande
     const numeroCommande = await genererNumeroCommande(req.entrepriseId);
 
-    // Calculer les totaux
-    let totalHT = 0;
+    // Calculer les totaux articles
+    let totalArticlesHT = 0;
     for (const item of items) {
       const quantite = parseFloat(item.quantite);
       const prixUnitaire = parseFloat(item.prixUnitaire);
       const remise = parseFloat(item.remise || 0);
       const totalLigne = quantite * prixUnitaire * (1 - remise / 100);
-      totalHT += totalLigne;
+      totalArticlesHT += totalLigne;
     }
 
-    const totalTVA = totalHT * 0.18; // TVA à récupérer depuis les paramètres entreprise
+    // Calculer les coûts logistiques
+    let totalLogistique = 0;
+    if (coutsLogistiques && Array.isArray(coutsLogistiques)) {
+      for (const cout of coutsLogistiques) {
+        totalLogistique += parseFloat(cout.montant || 0);
+      }
+    }
+
+    const totalHT = totalArticlesHT + totalLogistique;
+    const totalTVA = totalArticlesHT * 0.18; // TVA à récupérer depuis les paramètres entreprise
     const totalTTC = totalHT + totalTVA;
 
     // Créer la commande
@@ -213,6 +230,8 @@ router.post('/', async (req, res) => {
         statut: 'brouillon',
         dateCommande: dateCommande || new Date().toISOString().split('T')[0],
         dateLivraisonPrevue: dateLivraisonPrevue || null,
+        totalArticlesHT: totalArticlesHT.toFixed(2),
+        totalLogistique: totalLogistique.toFixed(2),
         totalHT: totalHT.toFixed(2),
         totalTVA: totalTVA.toFixed(2),
         totalTTC: totalTTC.toFixed(2),
@@ -248,12 +267,30 @@ router.post('/', async (req, res) => {
       .values(itemsToInsert)
       .returning();
 
+    // Créer les coûts logistiques
+    let insertedCouts = [];
+    if (coutsLogistiques && Array.isArray(coutsLogistiques) && coutsLogistiques.length > 0) {
+      const coutsToInsert = coutsLogistiques.map(cout => ({
+        entrepriseId: req.entrepriseId,
+        commandeAchatId: newCommande.id,
+        type: cout.type,
+        description: cout.description || null,
+        montant: parseFloat(cout.montant).toFixed(2),
+      }));
+
+      insertedCouts = await db
+        .insert(coutsLogistiquesCommande)
+        .values(coutsToInsert)
+        .returning();
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Commande créée avec succès',
       data: {
         ...newCommande,
-        items: insertedItems
+        items: insertedItems,
+        coutsLogistiques: insertedCouts
       }
     });
   } catch (error) {
