@@ -5,6 +5,14 @@ import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 
 const router = express.Router();
 
+// Fonction utilitaire pour obtenir dates de l'année fiscale (par défaut année en cours)
+function getFiscalYearDates() {
+  const now = new Date();
+  const debut = new Date(now.getFullYear(), 0, 1); // 1er janvier
+  const fin = new Date(now.getFullYear(), 11, 31); // 31 décembre
+  return { debut, fin };
+}
+
 // Fonction utilitaire pour obtenir dates du mois
 function getMonthDates() {
   const now = new Date();
@@ -23,7 +31,8 @@ router.get('/global', async (req, res) => {
       return res.status(400).json({ error: 'entrepriseId requis' });
     }
     
-    const { debut, fin } = getMonthDates();
+    // Par défaut: année fiscale entière pour avoir toutes les données
+    const { debut, fin } = getFiscalYearDates();
     const dateStart = startDate ? new Date(startDate) : debut;
     const dateEnd = endDate ? new Date(endDate) : fin;
 
@@ -78,16 +87,23 @@ router.get('/global', async (req, res) => {
       });
       allProduits.forEach(p => { produitsMap[p.id] = parseFloat(p.prixAchat || 0); });
       
-      // Calculer le CMV à partir des lignes de factures
-      const itemsResult = await db.execute(sql.raw(`
-        SELECT fi.produit_id, fi.quantite, fi.prix_unitaire
-        FROM facture_items fi
-        WHERE fi.entreprise_id = ${eId}
-        AND fi.facture_id IN (${facturesIds.join(',') || 0})
-      `));
+      // Calculer le CMV à partir des lignes de factures (requête sécurisée)
+      const itemsResult = await db
+        .select({
+          produitId: factureItems.produitId,
+          quantite: factureItems.quantite,
+          prixUnitaire: factureItems.prixUnitaire
+        })
+        .from(factureItems)
+        .where(
+          and(
+            eq(factureItems.entrepriseId, eId),
+            sql`${factureItems.factureId} IN (${sql.join(facturesIds.map(id => sql`${id}`), sql`, `)})`
+          )
+        );
       
-      (itemsResult.rows || []).forEach(item => {
-        const prixAchat = produitsMap[item.produit_id] || 0;
+      (itemsResult || []).forEach(item => {
+        const prixAchat = produitsMap[item.produitId] || 0;
         const quantite = parseFloat(item.quantite || 0);
         cmv += quantite * prixAchat;
       });

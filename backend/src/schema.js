@@ -84,6 +84,7 @@ export const clients = pgTable('clients', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   compteComptableId: integer('compte_comptable_id'),
+  codeAuxiliaire: varchar('code_auxiliaire', { length: 20 }),
   numeroClient: varchar('numero_client', { length: 50 }).unique(),
   nom: varchar('nom', { length: 255 }).notNull(),
   type: varchar('type', { length: 50 }).default('particulier'), // particulier, entreprise
@@ -111,6 +112,8 @@ export const clients = pgTable('clients', {
 export const fournisseurs = pgTable('fournisseurs', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  compteComptableId: integer('compte_comptable_id'),
+  codeAuxiliaire: varchar('code_auxiliaire', { length: 20 }),
   numeroFournisseur: varchar('numero_fournisseur', { length: 50 }).unique(),
   raisonSociale: varchar('raison_sociale', { length: 255 }).notNull(),
   contactPrincipal: varchar('contact_principal', { length: 255 }),
@@ -215,12 +218,16 @@ export const paiementsFournisseurs = pgTable('paiements_fournisseurs', {
 // MODULE 6: STOCK & INVENTAIRE
 // ==========================================
 
-// Catégories de produits
+// Catégories de produits avec codes comptables
 export const categoriesStock = pgTable('categories_stock', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   nom: varchar('nom', { length: 255 }).notNull(),
   description: text('description'),
+  codeCategorie: varchar('code_categorie', { length: 20 }),
+  compteVentesId: integer('compte_ventes_id'),
+  compteAchatsId: integer('compte_achats_id'),
+  compteStockId: integer('compte_stock_id'),
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
 });

@@ -20,11 +20,15 @@ router.get('/categories', async (req, res) => {
 
 router.post('/categories', async (req, res) => {
   try {
-    const { nom, description } = req.body;
+    const { nom, description, codeCategorie, compteVentesId, compteAchatsId, compteStockId } = req.body;
     const result = await db.insert(categoriesStock).values({
       entrepriseId: req.entrepriseId,
       nom,
-      description
+      description,
+      codeCategorie,
+      compteVentesId: compteVentesId ? parseInt(compteVentesId) : null,
+      compteAchatsId: compteAchatsId ? parseInt(compteAchatsId) : null,
+      compteStockId: compteStockId ? parseInt(compteStockId) : null
     }).returning();
 
     // Audit log
@@ -46,9 +50,16 @@ router.post('/categories', async (req, res) => {
 
 router.put('/categories/:id', async (req, res) => {
   try {
-    const { nom, description } = req.body;
+    const { nom, description, codeCategorie, compteVentesId, compteAchatsId, compteStockId } = req.body;
     const result = await db.update(categoriesStock)
-      .set({ nom, description, updatedAt: new Date() })
+      .set({ 
+        nom, 
+        description, 
+        codeCategorie,
+        compteVentesId: compteVentesId ? parseInt(compteVentesId) : null,
+        compteAchatsId: compteAchatsId ? parseInt(compteAchatsId) : null,
+        compteStockId: compteStockId ? parseInt(compteStockId) : null
+      })
       .where(and(
         eq(categoriesStock.id, parseInt(req.params.id)),
         eq(categoriesStock.entrepriseId, req.entrepriseId)
