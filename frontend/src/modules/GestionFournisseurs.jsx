@@ -7,6 +7,494 @@ import { DetailsModal } from '../components/DetailsModal';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 
+function FacturationTab({ fournisseurs }) {
+  const [subTab, setSubTab] = useState('stock');
+  const [stockPending, setStockPending] = useState({ items: [], totaux: {}, parFournisseur: [] });
+  const [logistiquePending, setLogistiquePending] = useState({ items: [], totaux: {}, parType: [], parFournisseur: [] });
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({ fournisseurId: '', dateDebut: '', dateFin: '' });
+  
+  const [showFactureModal, setShowFactureModal] = useState(false);
+  const [receptionsEnAttente, setReceptionsEnAttente] = useState([]);
+  const [selectedReceptions, setSelectedReceptions] = useState([]);
+  const [produits, setProduits] = useState([]);
+  const [factureForm, setFactureForm] = useState({
+    fournisseurId: '',
+    numeroFactureFournisseur: '',
+    dateFacture: new Date().toISOString().split('T')[0],
+    dateEcheance: '',
+    lignes: [],
+    coutsLogistiques: [],
+    notes: ''
+  });
+  const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.fournisseurId) params.append('fournisseurId', filters.fournisseurId);
+      if (filters.dateDebut) params.append('dateDebut', filters.dateDebut);
+      if (filters.dateFin) params.append('dateFin', filters.dateFin);
+      
+      const [stockRes, logRes, produitsRes] = await Promise.all([
+        api.get(`/stock/rapports/stock-non-facture?${params}`),
+        api.get(`/stock/rapports/logistique-non-facturee?${params}`),
+        api.get('/produits').catch(() => ({ data: [] }))
+      ]);
+      setStockPending(stockRes.data);
+      setLogistiquePending(logRes.data);
+      setProduits(produitsRes.data || []);
+    } catch (err) {
+      console.error('Erreur chargement données:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadData(); }, [filters]);
+
+  const typeLabels = { transport: 'Transport', douane: 'Douane', manutention: 'Manutention', assurance: 'Assurance', autre: 'Autres' };
+
+  const openFactureModal = () => {
+    setShowFactureModal(true);
+    setStep(1);
+    setSelectedReceptions([]);
+    setFactureForm({
+      fournisseurId: '',
+      numeroFactureFournisseur: '',
+      dateFacture: new Date().toISOString().split('T')[0],
+      dateEcheance: '',
+      lignes: [],
+      coutsLogistiques: [],
+      notes: ''
+    });
+  };
+
+  const loadReceptionsForFournisseur = async (fournisseurId) => {
+    if (!fournisseurId) {
+      setReceptionsEnAttente([]);
+      return;
+    }
+    try {
+      const res = await api.get(`/achats/receptions-en-attente?fournisseurId=${fournisseurId}`);
+      setReceptionsEnAttente(res.data.data || []);
+    } catch (err) {
+      console.error('Erreur chargement réceptions:', err);
+    }
+  };
+
+  const toggleReception = (recId) => {
+    setSelectedReceptions(prev => 
+      prev.includes(recId) ? prev.filter(id => id !== recId) : [...prev, recId]
+    );
+  };
+
+  const goToStep2 = () => {
+    if (!factureForm.fournisseurId || selectedReceptions.length === 0) {
+      alert('Sélectionnez un fournisseur et au moins une réception');
+      return;
+    }
+    const selectedRecs = receptionsEnAttente.filter(r => selectedReceptions.includes(r.id));
+    const lignes = [];
+    
+    for (const rec of selectedRecs) {
+      const recLignes = rec.lignes || [];
+      for (const l of recLignes) {
+        lignes.push({
+          produitId: l.produit_id,
+          produitNom: produits.find(p => p.id === l.produit_id)?.nom || `Produit ${l.produit_id}`,
+          quantite: parseFloat(l.quantite_recue),
+          prixEstime: parseFloat(l.prix_unitaire_estime || 0),
+          prixUnitaireReel: parseFloat(l.prix_unitaire_estime || 0),
+          description: produits.find(p => p.id === l.produit_id)?.nom || `Article réception ${rec.numero}`
+        });
+      }
+    }
+    
+    const logItems = logistiquePending.items?.filter(l => selectedReceptions.includes(l.bon_reception_id)) || [];
+    const groupedCouts = {};
+    for (const l of logItems) {
+      if (!groupedCouts[l.type]) {
+        groupedCouts[l.type] = { type: l.type, montantEstime: 0, montantReel: 0, description: typeLabels[l.type] || l.type };
+      }
+      groupedCouts[l.type].montantEstime += parseFloat(l.montant_estime || 0);
+      groupedCouts[l.type].montantReel += parseFloat(l.montant_estime || 0);
+    }
+    
+    setFactureForm(prev => ({
+      ...prev,
+      lignes,
+      coutsLogistiques: Object.values(groupedCouts)
+    }));
+    setStep(2);
+  };
+
+  const updateLigne = (index, field, value) => {
+    setFactureForm(prev => {
+      const newLignes = [...prev.lignes];
+      newLignes[index] = { ...newLignes[index], [field]: value };
+      return { ...prev, lignes: newLignes };
+    });
+  };
+
+  const updateCout = (index, field, value) => {
+    setFactureForm(prev => {
+      const newCouts = [...prev.coutsLogistiques];
+      newCouts[index] = { ...newCouts[index], [field]: value };
+      return { ...prev, coutsLogistiques: newCouts };
+    });
+  };
+
+  const calculateTotals = () => {
+    const totalArticles = factureForm.lignes.reduce((sum, l) => sum + (parseFloat(l.quantite) * parseFloat(l.prixUnitaireReel || 0)), 0);
+    const totalLogistique = factureForm.coutsLogistiques.reduce((sum, c) => sum + parseFloat(c.montantReel || 0), 0);
+    return { totalArticles, totalLogistique, totalHT: totalArticles + totalLogistique };
+  };
+
+  const submitFacture = async () => {
+    setSubmitting(true);
+    try {
+      const payload = {
+        fournisseurId: factureForm.fournisseurId,
+        numeroFactureFournisseur: factureForm.numeroFactureFournisseur,
+        dateFacture: factureForm.dateFacture,
+        dateEcheance: factureForm.dateEcheance || null,
+        receptionsIds: selectedReceptions,
+        lignes: factureForm.lignes.map(l => ({
+          produitId: l.produitId,
+          quantite: l.quantite,
+          prixUnitaireReel: l.prixUnitaireReel,
+          description: l.description
+        })),
+        coutsLogistiques: factureForm.coutsLogistiques.map(c => ({
+          type: c.type,
+          montantReel: c.montantReel,
+          description: c.description
+        })),
+        notes: factureForm.notes
+      };
+      
+      await api.post('/achats/factures-avec-rapprochement', payload);
+      alert('Facture créée avec succès !');
+      setShowFactureModal(false);
+      loadData();
+    } catch (err) {
+      alert('Erreur: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const totals = calculateTotals();
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div>
+          <h3 style={{ margin: 0 }}>📄 Créer Facture depuis Réceptions</h3>
+          <p style={{ color: '#7f8c8d', margin: '5px 0 0 0' }}>
+            Convertir les stocks et coûts logistiques non facturés en facture fournisseur.
+          </p>
+        </div>
+        <Button onClick={openFactureModal} variant="success">+ Créer Facture Fournisseur</Button>
+      </div>
+
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
+        <select value={filters.fournisseurId} onChange={(e) => setFilters({...filters, fournisseurId: e.target.value})}
+          style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minWidth: '200px' }}>
+          <option value="">Tous les fournisseurs</option>
+          {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom || f.raisonSociale}</option>)}
+        </select>
+        <input type="date" value={filters.dateDebut} onChange={(e) => setFilters({...filters, dateDebut: e.target.value})}
+          style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} placeholder="Date début" />
+        <input type="date" value={filters.dateFin} onChange={(e) => setFilters({...filters, dateFin: e.target.value})}
+          style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} placeholder="Date fin" />
+        <Button onClick={loadData} variant="outline">🔄 Actualiser</Button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '25px' }}>
+        <div style={{ padding: '20px', background: '#fff3e0', borderRadius: '8px' }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>STOCK EN ATTENTE</p>
+          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{stockPending.totaux?.valeur?.toLocaleString() || 0} FCFA</h2>
+          <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{stockPending.totaux?.lignes || 0} lignes</p>
+        </div>
+        <div style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px' }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>LOGISTIQUE EN ATTENTE</p>
+          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{logistiquePending.totaux?.montant?.toLocaleString() || 0} FCFA</h2>
+          <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{logistiquePending.totaux?.lignes || 0} lignes</p>
+        </div>
+        <div style={{ padding: '20px', background: '#fce4ec', borderRadius: '8px' }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL NON FACTURÉ</p>
+          <h2 style={{ margin: '10px 0 0 0', color: '#c2185b' }}>
+            {((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString()} FCFA
+          </h2>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        {['stock', 'logistique'].map(t => (
+          <button key={t} onClick={() => setSubTab(t)}
+            style={{
+              padding: '10px 20px', background: subTab === t ? '#3498db' : '#ecf0f1',
+              color: subTab === t ? '#fff' : '#34495e', border: 'none', borderRadius: '8px',
+              fontWeight: subTab === t ? 'bold' : 'normal', cursor: 'pointer'
+            }}>
+            {t === 'stock' ? '📦 Stock Non Facturé' : '🚚 Frais Logistiques'}
+          </button>
+        ))}
+      </div>
+
+      {loading && <div style={{ padding: '20px', textAlign: 'center' }}>Chargement...</div>}
+
+      {!loading && subTab === 'stock' && (
+        <div>
+          {stockPending.items?.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', background: '#d4edda', borderRadius: '8px', color: '#155724' }}>
+              ✅ Aucun stock en attente de facturation
+            </div>
+          ) : (
+            <Table
+              columns={[
+                { key: 'commande_numero', label: 'N° PO' },
+                { key: 'fournisseur_nom', label: 'Fournisseur' },
+                { key: 'date_reception', label: 'Date Réception', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
+                { key: 'reception_numero', label: 'N° Réception' },
+                { key: 'produit_nom', label: 'Produit', render: (val, row) => `${row.produit_reference || ''} ${val || ''}` },
+                { key: 'quantite_pending', label: 'Qté', render: (val) => parseFloat(val).toFixed(0) },
+                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+              ]}
+              data={stockPending.items || []}
+            />
+          )}
+        </div>
+      )}
+
+      {!loading && subTab === 'logistique' && (
+        <div>
+          {logistiquePending.items?.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', background: '#d4edda', borderRadius: '8px', color: '#155724' }}>
+              ✅ Aucun frais logistique en attente
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                {(logistiquePending.parType || []).map(t => (
+                  <div key={t.type} style={{ padding: '10px 15px', background: '#f5f5f5', borderRadius: '8px' }}>
+                    <strong>{typeLabels[t.type] || t.type}:</strong> {t.montant.toLocaleString()} FCFA ({t.lignes})
+                  </div>
+                ))}
+              </div>
+              <Table
+                columns={[
+                  { key: 'commande_numero', label: 'N° PO' },
+                  { key: 'fournisseur_nom', label: 'Fournisseur' },
+                  { key: 'date_reception', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
+                  { key: 'reception_numero', label: 'N° Réception' },
+                  { key: 'type', label: 'Type', render: (val) => typeLabels[val] || val },
+                  { key: 'description', label: 'Description' },
+                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+                ]}
+                data={logistiquePending.items || []}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {showFactureModal && (
+        <Modal isOpen={true} onClose={() => setShowFactureModal(false)} title="Créer Facture Fournisseur avec Rapprochement" size="xlarge">
+          {step === 1 && (
+            <div>
+              <h4>Étape 1: Sélectionner le fournisseur et les réceptions</h4>
+              
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Fournisseur *</label>
+                <select 
+                  value={factureForm.fournisseurId} 
+                  onChange={(e) => {
+                    setFactureForm(prev => ({ ...prev, fournisseurId: e.target.value }));
+                    loadReceptionsForFournisseur(e.target.value);
+                    setSelectedReceptions([]);
+                  }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd' }}>
+                  <option value="">-- Sélectionner un fournisseur --</option>
+                  {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom || f.raisonSociale}</option>)}
+                </select>
+              </div>
+
+              {factureForm.fournisseurId && (
+                <div>
+                  <h5>Réceptions en attente de facturation ({receptionsEnAttente.length})</h5>
+                  {receptionsEnAttente.length === 0 ? (
+                    <div style={{ padding: '20px', background: '#f8f9fa', borderRadius: '8px', textAlign: 'center' }}>
+                      Aucune réception en attente pour ce fournisseur
+                    </div>
+                  ) : (
+                    <div style={{ maxHeight: '300px', overflow: 'auto', border: '1px solid #ddd', borderRadius: '8px' }}>
+                      {receptionsEnAttente.map(rec => (
+                        <div key={rec.id} 
+                          onClick={() => toggleReception(rec.id)}
+                          style={{ 
+                            padding: '15px', borderBottom: '1px solid #eee', cursor: 'pointer',
+                            background: selectedReceptions.includes(rec.id) ? '#e3f2fd' : '#fff'
+                          }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <input type="checkbox" checked={selectedReceptions.includes(rec.id)} onChange={() => {}} style={{ marginRight: '10px' }} />
+                              <strong>{rec.numero}</strong> - {new Date(rec.date_reception).toLocaleDateString('fr-FR')}
+                            </div>
+                            <span style={{ fontWeight: 'bold', color: '#2196f3' }}>{parseFloat(rec.total_ht || 0).toLocaleString()} FCFA</span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                            {(rec.lignes || []).length} article(s)
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" onClick={() => setShowFactureModal(false)}>Annuler</Button>
+                <Button variant="info" onClick={goToStep2} disabled={!factureForm.fournisseurId || selectedReceptions.length === 0}>
+                  Suivant →
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div>
+              <h4>Étape 2: Saisir les coûts réels</h4>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>N° Facture Fournisseur *</label>
+                  <input type="text" value={factureForm.numeroFactureFournisseur}
+                    onChange={(e) => setFactureForm(prev => ({ ...prev, numeroFactureFournisseur: e.target.value }))}
+                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Date Facture *</label>
+                  <input type="date" value={factureForm.dateFacture}
+                    onChange={(e) => setFactureForm(prev => ({ ...prev, dateFacture: e.target.value }))}
+                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Date Échéance</label>
+                  <input type="date" value={factureForm.dateEcheance}
+                    onChange={(e) => setFactureForm(prev => ({ ...prev, dateEcheance: e.target.value }))}
+                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
+                </div>
+              </div>
+
+              <h5>Articles ({factureForm.lignes.length})</h5>
+              <div style={{ maxHeight: '200px', overflow: 'auto', marginBottom: '20px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f5f5f5' }}>
+                      <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #ddd' }}>Produit</th>
+                      <th style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd', width: '100px' }}>Quantité</th>
+                      <th style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', width: '120px' }}>Prix Estimé</th>
+                      <th style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', width: '150px' }}>Prix Réel *</th>
+                      <th style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', width: '120px' }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {factureForm.lignes.map((ligne, idx) => (
+                      <tr key={idx}>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>{ligne.produitNom || ligne.description}</td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>{ligne.quantite}</td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: '#999' }}>{ligne.prixEstime.toLocaleString()}</td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                          <input type="number" value={ligne.prixUnitaireReel}
+                            onChange={(e) => updateLigne(idx, 'prixUnitaireReel', parseFloat(e.target.value) || 0)}
+                            style={{ width: '100%', padding: '5px', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'right' }} />
+                        </td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', fontWeight: 'bold' }}>
+                          {(ligne.quantite * (ligne.prixUnitaireReel || 0)).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {factureForm.coutsLogistiques.length > 0 && (
+                <>
+                  <h5>Coûts Logistiques ({factureForm.coutsLogistiques.length})</h5>
+                  <div style={{ marginBottom: '20px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: '#f5f5f5' }}>
+                          <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #ddd' }}>Type</th>
+                          <th style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', width: '150px' }}>Montant Estimé</th>
+                          <th style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', width: '180px' }}>Montant Réel *</th>
+                          <th style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', width: '120px' }}>Écart</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {factureForm.coutsLogistiques.map((cout, idx) => (
+                          <tr key={idx}>
+                            <td style={{ padding: '8px', border: '1px solid #ddd' }}>{cout.description}</td>
+                            <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: '#999' }}>{cout.montantEstime.toLocaleString()}</td>
+                            <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                              <input type="number" value={cout.montantReel}
+                                onChange={(e) => updateCout(idx, 'montantReel', parseFloat(e.target.value) || 0)}
+                                style={{ width: '100%', padding: '5px', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'right' }} />
+                            </td>
+                            <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', 
+                              color: (cout.montantReel - cout.montantEstime) > 0 ? '#e74c3c' : (cout.montantReel - cout.montantEstime) < 0 ? '#27ae60' : '#333' }}>
+                              {((cout.montantReel || 0) - cout.montantEstime).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              <div style={{ background: '#e8f5e9', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <span>Total Articles:</span>
+                  <strong>{totals.totalArticles.toLocaleString()} FCFA</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <span>Total Logistique:</span>
+                  <strong>{totals.totalLogistique.toLocaleString()} FCFA</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #4caf50', paddingTop: '10px' }}>
+                  <span style={{ fontSize: '18px' }}>Total HT:</span>
+                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{totals.totalHT.toLocaleString()} FCFA</strong>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '5px' }}>Notes</label>
+                <textarea value={factureForm.notes}
+                  onChange={(e) => setFactureForm(prev => ({ ...prev, notes: e.target.value }))}
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minHeight: '60px' }} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" onClick={() => setStep(1)}>← Retour</Button>
+                <Button variant="success" onClick={submitFacture} disabled={submitting || !factureForm.numeroFactureFournisseur}>
+                  {submitting ? 'Création...' : 'Créer la Facture'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 export function GestionFournisseurs() {
   const [activeTab, setActiveTab] = useState('parametres');
   const [subTab, setSubTab] = useState('fournisseurs');
@@ -196,6 +684,7 @@ export function GestionFournisseurs() {
     { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' },
     { id: 'commandes', label: '📦 Commandes Achat', icon: '📦' },
     { id: 'receptions', label: '📥 Réceptions', icon: '📥' },
+    { id: 'facturation', label: '📄 Facturation', icon: '📄' },
     { id: 'factures', label: '🧾 Factures', icon: '🧾' },
     { id: 'paiements', label: '💰 Paiements', icon: '💰' },
     { id: 'etats-compte', label: '📋 États de Compte', icon: '📋' },
@@ -374,6 +863,10 @@ export function GestionFournisseurs() {
             <p style={{ color: '#7f8c8d', margin: 0 }}>Aucune réception enregistrée</p>
           </div>
         </div>
+      )}
+
+      {activeTab === 'facturation' && (
+        <FacturationTab fournisseurs={data.fournisseurs} />
       )}
 
       {activeTab === 'factures' && (
