@@ -589,4 +589,258 @@ router.get('/echeances', async (req, res) => {
   }
 });
 
+// =========================================
+// COSTING - RAPPROCHEMENT RECEPTIONS/FACTURES
+// =========================================
+
+// GET /api/achats/receptions-en-attente - Réceptions en attente de facturation pour un fournisseur
+router.get('/receptions-en-attente', async (req, res) => {
+  try {
+    const { fournisseurId } = req.query;
+    
+    let conditions = `WHERE br.entreprise_id = ${req.entrepriseId} AND br.statut = 'validee' AND br.facture_achat_id IS NULL`;
+    if (fournisseurId) {
+      conditions += ` AND br.fournisseur_id = ${fournisseurId}`;
+    }
+    
+    const result = await db.execute(sql.raw(`
+      SELECT br.*, f.raison_sociale as fournisseur_nom,
+             (SELECT json_agg(lr.*) FROM lignes_reception lr WHERE lr.bon_reception_id = br.id) as lignes
+      FROM bons_reception br
+      LEFT JOIN fournisseurs f ON br.fournisseur_id = f.id
+      ${conditions}
+      ORDER BY br.date_reception ASC
+    `));
+    
+    res.json({ success: true, data: result.rows || [] });
+  } catch (error) {
+    console.error('Erreur récupération réceptions en attente:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/achats/logistique-pending/:receptionId - Coûts logistiques pending pour une réception
+router.get('/logistique-pending/:receptionId', async (req, res) => {
+  try {
+    const receptionId = parseInt(req.params.receptionId);
+    
+    const result = await db.execute(sql`
+      SELECT * FROM logistique_pending 
+      WHERE entreprise_id = ${req.entrepriseId} 
+        AND bon_reception_id = ${receptionId}
+        AND statut = 'pending'
+    `);
+    
+    res.json({ success: true, data: result.rows || [] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/achats/factures-avec-rapprochement - Créer facture avec rapprochement des réceptions
+router.post('/factures-avec-rapprochement', async (req, res) => {
+  try {
+    const {
+      fournisseurId,
+      numeroFactureFournisseur,
+      dateFacture,
+      dateEcheance,
+      receptionsIds, // Array des IDs de bons de réception à rapprocher
+      lignes, // Lignes avec coûts réels: { produitId, quantite, prixUnitaireReel, description }
+      coutsLogistiques, // Coûts logistiques réels: { type, montantReel, description }
+      notes
+    } = req.body;
+
+    // Validation
+    if (!fournisseurId) {
+      return res.status(400).json({ success: false, message: 'Le fournisseur est obligatoire' });
+    }
+    if (!receptionsIds || receptionsIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Au moins une réception à rapprocher est obligatoire' });
+    }
+
+    // Vérifier que le fournisseur existe
+    const fournisseurResult = await db.execute(sql`
+      SELECT * FROM fournisseurs WHERE id = ${parseInt(fournisseurId)} AND entreprise_id = ${req.entrepriseId}
+    `);
+    if (!fournisseurResult.rows?.length) {
+      return res.status(404).json({ success: false, message: 'Fournisseur non trouvé' });
+    }
+    const fournisseur = fournisseurResult.rows[0];
+
+    // Vérifier que les réceptions existent et appartiennent au fournisseur
+    for (const recId of receptionsIds) {
+      const recResult = await db.execute(sql`
+        SELECT * FROM bons_reception 
+        WHERE id = ${parseInt(recId)} 
+          AND entreprise_id = ${req.entrepriseId}
+          AND fournisseur_id = ${parseInt(fournisseurId)}
+          AND statut = 'validee'
+          AND facture_achat_id IS NULL
+      `);
+      if (!recResult.rows?.length) {
+        return res.status(400).json({ success: false, message: `Réception ${recId} invalide ou déjà facturée` });
+      }
+    }
+
+    // Générer numéro de facture
+    const numeroFacture = await genererNumeroFactureAchat(req.entrepriseId);
+
+    // Calculer totaux articles
+    let totalArticlesHT = 0;
+    const lignesProcessed = lignes.map(l => {
+      const qt = parseFloat(l.quantite);
+      const pu = parseFloat(l.prixUnitaireReel);
+      const total = qt * pu;
+      totalArticlesHT += total;
+      return { ...l, totalLigne: total };
+    });
+
+    // Calculer totaux coûts logistiques
+    let totalLogistique = 0;
+    const coutsProcessed = (coutsLogistiques || []).map(c => {
+      const montant = parseFloat(c.montantReel);
+      totalLogistique += montant;
+      return { ...c, montant };
+    });
+
+    const totalHT = totalArticlesHT + totalLogistique;
+    const totalTVA = totalHT * 0.18;
+    const totalTTC = totalHT + totalTVA;
+
+    // Créer la facture
+    const factureResult = await db.execute(sql`
+      INSERT INTO factures_achat (entreprise_id, numero_facture, numero_facture_fournisseur, fournisseur_id, statut, date_facture, date_echeance, total_ht, total_tva, total_ttc, montant_paye, solde_restant, notes, user_id)
+      VALUES (${req.entrepriseId}, ${numeroFacture}, ${numeroFactureFournisseur || null}, ${parseInt(fournisseurId)}, 'brouillon', ${dateFacture || new Date().toISOString().split('T')[0]}, ${dateEcheance || null}, ${totalHT.toFixed(2)}, ${totalTVA.toFixed(2)}, ${totalTTC.toFixed(2)}, '0', ${totalTTC.toFixed(2)}, ${notes || null}, ${req.user?.id || null})
+      RETURNING *
+    `);
+    const newFacture = factureResult.rows[0];
+
+    // Créer les lignes de facture
+    for (const ligne of lignesProcessed) {
+      await db.execute(sql`
+        INSERT INTO facture_achat_items (entreprise_id, facture_id, produit_id, description, quantite, prix_unitaire, total_ligne)
+        VALUES (${req.entrepriseId}, ${newFacture.id}, ${ligne.produitId ? parseInt(ligne.produitId) : null}, ${ligne.description}, ${ligne.quantite}, ${ligne.prixUnitaireReel}, ${ligne.totalLigne.toFixed(2)})
+      `);
+    }
+
+    // Créer les lignes de coûts logistiques dans la facture
+    for (const cout of coutsProcessed) {
+      await db.execute(sql`
+        INSERT INTO facture_achat_items (entreprise_id, facture_id, produit_id, description, quantite, prix_unitaire, total_ligne)
+        VALUES (${req.entrepriseId}, ${newFacture.id}, ${null}, ${`Frais ${cout.type}: ${cout.description || ''}`}, ${1}, ${cout.montant.toFixed(2)}, ${cout.montant.toFixed(2)})
+      `);
+    }
+
+    // Lier les réceptions à la facture et mettre à jour les stock_pending
+    for (const recId of receptionsIds) {
+      // Mettre à jour le bon de réception
+      await db.execute(sql`
+        UPDATE bons_reception SET facture_achat_id = ${newFacture.id}, updated_at = NOW() WHERE id = ${parseInt(recId)}
+      `);
+
+      // Mettre à jour les stock_pending -> invoiced
+      await db.execute(sql`
+        UPDATE stock_pending 
+        SET statut = 'invoiced', facture_achat_id = ${newFacture.id}, date_facturation = NOW(), updated_at = NOW()
+        WHERE bon_reception_id = ${parseInt(recId)} AND statut = 'pending'
+      `);
+
+      // Mettre à jour les logistique_pending -> invoiced
+      await db.execute(sql`
+        UPDATE logistique_pending 
+        SET statut = 'invoiced', facture_achat_id = ${newFacture.id}, date_facturation = NOW(), updated_at = NOW()
+        WHERE bon_reception_id = ${parseInt(recId)} AND statut = 'pending'
+      `);
+    }
+
+    // Mettre à jour les coûts réels dans stock_pending (prix réel vs estimé)
+    for (const ligne of lignesProcessed) {
+      if (ligne.produitId) {
+        await db.execute(sql`
+          UPDATE stock_pending 
+          SET prix_reel = ${ligne.prixUnitaireReel}, ecart_prix = ${ligne.prixUnitaireReel} - prix_estime
+          WHERE facture_achat_id = ${newFacture.id} AND produit_id = ${parseInt(ligne.produitId)}
+        `);
+      }
+    }
+
+    // Mettre à jour les coûts réels dans logistique_pending
+    for (const cout of coutsProcessed) {
+      await db.execute(sql`
+        UPDATE logistique_pending 
+        SET montant_reel = ${cout.montant.toFixed(2)}, ecart_montant = ${cout.montant} - montant_estime
+        WHERE facture_achat_id = ${newFacture.id} AND type = ${cout.type}
+      `);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Facture créée avec rapprochement réussi',
+      data: {
+        ...newFacture,
+        totalArticles: totalArticlesHT,
+        totalLogistique,
+        receptionsRapprochees: receptionsIds.length
+      }
+    });
+  } catch (error) {
+    console.error('Erreur création facture avec rapprochement:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/achats/ecarts-costing - Rapport des écarts de costing
+router.get('/ecarts-costing', async (req, res) => {
+  try {
+    const { dateDebut, dateFin, fournisseurId } = req.query;
+    
+    let conditions = `WHERE sp.entreprise_id = ${req.entrepriseId} AND sp.statut = 'invoiced' AND sp.ecart_prix IS NOT NULL AND sp.ecart_prix != 0`;
+    if (fournisseurId) conditions += ` AND sp.fournisseur_id = ${fournisseurId}`;
+    if (dateDebut) conditions += ` AND sp.date_facturation >= '${dateDebut}'`;
+    if (dateFin) conditions += ` AND sp.date_facturation <= '${dateFin}'`;
+
+    const stockEcarts = await db.execute(sql.raw(`
+      SELECT sp.*, p.nom as produit_nom, p.reference as produit_reference, f.raison_sociale as fournisseur_nom
+      FROM stock_pending sp
+      LEFT JOIN produits p ON sp.produit_id = p.id
+      LEFT JOIN fournisseurs f ON sp.fournisseur_id = f.id
+      ${conditions}
+      ORDER BY ABS(sp.ecart_prix) DESC
+    `));
+
+    let logConditions = `WHERE lp.entreprise_id = ${req.entrepriseId} AND lp.statut = 'invoiced' AND lp.ecart_montant IS NOT NULL AND lp.ecart_montant != 0`;
+    if (fournisseurId) logConditions += ` AND lp.fournisseur_id = ${fournisseurId}`;
+    if (dateDebut) logConditions += ` AND lp.date_facturation >= '${dateDebut}'`;
+    if (dateFin) logConditions += ` AND lp.date_facturation <= '${dateFin}'`;
+
+    const logEcarts = await db.execute(sql.raw(`
+      SELECT lp.*, f.raison_sociale as fournisseur_nom
+      FROM logistique_pending lp
+      LEFT JOIN fournisseurs f ON lp.fournisseur_id = f.id
+      ${logConditions}
+      ORDER BY ABS(lp.ecart_montant) DESC
+    `));
+
+    const totalEcartStock = (stockEcarts.rows || []).reduce((sum, r) => sum + parseFloat(r.ecart_prix || 0), 0);
+    const totalEcartLogistique = (logEcarts.rows || []).reduce((sum, r) => sum + parseFloat(r.ecart_montant || 0), 0);
+
+    res.json({
+      success: true,
+      data: {
+        ecartsStock: stockEcarts.rows || [],
+        ecartsLogistique: logEcarts.rows || [],
+        totaux: {
+          ecartStock: totalEcartStock,
+          ecartLogistique: totalEcartLogistique,
+          ecartTotal: totalEcartStock + totalEcartLogistique
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erreur rapport écarts costing:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 export default router;
