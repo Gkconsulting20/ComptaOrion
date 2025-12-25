@@ -831,4 +831,142 @@ router.get('/rapports/mouvements', async (req, res) => {
   }
 });
 
+// ==========================================
+// RAPPORTS STOCK NON FACTURÉ & COÛTS LOGISTIQUES
+// ==========================================
+
+// Rapport stock non facturé (pending)
+router.get('/rapports/stock-non-facture', async (req, res) => {
+  try {
+    const { fournisseurId, produitId, dateDebut, dateFin } = req.query;
+    
+    let conditions = `WHERE sp.entreprise_id = ${req.entrepriseId} AND sp.statut = 'pending'`;
+    
+    if (fournisseurId) {
+      conditions += ` AND sp.fournisseur_id = ${fournisseurId}`;
+    }
+    if (produitId) {
+      conditions += ` AND sp.produit_id = ${produitId}`;
+    }
+    if (dateDebut) {
+      conditions += ` AND sp.date_reception >= '${dateDebut}'`;
+    }
+    if (dateFin) {
+      conditions += ` AND sp.date_reception <= '${dateFin}'`;
+    }
+    
+    const result = await db.execute(sql.raw(`
+      SELECT 
+        sp.*,
+        p.reference as produit_reference, p.nom as produit_nom,
+        f.raison_sociale as fournisseur_nom,
+        br.numero as reception_numero,
+        e.nom as entrepot_nom
+      FROM stock_pending sp
+      LEFT JOIN produits p ON sp.produit_id = p.id
+      LEFT JOIN fournisseurs f ON sp.fournisseur_id = f.id
+      LEFT JOIN bons_reception br ON sp.bon_reception_id = br.id
+      LEFT JOIN entrepots e ON sp.entrepot_id = e.id
+      ${conditions}
+      ORDER BY sp.date_reception DESC
+    `));
+    
+    const items = result.rows || [];
+    const totalQuantite = items.reduce((sum, i) => sum + parseFloat(i.quantite_pending || 0), 0);
+    const totalValeur = items.reduce((sum, i) => sum + parseFloat(i.valeur_estimee || 0), 0);
+    
+    // Résumé par fournisseur
+    const parFournisseur = {};
+    for (const item of items) {
+      const key = item.fournisseur_id;
+      if (!parFournisseur[key]) {
+        parFournisseur[key] = { fournisseurId: key, nom: item.fournisseur_nom, quantite: 0, valeur: 0, lignes: 0 };
+      }
+      parFournisseur[key].quantite += parseFloat(item.quantite_pending || 0);
+      parFournisseur[key].valeur += parseFloat(item.valeur_estimee || 0);
+      parFournisseur[key].lignes++;
+    }
+    
+    res.json({ 
+      items, 
+      totaux: { quantite: totalQuantite, valeur: totalValeur, lignes: items.length },
+      parFournisseur: Object.values(parFournisseur)
+    });
+  } catch (error) {
+    console.error('Erreur rapport stock non facturé:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Rapport coûts logistiques non facturés (pending)
+router.get('/rapports/logistique-non-facturee', async (req, res) => {
+  try {
+    const { fournisseurId, type, dateDebut, dateFin } = req.query;
+    
+    let conditions = `WHERE lp.entreprise_id = ${req.entrepriseId} AND lp.statut = 'pending'`;
+    
+    if (fournisseurId) {
+      conditions += ` AND lp.fournisseur_id = ${fournisseurId}`;
+    }
+    if (type) {
+      conditions += ` AND lp.type = '${type}'`;
+    }
+    if (dateDebut) {
+      conditions += ` AND lp.date_reception >= '${dateDebut}'`;
+    }
+    if (dateFin) {
+      conditions += ` AND lp.date_reception <= '${dateFin}'`;
+    }
+    
+    const result = await db.execute(sql.raw(`
+      SELECT 
+        lp.*,
+        f.raison_sociale as fournisseur_nom,
+        br.numero as reception_numero,
+        ca.numero_commande as commande_numero
+      FROM logistique_pending lp
+      LEFT JOIN fournisseurs f ON lp.fournisseur_id = f.id
+      LEFT JOIN bons_reception br ON lp.bon_reception_id = br.id
+      LEFT JOIN commandes_achat ca ON lp.commande_achat_id = ca.id
+      ${conditions}
+      ORDER BY lp.date_reception DESC
+    `));
+    
+    const items = result.rows || [];
+    const totalMontant = items.reduce((sum, i) => sum + parseFloat(i.montant_estime || 0), 0);
+    
+    // Résumé par type
+    const parType = {};
+    for (const item of items) {
+      const key = item.type;
+      if (!parType[key]) {
+        parType[key] = { type: key, montant: 0, lignes: 0 };
+      }
+      parType[key].montant += parseFloat(item.montant_estime || 0);
+      parType[key].lignes++;
+    }
+    
+    // Résumé par fournisseur
+    const parFournisseur = {};
+    for (const item of items) {
+      const key = item.fournisseur_id;
+      if (!parFournisseur[key]) {
+        parFournisseur[key] = { fournisseurId: key, nom: item.fournisseur_nom, montant: 0, lignes: 0 };
+      }
+      parFournisseur[key].montant += parseFloat(item.montant_estime || 0);
+      parFournisseur[key].lignes++;
+    }
+    
+    res.json({ 
+      items, 
+      totaux: { montant: totalMontant, lignes: items.length },
+      parType: Object.values(parType),
+      parFournisseur: Object.values(parFournisseur)
+    });
+  } catch (error) {
+    console.error('Erreur rapport logistique non facturée:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
