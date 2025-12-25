@@ -137,6 +137,19 @@ ComptaOrion is built with a modular architecture comprising 18 modules organized
     - **Security:** Multi-tenant isolation via entrepriseId, encrypted webhook secrets (requires WEBHOOK_ENCRYPTION_KEY in production), complete audit logging for all export/API operations
     - **Database Tables:** api_keys, webhook_subscriptions, webhook_deliveries, backup_configs, backup_jobs, export_history, import_batches, import_records, import_mapping_templates
 
+-   **Two-Stage Purchase Costing (Dec 2025):** Sophisticated purchase-to-invoice workflow for import operations following SYSCOHADA standards:
+    - **Purchase Orders with Logistics Costs:** Orders include estimated costs for transport, customs (douane), handling (manutention), insurance, and other charges
+    - **Reception Validation (Quantity Only):** Validates quantities received without final costing, creates stock movements with bridge account 408 (Fournisseurs - Factures non parvenues)
+    - **Pending Ledgers:** Automatic creation of `stock_pending` and `logistique_pending` records for tracking uninvoiced goods and logistics costs
+    - **Invoice Reconciliation (Final Costing):** New endpoint `/api/achats/factures-avec-rapprochement` matches invoices to receptions, captures actual costs, and calculates price variances
+    - **Reports:**
+      - "Non Facturé" tab in Stock module showing pending stock and logistics costs by supplier
+      - Costing variance reports comparing estimated vs actual prices
+    - **Accounting Flow:**
+      - At reception: Debit 31x (Stock) / Credit 408 (Bridge account)
+      - At invoice: Debit 408 / Credit 401 (Fournisseurs) + adjust for price variances
+    - **Database Tables:** stock_pending, logistique_pending, couts_logistiques_commande
+
 ## External Dependencies
 
 ### Backend
