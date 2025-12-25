@@ -26,7 +26,10 @@ ComptaOrion is a lightweight ERP solution designed for the African market, inspi
 ### Core Features
 ComptaOrion features a modular architecture covering 8 domains:
 
-1.  **Dashboard Global:** Real-time KPIs.
+1.  **Dashboard Global:** Real-time KPIs including:
+    -   **Financial KPIs:** Sales, Expenses, Gross Margin (correctly calculated as (Sales - COGS) / Sales), Cashflow
+    -   **Cash Cycle KPIs:** DSO (Days Sales Outstanding), DPO (Days Payable Outstanding), DIO (Days Inventory Outstanding), CCC (Cash Conversion Cycle)
+    -   **Alerts:** Late invoices, Low stock alerts
 2.  **Customer & Sales Management:** CRUD for clients, quotes, sales invoices, payments, delivery notes, and an Aging Report for receivables.
 3.  **Supplier & Purchase Management:** CRUD for suppliers, purchase orders, goods receipts, and supplier invoices. Includes a two-stage costing workflow for import operations with logistics costs.
 4.  **Stock & Inventory:** Multi-warehouse management, movement tracking, and FIFO/CMP valorization.
