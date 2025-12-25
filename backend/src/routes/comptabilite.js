@@ -867,17 +867,85 @@ router.get('/comptes', async (req, res) => {
 // GESTION DES JOURNAUX
 // ==========================================
 
+// Journaux standard à créer pour chaque entreprise
+const JOURNAUX_STANDARD = [
+  { code: 'AC', nom: 'Journal des Achats', type: 'Achats' },
+  { code: 'VE', nom: 'Journal des Ventes', type: 'Ventes' },
+  { code: 'BQ', nom: 'Journal de Banque', type: 'Banque' },
+  { code: 'CA', nom: 'Journal de Caisse', type: 'Caisse' },
+  { code: 'OD', nom: 'Journal des Opérations Diverses', type: 'OD' },
+  { code: 'AN', nom: 'Journal des À-Nouveaux', type: 'AN' },
+];
+
+// Initialiser les journaux standard pour une entreprise (idempotent, case-insensitive)
+router.post('/journaux/initialiser', async (req, res) => {
+  try {
+    const entrepriseId = req.entrepriseId || parseInt(req.body.entrepriseId);
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+
+    // Récupérer les journaux existants
+    const existingJournaux = await db.query.journaux.findMany({
+      where: eq(journaux.entrepriseId, entrepriseId)
+    });
+    // Normaliser les codes existants en majuscules pour comparaison case-insensitive
+    const existingCodes = new Set(existingJournaux.map(j => j.code.toUpperCase()));
+
+    // Créer uniquement les journaux manquants (idempotent)
+    const createdJournaux = [];
+    for (const j of JOURNAUX_STANDARD) {
+      const normalizedCode = j.code.toUpperCase();
+      if (!existingCodes.has(normalizedCode)) {
+        const [created] = await db.insert(journaux).values({
+          entrepriseId,
+          code: normalizedCode,
+          nom: j.nom,
+          type: j.type,
+          actif: true
+        }).returning();
+        createdJournaux.push(created);
+        existingCodes.add(normalizedCode); // Éviter les doublons si appelé en boucle
+      }
+    }
+
+    // Récupérer tous les journaux après l'initialisation
+    const allJournaux = await db.query.journaux.findMany({
+      where: eq(journaux.entrepriseId, entrepriseId)
+    });
+
+    res.status(createdJournaux.length > 0 ? 201 : 200).json({ 
+      message: createdJournaux.length > 0 
+        ? `${createdJournaux.length} journaux créés avec succès`
+        : 'Journaux déjà complets',
+      journaux: allJournaux,
+      nouveaux: createdJournaux.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/journaux', async (req, res) => {
   try {
-    const { entrepriseId, code, nom, type } = req.body;
+    const entrepriseId = req.entrepriseId || parseInt(req.body.entrepriseId);
+    const { code, nom, type } = req.body;
+    
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+    if (!code || !nom) {
+      return res.status(400).json({ error: 'code et nom sont obligatoires' });
+    }
+
     const journal = await db.insert(journaux).values({
-      entrepriseId: parseInt(entrepriseId),
+      entrepriseId,
       code,
       nom,
-      type, // Achats, Ventes, Banque, Caisse, OD
+      type: type || 'OD',
       actif: true
     }).returning();
-    res.json(journal[0]);
+    res.status(201).json(journal[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -885,9 +953,13 @@ router.post('/journaux', async (req, res) => {
 
 router.get('/journaux', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+    
     const journals = await db.query.journaux.findMany({
-      where: eq(journaux.entrepriseId, parseInt(entrepriseId))
+      where: eq(journaux.entrepriseId, entrepriseId)
     });
     res.json(journals);
   } catch (error) {
@@ -901,30 +973,88 @@ router.get('/journaux', async (req, res) => {
 
 router.post('/ecritures', async (req, res) => {
   try {
-    const { entrepriseId, journalId, dateEcriture, reference, description, userId, ipAddress } = req.body;
+    const entrepriseId = req.entrepriseId || parseInt(req.body.entrepriseId);
+    const { journalId, dateEcriture, reference, description, lignes } = req.body;
 
-    const ecriture = await db.insert(ecritures).values({
-      entrepriseId: parseInt(entrepriseId),
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+    if (!journalId) {
+      return res.status(400).json({ error: 'journalId est obligatoire' });
+    }
+
+    // Valider que le journal appartient à l'entreprise
+    const journal = await db.query.journaux.findFirst({
+      where: and(
+        eq(journaux.id, parseInt(journalId)),
+        eq(journaux.entrepriseId, entrepriseId)
+      )
+    });
+    if (!journal) {
+      return res.status(400).json({ error: 'Journal non trouvé ou n\'appartient pas à l\'entreprise' });
+    }
+
+    // Valider l'équilibre des lignes si fournies
+    if (lignes && lignes.length > 0) {
+      let totalDebit = 0, totalCredit = 0;
+      for (const l of lignes) {
+        totalDebit += parseFloat(l.debit || 0);
+        totalCredit += parseFloat(l.credit || 0);
+      }
+      if (Math.abs(totalDebit - totalCredit) > 0.01) {
+        return res.status(400).json({ 
+          error: 'L\'écriture n\'est pas équilibrée', 
+          totalDebit, 
+          totalCredit,
+          difference: totalDebit - totalCredit
+        });
+      }
+    }
+
+    const [ecriture] = await db.insert(ecritures).values({
+      entrepriseId,
       journalId: parseInt(journalId),
       dateEcriture: new Date(dateEcriture),
       reference,
       description,
-      statut: 'brouillon',
-      totalDebit: 0,
-      totalCredit: 0
+      valide: false,
+      totalDebit: '0',
+      totalCredit: '0'
     }).returning();
 
+    // Si des lignes sont fournies, les créer
+    if (lignes && lignes.length > 0) {
+      for (const l of lignes) {
+        await db.insert(lignesEcritures).values({
+          entrepriseId,
+          ecritureId: ecriture.id,
+          compteComptableId: parseInt(l.compteComptableId),
+          debit: l.debit || '0',
+          credit: l.credit || '0',
+          libelle: l.libelle || description
+        });
+      }
+
+      // Mettre à jour les totaux
+      const totalDebit = lignes.reduce((acc, l) => acc + parseFloat(l.debit || 0), 0);
+      const totalCredit = lignes.reduce((acc, l) => acc + parseFloat(l.credit || 0), 0);
+      await db.update(ecritures)
+        .set({ totalDebit: String(totalDebit), totalCredit: String(totalCredit) })
+        .where(eq(ecritures.id, ecriture.id));
+      ecriture.totalDebit = String(totalDebit);
+      ecriture.totalCredit = String(totalCredit);
+    }
+
     await db.insert(auditLogs).values({
-      entrepriseId: parseInt(entrepriseId),
-      userId,
+      entrepriseId,
+      userId: req.userId,
       action: 'CREATE',
       table: 'ecritures',
-      recordId: ecriture[0].id,
-      description: `Écriture créée: ${reference}`,
-      ipAddress
+      recordId: ecriture.id,
+      description: `Écriture créée: ${reference} - Journal: ${journal.code}`
     });
 
-    res.json(ecriture[0]);
+    res.status(201).json(ecriture);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -932,15 +1062,131 @@ router.post('/ecritures', async (req, res) => {
 
 router.get('/ecritures', async (req, res) => {
   try {
-    const { entrepriseId, journalId } = req.query;
-    const where = [eq(ecritures.entrepriseId, parseInt(entrepriseId))];
-    if (journalId) where.push(eq(ecritures.journalId, parseInt(journalId)));
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const { journalId, dateDebut, dateFin, valide } = req.query;
+    
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
 
-    const entries = await db.query.ecritures.findMany({
-      where: and(...where),
-      orderBy: desc(ecritures.dateEcriture)
-    });
+    const conditions = [eq(ecritures.entrepriseId, entrepriseId)];
+    if (journalId) conditions.push(eq(ecritures.journalId, parseInt(journalId)));
+    if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
+    if (dateFin) conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
+    if (valide !== undefined) conditions.push(eq(ecritures.valide, valide === 'true'));
+
+    const entries = await db
+      .select({
+        id: ecritures.id,
+        numeroEcriture: ecritures.numeroEcriture,
+        dateEcriture: ecritures.dateEcriture,
+        reference: ecritures.reference,
+        description: ecritures.description,
+        valide: ecritures.valide,
+        totalDebit: ecritures.totalDebit,
+        totalCredit: ecritures.totalCredit,
+        journalId: ecritures.journalId,
+        journalCode: journaux.code,
+        journalNom: journaux.nom,
+        createdAt: ecritures.createdAt
+      })
+      .from(ecritures)
+      .innerJoin(journaux, eq(ecritures.journalId, journaux.id))
+      .where(and(...conditions))
+      .orderBy(desc(ecritures.dateEcriture));
+
     res.json(entries);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Valider une écriture (passer de brouillon à validée)
+router.post('/ecritures/:id/valider', async (req, res) => {
+  try {
+    const entrepriseId = req.entrepriseId || parseInt(req.body.entrepriseId);
+    const { id } = req.params;
+
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+
+    // Vérifier que l'écriture existe et appartient à l'entreprise
+    const ecriture = await db.query.ecritures.findFirst({
+      where: and(
+        eq(ecritures.id, parseInt(id)),
+        eq(ecritures.entrepriseId, entrepriseId)
+      )
+    });
+
+    if (!ecriture) {
+      return res.status(404).json({ error: 'Écriture non trouvée' });
+    }
+
+    if (ecriture.valide) {
+      return res.status(400).json({ error: 'L\'écriture est déjà validée' });
+    }
+
+    // Vérifier l'équilibre
+    const lignes = await db.query.lignesEcritures.findMany({
+      where: eq(lignesEcritures.ecritureId, parseInt(id))
+    });
+
+    let totalDebit = 0, totalCredit = 0;
+    lignes.forEach(l => {
+      totalDebit += parseFloat(l.debit || 0);
+      totalCredit += parseFloat(l.credit || 0);
+    });
+
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      return res.status(400).json({ 
+        error: 'L\'écriture n\'est pas équilibrée et ne peut pas être validée',
+        totalDebit,
+        totalCredit,
+        difference: totalDebit - totalCredit
+      });
+    }
+
+    // Générer le numéro d'écriture
+    const year = new Date().getFullYear();
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const journal = await db.query.journaux.findFirst({
+      where: eq(journaux.id, ecriture.journalId)
+    });
+    
+    const countResult = await db.execute(sql`
+      SELECT COUNT(*) as count FROM ecritures 
+      WHERE entreprise_id = ${entrepriseId} 
+      AND valide = true 
+      AND EXTRACT(YEAR FROM date_ecriture) = ${year}
+    `);
+    const count = parseInt(countResult.rows[0]?.count || 0) + 1;
+    const numeroEcriture = `${journal?.code || 'EC'}-${year}${month}-${String(count).padStart(5, '0')}`;
+
+    // Valider l'écriture
+    const [updated] = await db.update(ecritures)
+      .set({ 
+        valide: true, 
+        numeroEcriture,
+        totalDebit: String(totalDebit),
+        totalCredit: String(totalCredit)
+      })
+      .where(eq(ecritures.id, parseInt(id)))
+      .returning();
+
+    await db.insert(auditLogs).values({
+      entrepriseId,
+      userId: req.userId,
+      action: 'UPDATE',
+      table: 'ecritures',
+      recordId: parseInt(id),
+      description: `Écriture validée: ${numeroEcriture}`
+    });
+
+    res.json({ 
+      message: 'Écriture validée avec succès',
+      ecriture: updated
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -952,38 +1198,92 @@ router.get('/ecritures', async (req, res) => {
 
 router.post('/lignes', async (req, res) => {
   try {
-    const { entrepriseId, ecritureId, compteId, montant, type, description } = req.body;
+    const entrepriseId = req.entrepriseId || parseInt(req.body.entrepriseId);
+    const { ecritureId, compteComptableId, debit, credit, libelle } = req.body;
 
-    const ligne = await db.insert(lignesEcritures).values({
-      entrepriseId: parseInt(entrepriseId),
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+    if (!ecritureId || !compteComptableId) {
+      return res.status(400).json({ error: 'ecritureId et compteComptableId sont obligatoires' });
+    }
+
+    // Validation : debit et credit doivent être non-négatifs
+    const debitVal = parseFloat(debit || 0);
+    const creditVal = parseFloat(credit || 0);
+    if (debitVal < 0 || creditVal < 0) {
+      return res.status(400).json({ error: 'Les montants débit et crédit doivent être positifs' });
+    }
+    // Une ligne doit avoir soit débit soit crédit (pas les deux ou aucun)
+    if ((debitVal === 0 && creditVal === 0) || (debitVal > 0 && creditVal > 0)) {
+      return res.status(400).json({ error: 'Une ligne doit avoir soit un débit soit un crédit (pas les deux)' });
+    }
+
+    // Vérifier que l'écriture existe et appartient à l'entreprise
+    const ecriture = await db.query.ecritures.findFirst({
+      where: and(
+        eq(ecritures.id, parseInt(ecritureId)),
+        eq(ecritures.entrepriseId, entrepriseId)
+      )
+    });
+    if (!ecriture) {
+      return res.status(404).json({ error: 'Écriture non trouvée' });
+    }
+    if (ecriture.valide) {
+      return res.status(400).json({ error: 'Impossible d\'ajouter une ligne à une écriture validée' });
+    }
+
+    // Vérifier que le compte appartient à l'entreprise
+    const compte = await db.query.comptesComptables.findFirst({
+      where: and(
+        eq(comptesComptables.id, parseInt(compteComptableId)),
+        eq(comptesComptables.entrepriseId, entrepriseId)
+      )
+    });
+    if (!compte) {
+      return res.status(400).json({ error: 'Compte comptable non trouvé' });
+    }
+
+    const [ligne] = await db.insert(lignesEcritures).values({
+      entrepriseId,
       ecritureId: parseInt(ecritureId),
-      compteId: parseInt(compteId),
-      montant: parseFloat(montant),
-      type, // debit ou credit
-      description
+      compteComptableId: parseInt(compteComptableId),
+      debit: debit || '0',
+      credit: credit || '0',
+      libelle: libelle || ''
     }).returning();
 
     // Mettre à jour totaux de l'écriture
-    const ecriture = await db.query.ecritures.findFirst({
-      where: eq(ecritures.id, parseInt(ecritureId))
-    });
-
-    const lignes = await db.query.lignesEcritures.findMany({
+    const allLignes = await db.query.lignesEcritures.findMany({
       where: eq(lignesEcritures.ecritureId, parseInt(ecritureId))
     });
 
     let totalDebit = 0, totalCredit = 0;
-    lignes.forEach(l => {
-      if (l.type === 'debit') totalDebit += parseFloat(l.montant);
-      else totalCredit += parseFloat(l.montant);
+    allLignes.forEach(l => {
+      totalDebit += parseFloat(l.debit || 0);
+      totalCredit += parseFloat(l.credit || 0);
     });
 
+    // Stocker les totaux comme décimaux (le schéma utilise decimal)
     await db.update(ecritures).set({
-      totalDebit,
-      totalCredit
+      totalDebit: String(totalDebit),
+      totalCredit: String(totalCredit)
     }).where(eq(ecritures.id, parseInt(ecritureId)));
 
-    res.json(ligne[0]);
+    const equilibre = Math.abs(totalDebit - totalCredit) < 0.01;
+
+    // Retourner la ligne avec les totaux numériques et status d'équilibre
+    res.status(201).json({
+      ...ligne,
+      debit: parseFloat(ligne.debit || 0),
+      credit: parseFloat(ligne.credit || 0),
+      ecritureTotaux: { 
+        totalDebit, 
+        totalCredit, 
+        equilibre,
+        message: equilibre ? 'Écriture équilibrée' : `Écart de ${Math.abs(totalDebit - totalCredit).toFixed(2)}`
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -991,10 +1291,38 @@ router.post('/lignes', async (req, res) => {
 
 router.get('/lignes/:ecritureId', async (req, res) => {
   try {
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
     const { ecritureId } = req.params;
-    const lines = await db.query.lignesEcritures.findMany({
-      where: eq(lignesEcritures.ecritureId, parseInt(ecritureId))
+
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+
+    // Vérifier que l'écriture appartient à l'entreprise
+    const ecriture = await db.query.ecritures.findFirst({
+      where: and(
+        eq(ecritures.id, parseInt(ecritureId)),
+        eq(ecritures.entrepriseId, entrepriseId)
+      )
     });
+    if (!ecriture) {
+      return res.status(404).json({ error: 'Écriture non trouvée' });
+    }
+
+    const lines = await db
+      .select({
+        id: lignesEcritures.id,
+        compteComptableId: lignesEcritures.compteComptableId,
+        compteNumero: comptesComptables.numero,
+        compteNom: comptesComptables.nom,
+        debit: lignesEcritures.debit,
+        credit: lignesEcritures.credit,
+        libelle: lignesEcritures.libelle
+      })
+      .from(lignesEcritures)
+      .innerJoin(comptesComptables, eq(lignesEcritures.compteComptableId, comptesComptables.id))
+      .where(eq(lignesEcritures.ecritureId, parseInt(ecritureId)));
+
     res.json(lines);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1069,31 +1397,85 @@ router.delete('/ecritures/:id', async (req, res) => {
 
 router.get('/grand-livre', async (req, res) => {
   try {
-    const { entrepriseId, compteId, dateDebut, dateFin } = req.query;
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const { compteId, dateDebut, dateFin } = req.query;
+
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
 
     const conditions = [
-      eq(lignesEcritures.entrepriseId, parseInt(entrepriseId)),
-      eq(ecritures.statut, 'validée')
+      eq(lignesEcritures.entrepriseId, entrepriseId),
+      eq(ecritures.valide, true)
     ];
-    if (compteId) conditions.push(eq(lignesEcritures.compteId, parseInt(compteId)));
+    if (compteId) conditions.push(eq(lignesEcritures.compteComptableId, parseInt(compteId)));
     if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
     if (dateFin) conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
 
     const lignes = await db
       .select({
         id: lignesEcritures.id,
-        compteId: lignesEcritures.compteId,
-        montant: lignesEcritures.montant,
-        type: lignesEcritures.type,
-        description: lignesEcritures.description,
+        compteComptableId: lignesEcritures.compteComptableId,
+        compteNumero: comptesComptables.numero,
+        compteNom: comptesComptables.nom,
+        debit: lignesEcritures.debit,
+        credit: lignesEcritures.credit,
+        libelle: lignesEcritures.libelle,
         dateEcriture: ecritures.dateEcriture,
-        reference: ecritures.reference
+        reference: ecritures.reference,
+        journalCode: journaux.code,
+        journalNom: journaux.nom
       })
       .from(lignesEcritures)
       .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
-      .where(and(...conditions));
+      .innerJoin(comptesComptables, eq(lignesEcritures.compteComptableId, comptesComptables.id))
+      .innerJoin(journaux, eq(ecritures.journalId, journaux.id))
+      .where(and(...conditions))
+      .orderBy(ecritures.dateEcriture, comptesComptables.numero);
 
-    res.json(lignes);
+    // Grouper par compte pour le grand livre
+    const grandLivre = {};
+    lignes.forEach(ligne => {
+      const key = ligne.compteComptableId;
+      if (!grandLivre[key]) {
+        grandLivre[key] = {
+          compteId: key,
+          numero: ligne.compteNumero,
+          nom: ligne.compteNom,
+          lignes: [],
+          totalDebit: 0,
+          totalCredit: 0,
+          solde: 0
+        };
+      }
+      grandLivre[key].lignes.push({
+        id: ligne.id,
+        date: ligne.dateEcriture,
+        journal: ligne.journalCode,
+        reference: ligne.reference,
+        libelle: ligne.libelle,
+        debit: parseFloat(ligne.debit || 0),
+        credit: parseFloat(ligne.credit || 0)
+      });
+      grandLivre[key].totalDebit += parseFloat(ligne.debit || 0);
+      grandLivre[key].totalCredit += parseFloat(ligne.credit || 0);
+    });
+
+    // Calculer les soldes
+    Object.values(grandLivre).forEach(compte => {
+      compte.solde = compte.totalDebit - compte.totalCredit;
+    });
+
+    // Trier par numéro de compte
+    const result = Object.values(grandLivre).sort((a, b) => a.numero.localeCompare(b.numero));
+
+    res.json({
+      comptes: result,
+      totaux: {
+        totalDebit: result.reduce((acc, c) => acc + c.totalDebit, 0),
+        totalCredit: result.reduce((acc, c) => acc + c.totalCredit, 0)
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
