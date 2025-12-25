@@ -15,6 +15,7 @@ export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['entree', 's
 export const journalTypeEnum = pgEnum('journal_type', ['achats', 'ventes', 'banque', 'caisse', 'od']);
 export const systemeComptableEnum = pgEnum('systeme_comptable', ['SYSCOHADA', 'IFRS', 'PCG']);
 export const emailStatusEnum = pgEnum('email_status', ['envoye', 'echec', 'en_attente']);
+export const receptionStatusEnum = pgEnum('reception_status', ['brouillon', 'validee', 'facturee', 'annulee']);
 
 // ==========================================
 // MODULE 9: MULTI-ENTREPRISE & ADMINISTRATION
@@ -327,6 +328,52 @@ export const alertesStock = pgTable('alertes_stock', {
   statut: varchar('statut', { length: 50 }).default('active'),
   dateAlerte: timestamp('date_alerte').defaultNow(),
   dateResolution: timestamp('date_resolution'),
+});
+
+// ==========================================
+// MODULE 11B: BONS DE RÉCEPTION (INVENTAIRE ACHATS)
+// ==========================================
+
+export const bonsReception = pgTable('bons_reception', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  numero: varchar('numero', { length: 100 }).unique(),
+  fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id).notNull(),
+  dateReception: date('date_reception').notNull(),
+  statut: receptionStatusEnum('statut').default('brouillon'),
+  
+  entrepotId: integer('entrepot_id').references(() => entrepots.id),
+  commandeAchatId: integer('commande_achat_id'),
+  
+  totalHT: decimal('total_ht', { precision: 15, scale: 2 }).default('0'),
+  notes: text('notes'),
+  
+  ecritureStockId: integer('ecriture_stock_id'),
+  factureAchatId: integer('facture_achat_id'),
+  
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const lignesReception = pgTable('lignes_reception', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  bonReceptionId: integer('bon_reception_id').references(() => bonsReception.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id).notNull(),
+  
+  quantiteCommandee: decimal('quantite_commandee', { precision: 15, scale: 3 }).default('0'),
+  quantiteRecue: decimal('quantite_recue', { precision: 15, scale: 3 }).notNull(),
+  quantiteFacturee: decimal('quantite_facturee', { precision: 15, scale: 3 }).default('0'),
+  
+  prixUnitaireEstime: decimal('prix_unitaire_estime', { precision: 15, scale: 2 }).notNull(),
+  prixUnitaireFacture: decimal('prix_unitaire_facture', { precision: 15, scale: 2 }),
+  
+  ecartPrix: decimal('ecart_prix', { precision: 15, scale: 2 }).default('0'),
+  
+  mouvementStockId: integer('mouvement_stock_id').references(() => mouvementsStock.id),
+  
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // ==========================================
