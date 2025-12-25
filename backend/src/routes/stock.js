@@ -861,11 +861,14 @@ router.get('/rapports/stock-non-facture', async (req, res) => {
         p.reference as produit_reference, p.nom as produit_nom,
         f.raison_sociale as fournisseur_nom,
         br.numero as reception_numero,
+        br.commande_achat_id,
+        ca.numero_commande as commande_numero,
         e.nom as entrepot_nom
       FROM stock_pending sp
       LEFT JOIN produits p ON sp.produit_id = p.id
       LEFT JOIN fournisseurs f ON sp.fournisseur_id = f.id
       LEFT JOIN bons_reception br ON sp.bon_reception_id = br.id
+      LEFT JOIN commandes_achat ca ON br.commande_achat_id = ca.id
       LEFT JOIN entrepots e ON sp.entrepot_id = e.id
       ${conditions}
       ORDER BY sp.date_reception DESC

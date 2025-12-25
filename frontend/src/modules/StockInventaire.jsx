@@ -442,11 +442,12 @@ function NonFactureTab({ fournisseurs, produits }) {
           ) : (
             <Table
               columns={[
+                { key: 'commande_numero', label: 'N° PO' },
+                { key: 'fournisseur_nom', label: 'Fournisseur' },
                 { key: 'date_reception', label: 'Date Réception', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
                 { key: 'reception_numero', label: 'N° Réception' },
                 { key: 'produit_nom', label: 'Produit', render: (val, row) => `${row.produit_reference || ''} ${val || ''}` },
-                { key: 'fournisseur_nom', label: 'Fournisseur' },
-                { key: 'quantite_pending', label: 'Quantité', render: (val) => parseFloat(val).toFixed(0) },
+                { key: 'quantite_pending', label: 'Qté', render: (val) => parseFloat(val).toFixed(0) },
                 { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
                 { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
               ]}
@@ -473,10 +474,10 @@ function NonFactureTab({ fournisseurs, produits }) {
               </div>
               <Table
                 columns={[
+                  { key: 'commande_numero', label: 'N° PO' },
+                  { key: 'fournisseur_nom', label: 'Fournisseur' },
                   { key: 'date_reception', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
                   { key: 'reception_numero', label: 'N° Réception' },
-                  { key: 'commande_numero', label: 'N° Commande' },
-                  { key: 'fournisseur_nom', label: 'Fournisseur' },
                   { key: 'type', label: 'Type', render: (val) => typeLabels[val] || val },
                   { key: 'description', label: 'Description' },
                   { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
