@@ -25,10 +25,10 @@ function getMonthDates() {
 router.get('/global', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     
     if (!eId) {
-      return res.status(400).json({ error: 'entrepriseId requis' });
+      return res.status(401).json({ error: 'Authentification requise' });
     }
     
     // Par défaut: année fiscale entière pour avoir toutes les données
@@ -223,7 +223,7 @@ router.get('/global', async (req, res) => {
 // Ventes par mois (historique 12 mois)
 router.get('/ventes-mensuelles', async (req, res) => {
   try {
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const data = [];
 
@@ -257,7 +257,7 @@ router.get('/ventes-mensuelles', async (req, res) => {
 // Répartition dépenses par catégorie
 router.get('/depenses-categories', async (req, res) => {
   try {
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
 
     const depenses = await db.query.facturesAchat.findMany({
@@ -285,7 +285,7 @@ router.get('/depenses-categories', async (req, res) => {
 // KPIs avancés
 router.get('/kpis', async (req, res) => {
   try {
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
 
     // Délai paiement client (jours entre facture et paiement)
@@ -346,7 +346,7 @@ router.get('/kpis', async (req, res) => {
 // Détail ventes du mois
 router.get('/detail/ventes', async (req, res) => {
   try {
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const { debut, fin } = getMonthDates();
@@ -379,7 +379,7 @@ router.get('/detail/ventes', async (req, res) => {
 // Détail dépenses du mois
 router.get('/detail/depenses', async (req, res) => {
   try {
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const { debut, fin } = getMonthDates();
@@ -411,7 +411,7 @@ router.get('/detail/depenses', async (req, res) => {
 // Détail factures en retard
 router.get('/detail/factures-retard', async (req, res) => {
   try {
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const now = new Date();
@@ -448,7 +448,7 @@ router.get('/detail/factures-retard', async (req, res) => {
 // Détail stock faible
 router.get('/detail/stock-faible', async (req, res) => {
   try {
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const allProduits = await db.query.produits.findMany({
@@ -475,7 +475,7 @@ router.get('/detail/stock-faible', async (req, res) => {
 // Détail cashflow
 router.get('/detail/cashflow', async (req, res) => {
   try {
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const { debut, fin } = getMonthDates();
@@ -536,7 +536,7 @@ router.get('/detail/cashflow', async (req, res) => {
 // Drill-down: Marge brute détaillée
 router.get('/detail/marge', async (req, res) => {
   try {
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const { debut, fin } = getMonthDates();
     
@@ -577,7 +577,7 @@ router.get('/detail/marge', async (req, res) => {
 router.get('/detail/ventes-mois', async (req, res) => {
   try {
     const { mois } = req.query;
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     
     // Parser le mois (format: "janv. 24")
@@ -638,7 +638,7 @@ router.get('/detail/ventes-mois', async (req, res) => {
 router.get('/detail/depenses-categorie', async (req, res) => {
   try {
     const { categorie } = req.query;
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const { debut, fin } = getMonthDates();
     

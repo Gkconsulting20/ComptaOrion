@@ -181,6 +181,13 @@ router.post('/', async (req, res) => {
       })
       .returning();
 
+    // Générer et assigner le code auxiliaire automatiquement
+    const codeAuxiliaire = 'FOU' + String(newFournisseur.id).padStart(5, '0');
+    await db.update(fournisseurs)
+      .set({ codeAuxiliaire })
+      .where(eq(fournisseurs.id, newFournisseur.id));
+    newFournisseur.codeAuxiliaire = codeAuxiliaire;
+
     // Audit log
     const auditInfo = extractAuditInfo(req);
     await logAudit({

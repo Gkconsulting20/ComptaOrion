@@ -596,6 +596,13 @@ router.post('/', async (req, res) => {
       })
       .returning();
 
+    // Générer et assigner le code auxiliaire automatiquement
+    const codeAuxiliaire = 'CLI' + String(newClient[0].id).padStart(5, '0');
+    await db.update(clients)
+      .set({ codeAuxiliaire })
+      .where(eq(clients.id, newClient[0].id));
+    newClient[0].codeAuxiliaire = codeAuxiliaire;
+
     // Audit log
     const auditInfo = extractAuditInfo(req);
     await logAudit({

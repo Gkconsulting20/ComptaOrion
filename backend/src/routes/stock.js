@@ -21,6 +21,21 @@ router.get('/categories', async (req, res) => {
 router.post('/categories', async (req, res) => {
   try {
     const { nom, description, codeCategorie, compteVentesId, compteAchatsId, compteStockId } = req.body;
+    
+    // Valider que les comptes comptables appartiennent à la même entreprise
+    const comptesIds = [compteVentesId, compteAchatsId, compteStockId].filter(Boolean).map(id => parseInt(id));
+    if (comptesIds.length > 0) {
+      const comptesValides = await db.query.comptesComptables.findMany({
+        where: and(
+          eq(comptesComptables.entrepriseId, req.entrepriseId),
+          sql`${comptesComptables.id} IN (${sql.join(comptesIds.map(id => sql`${id}`), sql`, `)})`
+        )
+      });
+      if (comptesValides.length !== comptesIds.length) {
+        return res.status(400).json({ error: 'Comptes comptables invalides ou appartenant à une autre entreprise' });
+      }
+    }
+    
     const result = await db.insert(categoriesStock).values({
       entrepriseId: req.entrepriseId,
       nom,
@@ -51,6 +66,21 @@ router.post('/categories', async (req, res) => {
 router.put('/categories/:id', async (req, res) => {
   try {
     const { nom, description, codeCategorie, compteVentesId, compteAchatsId, compteStockId } = req.body;
+    
+    // Valider que les comptes comptables appartiennent à la même entreprise
+    const comptesIds = [compteVentesId, compteAchatsId, compteStockId].filter(Boolean).map(id => parseInt(id));
+    if (comptesIds.length > 0) {
+      const comptesValides = await db.query.comptesComptables.findMany({
+        where: and(
+          eq(comptesComptables.entrepriseId, req.entrepriseId),
+          sql`${comptesComptables.id} IN (${sql.join(comptesIds.map(id => sql`${id}`), sql`, `)})`
+        )
+      });
+      if (comptesValides.length !== comptesIds.length) {
+        return res.status(400).json({ error: 'Comptes comptables invalides ou appartenant à une autre entreprise' });
+      }
+    }
+    
     const result = await db.update(categoriesStock)
       .set({ 
         nom, 
