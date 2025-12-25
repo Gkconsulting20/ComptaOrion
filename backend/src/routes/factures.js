@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables, mouvementsStock, entreprises } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import emailService from '../services/emailService.js';
+import { createEcritureFactureVente, createEcriturePaiementClient } from '../services/comptabiliteService.js';
 
 const router = express.Router();
 
@@ -223,6 +224,26 @@ router.post('/', async (req, res) => {
 
     await db.insert(factureItems).values(factureItemsData);
 
+    // Impact automatique sur COMPTABILITÉ - Journal des Ventes
+    // Débit: Client (411) - Crédit: Ventes (701) + TVA (443)
+    try {
+      const clientData = await db.select().from(clients).where(eq(clients.id, parseInt(clientId))).limit(1);
+      const clientInfo = clientData[0] || {};
+      
+      await createEcritureFactureVente({
+        entrepriseId: req.entrepriseId,
+        numeroFacture,
+        dateFacture: dateFacture || new Date().toISOString().split('T')[0],
+        clientNom: clientInfo.nom || 'Client',
+        clientCompteId: clientInfo.compteComptableId,
+        totalHT,
+        totalTVA,
+        totalTTC
+      });
+    } catch (comptaError) {
+      console.warn('Avertissement: Écriture comptable facture vente non générée:', comptaError.message);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Facture créée avec succès',
@@ -366,9 +387,25 @@ router.post('/:id/paiement', async (req, res) => {
       }
     }
 
-    // TODO: Impact automatique sur COMPTABILITÉ (à implémenter avec écritures comptables)
-    // Débit: Banque/Caisse
-    // Crédit: Client (411)
+    // Impact automatique sur COMPTABILITÉ
+    // Débit: Banque/Caisse - Crédit: Client (411)
+    try {
+      const clientData = await db.select().from(clients).where(eq(clients.id, factureData.clientId)).limit(1);
+      const clientInfo = clientData[0] || {};
+      
+      await createEcriturePaiementClient({
+        entrepriseId: req.entrepriseId,
+        reference: reference || `PAI-${newPaiement.id}`,
+        datePaiement: datePaiement || new Date().toISOString().split('T')[0],
+        clientNom: clientInfo.nom || 'Client',
+        clientCompteId: clientInfo.compteComptableId,
+        montant: montantPaiement,
+        modePaiement: modePaiement === 'especes' ? 'especes' : 'banque',
+        compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null
+      });
+    } catch (comptaError) {
+      console.warn('Avertissement: Écriture comptable paiement client non générée:', comptaError.message);
+    }
 
     res.status(201).json({
       success: true,

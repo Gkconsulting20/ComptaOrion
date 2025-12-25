@@ -519,6 +519,26 @@ router.post('/factures/:id/paiement', async (req, res) => {
         );
     }
 
+    // Impact automatique sur COMPTABILITÉ
+    // Débit: Fournisseur (401) - Crédit: Banque/Caisse
+    try {
+      const fournisseurData = await db.select().from(fournisseurs).where(eq(fournisseurs.id, factureData.fournisseurId)).limit(1);
+      const fournisseurInfo = fournisseurData[0] || {};
+      
+      await createEcriturePaiementFournisseur({
+        entrepriseId: req.entrepriseId,
+        reference: reference || `PAI-F-${paiement.id}`,
+        datePaiement: datePaiement || new Date().toISOString().split('T')[0],
+        fournisseurNom: fournisseurInfo.raisonSociale || fournisseurInfo.nom || 'Fournisseur',
+        fournisseurCompteId: fournisseurInfo.compteComptableId,
+        montant: montantPaiement,
+        modePaiement: modePaiement === 'especes' ? 'especes' : 'banque',
+        compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null
+      });
+    } catch (comptaError) {
+      console.warn('Avertissement: Écriture comptable paiement fournisseur non générée:', comptaError.message);
+    }
+
     return res.json({
       success: true,
       message: 'Paiement enregistré avec succès',
