@@ -794,47 +794,6 @@ router.get('/rapports/valorisation', async (req, res) => {
   }
 });
 
-// Rapport mouvements de stock
-router.get('/rapports/mouvements', async (req, res) => {
-  try {
-    const { dateDebut, dateFin, produitId, type } = req.query;
-    
-    let conditions = `WHERE ms.entreprise_id = ${req.entrepriseId}`;
-    
-    if (dateDebut) {
-      conditions += ` AND ms.created_at >= '${dateDebut}'`;
-    }
-    if (dateFin) {
-      conditions += ` AND ms.created_at <= '${dateFin}'::date + interval '1 day'`;
-    }
-    if (produitId) {
-      conditions += ` AND ms.produit_id = ${produitId}`;
-    }
-    if (type) {
-      conditions += ` AND ms.type = '${type}'`;
-    }
-    
-    const result = await db.execute(sql.raw(`
-      SELECT ms.*, p.nom as produit_nom, p.reference as produit_reference,
-             u.nom as user_nom, u.prenom as user_prenom
-      FROM mouvements_stock ms
-      LEFT JOIN produits p ON ms.produit_id = p.id
-      LEFT JOIN users u ON ms.user_id = u.id
-      ${conditions}
-      ORDER BY ms.created_at DESC
-      LIMIT 500
-    `));
-    
-    res.json(result.rows || []);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==========================================
-// RAPPORTS STOCK NON FACTURÉ & COÛTS LOGISTIQUES
-// ==========================================
-
 // Helper: Sanitize date (remove query string artifacts)
 function sanitizeDate(dateStr) {
   if (!dateStr) return null;
@@ -850,6 +809,52 @@ function sanitizeInt(val) {
   return isNaN(parsed) ? null : parsed;
 }
 
+// Rapport mouvements de stock
+router.get('/rapports/mouvements', async (req, res) => {
+  try {
+    const dateDebut = sanitizeDate(req.query.dateDebut);
+    const dateFin = sanitizeDate(req.query.dateFin);
+    const produitId = sanitizeInt(req.query.produitId);
+    const type = req.query.type ? req.query.type.split('?')[0].trim() : null;
+    const entrepriseId = sanitizeInt(req.entrepriseId);
+    
+    // Construire la requête avec sql template literals (sécurisé)
+    let query = sql`
+      SELECT ms.*, p.nom as produit_nom, p.reference as produit_reference,
+             u.nom as user_nom, u.prenom as user_prenom
+      FROM mouvements_stock ms
+      LEFT JOIN produits p ON ms.produit_id = p.id
+      LEFT JOIN users u ON ms.user_id = u.id
+      WHERE ms.entreprise_id = ${entrepriseId}
+    `;
+    
+    if (dateDebut) {
+      query = sql`${query} AND ms.created_at >= ${dateDebut}`;
+    }
+    if (dateFin) {
+      query = sql`${query} AND ms.created_at <= ${dateFin}::date + interval '1 day'`;
+    }
+    if (produitId) {
+      query = sql`${query} AND ms.produit_id = ${produitId}`;
+    }
+    if (type) {
+      query = sql`${query} AND ms.type = ${type}`;
+    }
+    
+    query = sql`${query} ORDER BY ms.created_at DESC LIMIT 500`;
+    
+    const result = await db.execute(query);
+    
+    res.json(result.rows || []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// RAPPORTS STOCK NON FACTURÉ & COÛTS LOGISTIQUES
+// ==========================================
+
 // Rapport stock non facturé (pending)
 router.get('/rapports/stock-non-facture', async (req, res) => {
   try {
@@ -859,35 +864,8 @@ router.get('/rapports/stock-non-facture', async (req, res) => {
     const dateFin = sanitizeDate(req.query.dateFin);
     const entrepriseId = sanitizeInt(req.entrepriseId);
     
-    let conditions = [];
-    let params = [];
-    let paramIndex = 1;
-    
-    conditions.push(`sp.entreprise_id = $${paramIndex++}`);
-    params.push(entrepriseId);
-    
-    conditions.push(`sp.statut = 'pending'`);
-    
-    if (fournisseurId) {
-      conditions.push(`sp.fournisseur_id = $${paramIndex++}`);
-      params.push(fournisseurId);
-    }
-    if (produitId) {
-      conditions.push(`sp.produit_id = $${paramIndex++}`);
-      params.push(produitId);
-    }
-    if (dateDebut) {
-      conditions.push(`sp.date_reception >= $${paramIndex++}`);
-      params.push(dateDebut);
-    }
-    if (dateFin) {
-      conditions.push(`sp.date_reception <= $${paramIndex++}`);
-      params.push(dateFin);
-    }
-    
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    
-    const queryText = `
+    // Construire la requête avec sql template literals (sécurisé)
+    let query = sql`
       SELECT 
         sp.*,
         p.reference as produit_reference, p.nom as produit_nom,
@@ -902,11 +880,25 @@ router.get('/rapports/stock-non-facture', async (req, res) => {
       LEFT JOIN bons_reception br ON sp.bon_reception_id = br.id
       LEFT JOIN commandes_achat ca ON br.commande_achat_id = ca.id
       LEFT JOIN entrepots e ON sp.entrepot_id = e.id
-      ${whereClause}
-      ORDER BY sp.date_reception DESC
+      WHERE sp.entreprise_id = ${entrepriseId} AND sp.statut = 'pending'
     `;
     
-    const result = await db.execute(sql.raw(queryText, params));
+    if (fournisseurId) {
+      query = sql`${query} AND sp.fournisseur_id = ${fournisseurId}`;
+    }
+    if (produitId) {
+      query = sql`${query} AND sp.produit_id = ${produitId}`;
+    }
+    if (dateDebut) {
+      query = sql`${query} AND sp.date_reception >= ${dateDebut}`;
+    }
+    if (dateFin) {
+      query = sql`${query} AND sp.date_reception <= ${dateFin}`;
+    }
+    
+    query = sql`${query} ORDER BY sp.date_reception DESC`;
+    
+    const result = await db.execute(query);
     
     const items = result.rows || [];
     const totalQuantite = items.reduce((sum, i) => sum + parseFloat(i.quantite_pending || 0), 0);
@@ -944,35 +936,8 @@ router.get('/rapports/logistique-non-facturee', async (req, res) => {
     const dateFin = sanitizeDate(req.query.dateFin);
     const entrepriseId = sanitizeInt(req.entrepriseId);
     
-    let conditions = [];
-    let params = [];
-    let paramIndex = 1;
-    
-    conditions.push(`lp.entreprise_id = $${paramIndex++}`);
-    params.push(entrepriseId);
-    
-    conditions.push(`lp.statut = 'pending'`);
-    
-    if (fournisseurId) {
-      conditions.push(`lp.fournisseur_id = $${paramIndex++}`);
-      params.push(fournisseurId);
-    }
-    if (type) {
-      conditions.push(`lp.type = $${paramIndex++}`);
-      params.push(type);
-    }
-    if (dateDebut) {
-      conditions.push(`lp.date_reception >= $${paramIndex++}`);
-      params.push(dateDebut);
-    }
-    if (dateFin) {
-      conditions.push(`lp.date_reception <= $${paramIndex++}`);
-      params.push(dateFin);
-    }
-    
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    
-    const queryText = `
+    // Construire la requête avec sql template literals (sécurisé)
+    let query = sql`
       SELECT 
         lp.*,
         f.raison_sociale as fournisseur_nom,
@@ -982,11 +947,25 @@ router.get('/rapports/logistique-non-facturee', async (req, res) => {
       LEFT JOIN fournisseurs f ON lp.fournisseur_id = f.id
       LEFT JOIN bons_reception br ON lp.bon_reception_id = br.id
       LEFT JOIN commandes_achat ca ON lp.commande_achat_id = ca.id
-      ${whereClause}
-      ORDER BY lp.date_reception DESC
+      WHERE lp.entreprise_id = ${entrepriseId} AND lp.statut = 'pending'
     `;
     
-    const result = await db.execute(sql.raw(queryText, params));
+    if (fournisseurId) {
+      query = sql`${query} AND lp.fournisseur_id = ${fournisseurId}`;
+    }
+    if (type) {
+      query = sql`${query} AND lp.type = ${type}`;
+    }
+    if (dateDebut) {
+      query = sql`${query} AND lp.date_reception >= ${dateDebut}`;
+    }
+    if (dateFin) {
+      query = sql`${query} AND lp.date_reception <= ${dateFin}`;
+    }
+    
+    query = sql`${query} ORDER BY lp.date_reception DESC`;
+    
+    const result = await db.execute(query);
     
     const items = result.rows || [];
     const totalMontant = items.reduce((sum, i) => sum + parseFloat(i.montant_estime || 0), 0);

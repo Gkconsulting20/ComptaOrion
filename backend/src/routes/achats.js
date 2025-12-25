@@ -617,21 +617,25 @@ router.get('/echeances', async (req, res) => {
 // GET /api/achats/receptions-en-attente - Réceptions en attente de facturation pour un fournisseur
 router.get('/receptions-en-attente', async (req, res) => {
   try {
-    const { fournisseurId } = req.query;
+    const fournisseurId = req.query.fournisseurId ? parseInt(req.query.fournisseurId, 10) : null;
+    const entrepriseId = parseInt(req.entrepriseId, 10);
     
-    let conditions = `WHERE br.entreprise_id = ${req.entrepriseId} AND br.statut = 'validee' AND br.facture_achat_id IS NULL`;
-    if (fournisseurId) {
-      conditions += ` AND br.fournisseur_id = ${fournisseurId}`;
-    }
-    
-    const result = await db.execute(sql.raw(`
+    // Construire la requête avec sql template literals (sécurisé)
+    let query = sql`
       SELECT br.*, f.raison_sociale as fournisseur_nom,
              (SELECT json_agg(lr.*) FROM lignes_reception lr WHERE lr.bon_reception_id = br.id) as lignes
       FROM bons_reception br
       LEFT JOIN fournisseurs f ON br.fournisseur_id = f.id
-      ${conditions}
-      ORDER BY br.date_reception ASC
-    `));
+      WHERE br.entreprise_id = ${entrepriseId} AND br.statut = 'validee' AND br.facture_achat_id IS NULL
+    `;
+    
+    if (fournisseurId && !isNaN(fournisseurId)) {
+      query = sql`${query} AND br.fournisseur_id = ${fournisseurId}`;
+    }
+    
+    query = sql`${query} ORDER BY br.date_reception ASC`;
+    
+    const result = await db.execute(query);
     
     res.json({ success: true, data: result.rows || [] });
   } catch (error) {
@@ -853,37 +857,72 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
   }
 });
 
+// Helper: Sanitize date (remove query string artifacts)
+function sanitizeDate(dateStr) {
+  if (!dateStr) return null;
+  const cleaned = dateStr.split('?')[0].trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return null;
+  return cleaned;
+}
+
 // GET /api/achats/ecarts-costing - Rapport des écarts de costing
 router.get('/ecarts-costing', async (req, res) => {
   try {
-    const { dateDebut, dateFin, fournisseurId } = req.query;
+    const dateDebut = sanitizeDate(req.query.dateDebut);
+    const dateFin = sanitizeDate(req.query.dateFin);
+    const fournisseurId = req.query.fournisseurId ? parseInt(req.query.fournisseurId, 10) : null;
+    const entrepriseId = parseInt(req.entrepriseId, 10);
     
-    let conditions = `WHERE sp.entreprise_id = ${req.entrepriseId} AND sp.statut = 'invoiced' AND sp.ecart_prix IS NOT NULL AND sp.ecart_prix != 0`;
-    if (fournisseurId) conditions += ` AND sp.fournisseur_id = ${fournisseurId}`;
-    if (dateDebut) conditions += ` AND sp.date_facturation >= '${dateDebut}'`;
-    if (dateFin) conditions += ` AND sp.date_facturation <= '${dateFin}'`;
-
-    const stockEcarts = await db.execute(sql.raw(`
+    // Stock écarts - requête sécurisée avec sql template literals
+    let stockQuery = sql`
       SELECT sp.*, p.nom as produit_nom, p.reference as produit_reference, f.raison_sociale as fournisseur_nom
       FROM stock_pending sp
       LEFT JOIN produits p ON sp.produit_id = p.id
       LEFT JOIN fournisseurs f ON sp.fournisseur_id = f.id
-      ${conditions}
-      ORDER BY ABS(sp.ecart_prix) DESC
-    `));
+      WHERE sp.entreprise_id = ${entrepriseId} 
+        AND sp.statut = 'invoiced' 
+        AND sp.ecart_prix IS NOT NULL 
+        AND sp.ecart_prix != 0
+    `;
+    
+    if (fournisseurId && !isNaN(fournisseurId)) {
+      stockQuery = sql`${stockQuery} AND sp.fournisseur_id = ${fournisseurId}`;
+    }
+    if (dateDebut) {
+      stockQuery = sql`${stockQuery} AND sp.date_facturation >= ${dateDebut}`;
+    }
+    if (dateFin) {
+      stockQuery = sql`${stockQuery} AND sp.date_facturation <= ${dateFin}`;
+    }
+    
+    stockQuery = sql`${stockQuery} ORDER BY ABS(sp.ecart_prix) DESC`;
 
-    let logConditions = `WHERE lp.entreprise_id = ${req.entrepriseId} AND lp.statut = 'invoiced' AND lp.ecart_montant IS NOT NULL AND lp.ecart_montant != 0`;
-    if (fournisseurId) logConditions += ` AND lp.fournisseur_id = ${fournisseurId}`;
-    if (dateDebut) logConditions += ` AND lp.date_facturation >= '${dateDebut}'`;
-    if (dateFin) logConditions += ` AND lp.date_facturation <= '${dateFin}'`;
+    const stockEcarts = await db.execute(stockQuery);
 
-    const logEcarts = await db.execute(sql.raw(`
+    // Logistique écarts - requête sécurisée avec sql template literals
+    let logQuery = sql`
       SELECT lp.*, f.raison_sociale as fournisseur_nom
       FROM logistique_pending lp
       LEFT JOIN fournisseurs f ON lp.fournisseur_id = f.id
-      ${logConditions}
-      ORDER BY ABS(lp.ecart_montant) DESC
-    `));
+      WHERE lp.entreprise_id = ${entrepriseId} 
+        AND lp.statut = 'invoiced' 
+        AND lp.ecart_montant IS NOT NULL 
+        AND lp.ecart_montant != 0
+    `;
+    
+    if (fournisseurId && !isNaN(fournisseurId)) {
+      logQuery = sql`${logQuery} AND lp.fournisseur_id = ${fournisseurId}`;
+    }
+    if (dateDebut) {
+      logQuery = sql`${logQuery} AND lp.date_facturation >= ${dateDebut}`;
+    }
+    if (dateFin) {
+      logQuery = sql`${logQuery} AND lp.date_facturation <= ${dateFin}`;
+    }
+    
+    logQuery = sql`${logQuery} ORDER BY ABS(lp.ecart_montant) DESC`;
+
+    const logEcarts = await db.execute(logQuery);
 
     const totalEcartStock = (stockEcarts.rows || []).reduce((sum, r) => sum + parseFloat(r.ecart_prix || 0), 0);
     const totalEcartLogistique = (logEcarts.rows || []).reduce((sum, r) => sum + parseFloat(r.ecart_montant || 0), 0);
