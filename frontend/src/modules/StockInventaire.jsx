@@ -6,6 +6,175 @@ import { Modal } from '../components/Modal';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
 
+function NonFactureTab({ fournisseurs, produits }) {
+  const [subTab, setSubTab] = useState('stock');
+  const [stockPending, setStockPending] = useState({ items: [], totaux: {}, parFournisseur: [] });
+  const [logistiquePending, setLogistiquePending] = useState({ items: [], totaux: {}, parType: [], parFournisseur: [] });
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({ fournisseurId: '', dateDebut: '', dateFin: '' });
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.fournisseurId) params.append('fournisseurId', filters.fournisseurId);
+      if (filters.dateDebut) params.append('dateDebut', filters.dateDebut);
+      if (filters.dateFin) params.append('dateFin', filters.dateFin);
+      
+      const [stockRes, logRes] = await Promise.all([
+        api.get(`/stock/rapports/stock-non-facture?${params}`),
+        api.get(`/stock/rapports/logistique-non-facturee?${params}`)
+      ]);
+      setStockPending(stockRes.data);
+      setLogistiquePending(logRes.data);
+    } catch (err) {
+      console.error('Erreur chargement données non facturées:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadData(); }, [filters]);
+
+  const typeLabels = { transport: 'Transport', douane: 'Douane', manutention: 'Manutention', assurance: 'Assurance', autre: 'Autres' };
+
+  return (
+    <div>
+      <h3>📄 Stock & Coûts Non Facturés</h3>
+      <p style={{ color: '#7f8c8d', marginBottom: '20px' }}>
+        Réceptions validées en attente de facturation fournisseur.
+      </p>
+
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
+        <select value={filters.fournisseurId} onChange={(e) => setFilters({...filters, fournisseurId: e.target.value})}
+          style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minWidth: '200px' }}>
+          <option value="">Tous les fournisseurs</option>
+          {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom || f.raisonSociale}</option>)}
+        </select>
+        <input type="date" value={filters.dateDebut} onChange={(e) => setFilters({...filters, dateDebut: e.target.value})}
+          style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} placeholder="Date début" />
+        <input type="date" value={filters.dateFin} onChange={(e) => setFilters({...filters, dateFin: e.target.value})}
+          style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} placeholder="Date fin" />
+        <Button onClick={loadData} variant="outline">🔄 Actualiser</Button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '25px' }}>
+        <div style={{ padding: '20px', background: '#fff3e0', borderRadius: '8px' }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>STOCK EN ATTENTE</p>
+          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{stockPending.totaux?.valeur?.toLocaleString() || 0} FCFA</h2>
+          <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{stockPending.totaux?.lignes || 0} lignes</p>
+        </div>
+        <div style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px' }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>LOGISTIQUE EN ATTENTE</p>
+          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{logistiquePending.totaux?.montant?.toLocaleString() || 0} FCFA</h2>
+          <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{logistiquePending.totaux?.lignes || 0} lignes</p>
+        </div>
+        <div style={{ padding: '20px', background: '#fce4ec', borderRadius: '8px' }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL NON FACTURÉ</p>
+          <h2 style={{ margin: '10px 0 0 0', color: '#c2185b' }}>
+            {((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString()} FCFA
+          </h2>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        {['stock', 'logistique', 'fournisseurs'].map(t => (
+          <button key={t} onClick={() => setSubTab(t)}
+            style={{
+              padding: '10px 20px', background: subTab === t ? '#3498db' : '#ecf0f1',
+              color: subTab === t ? '#fff' : '#34495e', border: 'none', borderRadius: '8px',
+              fontWeight: subTab === t ? 'bold' : 'normal', cursor: 'pointer'
+            }}>
+            {t === 'stock' ? '📦 Stock Non Facturé' : t === 'logistique' ? '🚚 Frais Logistiques' : '👥 Par Fournisseur'}
+          </button>
+        ))}
+      </div>
+
+      {loading && <div style={{ padding: '20px', textAlign: 'center' }}>Chargement...</div>}
+
+      {!loading && subTab === 'stock' && (
+        <div>
+          {stockPending.items?.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', background: '#d4edda', borderRadius: '8px', color: '#155724' }}>
+              ✅ Aucun stock en attente de facturation
+            </div>
+          ) : (
+            <Table
+              columns={[
+                { key: 'date_reception', label: 'Date Réception', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
+                { key: 'reception_numero', label: 'N° Réception' },
+                { key: 'produit_nom', label: 'Produit', render: (val, row) => `${row.produit_reference || ''} ${val || ''}` },
+                { key: 'fournisseur_nom', label: 'Fournisseur' },
+                { key: 'quantite_pending', label: 'Quantité', render: (val) => parseFloat(val).toFixed(0) },
+                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+              ]}
+              data={stockPending.items || []}
+            />
+          )}
+        </div>
+      )}
+
+      {!loading && subTab === 'logistique' && (
+        <div>
+          {logistiquePending.items?.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', background: '#d4edda', borderRadius: '8px', color: '#155724' }}>
+              ✅ Aucun frais logistique en attente
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                {(logistiquePending.parType || []).map(t => (
+                  <div key={t.type} style={{ padding: '10px 15px', background: '#f5f5f5', borderRadius: '8px' }}>
+                    <strong>{typeLabels[t.type] || t.type}:</strong> {t.montant.toLocaleString()} FCFA ({t.lignes})
+                  </div>
+                ))}
+              </div>
+              <Table
+                columns={[
+                  { key: 'date_reception', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
+                  { key: 'reception_numero', label: 'N° Réception' },
+                  { key: 'commande_numero', label: 'N° Commande' },
+                  { key: 'fournisseur_nom', label: 'Fournisseur' },
+                  { key: 'type', label: 'Type', render: (val) => typeLabels[val] || val },
+                  { key: 'description', label: 'Description' },
+                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+                ]}
+                data={logistiquePending.items || []}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {!loading && subTab === 'fournisseurs' && (
+        <div>
+          <h4>📦 Stock par Fournisseur</h4>
+          <Table
+            columns={[
+              { key: 'nom', label: 'Fournisseur' },
+              { key: 'lignes', label: 'Lignes' },
+              { key: 'quantite', label: 'Quantité', render: (val) => parseFloat(val).toFixed(0) },
+              { key: 'valeur', label: 'Valeur Stock', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+            ]}
+            data={stockPending.parFournisseur || []}
+          />
+          
+          <h4 style={{ marginTop: '30px' }}>🚚 Logistique par Fournisseur</h4>
+          <Table
+            columns={[
+              { key: 'nom', label: 'Fournisseur' },
+              { key: 'lignes', label: 'Lignes' },
+              { key: 'montant', label: 'Montant Total', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+            ]}
+            data={logistiquePending.parFournisseur || []}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StockInventaire() {
   const [activeTab, setActiveTab] = useState('parametres');
   const [subTab, setSubTab] = useState('produits');
@@ -202,7 +371,7 @@ export function StockInventaire() {
       <h2>📦 Stock & Inventaire</h2>
       
       <div style={{ display: 'flex', borderBottom: '2px solid #e1e8ed', marginBottom: '20px', flexWrap: 'wrap' }}>
-        {['parametres', 'receptions', 'mouvements', 'inventaires', 'alertes', 'rapports'].map(tab => (
+        {['parametres', 'receptions', 'mouvements', 'inventaires', 'alertes', 'nonfacture', 'rapports'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             style={{
               padding: '12px 20px', background: activeTab === tab ? '#fff' : 'transparent',
@@ -214,7 +383,8 @@ export function StockInventaire() {
              tab === 'receptions' ? '📥 Réceptions' :
              tab === 'mouvements' ? '🔄 Mouvements' :
              tab === 'inventaires' ? '📋 Inventaires' :
-             tab === 'alertes' ? '⚠️ Alertes' : '📊 Rapports'}
+             tab === 'alertes' ? '⚠️ Alertes' :
+             tab === 'nonfacture' ? '📄 Non Facturé' : '📊 Rapports'}
           </button>
         ))}
       </div>
@@ -458,6 +628,10 @@ export function StockInventaire() {
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'nonfacture' && (
+        <NonFactureTab fournisseurs={data.fournisseurs} produits={data.produits} />
       )}
 
       {activeTab === 'rapports' && (

@@ -551,6 +551,26 @@ export function GestionFournisseurs() {
                 </div>
               ))}
               <Button type="button" variant="outline" size="small" onClick={addItem}>+ Ajouter un article</Button>
+              
+              <h4 style={{ marginTop: '20px' }}>Coûts Logistiques Estimés</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+                <FormField label="Transport" type="number" value={form.coutsLogistiques?.transport || 0}
+                  onChange={(e) => setForm({...form, coutsLogistiques: {...(form.coutsLogistiques || {}), transport: parseFloat(e.target.value) || 0}})} />
+                <FormField label="Douane" type="number" value={form.coutsLogistiques?.douane || 0}
+                  onChange={(e) => setForm({...form, coutsLogistiques: {...(form.coutsLogistiques || {}), douane: parseFloat(e.target.value) || 0}})} />
+                <FormField label="Manutention" type="number" value={form.coutsLogistiques?.manutention || 0}
+                  onChange={(e) => setForm({...form, coutsLogistiques: {...(form.coutsLogistiques || {}), manutention: parseFloat(e.target.value) || 0}})} />
+                <FormField label="Assurance" type="number" value={form.coutsLogistiques?.assurance || 0}
+                  onChange={(e) => setForm({...form, coutsLogistiques: {...(form.coutsLogistiques || {}), assurance: parseFloat(e.target.value) || 0}})} />
+                <FormField label="Autres" type="number" value={form.coutsLogistiques?.autre || 0}
+                  onChange={(e) => setForm({...form, coutsLogistiques: {...(form.coutsLogistiques || {}), autre: parseFloat(e.target.value) || 0}})} />
+              </div>
+              <div style={{ background: '#f8f9fa', padding: '10px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Total Articles: <strong>{(form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0).toLocaleString()} FCFA</strong></span>
+                <span>Total Logistique: <strong>{Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0).toLocaleString()} FCFA</strong></span>
+                <span>Total Commande: <strong>{((form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0) + Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0)).toLocaleString()} FCFA</strong></span>
+              </div>
+              
               <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
                 <Button type="submit" variant="success">Créer Commande</Button>
