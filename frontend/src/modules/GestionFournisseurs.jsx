@@ -497,6 +497,206 @@ function FacturationTab({ fournisseurs }) {
   );
 }
 
+function RapportsClotureComptable({ periode, fournisseurs }) {
+  const [stockNonFacture, setStockNonFacture] = useState({ items: [], totaux: {}, parFournisseur: [] });
+  const [logistiqueNonFacturee, setLogistiqueNonFacturee] = useState({ items: [], totaux: {}, parType: [], parFournisseur: [] });
+  const [loading, setLoading] = useState(false);
+  const [activeRapport, setActiveRapport] = useState('stock');
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (periode.dateDebut) params.append('dateDebut', periode.dateDebut);
+        if (periode.dateFin) params.append('dateFin', periode.dateFin);
+
+        const [stockRes, logRes] = await Promise.all([
+          api.get(`/stock/rapports/stock-non-facture?${params}`).catch(() => ({ data: { items: [], totaux: {}, parFournisseur: [] } })),
+          api.get(`/stock/rapports/logistique-non-facturee?${params}`).catch(() => ({ data: { items: [], totaux: {}, parType: [], parFournisseur: [] } }))
+        ]);
+        setStockNonFacture(stockRes.data || { items: [], totaux: {}, parFournisseur: [] });
+        setLogistiqueNonFacturee(logRes.data || { items: [], totaux: {}, parType: [], parFournisseur: [] });
+      } catch (err) {
+        console.error('Erreur chargement rapports clôture:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [periode]);
+
+  const exportCSV = (type) => {
+    let csv = '';
+    const date = new Date().toLocaleDateString('fr-FR');
+    
+    if (type === 'stock') {
+      csv = `RAPPORT STOCK NON FACTURE - Clôture Comptable\nPériode: ${periode.dateDebut} au ${periode.dateFin}\nDate: ${date}\n\n`;
+      csv += 'Fournisseur;Produit;Référence;Quantité;Prix Unitaire;Montant Total;Date Réception;Réception N°\n';
+      (stockNonFacture.items || []).forEach(item => {
+        const pu = Math.round(parseFloat(item.prix_unitaire_estime || 0));
+        const montant = Math.round(parseFloat(item.valeur_estimee || 0));
+        csv += `${item.fournisseur_nom || ''};${item.produit_nom || ''};${item.produit_reference || ''};${item.quantite_pending || 0};${pu};${montant};${item.date_reception || ''};${item.reception_numero || ''}\n`;
+      });
+      csv += `\nTOTAL STOCK NON FACTURE;;;;;${Math.round(stockNonFacture.totaux?.valeur || 0)};;`;
+    } else {
+      csv = `RAPPORT COUTS LOGISTIQUES NON FACTURES - Clôture Comptable\nPériode: ${periode.dateDebut} au ${periode.dateFin}\nDate: ${date}\n\n`;
+      csv += 'Fournisseur;Type;Montant;Date Réception;Réception N°;Commande N°\n';
+      (logistiqueNonFacturee.items || []).forEach(item => {
+        const montant = Math.round(parseFloat(item.montant_estime || 0));
+        csv += `${item.fournisseur_nom || ''};${item.type || ''};${montant};${item.date_reception || ''};${item.reception_numero || ''};${item.commande_numero || ''}\n`;
+      });
+      csv += `\nTOTAL LOGISTIQUE NON FACTUREE;;;${Math.round(logistiqueNonFacturee.totaux?.montant || 0)};;`;
+    }
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rapport_${type}_non_facture_${periode.dateDebut}_${periode.dateFin}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const typeLabels = { transport: 'Transport', douane: 'Douane', manutention: 'Manutention', assurance: 'Assurance', autre: 'Autres' };
+
+  return (
+    <div style={{ marginTop: '30px', borderTop: '2px solid #1976d2', paddingTop: '20px' }}>
+      <h4 style={{ marginBottom: '15px', color: '#1976d2' }}>📋 Rapports de Clôture Comptable - Coûts Non Facturés</h4>
+      
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        <button 
+          onClick={() => setActiveRapport('stock')}
+          style={{ 
+            padding: '10px 20px', border: 'none', borderRadius: '4px', cursor: 'pointer',
+            background: activeRapport === 'stock' ? '#1976d2' : '#e0e0e0',
+            color: activeRapport === 'stock' ? 'white' : '#333'
+          }}>
+          📦 Stock Non Facturé
+        </button>
+        <button 
+          onClick={() => setActiveRapport('logistique')}
+          style={{ 
+            padding: '10px 20px', border: 'none', borderRadius: '4px', cursor: 'pointer',
+            background: activeRapport === 'logistique' ? '#1976d2' : '#e0e0e0',
+            color: activeRapport === 'logistique' ? 'white' : '#333'
+          }}>
+          🚚 Coûts Logistiques Non Facturés
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: '20px', textAlign: 'center' }}>Chargement...</div>
+      ) : activeRapport === 'stock' ? (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <div style={{ display: 'flex', gap: '20px' }}>
+              <div style={{ padding: '15px', background: '#fff3e0', borderRadius: '8px' }}>
+                <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>ARTICLES EN ATTENTE</p>
+                <h3 style={{ margin: '5px 0 0', color: '#f57c00' }}>{stockNonFacture.totaux?.lignes || 0}</h3>
+              </div>
+              <div style={{ padding: '15px', background: '#ffebee', borderRadius: '8px' }}>
+                <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>MONTANT TOTAL NON FACTURÉ</p>
+                <h3 style={{ margin: '5px 0 0', color: '#d32f2f' }}>{Math.round(stockNonFacture.totaux?.valeur || 0).toLocaleString()} FCFA</h3>
+              </div>
+            </div>
+            <Button variant="secondary" onClick={() => exportCSV('stock')}>📥 Exporter CSV</Button>
+          </div>
+
+          {stockNonFacture.parFournisseur?.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <h5 style={{ marginBottom: '10px' }}>Récapitulatif par Fournisseur (Compte 408 - Factures Non Parvenues)</h5>
+              <Table
+                columns={[
+                  { key: 'nom', label: 'Fournisseur' },
+                  { key: 'lignes', label: 'Nb Articles' },
+                  { key: 'valeur', label: 'Montant Total', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString()} FCFA` }
+                ]}
+                data={stockNonFacture.parFournisseur}
+                actions={false}
+              />
+            </div>
+          )}
+
+          <h5 style={{ marginBottom: '10px' }}>Détail des Articles</h5>
+          <Table
+            columns={[
+              { key: 'fournisseur_nom', label: 'Fournisseur' },
+              { key: 'produit_nom', label: 'Produit' },
+              { key: 'produit_reference', label: 'Réf.' },
+              { key: 'quantite_pending', label: 'Qté' },
+              { key: 'prix_unitaire_estime', label: 'P.U.', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString()}` },
+              { key: 'valeur_estimee', label: 'Montant', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString()} FCFA` },
+              { key: 'date_reception', label: 'Date Réception' },
+              { key: 'reception_numero', label: 'Réception N°' }
+            ]}
+            data={stockNonFacture.items || []}
+            actions={false}
+          />
+        </div>
+      ) : (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <div style={{ display: 'flex', gap: '20px' }}>
+              <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px' }}>
+                <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>LIGNES EN ATTENTE</p>
+                <h3 style={{ margin: '5px 0 0', color: '#1976d2' }}>{logistiqueNonFacturee.totaux?.lignes || 0}</h3>
+              </div>
+              <div style={{ padding: '15px', background: '#ffebee', borderRadius: '8px' }}>
+                <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>MONTANT TOTAL NON FACTURÉ</p>
+                <h3 style={{ margin: '5px 0 0', color: '#d32f2f' }}>{Math.round(logistiqueNonFacturee.totaux?.montant || 0).toLocaleString()} FCFA</h3>
+              </div>
+            </div>
+            <Button variant="secondary" onClick={() => exportCSV('logistique')}>📥 Exporter CSV</Button>
+          </div>
+
+          {logistiqueNonFacturee.parType?.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <h5 style={{ marginBottom: '10px' }}>Récapitulatif par Type de Coût</h5>
+              <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                {logistiqueNonFacturee.parType.map(t => (
+                  <div key={t.type} style={{ padding: '10px 15px', background: '#f5f5f5', borderRadius: '8px' }}>
+                    <span style={{ fontWeight: 'bold' }}>{typeLabels[t.type] || t.type}:</span> {Math.round(parseFloat(t.montant || 0)).toLocaleString()} FCFA
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {logistiqueNonFacturee.parFournisseur?.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <h5 style={{ marginBottom: '10px' }}>Récapitulatif par Fournisseur</h5>
+              <Table
+                columns={[
+                  { key: 'nom', label: 'Fournisseur' },
+                  { key: 'lignes', label: 'Nb Lignes' },
+                  { key: 'montant', label: 'Montant Total', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString()} FCFA` }
+                ]}
+                data={logistiqueNonFacturee.parFournisseur}
+                actions={false}
+              />
+            </div>
+          )}
+
+          <h5 style={{ marginBottom: '10px' }}>Détail des Coûts Logistiques</h5>
+          <Table
+            columns={[
+              { key: 'fournisseur_nom', label: 'Fournisseur' },
+              { key: 'type', label: 'Type', render: (v) => typeLabels[v] || v },
+              { key: 'montant_estime', label: 'Montant', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString()} FCFA` },
+              { key: 'date_reception', label: 'Date Réception' },
+              { key: 'reception_numero', label: 'Réception N°' },
+              { key: 'commande_numero', label: 'Commande N°' }
+            ]}
+            data={logistiqueNonFacturee.items || []}
+            actions={false}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GestionFournisseurs() {
   const [activeTab, setActiveTab] = useState('parametres');
   const [subTab, setSubTab] = useState('fournisseurs');
@@ -978,6 +1178,8 @@ export function GestionFournisseurs() {
               actions={false}
             />
           </div>
+
+          <RapportsClotureComptable periode={periode} fournisseurs={data.fournisseurs} />
         </div>
       )}
 
