@@ -440,6 +440,264 @@ router.get('/export/comptes', async (req, res) => {
   }
 });
 
+// ==========================================
+// CHARTE DES COMPTES - Rapport structuré
+// ==========================================
+
+const CLASSES_SYSCOHADA = {
+  '1': { nom: 'Comptes de ressources durables', type: 'Bilan' },
+  '2': { nom: 'Comptes d\'actif immobilisé', type: 'Bilan' },
+  '3': { nom: 'Comptes de stocks', type: 'Bilan' },
+  '4': { nom: 'Comptes de tiers', type: 'Bilan' },
+  '5': { nom: 'Comptes de trésorerie', type: 'Bilan' },
+  '6': { nom: 'Comptes de charges', type: 'Gestion' },
+  '7': { nom: 'Comptes de produits', type: 'Gestion' },
+  '8': { nom: 'Comptes spéciaux', type: 'Résultat' }
+};
+
+router.get('/rapports/charte-comptes', async (req, res) => {
+  try {
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!entrepriseId || isNaN(entrepriseId)) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+
+    const allComptes = await db.query.comptesComptables.findMany({
+      where: eq(comptesComptables.entrepriseId, entrepriseId),
+      orderBy: (comptesComptables, { asc }) => [asc(comptesComptables.numero)]
+    });
+
+    const comptesSecondaires = await db.query.comptes.findMany({
+      where: eq(comptes.entrepriseId, entrepriseId)
+    });
+
+    const soldesFromEcritures = await db.select({
+      compteComptableId: lignesEcritures.compteComptableId,
+      numero: comptesComptables.numero,
+      totalDebit: sql`COALESCE(SUM(CAST(${lignesEcritures.debit} AS DECIMAL)), 0)`,
+      totalCredit: sql`COALESCE(SUM(CAST(${lignesEcritures.credit} AS DECIMAL)), 0)`
+    })
+    .from(lignesEcritures)
+    .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
+    .innerJoin(comptesComptables, eq(lignesEcritures.compteComptableId, comptesComptables.id))
+    .where(eq(ecritures.entrepriseId, entrepriseId))
+    .groupBy(lignesEcritures.compteComptableId, comptesComptables.numero);
+
+    const soldesMapByNumero = {};
+    for (const s of soldesFromEcritures) {
+      if (s.numero) {
+        soldesMapByNumero[s.numero] = {
+          debit: parseFloat(s.totalDebit || 0),
+          credit: parseFloat(s.totalCredit || 0)
+        };
+      }
+    }
+
+    const normalizeCompte = (c) => {
+      const ecritureSolde = soldesMapByNumero[c.numero] || { debit: 0, credit: 0 };
+      let soldeDebit = ecritureSolde.debit;
+      let soldeCredit = ecritureSolde.credit;
+      
+      if (soldeDebit === 0 && soldeCredit === 0) {
+        if (c.solde !== undefined && c.solde !== null) {
+          const soldeVal = parseFloat(c.solde || 0);
+          if (soldeVal >= 0) {
+            soldeDebit = soldeVal;
+          } else {
+            soldeCredit = Math.abs(soldeVal);
+          }
+        } else {
+          soldeDebit = parseFloat(c.soldeDebiteur || 0);
+          soldeCredit = parseFloat(c.soldeCrediteur || 0);
+        }
+      }
+      
+      const soldeNet = soldeDebit - soldeCredit;
+      return {
+        id: c.id,
+        numero: c.numero,
+        nom: c.nom,
+        categorie: c.categorie || c.type || '',
+        devise: c.devise || 'XOF',
+        solde: soldeNet,
+        soldeDebiteur: soldeDebit,
+        soldeCrediteur: soldeCredit,
+        actif: c.actif !== false
+      };
+    };
+
+    const allComptesUnified = [];
+    const seen = new Set();
+    
+    for (const c of allComptes) {
+      if (!seen.has(c.numero)) {
+        allComptesUnified.push(normalizeCompte(c));
+        seen.add(c.numero);
+      }
+    }
+    for (const c of comptesSecondaires) {
+      if (!seen.has(c.numero)) {
+        allComptesUnified.push(normalizeCompte(c));
+        seen.add(c.numero);
+      }
+    }
+    allComptesUnified.sort((a, b) => (a.numero || '').localeCompare(b.numero || ''));
+
+    const entreprise = await db.query.entreprises.findFirst({
+      where: eq(entreprises.id, entrepriseId)
+    });
+
+    const parClasse = {};
+    for (const classe of Object.keys(CLASSES_SYSCOHADA)) {
+      parClasse[classe] = {
+        classe,
+        ...CLASSES_SYSCOHADA[classe],
+        comptes: [],
+        nombreComptes: 0,
+        totalSoldeDebiteur: 0,
+        totalSoldeCrediteur: 0
+      };
+    }
+
+    for (const compte of allComptesUnified) {
+      const classe = compte.numero ? compte.numero.charAt(0) : null;
+      if (classe && parClasse[classe]) {
+        parClasse[classe].comptes.push(compte);
+        parClasse[classe].nombreComptes++;
+        parClasse[classe].totalSoldeDebiteur += compte.soldeDebiteur;
+        parClasse[classe].totalSoldeCrediteur += compte.soldeCrediteur;
+      }
+    }
+
+    res.json({
+      entreprise: {
+        id: entreprise?.id,
+        nom: entreprise?.nom,
+        logo: entreprise?.logo
+      },
+      dateGeneration: new Date().toISOString(),
+      systemeComptable: 'SYSCOHADA',
+      totalComptes: allComptesUnified.length,
+      classes: Object.values(parClasse).filter(c => c.nombreComptes > 0),
+      planReference: PLAN_SYSCOHADA
+    });
+  } catch (error) {
+    console.error('Erreur GET /rapports/charte-comptes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/export/charte-comptes', async (req, res) => {
+  try {
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    if (!entrepriseId || isNaN(entrepriseId)) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+
+    const comptesComptablesList = await db.query.comptesComptables.findMany({
+      where: eq(comptesComptables.entrepriseId, entrepriseId),
+      orderBy: (comptesComptables, { asc }) => [asc(comptesComptables.numero)]
+    });
+
+    const comptesSecondaires = await db.query.comptes.findMany({
+      where: eq(comptes.entrepriseId, entrepriseId)
+    });
+
+    const soldesFromEcritures = await db.select({
+      compteComptableId: lignesEcritures.compteComptableId,
+      numero: comptesComptables.numero,
+      totalDebit: sql`COALESCE(SUM(CAST(${lignesEcritures.debit} AS DECIMAL)), 0)`,
+      totalCredit: sql`COALESCE(SUM(CAST(${lignesEcritures.credit} AS DECIMAL)), 0)`
+    })
+    .from(lignesEcritures)
+    .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
+    .innerJoin(comptesComptables, eq(lignesEcritures.compteComptableId, comptesComptables.id))
+    .where(eq(ecritures.entrepriseId, entrepriseId))
+    .groupBy(lignesEcritures.compteComptableId, comptesComptables.numero);
+
+    const soldesMapByNumero = {};
+    for (const s of soldesFromEcritures) {
+      if (s.numero) {
+        soldesMapByNumero[s.numero] = {
+          debit: parseFloat(s.totalDebit || 0),
+          credit: parseFloat(s.totalCredit || 0)
+        };
+      }
+    }
+
+    const normalizeCompte = (c) => {
+      const ecritureSolde = soldesMapByNumero[c.numero] || { debit: 0, credit: 0 };
+      let soldeDebit = ecritureSolde.debit;
+      let soldeCredit = ecritureSolde.credit;
+      
+      if (soldeDebit === 0 && soldeCredit === 0) {
+        if (c.solde !== undefined && c.solde !== null) {
+          const soldeVal = parseFloat(c.solde || 0);
+          if (soldeVal >= 0) {
+            soldeDebit = soldeVal;
+          } else {
+            soldeCredit = Math.abs(soldeVal);
+          }
+        } else {
+          soldeDebit = parseFloat(c.soldeDebiteur || 0);
+          soldeCredit = parseFloat(c.soldeCrediteur || 0);
+        }
+      }
+      
+      const soldeNet = soldeDebit - soldeCredit;
+      return {
+        numero: c.numero,
+        nom: c.nom,
+        categorie: c.categorie || c.type || '',
+        devise: c.devise || 'XOF',
+        solde: soldeNet,
+        soldeDebiteur: soldeDebit,
+        soldeCrediteur: soldeCredit,
+        actif: c.actif !== false
+      };
+    };
+
+    const allComptes = [];
+    const seen = new Set();
+    for (const c of comptesComptablesList) {
+      if (!seen.has(c.numero)) {
+        allComptes.push(normalizeCompte(c));
+        seen.add(c.numero);
+      }
+    }
+    for (const c of comptesSecondaires) {
+      if (!seen.has(c.numero)) {
+        allComptes.push(normalizeCompte(c));
+        seen.add(c.numero);
+      }
+    }
+    allComptes.sort((a, b) => (a.numero || '').localeCompare(b.numero || ''));
+
+    const entreprise = await db.query.entreprises.findFirst({
+      where: eq(entreprises.id, entrepriseId)
+    });
+
+    const csv = [
+      `CHARTE DES COMPTES - ${entreprise?.nom || 'Entreprise'}`,
+      `Date de génération: ${new Date().toLocaleDateString('fr-FR')}`,
+      `Système comptable: SYSCOHADA`,
+      '',
+      'Classe;Numéro;Intitulé;Catégorie;Débit;Crédit;Solde;Devise;Statut',
+      ...allComptes.map(c => {
+        const classe = c.numero ? c.numero.charAt(0) : '';
+        return `${classe};${c.numero};${c.nom};${c.categorie || ''};${c.soldeDebiteur};${c.soldeCrediteur};${c.solde};${c.devise};${c.actif ? 'Actif' : 'Inactif'}`;
+      })
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=charte_comptes_${new Date().toISOString().split('T')[0]}.csv`);
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    console.error('Erreur export charte-comptes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Export CSV des écritures
 router.get('/export/ecritures', async (req, res) => {
   try {

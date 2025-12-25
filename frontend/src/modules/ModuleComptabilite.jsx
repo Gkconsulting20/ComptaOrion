@@ -5,6 +5,261 @@ import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import api from '../api';
 
+const CLASSES_SYSCOHADA = {
+  '1': { nom: 'Comptes de ressources durables', type: 'Bilan', color: '#e3f2fd' },
+  '2': { nom: 'Comptes d\'actif immobilisé', type: 'Bilan', color: '#f3e5f5' },
+  '3': { nom: 'Comptes de stocks', type: 'Bilan', color: '#e8f5e9' },
+  '4': { nom: 'Comptes de tiers', type: 'Bilan', color: '#fff3e0' },
+  '5': { nom: 'Comptes de trésorerie', type: 'Bilan', color: '#e1f5fe' },
+  '6': { nom: 'Comptes de charges', type: 'Gestion', color: '#ffebee' },
+  '7': { nom: 'Comptes de produits', type: 'Gestion', color: '#e8f5e9' },
+  '8': { nom: 'Comptes spéciaux', type: 'Résultat', color: '#fafafa' }
+};
+
+function PlanComptableTab({ data, loadAllData, openModal, api }) {
+  const [viewMode, setViewMode] = useState('liste');
+  const [charteData, setCharteData] = useState(null);
+  const [loadingCharte, setLoadingCharte] = useState(false);
+  const [expandedClasses, setExpandedClasses] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const loadCharteComptes = async () => {
+    setLoadingCharte(true);
+    try {
+      const res = await api.get('/comptabilite/rapports/charte-comptes');
+      setCharteData(res);
+      const expanded = {};
+      (res.classes || []).forEach(c => { expanded[c.classe] = true; });
+      setExpandedClasses(expanded);
+    } catch (err) {
+      console.error('Erreur chargement charte:', err);
+    } finally {
+      setLoadingCharte(false);
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === 'charte' && !charteData) {
+      loadCharteComptes();
+    }
+  }, [viewMode]);
+
+  const toggleClasse = (classe) => {
+    setExpandedClasses(prev => ({ ...prev, [classe]: !prev[classe] }));
+  };
+
+  const exportCharteCSV = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/comptabilite/export/charte-comptes', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Erreur téléchargement');
+      const csvText = await response.text();
+      const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `charte_comptes_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Erreur export: ' + err.message);
+    }
+  };
+
+  const filteredComptes = searchTerm 
+    ? data.comptes.filter(c => 
+        c.numero?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.nom?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : data.comptes;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3>📋 Plan Comptable ({data.comptes.length} comptes)</h3>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', border: '1px solid #ddd', borderRadius: '6px', overflow: 'hidden' }}>
+            <button onClick={() => setViewMode('liste')} style={{
+              padding: '8px 16px', border: 'none', cursor: 'pointer',
+              background: viewMode === 'liste' ? '#1976d2' : '#fff',
+              color: viewMode === 'liste' ? '#fff' : '#333'
+            }}>📋 Liste</button>
+            <button onClick={() => setViewMode('charte')} style={{
+              padding: '8px 16px', border: 'none', cursor: 'pointer',
+              background: viewMode === 'charte' ? '#1976d2' : '#fff',
+              color: viewMode === 'charte' ? '#fff' : '#333'
+            }}>📊 Charte des Comptes</button>
+          </div>
+        </div>
+      </div>
+
+      {viewMode === 'liste' && (
+        <div>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', flexWrap: 'wrap' }}>
+            <input 
+              type="text" 
+              placeholder="🔍 Rechercher un compte..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '6px', width: '300px' }}
+            />
+            {data.comptes.length < 20 && (
+              <Button variant="success" onClick={async () => {
+                if (!confirm('Initialiser le plan comptable SYSCOHADA complet (120+ comptes) ?')) return;
+                try {
+                  const result = await api.post('/comptabilite/init-syscohada', {});
+                  alert(`Plan SYSCOHADA initialisé : ${result.comptesCreés} comptes créés`);
+                  loadAllData();
+                } catch (err) {
+                  alert('Erreur: ' + err.message);
+                }
+              }}>Initialiser SYSCOHADA</Button>
+            )}
+            <Button variant="secondary" onClick={async () => {
+              try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/comptabilite/export/comptes', {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Erreur téléchargement');
+                const csvText = await response.text();
+                const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'plan_comptable.csv';
+                a.click();
+                window.URL.revokeObjectURL(url);
+              } catch (err) {
+                alert('Erreur export: ' + err.message);
+              }
+            }}>Export CSV</Button>
+            <Button onClick={() => openModal('compte')}>+ Nouveau Compte</Button>
+          </div>
+          <Table
+            columns={[
+              { key: 'numero', label: 'N° Compte' },
+              { key: 'nom', label: 'Nom du Compte' },
+              { key: 'categorie', label: 'Catégorie' },
+              { key: 'sousCategorie', label: 'Classe' },
+              { key: 'solde', label: 'Solde', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
+            ]}
+            data={filteredComptes}
+            onEdit={(item) => openModal('compte', item)}
+            actions={true}
+          />
+        </div>
+      )}
+
+      {viewMode === 'charte' && (
+        <div>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'center' }}>
+            <Button variant="primary" onClick={exportCharteCSV}>📥 Exporter la Charte (CSV)</Button>
+            <Button variant="secondary" onClick={loadCharteComptes}>🔄 Actualiser</Button>
+            {charteData && (
+              <span style={{ color: '#666', fontSize: '14px' }}>
+                Généré le {new Date(charteData.dateGeneration).toLocaleDateString('fr-FR')} à {new Date(charteData.dateGeneration).toLocaleTimeString('fr-FR')}
+              </span>
+            )}
+          </div>
+
+          {loadingCharte ? (
+            <div style={{ padding: '40px', textAlign: 'center' }}>Chargement de la charte des comptes...</div>
+          ) : charteData ? (
+            <div>
+              <div style={{ 
+                padding: '20px', 
+                background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)', 
+                borderRadius: '12px', 
+                color: '#fff', 
+                marginBottom: '25px' 
+              }}>
+                <h2 style={{ margin: '0 0 10px 0' }}>📊 CHARTE DES COMPTES</h2>
+                <p style={{ margin: 0, opacity: 0.9 }}>
+                  {charteData.entreprise?.nom || 'Entreprise'} | Système: {charteData.systemeComptable} | {charteData.totalComptes} comptes
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '25px' }}>
+                {(charteData.classes || []).map(classe => (
+                  <div key={classe.classe} style={{ 
+                    padding: '15px', 
+                    background: CLASSES_SYSCOHADA[classe.classe]?.color || '#f5f5f5', 
+                    borderRadius: '8px',
+                    border: '1px solid #e0e0e0'
+                  }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>Classe {classe.classe}</div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>{classe.nombreComptes} comptes</div>
+                  </div>
+                ))}
+              </div>
+
+              {(charteData.classes || []).map(classe => (
+                <div key={classe.classe} style={{ marginBottom: '15px' }}>
+                  <div 
+                    onClick={() => toggleClasse(classe.classe)}
+                    style={{ 
+                      padding: '15px 20px', 
+                      background: CLASSES_SYSCOHADA[classe.classe]?.color || '#f5f5f5',
+                      borderRadius: expandedClasses[classe.classe] ? '8px 8px 0 0' : '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      border: '1px solid #e0e0e0'
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: '16px' }}>Classe {classe.classe} - {classe.nom}</strong>
+                      <span style={{ marginLeft: '15px', color: '#666', fontSize: '14px' }}>
+                        ({classe.nombreComptes} comptes) | Type: {classe.type}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '20px' }}>{expandedClasses[classe.classe] ? '▼' : '▶'}</span>
+                  </div>
+                  
+                  {expandedClasses[classe.classe] && (
+                    <div style={{ border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#f5f5f5' }}>
+                            <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #e0e0e0' }}>N° Compte</th>
+                            <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #e0e0e0' }}>Intitulé</th>
+                            <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #e0e0e0' }}>Catégorie</th>
+                            <th style={{ padding: '10px', textAlign: 'right', borderBottom: '1px solid #e0e0e0' }}>Solde</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(classe.comptes || []).map(compte => (
+                            <tr key={compte.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                              <td style={{ padding: '10px', fontFamily: 'monospace', fontWeight: 'bold' }}>{compte.numero}</td>
+                              <td style={{ padding: '10px' }}>{compte.nom}</td>
+                              <td style={{ padding: '10px', color: '#666' }}>{compte.categorie || '-'}</td>
+                              <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold' }}>
+                                {parseFloat(compte.solde || 0).toLocaleString()} {compte.devise || 'FCFA'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: '40px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
+              <p>Aucune donnée disponible. Cliquez sur "Actualiser" pour charger la charte des comptes.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ModuleComptabilite() {
   const [activeTab, setActiveTab] = useState('plan');
   const [data, setData] = useState({
@@ -252,52 +507,12 @@ export function ModuleComptabilite() {
       </div>
 
       {activeTab === 'plan' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3>📋 Plan Comptable ({data.comptes.length} comptes)</h3>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {data.comptes.length < 20 && (
-                <Button variant="success" onClick={async () => {
-                  if (!confirm('Initialiser le plan comptable SYSCOHADA complet (120+ comptes) ?')) return;
-                  try {
-                    const result = await api.post('/comptabilite/init-syscohada', {});
-                    alert(`Plan SYSCOHADA initialisé : ${result.comptesCreés} comptes créés`);
-                    loadAllData();
-                  } catch (err) {
-                    alert('Erreur: ' + err.message);
-                  }
-                }}>Initialiser SYSCOHADA</Button>
-              )}
-              <Button variant="secondary" onClick={async () => {
-                try {
-                  const response = await api.get('/comptabilite/export/comptes', {}, { responseType: 'text' });
-                  const blob = new Blob([response], { type: 'text/csv;charset=utf-8' });
-                  const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = 'plan_comptable.csv';
-                  a.click();
-                  window.URL.revokeObjectURL(url);
-                } catch (err) {
-                  alert('Erreur export: ' + err.message);
-                }
-              }}>Export CSV</Button>
-              <Button onClick={() => openModal('compte')}>+ Nouveau Compte</Button>
-            </div>
-          </div>
-          <Table
-            columns={[
-              { key: 'numero', label: 'N° Compte' },
-              { key: 'nom', label: 'Nom du Compte' },
-              { key: 'categorie', label: 'Catégorie' },
-              { key: 'sousCategorie', label: 'Sous-Catégorie' },
-              { key: 'solde', label: 'Solde', render: (val) => `${val || 0} FCFA` }
-            ]}
-            data={data.comptes}
-            onEdit={(item) => openModal('compte', item)}
-            actions={true}
-          />
-        </div>
+        <PlanComptableTab 
+          data={data} 
+          loadAllData={loadAllData} 
+          openModal={openModal} 
+          api={api} 
+        />
       )}
 
       {activeTab === 'journaux' && (
