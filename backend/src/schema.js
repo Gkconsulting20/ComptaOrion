@@ -134,9 +134,11 @@ export const commandesAchat = pgTable('commandes_achat', {
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   numeroCommande: varchar('numero_commande', { length: 100 }).unique(),
   fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id).notNull(),
-  statut: varchar('statut', { length: 50 }).default('brouillon'), // brouillon, confirmee, preparee, livree, annulee
+  statut: varchar('statut', { length: 50 }).default('brouillon'), // brouillon, confirmee, recue_partiel, recue, facturee, annulee
   dateCommande: date('date_commande').defaultNow(),
   dateLivraisonPrevue: date('date_livraison_prevue'),
+  totalArticlesHT: decimal('total_articles_ht', { precision: 15, scale: 2 }).default('0'),
+  totalLogistique: decimal('total_logistique', { precision: 15, scale: 2 }).default('0'),
   totalHT: decimal('total_ht', { precision: 15, scale: 2 }).default('0'),
   totalTVA: decimal('total_tva', { precision: 15, scale: 2 }).default('0'),
   totalTTC: decimal('total_ttc', { precision: 15, scale: 2 }).default('0'),
@@ -373,6 +375,68 @@ export const lignesReception = pgTable('lignes_reception', {
   
   mouvementStockId: integer('mouvement_stock_id').references(() => mouvementsStock.id),
   
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ==========================================
+// MODULE 11C: COÛTS LOGISTIQUES (PURCHASE ORDERS)
+// ==========================================
+
+export const coutTypeEnum = pgEnum('cout_type', ['transport', 'douane', 'manutention', 'assurance', 'autre']);
+
+export const coutsLogistiquesCommande = pgTable('couts_logistiques_commande', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  commandeAchatId: integer('commande_achat_id').references(() => commandesAchat.id).notNull(),
+  
+  type: coutTypeEnum('type').notNull(),
+  description: text('description'),
+  montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
+  
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ==========================================
+// MODULE 11D: STOCK & COÛTS NON FACTURÉS (PENDING)
+// ==========================================
+
+export const stockPending = pgTable('stock_pending', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  
+  bonReceptionId: integer('bon_reception_id').references(() => bonsReception.id).notNull(),
+  ligneReceptionId: integer('ligne_reception_id').references(() => lignesReception.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id).notNull(),
+  fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id).notNull(),
+  
+  quantitePending: decimal('quantite_pending', { precision: 15, scale: 3 }).notNull(),
+  prixEstime: decimal('prix_estime', { precision: 15, scale: 2 }).notNull(),
+  valeurEstimee: decimal('valeur_estimee', { precision: 15, scale: 2 }).notNull(),
+  
+  dateReception: date('date_reception').notNull(),
+  entrepotId: integer('entrepot_id').references(() => entrepots.id),
+  
+  statut: varchar('statut', { length: 50 }).default('pending'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const logistiquePending = pgTable('logistique_pending', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  
+  bonReceptionId: integer('bon_reception_id').references(() => bonsReception.id).notNull(),
+  commandeAchatId: integer('commande_achat_id').references(() => commandesAchat.id),
+  fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id).notNull(),
+  
+  type: coutTypeEnum('type').notNull(),
+  description: text('description'),
+  montantEstime: decimal('montant_estime', { precision: 15, scale: 2 }).notNull(),
+  montantFacture: decimal('montant_facture', { precision: 15, scale: 2 }),
+  
+  dateReception: date('date_reception').notNull(),
+  
+  statut: varchar('statut', { length: 50 }).default('pending'),
+  factureAchatId: integer('facture_achat_id'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
