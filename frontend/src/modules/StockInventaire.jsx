@@ -14,7 +14,9 @@ export function StockInventaire() {
     produits: [],
     categories: [],
     entrepots: [],
-    mouvements: []
+    mouvements: [],
+    receptions: [],
+    fournisseurs: []
   });
   
   const [modal, setModal] = useState({ open: false, type: null, item: null });
@@ -31,17 +33,21 @@ export function StockInventaire() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [p, c, e, m] = await Promise.all([
+        const [p, c, e, m, r, f] = await Promise.all([
           api.get('/produits').catch(() => ({ data: { data: [] } })),
           api.get('/stock/categories').catch(() => ({ data: [] })),
           api.get('/stock/entrepots').catch(() => ({ data: [] })),
-          api.get('/stock/mouvements').catch(() => ({ data: [] }))
+          api.get('/stock/mouvements').catch(() => ({ data: [] })),
+          api.get('/stock/receptions').catch(() => ({ data: [] })),
+          api.get('/fournisseurs').catch(() => ({ data: { data: [] } }))
         ]);
         setData({
           produits: p.data.data || p.data || [],
           categories: c.data || [],
           entrepots: e.data || [],
-          mouvements: m.data || []
+          mouvements: m.data || [],
+          receptions: r.data || [],
+          fournisseurs: f.data.data || f.data || []
         });
       } catch (err) {
         console.error('Load error:', err);
@@ -64,6 +70,9 @@ export function StockInventaire() {
       } else if (type === 'mouvements') {
         const res = await api.get('/stock/mouvements');
         setData(d => ({ ...d, mouvements: res.data || [] }));
+      } else if (type === 'receptions') {
+        const res = await api.get('/stock/receptions');
+        setData(d => ({ ...d, receptions: res.data || [] }));
       }
     } catch (err) {
       console.error('Reload error:', err);
@@ -80,6 +89,14 @@ export function StockInventaire() {
       setForm(item || { nom: '', adresse: '', responsable: '' });
     } else if (type === 'inventaire') {
       setForm({ produitId: null, quantiteComptee: 0, notes: '' });
+    } else if (type === 'reception') {
+      setForm({ 
+        fournisseurId: '', 
+        dateReception: new Date().toISOString().split('T')[0],
+        entrepotId: '', 
+        notes: '', 
+        lignes: [{ produitId: '', quantiteRecue: 1, prixUnitaireEstime: 0 }] 
+      });
     }
   };
 
@@ -132,6 +149,24 @@ export function StockInventaire() {
           await reload('produits');
           await reload('mouvements');
         }
+      } else if (type === 'reception') {
+        const lignesValides = form.lignes.filter(l => l.produitId && parseFloat(l.quantiteRecue) > 0);
+        if (!form.fournisseurId || lignesValides.length === 0) {
+          return alert('Veuillez saisir un fournisseur et au moins une ligne valide');
+        }
+        await api.post('/stock/receptions', {
+          fournisseurId: parseInt(form.fournisseurId),
+          dateReception: form.dateReception,
+          entrepotId: form.entrepotId ? parseInt(form.entrepotId) : null,
+          notes: form.notes,
+          lignes: lignesValides.map(l => ({
+            produitId: parseInt(l.produitId),
+            quantiteRecue: parseFloat(l.quantiteRecue),
+            prixUnitaireEstime: parseFloat(l.prixUnitaireEstime)
+          }))
+        });
+        await reload('receptions');
+        alert('Bon de reception cree avec succes. Validez-le pour mettre a jour le stock.');
       }
       
       closeModal();
@@ -166,8 +201,8 @@ export function StockInventaire() {
     <div>
       <h2>📦 Stock & Inventaire</h2>
       
-      <div style={{ display: 'flex', borderBottom: '2px solid #e1e8ed', marginBottom: '20px' }}>
-        {['parametres', 'mouvements', 'inventaires', 'alertes', 'rapports'].map(tab => (
+      <div style={{ display: 'flex', borderBottom: '2px solid #e1e8ed', marginBottom: '20px', flexWrap: 'wrap' }}>
+        {['parametres', 'receptions', 'mouvements', 'inventaires', 'alertes', 'rapports'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             style={{
               padding: '12px 20px', background: activeTab === tab ? '#fff' : 'transparent',
@@ -176,6 +211,7 @@ export function StockInventaire() {
               fontWeight: activeTab === tab ? 'bold' : 'normal', cursor: 'pointer'
             }}>
             {tab === 'parametres' ? '⚙️ Paramètres' : 
+             tab === 'receptions' ? '📥 Réceptions' :
              tab === 'mouvements' ? '🔄 Mouvements' :
              tab === 'inventaires' ? '📋 Inventaires' :
              tab === 'alertes' ? '⚠️ Alertes' : '📊 Rapports'}
@@ -263,6 +299,99 @@ export function StockInventaire() {
                 onDelete={(item) => handleDelete('entrepot', item)}
               />
             </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'receptions' && (
+        <div>
+          <h3>📥 Bons de Réception</h3>
+          <p style={{ color: '#7f8c8d', marginBottom: '15px' }}>
+            Réceptionnez les marchandises avant de les facturer. Chaque validation génère une écriture comptable.
+          </p>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <div>
+              <span style={{ background: '#e8f5e9', padding: '5px 10px', borderRadius: '4px', marginRight: '10px' }}>
+                Brouillon: {data.receptions.filter(r => r.statut === 'brouillon').length}
+              </span>
+              <span style={{ background: '#e3f2fd', padding: '5px 10px', borderRadius: '4px', marginRight: '10px' }}>
+                Validées: {data.receptions.filter(r => r.statut === 'validee').length}
+              </span>
+              <span style={{ background: '#f3e5f5', padding: '5px 10px', borderRadius: '4px' }}>
+                Facturées: {data.receptions.filter(r => r.statut === 'facturee').length}
+              </span>
+            </div>
+            <Button onClick={() => openModal('reception')}>+ Nouvelle Réception</Button>
+          </div>
+
+          {data.receptions.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
+              <p style={{ color: '#7f8c8d' }}>Aucun bon de réception</p>
+            </div>
+          ) : (
+            <Table
+              columns={[
+                { key: 'numero', label: 'Numéro' },
+                { key: 'date_reception', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
+                { key: 'fournisseur_nom', label: 'Fournisseur' },
+                { key: 'entrepot_nom', label: 'Entrepôt', render: (val) => val || '-' },
+                { key: 'total_ht', label: 'Total HT', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                { key: 'nb_lignes', label: 'Lignes' },
+                { key: 'statut', label: 'Statut', render: (val) => (
+                  <span style={{ 
+                    padding: '3px 8px', borderRadius: '4px', fontSize: '12px',
+                    background: val === 'brouillon' ? '#fff3cd' : val === 'validee' ? '#d4edda' : val === 'facturee' ? '#cce5ff' : '#f8d7da',
+                    color: val === 'brouillon' ? '#856404' : val === 'validee' ? '#155724' : val === 'facturee' ? '#004085' : '#721c24'
+                  }}>
+                    {val === 'brouillon' ? 'Brouillon' : val === 'validee' ? 'Validée' : val === 'facturee' ? 'Facturée' : val}
+                  </span>
+                )},
+                { key: 'actions', label: 'Actions', render: (_, row) => (
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    {row.statut === 'brouillon' && (
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (confirm('Valider ce bon de réception ? Le stock sera mis à jour.')) {
+                            try {
+                              await api.post(`/stock/receptions/${row.id}/valider`);
+                              await reload('receptions');
+                              await reload('mouvements');
+                              alert('Bon validé avec succès. Stock et écritures comptables mis à jour.');
+                            } catch (err) {
+                              alert('Erreur: ' + (err.response?.data?.error || err.message));
+                            }
+                          }
+                        }}
+                        style={{ padding: '4px 8px', background: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        Valider
+                      </button>
+                    )}
+                    {row.statut === 'brouillon' && (
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (confirm('Supprimer ce bon de réception ?')) {
+                            try {
+                              await api.delete(`/stock/receptions/${row.id}`);
+                              await reload('receptions');
+                            } catch (err) {
+                              alert('Erreur: ' + (err.response?.data?.error || err.message));
+                            }
+                          }
+                        }}
+                        style={{ padding: '4px 8px', background: '#dc3545', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                )}
+              ]}
+              data={data.receptions}
+            />
           )}
         </div>
       )}
@@ -509,7 +638,8 @@ export function StockInventaire() {
         title={modal.type === 'produit' ? (modal.item ? 'Modifier' : 'Nouveau Produit') :
                modal.type === 'categorie' ? (modal.item ? 'Modifier' : 'Nouvelle Catégorie') :
                modal.type === 'entrepot' ? (modal.item ? 'Modifier' : 'Nouvel Entrepôt') :
-               modal.type === 'inventaire' ? 'Comptage Physique' : ''}>
+               modal.type === 'inventaire' ? 'Comptage Physique' : 
+               modal.type === 'reception' ? 'Nouveau Bon de Réception' : ''}>
         <form onSubmit={handleSubmit}>
           {modal.type === 'produit' && (
             <>
@@ -554,6 +684,100 @@ export function StockInventaire() {
                 required />
               <FormField label="Quantité Comptée" type="number" value={form.quantiteComptee || 0} onChange={(e) => setForm({...form, quantiteComptee: parseFloat(e.target.value) || 0})} required />
               <FormField label="Notes" type="textarea" value={form.notes || ''} onChange={(e) => setForm({...form, notes: e.target.value})} />
+            </>
+          )}
+
+          {modal.type === 'reception' && (
+            <>
+              <FormField label="Fournisseur" type="select" value={form.fournisseurId || ''} 
+                onChange={(e) => setForm({...form, fournisseurId: e.target.value})}
+                options={[{ value: '', label: '-- Sélectionner --' }, ...data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))]}
+                required />
+              <FormField label="Date Réception" type="date" value={form.dateReception || ''} 
+                onChange={(e) => setForm({...form, dateReception: e.target.value})} required />
+              <FormField label="Entrepôt" type="select" value={form.entrepotId || ''} 
+                onChange={(e) => setForm({...form, entrepotId: e.target.value})}
+                options={[{ value: '', label: '-- Aucun --' }, ...data.entrepots.map(e => ({ value: e.id, label: e.nom }))]} />
+              <FormField label="Notes" type="textarea" value={form.notes || ''} 
+                onChange={(e) => setForm({...form, notes: e.target.value})} />
+
+              <div style={{ marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <h4 style={{ margin: 0 }}>Lignes de Réception</h4>
+                  <button type="button" onClick={() => setForm({
+                    ...form, 
+                    lignes: [...(form.lignes || []), { produitId: '', quantiteRecue: 1, prixUnitaireEstime: 0 }]
+                  })} style={{ padding: '5px 10px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                    + Ajouter Ligne
+                  </button>
+                </div>
+                
+                {(form.lignes || []).map((ligne, index) => (
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', padding: '10px', background: '#f8f9fa', borderRadius: '4px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Produit</label>
+                      <select 
+                        value={ligne.produitId || ''} 
+                        onChange={(e) => {
+                          const newLignes = [...form.lignes];
+                          const produit = data.produits.find(p => p.id === parseInt(e.target.value));
+                          newLignes[index] = { 
+                            ...newLignes[index], 
+                            produitId: e.target.value,
+                            prixUnitaireEstime: produit ? produit.prixAchat || 0 : 0
+                          };
+                          setForm({...form, lignes: newLignes});
+                        }}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      >
+                        <option value="">-- Sélectionner --</option>
+                        {data.produits.map(p => (
+                          <option key={p.id} value={p.id}>{p.reference} - {p.nom}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Quantité</label>
+                      <input 
+                        type="number" 
+                        value={ligne.quantiteRecue || ''} 
+                        onChange={(e) => {
+                          const newLignes = [...form.lignes];
+                          newLignes[index] = { ...newLignes[index], quantiteRecue: e.target.value };
+                          setForm({...form, lignes: newLignes});
+                        }}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Prix Unit. Estimé</label>
+                      <input 
+                        type="number" 
+                        value={ligne.prixUnitaireEstime || ''} 
+                        onChange={(e) => {
+                          const newLignes = [...form.lignes];
+                          newLignes[index] = { ...newLignes[index], prixUnitaireEstime: e.target.value };
+                          setForm({...form, lignes: newLignes});
+                        }}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                      <button type="button" onClick={() => {
+                        const newLignes = form.lignes.filter((_, i) => i !== index);
+                        setForm({...form, lignes: newLignes.length > 0 ? newLignes : [{ produitId: '', quantiteRecue: 1, prixUnitaireEstime: 0 }]});
+                      }} style={{ padding: '8px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                        X
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                
+                <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px', textAlign: 'right' }}>
+                  <strong>Total HT estimé: </strong>
+                  {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantiteRecue || 0) * parseFloat(l.prixUnitaireEstime || 0)), 0).toLocaleString()} FCFA
+                </div>
+              </div>
             </>
           )}
 
