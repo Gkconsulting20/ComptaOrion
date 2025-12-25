@@ -190,7 +190,8 @@ export function StockInventaire() {
     entrepots: [],
     mouvements: [],
     receptions: [],
-    fournisseurs: []
+    fournisseurs: [],
+    commandes: []
   });
   
   const [modal, setModal] = useState({ open: false, type: null, item: null });
@@ -207,13 +208,14 @@ export function StockInventaire() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [p, c, e, m, r, f] = await Promise.all([
+        const [p, c, e, m, r, f, cmd] = await Promise.all([
           api.get('/produits').catch(() => ({ data: { data: [] } })),
           api.get('/stock/categories').catch(() => ({ data: [] })),
           api.get('/stock/entrepots').catch(() => ({ data: [] })),
           api.get('/stock/mouvements').catch(() => ({ data: [] })),
           api.get('/stock/receptions').catch(() => ({ data: [] })),
-          api.get('/fournisseurs').catch(() => ({ data: { data: [] } }))
+          api.get('/fournisseurs').catch(() => ({ data: { data: [] } })),
+          api.get('/commandes-achat').catch(() => ({ data: { data: [] } }))
         ]);
         setData({
           produits: p.data.data || p.data || [],
@@ -221,7 +223,8 @@ export function StockInventaire() {
           entrepots: e.data || [],
           mouvements: m.data || [],
           receptions: r.data || [],
-          fournisseurs: f.data.data || f.data || []
+          fournisseurs: f.data.data || f.data || [],
+          commandes: cmd.data?.data || cmd.data || []
         });
       } catch (err) {
         console.error('Load error:', err);
@@ -247,6 +250,9 @@ export function StockInventaire() {
       } else if (type === 'receptions') {
         const res = await api.get('/stock/receptions');
         setData(d => ({ ...d, receptions: res.data || [] }));
+      } else if (type === 'commandes') {
+        const res = await api.get('/commandes-achat');
+        setData(d => ({ ...d, commandes: res.data?.data || res.data || [] }));
       }
     } catch (err) {
       console.error('Reload error:', err);
@@ -270,6 +276,14 @@ export function StockInventaire() {
         entrepotId: '', 
         notes: '', 
         lignes: [{ produitId: '', quantiteRecue: 1, prixUnitaireEstime: 0 }] 
+      });
+    } else if (type === 'commande') {
+      setForm(item || {
+        fournisseurId: '',
+        dateCommande: new Date().toISOString().split('T')[0],
+        dateLivraisonPrevue: '',
+        notes: '',
+        lignes: [{ produitId: '', quantite: 1, prixUnitaire: 0 }]
       });
     }
   };
@@ -341,6 +355,25 @@ export function StockInventaire() {
         });
         await reload('receptions');
         alert('Bon de reception cree avec succes. Validez-le pour mettre a jour le stock.');
+      } else if (type === 'commande') {
+        const lignesValides = form.lignes.filter(l => l.produitId && parseFloat(l.quantite) > 0);
+        if (!form.fournisseurId || lignesValides.length === 0) {
+          return alert('Veuillez saisir un fournisseur et au moins une ligne valide');
+        }
+        await api.post('/commandes-achat', {
+          fournisseurId: parseInt(form.fournisseurId),
+          dateCommande: form.dateCommande,
+          dateLivraisonPrevue: form.dateLivraisonPrevue || null,
+          notes: form.notes,
+          items: lignesValides.map(l => ({
+            produitId: parseInt(l.produitId),
+            description: data.produits.find(p => p.id === parseInt(l.produitId))?.nom || '',
+            quantite: parseFloat(l.quantite),
+            prixUnitaire: parseFloat(l.prixUnitaire)
+          }))
+        });
+        await reload('commandes');
+        alert('Commande d\'achat creee avec succes.');
       }
       
       closeModal();
@@ -376,7 +409,7 @@ export function StockInventaire() {
       <h2>📦 Stock & Inventaire</h2>
       
       <div style={{ display: 'flex', borderBottom: '2px solid #e1e8ed', marginBottom: '20px', flexWrap: 'wrap' }}>
-        {['parametres', 'receptions', 'mouvements', 'inventaires', 'alertes', 'nonfacture', 'rapports'].map(tab => (
+        {['parametres', 'commandes', 'receptions', 'mouvements', 'inventaires', 'alertes', 'nonfacture', 'rapports'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             style={{
               padding: '12px 20px', background: activeTab === tab ? '#fff' : 'transparent',
@@ -384,7 +417,8 @@ export function StockInventaire() {
               color: activeTab === tab ? '#3498db' : '#7f8c8d',
               fontWeight: activeTab === tab ? 'bold' : 'normal', cursor: 'pointer'
             }}>
-            {tab === 'parametres' ? '⚙️ Paramètres' : 
+            {tab === 'parametres' ? '⚙️ Paramètres' :
+             tab === 'commandes' ? '📦 Commandes Achat' :
              tab === 'receptions' ? '📥 Réceptions' :
              tab === 'mouvements' ? '🔄 Mouvements' :
              tab === 'inventaires' ? '📋 Inventaires' :
@@ -474,6 +508,48 @@ export function StockInventaire() {
                 onDelete={(item) => handleDelete('entrepot', item)}
               />
             </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'commandes' && (
+        <div>
+          <h3>📦 Commandes d'Achat</h3>
+          <p style={{ color: '#7f8c8d', marginBottom: '15px' }}>
+            Créez des commandes d'achat pour vos fournisseurs. Vous pourrez ensuite créer des réceptions à leur arrivée.
+          </p>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <div>
+              <span style={{ background: '#f8f9fa', padding: '5px 10px', borderRadius: '4px', marginRight: '10px' }}>
+                Total: {data.commandes.length} commandes
+              </span>
+            </div>
+            <Button onClick={() => openModal('commande')}>+ Nouvelle Commande</Button>
+          </div>
+
+          {data.commandes.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
+              <p style={{ color: '#7f8c8d' }}>Aucune commande d'achat</p>
+            </div>
+          ) : (
+            <Table
+              columns={[
+                { key: 'numeroCommande', label: 'N° Commande' },
+                { key: 'fournisseur', label: 'Fournisseur', render: (val, row) => row.fournisseur?.nom || val?.nom || '-' },
+                { key: 'dateCommande', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString('fr-FR') : '-' },
+                { key: 'totalHT', label: 'Total HT', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                { key: 'statut', label: 'Statut', render: (val) => {
+                  const statut = val || 'brouillon';
+                  const colors = { brouillon: '#95a5a6', validee: '#3498db', recue: '#27ae60', annulee: '#e74c3c' };
+                  return <span style={{ 
+                    padding: '4px 8px', borderRadius: '4px', backgroundColor: colors[statut] || '#999',
+                    color: 'white', fontSize: '11px'
+                  }}>{statut}</span>;
+                }}
+              ]}
+              data={data.commandes}
+            />
           )}
         </div>
       )}
@@ -818,7 +894,8 @@ export function StockInventaire() {
                modal.type === 'categorie' ? (modal.item ? 'Modifier' : 'Nouvelle Catégorie') :
                modal.type === 'entrepot' ? (modal.item ? 'Modifier' : 'Nouvel Entrepôt') :
                modal.type === 'inventaire' ? 'Comptage Physique' : 
-               modal.type === 'reception' ? 'Nouveau Bon de Réception' : ''}>
+               modal.type === 'reception' ? 'Nouveau Bon de Réception' :
+               modal.type === 'commande' ? 'Nouvelle Commande d\'Achat' : ''}>
         <form onSubmit={handleSubmit}>
           {modal.type === 'produit' && (
             <>
@@ -955,6 +1032,99 @@ export function StockInventaire() {
                 <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px', textAlign: 'right' }}>
                   <strong>Total HT estimé: </strong>
                   {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantiteRecue || 0) * parseFloat(l.prixUnitaireEstime || 0)), 0).toLocaleString()} FCFA
+                </div>
+              </div>
+            </>
+          )}
+
+          {modal.type === 'commande' && (
+            <>
+              <FormField label="Fournisseur" type="select" value={form.fournisseurId || ''} 
+                onChange={(e) => setForm({...form, fournisseurId: e.target.value})}
+                options={[{ value: '', label: '-- Sélectionner --' }, ...data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))]}
+                required />
+              <FormField label="Date Commande" type="date" value={form.dateCommande || ''} 
+                onChange={(e) => setForm({...form, dateCommande: e.target.value})} required />
+              <FormField label="Date Livraison Prévue" type="date" value={form.dateLivraisonPrevue || ''} 
+                onChange={(e) => setForm({...form, dateLivraisonPrevue: e.target.value})} />
+              <FormField label="Notes" type="textarea" value={form.notes || ''} 
+                onChange={(e) => setForm({...form, notes: e.target.value})} />
+
+              <div style={{ marginTop: '20px', borderTop: '1px solid #ddd', paddingTop: '15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <h4 style={{ margin: 0 }}>Lignes de Commande</h4>
+                  <button type="button" onClick={() => setForm({
+                    ...form, 
+                    lignes: [...(form.lignes || []), { produitId: '', quantite: 1, prixUnitaire: 0 }]
+                  })} style={{ padding: '5px 10px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                    + Ajouter Ligne
+                  </button>
+                </div>
+                
+                {(form.lignes || []).map((ligne, index) => (
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', padding: '10px', background: '#f8f9fa', borderRadius: '4px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Produit</label>
+                      <select 
+                        value={ligne.produitId || ''} 
+                        onChange={(e) => {
+                          const newLignes = [...form.lignes];
+                          const produit = data.produits.find(p => p.id === parseInt(e.target.value));
+                          newLignes[index] = { 
+                            ...newLignes[index], 
+                            produitId: e.target.value,
+                            prixUnitaire: produit ? produit.prixAchat || 0 : 0
+                          };
+                          setForm({...form, lignes: newLignes});
+                        }}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      >
+                        <option value="">-- Sélectionner --</option>
+                        {data.produits.map(p => (
+                          <option key={p.id} value={p.id}>{p.reference} - {p.nom}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Quantité</label>
+                      <input 
+                        type="number" 
+                        value={ligne.quantite || ''} 
+                        onChange={(e) => {
+                          const newLignes = [...form.lignes];
+                          newLignes[index] = { ...newLignes[index], quantite: e.target.value };
+                          setForm({...form, lignes: newLignes});
+                        }}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Prix Unitaire</label>
+                      <input 
+                        type="number" 
+                        value={ligne.prixUnitaire || ''} 
+                        onChange={(e) => {
+                          const newLignes = [...form.lignes];
+                          newLignes[index] = { ...newLignes[index], prixUnitaire: e.target.value };
+                          setForm({...form, lignes: newLignes});
+                        }}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                      <button type="button" onClick={() => {
+                        const newLignes = form.lignes.filter((_, i) => i !== index);
+                        setForm({...form, lignes: newLignes.length > 0 ? newLignes : [{ produitId: '', quantite: 1, prixUnitaire: 0 }]});
+                      }} style={{ padding: '8px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                        X
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                
+                <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px', textAlign: 'right' }}>
+                  <strong>Total HT: </strong>
+                  {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantite || 0) * parseFloat(l.prixUnitaire || 0)), 0).toLocaleString()} FCFA
                 </div>
               </div>
             </>

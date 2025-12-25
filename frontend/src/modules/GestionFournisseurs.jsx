@@ -884,8 +884,6 @@ export function GestionFournisseurs() {
 
   const tabs = [
     { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' },
-    { id: 'commandes', label: '📦 Commandes Achat', icon: '📦' },
-    { id: 'receptions', label: '📥 Réceptions', icon: '📥' },
     { id: 'facturation', label: '📄 Facturation', icon: '📄' },
     { id: 'factures', label: '🧾 Factures', icon: '🧾' },
     { id: 'paiements', label: '💰 Paiements', icon: '💰' },
@@ -1015,55 +1013,6 @@ export function GestionFournisseurs() {
               />
             </div>
           )}
-        </div>
-      )}
-
-      {activeTab === 'commandes' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3>📦 Commandes d'Achat</h3>
-            <Button onClick={() => openModal('commande')}>+ Nouvelle Commande</Button>
-          </div>
-          <Table
-            columns={[
-              { key: 'numeroCommande', label: 'N° Commande', render: (_, row) => row.commande?.numeroCommande || '-' },
-              { key: 'fournisseur', label: 'Fournisseur', render: (_, row) => row.fournisseur?.nom || '-' },
-              { key: 'dateCommande', label: 'Date', render: (_, row) => row.commande?.dateCommande?.split('T')[0] || '-' },
-              { key: 'totalHT', label: 'Total HT', render: (_, row) => `${row.commande?.totalHT || 0} FCFA` },
-              { key: 'statut', label: 'Statut', render: (_, row) => {
-                const statut = row.commande?.statut || 'brouillon';
-                const colors = { brouillon: '#95a5a6', validee: '#3498db', recue: '#27ae60', annulee: '#e74c3c' };
-                return <span style={{ 
-                  padding: '4px 8px', borderRadius: '4px', backgroundColor: colors[statut] || '#999',
-                  color: 'white', fontSize: '11px'
-                }}>{statut}</span>;
-              }},
-              { key: 'actions', label: 'Actions', render: (_, row) => (
-                <Button 
-                  variant="success" 
-                  size="small"
-                  onClick={() => convertirEnFacture(row)}
-                >
-                  🧾 Convertir en Facture
-                </Button>
-              )}
-            ]}
-            data={data.commandes}
-            onRowClick={(row) => { setSelectedCommande(row); setShowCommandeDetails(true); }}
-            actions={false}
-          />
-        </div>
-      )}
-
-      {activeTab === 'receptions' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3>📥 Réceptions de Marchandises</h3>
-            <Button onClick={() => openModal('reception')}>+ Nouvelle Réception</Button>
-          </div>
-          <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
-            <p style={{ color: '#7f8c8d', margin: 0 }}>Aucune réception enregistrée</p>
-          </div>
         </div>
       )}
 
@@ -1322,12 +1271,26 @@ export function GestionFournisseurs() {
           {modal.type === 'paiement' && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
-                <FormField label="1️⃣ Sélectionner le Fournisseur" name="fournisseurId" type="select" value={form.fournisseurId}
-                  onChange={(e) => setForm({...form, fournisseurId: e.target.value, factureId: '', montant: 0})}
-                  options={[
-                    { value: '', label: '-- Choisir un fournisseur --' },
-                    ...data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))
-                  ]} required />
+                {(() => {
+                  const fournisseursAvecFacturesImpayees = data.fournisseurs.filter(f => 
+                    data.factures.some(fact => fact.fournisseurId == f.id && fact.statut !== 'payee')
+                  );
+                  return (
+                    <FormField label="1️⃣ Sélectionner le Fournisseur (avec factures impayées)" name="fournisseurId" type="select" value={form.fournisseurId}
+                      onChange={(e) => setForm({...form, fournisseurId: e.target.value, factureId: '', montant: 0})}
+                      options={[
+                        { value: '', label: fournisseursAvecFacturesImpayees.length > 0 ? '-- Choisir un fournisseur --' : '-- Aucun fournisseur avec facture impayée --' },
+                        ...fournisseursAvecFacturesImpayees.map(f => {
+                          const facturesImpayees = data.factures.filter(fact => fact.fournisseurId == f.id && fact.statut !== 'payee');
+                          const montantTotal = facturesImpayees.reduce((sum, fact) => sum + parseFloat(fact.montantTotal || fact.montantHT || 0), 0);
+                          return { 
+                            value: f.id, 
+                            label: `${f.nom} (${facturesImpayees.length} facture${facturesImpayees.length > 1 ? 's' : ''} - ${montantTotal.toLocaleString()} FCFA)` 
+                          };
+                        })
+                      ]} required />
+                  );
+                })()}
                 
                 {form.fournisseurId && (
                   <FormField label="2️⃣ Sélectionner la Facture à Payer" name="factureId" type="select" value={form.factureId}
