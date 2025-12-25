@@ -22,13 +22,15 @@ function NonFactureTab({ fournisseurs, produits }) {
       if (filters.dateFin) params.append('dateFin', filters.dateFin);
       
       const [stockRes, logRes] = await Promise.all([
-        api.get(`/stock/rapports/stock-non-facture?${params}`),
-        api.get(`/stock/rapports/logistique-non-facturee?${params}`)
+        api.get(`/stock/rapports/stock-non-facture?${params}`).catch(() => ({ data: { items: [], totaux: {}, parFournisseur: [] } })),
+        api.get(`/stock/rapports/logistique-non-facturee?${params}`).catch(() => ({ data: { items: [], totaux: {}, parType: [], parFournisseur: [] } }))
       ]);
-      setStockPending(stockRes.data);
-      setLogistiquePending(logRes.data);
+      setStockPending(stockRes.data || { items: [], totaux: {}, parFournisseur: [] });
+      setLogistiquePending(logRes.data || { items: [], totaux: {}, parType: [], parFournisseur: [] });
     } catch (err) {
       console.error('Erreur chargement données non facturées:', err);
+      setStockPending({ items: [], totaux: {}, parFournisseur: [] });
+      setLogistiquePending({ items: [], totaux: {}, parType: [], parFournisseur: [] });
     } finally {
       setLoading(false);
     }

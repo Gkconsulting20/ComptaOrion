@@ -39,15 +39,17 @@ function FacturationTab({ fournisseurs }) {
       if (filters.dateFin) params.append('dateFin', filters.dateFin);
       
       const [stockRes, logRes, produitsRes] = await Promise.all([
-        api.get(`/stock/rapports/stock-non-facture?${params}`),
-        api.get(`/stock/rapports/logistique-non-facturee?${params}`),
+        api.get(`/stock/rapports/stock-non-facture?${params}`).catch(() => ({ data: { items: [], totaux: {}, parFournisseur: [] } })),
+        api.get(`/stock/rapports/logistique-non-facturee?${params}`).catch(() => ({ data: { items: [], totaux: {}, parType: [], parFournisseur: [] } })),
         api.get('/produits').catch(() => ({ data: [] }))
       ]);
-      setStockPending(stockRes.data);
-      setLogistiquePending(logRes.data);
+      setStockPending(stockRes.data || { items: [], totaux: {}, parFournisseur: [] });
+      setLogistiquePending(logRes.data || { items: [], totaux: {}, parType: [], parFournisseur: [] });
       setProduits(produitsRes.data || []);
     } catch (err) {
       console.error('Erreur chargement données:', err);
+      setStockPending({ items: [], totaux: {}, parFournisseur: [] });
+      setLogistiquePending({ items: [], totaux: {}, parType: [], parFournisseur: [] });
     } finally {
       setLoading(false);
     }
