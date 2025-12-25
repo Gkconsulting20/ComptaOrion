@@ -1105,36 +1105,68 @@ router.get('/grand-livre', async (req, res) => {
 
 router.get('/balance', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
+    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    
+    if (!entrepriseId) {
+      return res.status(400).json({ error: 'entrepriseId requis' });
+    }
 
-    const lignes = await db
+    // Récupérer les lignes d'écriture avec les comptes comptables
+    const lignesData = await db
       .select({
-        compteId: lignesEcritures.compteId,
-        montant: lignesEcritures.montant,
-        type: lignesEcritures.type
+        compteId: lignesEcritures.compteComptableId,
+        debit: lignesEcritures.debit,
+        credit: lignesEcritures.credit,
+        compteNumero: comptesComptables.numero,
+        compteNom: comptesComptables.nom,
+        compteType: comptesComptables.type
       })
       .from(lignesEcritures)
       .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
+      .innerJoin(comptesComptables, eq(lignesEcritures.compteComptableId, comptesComptables.id))
       .where(
         and(
-          eq(lignesEcritures.entrepriseId, parseInt(entrepriseId)),
-          eq(ecritures.statut, 'validée')
+          eq(lignesEcritures.entrepriseId, entrepriseId),
+          eq(ecritures.valide, true)
         )
       );
 
+    // Agréger par compte
     const balance = {};
-    lignes.forEach(ligne => {
-      if (!balance[ligne.compteId]) {
-        balance[ligne.compteId] = { debit: 0, credit: 0 };
+    lignesData.forEach(ligne => {
+      const key = ligne.compteId;
+      if (!balance[key]) {
+        balance[key] = { 
+          compteId: key,
+          numero: ligne.compteNumero,
+          nom: ligne.compteNom,
+          type: ligne.compteType,
+          debit: 0, 
+          credit: 0,
+          solde: 0
+        };
       }
-      if (ligne.type === 'debit') {
-        balance[ligne.compteId].debit += parseFloat(ligne.montant);
-      } else {
-        balance[ligne.compteId].credit += parseFloat(ligne.montant);
-      }
+      balance[key].debit += parseFloat(ligne.debit || 0);
+      balance[key].credit += parseFloat(ligne.credit || 0);
     });
 
-    res.json(balance);
+    // Calculer les soldes et trier par numéro de compte
+    const balanceArray = Object.values(balance).map(compte => ({
+      ...compte,
+      solde: compte.debit - compte.credit
+    })).sort((a, b) => a.numero.localeCompare(b.numero));
+
+    // Totaux
+    const totaux = balanceArray.reduce((acc, c) => ({
+      totalDebit: acc.totalDebit + c.debit,
+      totalCredit: acc.totalCredit + c.credit
+    }), { totalDebit: 0, totalCredit: 0 });
+
+    res.json({ 
+      comptes: balanceArray, 
+      totaux,
+      equilibre: Math.abs(totaux.totalDebit - totaux.totalCredit) < 0.01
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
