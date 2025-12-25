@@ -835,27 +835,59 @@ router.get('/rapports/mouvements', async (req, res) => {
 // RAPPORTS STOCK NON FACTURÉ & COÛTS LOGISTIQUES
 // ==========================================
 
+// Helper: Sanitize date (remove query string artifacts)
+function sanitizeDate(dateStr) {
+  if (!dateStr) return null;
+  const cleaned = dateStr.split('?')[0].trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return null;
+  return cleaned;
+}
+
+// Helper: Sanitize integer ID
+function sanitizeInt(val) {
+  if (!val) return null;
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) ? null : parsed;
+}
+
 // Rapport stock non facturé (pending)
 router.get('/rapports/stock-non-facture', async (req, res) => {
   try {
-    const { fournisseurId, produitId, dateDebut, dateFin } = req.query;
+    const fournisseurId = sanitizeInt(req.query.fournisseurId);
+    const produitId = sanitizeInt(req.query.produitId);
+    const dateDebut = sanitizeDate(req.query.dateDebut);
+    const dateFin = sanitizeDate(req.query.dateFin);
+    const entrepriseId = sanitizeInt(req.entrepriseId);
     
-    let conditions = `WHERE sp.entreprise_id = ${req.entrepriseId} AND sp.statut = 'pending'`;
+    let conditions = [];
+    let params = [];
+    let paramIndex = 1;
+    
+    conditions.push(`sp.entreprise_id = $${paramIndex++}`);
+    params.push(entrepriseId);
+    
+    conditions.push(`sp.statut = 'pending'`);
     
     if (fournisseurId) {
-      conditions += ` AND sp.fournisseur_id = ${fournisseurId}`;
+      conditions.push(`sp.fournisseur_id = $${paramIndex++}`);
+      params.push(fournisseurId);
     }
     if (produitId) {
-      conditions += ` AND sp.produit_id = ${produitId}`;
+      conditions.push(`sp.produit_id = $${paramIndex++}`);
+      params.push(produitId);
     }
     if (dateDebut) {
-      conditions += ` AND sp.date_reception >= '${dateDebut}'`;
+      conditions.push(`sp.date_reception >= $${paramIndex++}`);
+      params.push(dateDebut);
     }
     if (dateFin) {
-      conditions += ` AND sp.date_reception <= '${dateFin}'`;
+      conditions.push(`sp.date_reception <= $${paramIndex++}`);
+      params.push(dateFin);
     }
     
-    const result = await db.execute(sql.raw(`
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    
+    const queryText = `
       SELECT 
         sp.*,
         p.reference as produit_reference, p.nom as produit_nom,
@@ -870,9 +902,11 @@ router.get('/rapports/stock-non-facture', async (req, res) => {
       LEFT JOIN bons_reception br ON sp.bon_reception_id = br.id
       LEFT JOIN commandes_achat ca ON br.commande_achat_id = ca.id
       LEFT JOIN entrepots e ON sp.entrepot_id = e.id
-      ${conditions}
+      ${whereClause}
       ORDER BY sp.date_reception DESC
-    `));
+    `;
+    
+    const result = await db.execute(sql.raw(queryText, params));
     
     const items = result.rows || [];
     const totalQuantite = items.reduce((sum, i) => sum + parseFloat(i.quantite_pending || 0), 0);
@@ -904,24 +938,41 @@ router.get('/rapports/stock-non-facture', async (req, res) => {
 // Rapport coûts logistiques non facturés (pending)
 router.get('/rapports/logistique-non-facturee', async (req, res) => {
   try {
-    const { fournisseurId, type, dateDebut, dateFin } = req.query;
+    const fournisseurId = sanitizeInt(req.query.fournisseurId);
+    const type = req.query.type ? req.query.type.split('?')[0].trim() : null;
+    const dateDebut = sanitizeDate(req.query.dateDebut);
+    const dateFin = sanitizeDate(req.query.dateFin);
+    const entrepriseId = sanitizeInt(req.entrepriseId);
     
-    let conditions = `WHERE lp.entreprise_id = ${req.entrepriseId} AND lp.statut = 'pending'`;
+    let conditions = [];
+    let params = [];
+    let paramIndex = 1;
+    
+    conditions.push(`lp.entreprise_id = $${paramIndex++}`);
+    params.push(entrepriseId);
+    
+    conditions.push(`lp.statut = 'pending'`);
     
     if (fournisseurId) {
-      conditions += ` AND lp.fournisseur_id = ${fournisseurId}`;
+      conditions.push(`lp.fournisseur_id = $${paramIndex++}`);
+      params.push(fournisseurId);
     }
     if (type) {
-      conditions += ` AND lp.type = '${type}'`;
+      conditions.push(`lp.type = $${paramIndex++}`);
+      params.push(type);
     }
     if (dateDebut) {
-      conditions += ` AND lp.date_reception >= '${dateDebut}'`;
+      conditions.push(`lp.date_reception >= $${paramIndex++}`);
+      params.push(dateDebut);
     }
     if (dateFin) {
-      conditions += ` AND lp.date_reception <= '${dateFin}'`;
+      conditions.push(`lp.date_reception <= $${paramIndex++}`);
+      params.push(dateFin);
     }
     
-    const result = await db.execute(sql.raw(`
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    
+    const queryText = `
       SELECT 
         lp.*,
         f.raison_sociale as fournisseur_nom,
@@ -931,9 +982,11 @@ router.get('/rapports/logistique-non-facturee', async (req, res) => {
       LEFT JOIN fournisseurs f ON lp.fournisseur_id = f.id
       LEFT JOIN bons_reception br ON lp.bon_reception_id = br.id
       LEFT JOIN commandes_achat ca ON lp.commande_achat_id = ca.id
-      ${conditions}
+      ${whereClause}
       ORDER BY lp.date_reception DESC
-    `));
+    `;
+    
+    const result = await db.execute(sql.raw(queryText, params));
     
     const items = result.rows || [];
     const totalMontant = items.reduce((sum, i) => sum + parseFloat(i.montant_estime || 0), 0);
