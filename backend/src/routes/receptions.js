@@ -1,7 +1,8 @@
 import express from 'express';
 import { db } from '../db.js';
-import { commandesAchat, commandesAchatItems, produits, mouvementsStock } from '../schema.js';
+import { commandesAchat, commandesAchatItems, produits, mouvementsStock, fournisseurs } from '../schema.js';
 import { eq, and, sql } from 'drizzle-orm';
+import { createEcritureReception } from '../services/comptabiliteService.js';
 
 const router = express.Router();
 
@@ -158,12 +159,41 @@ router.post('/', async (req, res) => {
     // Mettre à jour le statut de la commande
     const nouveauStatut = toutRecu ? 'livree' : 'preparee';
     await db
-      .update(commandes)
+      .update(commandesAchat)
       .set({
         statut: nouveauStatut,
         updatedAt: new Date()
       })
       .where(eq(commandesAchat.id, parseInt(commandeId)));
+
+    // Générer l'écriture comptable pour la réception
+    let ecritureComptable = null;
+    if (mouvements.length > 0) {
+      try {
+        // Récupérer le fournisseur
+        let fournisseurNom = 'Fournisseur';
+        if (commande.fournisseurId) {
+          const [fourn] = await db.select().from(fournisseurs)
+            .where(eq(fournisseurs.id, commande.fournisseurId));
+          if (fourn) fournisseurNom = fourn.raisonSociale;
+        }
+
+        // Calculer le total HT de la réception
+        const totalHT = parseFloat(commande.totalHT || 0);
+
+        ecritureComptable = await createEcritureReception({
+          entrepriseId: req.entrepriseId,
+          receptionNumero: `REC-${commande.numeroCommande}`,
+          dateReception: dateReception || new Date().toISOString().split('T')[0],
+          fournisseurNom,
+          fournisseurCompteId: null,
+          lignes: items,
+          totalHT
+        });
+      } catch (err) {
+        console.warn('Écriture comptable non générée:', err.message);
+      }
+    }
 
     return res.json({
       success: true,
@@ -172,7 +202,8 @@ router.post('/', async (req, res) => {
         commandeId: parseInt(commandeId),
         statut: nouveauStatut,
         mouvementsStock: mouvements.length,
-        toutRecu
+        toutRecu,
+        ecritureComptableId: ecritureComptable?.id || null
       }
     });
   } catch (error) {
