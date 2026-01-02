@@ -19,6 +19,8 @@ let db;
 
 if (isNeon) {
   neonConfig.webSocketConstructor = ws;
+  neonConfig.pipelineConnect = false;
+  neonConfig.useSecureWebSocket = true;
   
   function getPooledConnectionString(url) {
     try {
@@ -35,10 +37,17 @@ if (isNeon) {
   const connectionString = getPooledConnectionString(process.env.DATABASE_URL);
   pool = new NeonPool({ 
     connectionString,
-    max: 3,
-    idleTimeoutMillis: 20000,
-    connectionTimeoutMillis: 10000
+    max: 5,
+    min: 1,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 15000,
+    allowExitOnIdle: false
   });
+  
+  pool.on('error', (err) => {
+    console.error('Erreur pool Neon:', err.message);
+  });
+  
   db = drizzleNeon({ client: pool, schema });
   console.log('✅ Base de données Neon connectée');
 } else {

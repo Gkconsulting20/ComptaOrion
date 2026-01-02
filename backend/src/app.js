@@ -31,6 +31,7 @@ import impotsRoutes from './routes/impots.js';
 import integrationsRoutes from './routes/integrations.js';
 import importRoutes from './routes/import.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
+import { createTenantMiddleware } from './utils/rlsPolicies.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -81,7 +82,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/saas-admin', authMiddleware, saasAdminOnly, saasAdminRoutes);
 
 // ✅ AUTHENTIFICATION ACTIVÉE - TOUTES LES ROUTES PROTÉGÉES
-app.use('/api', authMiddleware, entrepriseIsolation);
+app.use('/api', authMiddleware, entrepriseIsolation, createTenantMiddleware());
 
 // ===============================================
 // ROUTES CRUD DES MODULES

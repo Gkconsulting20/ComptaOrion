@@ -69,13 +69,14 @@ router.post('/', async (req, res) => {
         continue; // Ignorer les quantités nulles
       }
 
-      // Récupérer la ligne de commande
+      // Récupérer la ligne de commande avec isolation tenant ET commande
       const [commandeItem] = await db
         .select()
         .from(commandesAchatItems)
         .where(
           and(
             eq(commandesAchatItems.id, parseInt(item.commandeItemId)),
+            eq(commandesAchatItems.commandeId, parseInt(commandeId)),
             eq(commandesAchatItems.entrepriseId, req.entrepriseId)
           )
         )
@@ -186,11 +187,15 @@ router.post('/', async (req, res) => {
         for (const item of items) {
           const quantiteRecue = parseFloat(item.quantiteRecue);
           if (quantiteRecue > 0) {
-            // Récupérer le prix unitaire de la ligne de commande
+            // Récupérer le prix unitaire avec isolation tenant ET commande
             const [commandeItem] = await db
               .select()
               .from(commandesAchatItems)
-              .where(eq(commandesAchatItems.id, parseInt(item.commandeItemId)))
+              .where(and(
+                eq(commandesAchatItems.id, parseInt(item.commandeItemId)),
+                eq(commandesAchatItems.commandeId, parseInt(commandeId)),
+                eq(commandesAchatItems.entrepriseId, req.entrepriseId)
+              ))
               .limit(1);
             
             if (commandeItem) {
@@ -207,8 +212,6 @@ router.post('/', async (req, res) => {
             receptionNumero: `REC-${commande.numeroCommande}-${Date.now()}`,
             dateReception: dateReception || new Date().toISOString().split('T')[0],
             fournisseurNom,
-            fournisseurCompteId: null,
-            lignes: items,
             totalHT: totalHTReception
           });
         }

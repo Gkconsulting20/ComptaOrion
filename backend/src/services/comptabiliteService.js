@@ -148,8 +148,6 @@ export async function createEcritureReception(params) {
     receptionNumero,
     dateReception,
     fournisseurNom,
-    fournisseurCompteId,
-    lignes,
     totalHT
   } = params;
 
