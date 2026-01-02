@@ -166,30 +166,52 @@ router.post('/', async (req, res) => {
       })
       .where(eq(commandesAchat.id, parseInt(commandeId)));
 
-    // Générer l'écriture comptable pour la réception
+    // Générer l'écriture comptable pour la réception (uniquement pour les quantités effectivement reçues)
     let ecritureComptable = null;
     if (mouvements.length > 0) {
       try {
-        // Récupérer le fournisseur
+        // Récupérer le fournisseur avec filtre entrepriseId
         let fournisseurNom = 'Fournisseur';
         if (commande.fournisseurId) {
           const [fourn] = await db.select().from(fournisseurs)
-            .where(eq(fournisseurs.id, commande.fournisseurId));
+            .where(and(
+              eq(fournisseurs.id, commande.fournisseurId),
+              eq(fournisseurs.entrepriseId, req.entrepriseId)
+            ));
           if (fourn) fournisseurNom = fourn.raisonSociale;
         }
 
-        // Calculer le total HT de la réception
-        const totalHT = parseFloat(commande.totalHT || 0);
+        // Calculer le total HT basé uniquement sur les quantités reçues dans cette opération
+        let totalHTReception = 0;
+        for (const item of items) {
+          const quantiteRecue = parseFloat(item.quantiteRecue);
+          if (quantiteRecue > 0) {
+            // Récupérer le prix unitaire de la ligne de commande
+            const [commandeItem] = await db
+              .select()
+              .from(commandesAchatItems)
+              .where(eq(commandesAchatItems.id, parseInt(item.commandeItemId)))
+              .limit(1);
+            
+            if (commandeItem) {
+              const prixUnitaire = parseFloat(commandeItem.prixUnitaire || 0);
+              totalHTReception += quantiteRecue * prixUnitaire;
+            }
+          }
+        }
 
-        ecritureComptable = await createEcritureReception({
-          entrepriseId: req.entrepriseId,
-          receptionNumero: `REC-${commande.numeroCommande}`,
-          dateReception: dateReception || new Date().toISOString().split('T')[0],
-          fournisseurNom,
-          fournisseurCompteId: null,
-          lignes: items,
-          totalHT
-        });
+        // Ne créer l'écriture que si le montant est positif
+        if (totalHTReception > 0) {
+          ecritureComptable = await createEcritureReception({
+            entrepriseId: req.entrepriseId,
+            receptionNumero: `REC-${commande.numeroCommande}-${Date.now()}`,
+            dateReception: dateReception || new Date().toISOString().split('T')[0],
+            fournisseurNom,
+            fournisseurCompteId: null,
+            lignes: items,
+            totalHT: totalHTReception
+          });
+        }
       } catch (err) {
         console.warn('Écriture comptable non générée:', err.message);
       }

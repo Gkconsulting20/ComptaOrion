@@ -1,6 +1,20 @@
 import { db } from '../db.js';
 import { sql } from 'drizzle-orm';
 
+export async function initializeTenantSetting() {
+  try {
+    await db.execute(sql.raw(`
+      DO $$ 
+      BEGIN
+        PERFORM current_setting('app.current_tenant', true);
+      EXCEPTION WHEN undefined_object THEN
+        PERFORM set_config('app.current_tenant', '0', false);
+      END $$;
+    `));
+  } catch (err) {
+  }
+}
+
 const MULTI_TENANT_TABLES = [
   'users',
   'clients',
@@ -68,7 +82,11 @@ export async function enableRLS() {
 }
 
 export async function setCurrentTenant(entrepriseId) {
-  await db.execute(sql.raw(`SET app.current_tenant = '${entrepriseId}'`));
+  try {
+    await db.execute(sql.raw(`SELECT set_config('app.current_tenant', '${entrepriseId}', true)`));
+  } catch (err) {
+    console.warn('Erreur set_config tenant:', err.message);
+  }
 }
 
 export async function disableRLSForMigration() {
@@ -102,10 +120,21 @@ export async function checkRLSStatus() {
   return results;
 }
 
+export function createTenantMiddleware() {
+  return async (req, res, next) => {
+    if (req.entrepriseId) {
+      await setCurrentTenant(req.entrepriseId);
+    }
+    next();
+  };
+}
+
 export default {
   enableRLS,
   setCurrentTenant,
   disableRLSForMigration,
   checkRLSStatus,
+  initializeTenantSetting,
+  createTenantMiddleware,
   MULTI_TENANT_TABLES
 };
