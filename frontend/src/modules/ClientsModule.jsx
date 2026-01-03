@@ -1245,17 +1245,18 @@ function RapportsTab() {
               onClick={genererRapportPeriode}
               disabled={loadingPeriode}
               style={{
-                padding: '10px 20px',
-                backgroundColor: '#3498db',
+                padding: '10px 24px',
+                backgroundColor: '#28a745',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
                 cursor: loadingPeriode ? 'not-allowed' : 'pointer',
-                fontWeight: '500',
-                fontSize: '14px'
+                fontWeight: 'bold',
+                fontSize: '14px',
+                opacity: loadingPeriode ? 0.7 : 1
               }}
             >
-              {loadingPeriode ? 'Chargement...' : '🔍 Générer'}
+              {loadingPeriode ? 'Chargement...' : 'Générer'}
             </button>
           </div>
         </div>

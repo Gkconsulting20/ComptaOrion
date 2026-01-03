@@ -18,6 +18,9 @@ export function TresorerieModule() {
   const [rapprochements, setRapprochements] = useState([]);
   const [rapprochementActif, setRapprochementActif] = useState(null);
   const [showRapprochementModal, setShowRapprochementModal] = useState(false);
+  const [transactionDateDebut, setTransactionDateDebut] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [transactionDateFin, setTransactionDateFin] = useState(new Date().toISOString().split('T')[0]);
+  const [transactionsFiltered, setTransactionsFiltered] = useState([]);
   
   const ENTREPRISE_ID = parseInt(localStorage.getItem('entrepriseId')) || 1;
 
@@ -325,9 +328,22 @@ export function TresorerieModule() {
     </div>
   );
 
+  const loadTransactionsFiltered = async () => {
+    setLoading(true);
+    try {
+      setError(null);
+      const data = await api.get(`/tresorerie/mouvements?dateDebut=${transactionDateDebut}&dateFin=${transactionDateFin}`);
+      setTransactionsFiltered(data);
+    } catch (err) {
+      setError(err.message || 'Erreur lors du chargement des transactions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderTransactions = () => (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
         <h3 style={{ margin: 0 }}>Historique des Transactions</h3>
         <button
           onClick={() => openModal('transaction')}
@@ -345,9 +361,48 @@ export function TresorerieModule() {
         </button>
       </div>
 
+      <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '14px', color: '#666' }}>Du:</label>
+            <input
+              type="date"
+              value={transactionDateDebut}
+              onChange={(e) => setTransactionDateDebut(e.target.value)}
+              style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '14px', color: '#666' }}>Au:</label>
+            <input
+              type="date"
+              value={transactionDateFin}
+              onChange={(e) => setTransactionDateFin(e.target.value)}
+              style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+            />
+          </div>
+          <button 
+            onClick={loadTransactionsFiltered}
+            disabled={loading}
+            style={{ 
+              padding: '10px 20px', 
+              backgroundColor: '#28a745', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold',
+              opacity: loading ? 0.7 : 1
+            }}
+          >
+            {loading ? 'Chargement...' : 'Générer'}
+          </button>
+        </div>
+      </div>
+
       {loading ? (
         <p>Chargement...</p>
-      ) : (
+      ) : transactionsFiltered.length > 0 ? (
         <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
           <thead>
             <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
@@ -359,7 +414,7 @@ export function TresorerieModule() {
             </tr>
           </thead>
           <tbody>
-            {transactions.map(transaction => (
+            {transactionsFiltered.map(transaction => (
               <tr key={transaction.id} style={{ borderBottom: '1px solid #dee2e6' }}>
                 <td style={{ padding: '12px' }}>{new Date(transaction.dateTransaction).toLocaleDateString('fr-FR')}</td>
                 <td style={{ padding: '12px' }}>
@@ -381,15 +436,12 @@ export function TresorerieModule() {
                 </td>
               </tr>
             ))}
-            {transactions.length === 0 && (
-              <tr>
-                <td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                  Aucune transaction enregistrée
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
+      ) : (
+        <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
+          <p style={{ color: '#7f8c8d', margin: 0 }}>Sélectionnez une période et cliquez sur "Générer" pour afficher les transactions</p>
+        </div>
       )}
     </div>
   );

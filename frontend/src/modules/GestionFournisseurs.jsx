@@ -1052,14 +1052,14 @@ export function GestionFournisseurs() {
 
           <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
             <h4 style={{ margin: '0 0 15px 0' }}>📅 Filtrer par Période</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'end', flexWrap: 'wrap' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Début</label>
                 <input
                   type="date"
                   value={periode.dateDebut}
                   onChange={(e) => setPeriode({...periode, dateDebut: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
                 />
               </div>
               <div>
@@ -1068,9 +1068,16 @@ export function GestionFournisseurs() {
                   type="date"
                   value={periode.dateFin}
                   onChange={(e) => setPeriode({...periode, dateFin: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
                 />
               </div>
+              <Button 
+                variant="success" 
+                onClick={loadAllData}
+                style={{ fontWeight: 'bold', padding: '10px 20px' }}
+              >
+                Générer
+              </Button>
             </div>
           </div>
 

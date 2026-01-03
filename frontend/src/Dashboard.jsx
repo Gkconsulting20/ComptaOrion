@@ -70,19 +70,27 @@ export function DashboardView() {
   const [kpis, setKpis] = useState(null);
   const [ventesMensuelles, setVentesMensuelles] = useState([]);
   const [depensesCategories, setDepensesCategories] = useState([]);
-  const [periode, setPeriode] = useState('mois');
+  
+  // Filtres de période
+  const today = new Date();
+  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const [dateDebut, setDateDebut] = useState(firstDayOfMonth.toISOString().split('T')[0]);
+  const [dateFin, setDateFin] = useState(today.toISOString().split('T')[0]);
+  const [filtersApplied, setFiltersApplied] = useState(false);
   
   const [drillDown, setDrillDown] = useState({ open: false, type: null, title: '', data: [], loading: false });
 
   useEffect(() => {
+    // Charger automatiquement au premier rendu
     loadDashboard();
   }, []);
 
   const loadDashboard = async () => {
     setLoading(true);
     try {
+      const params = `?dateDebut=${dateDebut}&dateFin=${dateFin}`;
       const [kpisRes, ventesRes, depensesRes] = await Promise.all([
-        api.get('/dashboard/global'),
+        api.get(`/dashboard/global${params}`),
         api.get('/dashboard/ventes-mensuelles'),
         api.get('/dashboard/depenses-categories')
       ]);
@@ -90,6 +98,7 @@ export function DashboardView() {
       setKpis(kpisRes);
       setVentesMensuelles(ventesRes || []);
       setDepensesCategories(depensesRes || []);
+      setFiltersApplied(true);
     } catch (error) {
       console.error('Erreur dashboard:', error);
     } finally {
@@ -276,21 +285,44 @@ export function DashboardView() {
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#f5f5f5', minHeight: '100%' }}>
-      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
         <h1 style={{ margin: 0, fontSize: '24px', color: '#333' }}>Tableau de bord</h1>
-        <button 
-          onClick={loadDashboard}
-          style={{ 
-            padding: '8px 16px', 
-            backgroundColor: '#007bff', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Actualiser
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '14px', color: '#666' }}>Du:</label>
+            <input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '14px', color: '#666' }}>Au:</label>
+            <input
+              type="date"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+              style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+            />
+          </div>
+          <button 
+            onClick={loadDashboard}
+            disabled={loading}
+            style={{ 
+              padding: '10px 20px', 
+              backgroundColor: '#28a745', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold',
+              opacity: loading ? 0.7 : 1
+            }}
+          >
+            {loading ? 'Chargement...' : 'Générer'}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>

@@ -604,23 +604,39 @@ export function ModuleComptabilite() {
                   onChange={(e) => setPeriode({...periode, dateFin: e.target.value})}
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
               </div>
-              <Button variant="primary" onClick={async () => {
+              <Button variant="success" style={{ fontWeight: 'bold', padding: '10px 20px' }} onClick={async () => {
                 const compteId = document.getElementById('grandLivreCompte').value;
                 try {
                   const params = { dateDebut: periode.dateDebut, dateFin: periode.dateFin };
                   if (compteId) params.compteId = compteId;
                   const lignes = await api.get('/comptabilite/grand-livre', params);
-                  alert(`Grand Livre chargé: ${lignes.length} lignes`);
+                  setData(prev => ({ ...prev, grandLivre: lignes }));
                 } catch (err) {
                   alert('Erreur: ' + err.message);
                 }
-              }}>Charger</Button>
+              }}>Générer</Button>
             </div>
           </div>
 
-          <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
-            <p style={{ color: '#7f8c8d', margin: 0 }}>Sélectionnez les filtres et cliquez sur "Charger" pour afficher le grand livre</p>
-          </div>
+          {data.grandLivre && data.grandLivre.length > 0 ? (
+            <Table
+              columns={[
+                { key: 'date', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
+                { key: 'reference', label: 'Référence' },
+                { key: 'compte', label: 'Compte' },
+                { key: 'libelle', label: 'Libellé' },
+                { key: 'debit', label: 'Débit', render: (val) => val ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
+                { key: 'credit', label: 'Crédit', render: (val) => val ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
+                { key: 'solde', label: 'Solde', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
+              ]}
+              data={data.grandLivre}
+              actions={false}
+            />
+          ) : (
+            <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
+              <p style={{ color: '#7f8c8d', margin: 0 }}>Sélectionnez les filtres et cliquez sur "Générer" pour afficher le grand livre</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -644,35 +660,44 @@ export function ModuleComptabilite() {
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
               </div>
             </div>
-            <Button variant="primary" style={{ marginTop: '15px' }} onClick={async () => {
+            <Button variant="success" style={{ marginTop: '15px', fontWeight: 'bold', padding: '10px 20px' }} onClick={async () => {
               try {
-                const balance = await api.get('/comptabilite/balance');
+                const balance = await api.get('/comptabilite/balance', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
                 const balanceData = data.comptes.map(c => {
                   const soldes = balance[c.id] || { debit: 0, credit: 0 };
                   return {
                     ...c,
-                    debit: soldes.debit,
-                    credit: soldes.credit,
-                    solde: soldes.debit - soldes.credit
+                    totalDebit: soldes.debit || 0,
+                    totalCredit: soldes.credit || 0,
+                    soldeDebit: (soldes.debit - soldes.credit) > 0 ? soldes.debit - soldes.credit : 0,
+                    soldeCredit: (soldes.credit - soldes.debit) > 0 ? soldes.credit - soldes.debit : 0
                   };
-                });
-                alert(`Balance générée: ${balanceData.length} comptes`);
+                }).filter(c => c.totalDebit > 0 || c.totalCredit > 0);
+                setData(prev => ({ ...prev, balanceData: balanceData }));
               } catch (err) {
                 alert('Erreur: ' + err.message);
               }
-            }}>Générer Balance</Button>
+            }}>Générer</Button>
           </div>
 
-          <Table
-            columns={[
-              { key: 'numero', label: 'N° Compte' },
-              { key: 'nom', label: 'Libellé' },
-              { key: 'categorie', label: 'Catégorie' },
-              { key: 'solde', label: 'Solde', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
-            ]}
-            data={data.comptes}
-            actions={false}
-          />
+          {data.balanceData && data.balanceData.length > 0 ? (
+            <Table
+              columns={[
+                { key: 'numero', label: 'N° Compte' },
+                { key: 'nom', label: 'Libellé' },
+                { key: 'totalDebit', label: 'Mouv. Débit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                { key: 'totalCredit', label: 'Mouv. Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                { key: 'soldeDebit', label: 'Solde Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
+                { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' }
+              ]}
+              data={data.balanceData}
+              actions={false}
+            />
+          ) : (
+            <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
+              <p style={{ color: '#7f8c8d', margin: 0 }}>Sélectionnez la période et cliquez sur "Générer" pour afficher la balance</p>
+            </div>
+          )}
         </div>
       )}
 
