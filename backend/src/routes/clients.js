@@ -507,10 +507,10 @@ router.post('/prix-produits/calculer', async (req, res) => {
     }
     
     const marge = parseFloat(margeBruteCible);
-    if (marge >= 100) {
+    if (marge <= 0 || marge >= 100) {
       return res.status(400).json({ 
         success: false, 
-        error: 'La marge brute doit être inférieure à 100%' 
+        error: 'La marge brute produit doit être comprise entre 1% et 99%' 
       });
     }
     
@@ -560,10 +560,10 @@ router.post('/prix-produits', async (req, res) => {
     }
     
     const marge = parseFloat(margeBruteCible);
-    if (marge >= 100) {
+    if (marge <= 0 || marge >= 100) {
       return res.status(400).json({ 
         success: false, 
-        error: 'La marge brute doit être inférieure à 100%' 
+        error: 'La marge brute produit doit être comprise entre 1% et 99%' 
       });
     }
     
@@ -636,10 +636,10 @@ router.put('/prix-produits/:id', async (req, res) => {
     if (coutAchat !== undefined) updates.coutAchat = parseFloat(coutAchat).toFixed(2);
     if (margeBruteCible !== undefined) {
       const marge = parseFloat(margeBruteCible);
-      if (marge >= 100) {
+      if (marge <= 0 || marge >= 100) {
         return res.status(400).json({ 
           success: false, 
-          error: 'La marge brute doit être inférieure à 100%' 
+          error: 'La marge brute produit doit être comprise entre 1% et 99%' 
         });
       }
       updates.margeBruteCible = marge.toFixed(2);
