@@ -1,7 +1,8 @@
 import express from 'express';
 import { db } from '../db.js';
-import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, auditLogs } from '../schema.js';
+import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, auditLogs, employes } from '../schema.js';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
+import { createEcritureDepense } from '../services/comptabiliteService.js';
 
 const router = express.Router();
 
@@ -179,6 +180,17 @@ router.post('/remboursement', async (req, res) => {
       return res.status(404).json({ error: 'Dépense non trouvée' });
     }
 
+    // Récupérer le nom de l'employé
+    let employeNom = 'Employé';
+    if (depense.employeId) {
+      const employe = await db.query.employes.findFirst({
+        where: eq(employes.id, depense.employeId)
+      });
+      if (employe) {
+        employeNom = `${employe.prenom || ''} ${employe.nom || ''}`.trim();
+      }
+    }
+
     // Créer remboursement
     const remboursement = await db.insert(remboursementsEmployes).values({
       entrepriseId: parseInt(entrepriseId),
@@ -195,6 +207,23 @@ router.post('/remboursement', async (req, res) => {
       montantRembourse: totalRembourse,
       statut: totalRembourse >= depense.montantApprouve ? 'remboursée' : 'partiellement_remboursée'
     }).where(eq(depenses.id, parseInt(depenseId)));
+
+    // Créer écriture comptable automatique
+    try {
+      await createEcritureDepense({
+        entrepriseId: parseInt(entrepriseId),
+        reference: `RMB-${remboursement[0].id}`,
+        dateRemboursement: new Date(dateRemboursement),
+        employeNom,
+        description: depense.description || 'Dépense',
+        montant: parseFloat(montantRembourse),
+        modePaiement: methodePaiement === 'especes' ? 'especes' : 'virement',
+        categorieCompte: '62'
+      });
+      console.log(`Écriture comptable créée pour remboursement dépense ${depenseId}`);
+    } catch (comptaError) {
+      console.error('Erreur création écriture comptable dépense:', comptaError.message);
+    }
 
     res.json(remboursement[0]);
   } catch (error) {

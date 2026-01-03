@@ -841,10 +841,12 @@ export const declarationsFiscales = pgTable('declarations_fiscales', {
   type: varchar('type', { length: 50 }).notNull(), // tva, is, ir, autre
   periode: varchar('periode', { length: 50 }).notNull(), // 2024-01, 2024-Q1, 2024
   montant: decimal('montant', { precision: 15, scale: 2 }),
-  statut: varchar('statut', { length: 50 }).default('brouillon'), // brouillon, soumise, acceptee, rejetee
+  statut: varchar('statut', { length: 50 }).default('brouillon'), // brouillon, soumise, acceptee, rejetee, payée
   numeroDeclaration: varchar('numero_declaration', { length: 255 }),
   dateDeclaration: date('date_declaration'),
   dateSoumission: timestamp('date_soumission'),
+  datePaiement: timestamp('date_paiement'),
+  referencePaiement: varchar('reference_paiement', { length: 255 }),
   reponseAdministration: text('reponse_administration'), // JSON de la réponse API
   erreurs: text('erreurs'),
   notes: text('notes'),

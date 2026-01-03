@@ -15,10 +15,15 @@ const COMPTES_SYSCOHADA = {
   FOURNISSEURS: '401',
   FOURNISSEURS_FACTURES_NON_PARVENUES: '408',
   CLIENTS: '411',
+  ETAT_TVA_DUE: '4434',
+  ETAT_IMPOTS: '44',
   BANQUE: '52',
   CAISSE: '57',
   ACHATS_MARCHANDISES: '601',
   ACHATS_SERVICES: '61',
+  AUTRES_CHARGES_EXTERNES: '62',
+  CHARGES_PERSONNEL: '64',
+  IMPOTS_TAXES: '64',
   VENTES_MARCHANDISES: '701',
   TVA_DEDUCTIBLE: '445',
   TVA_COLLECTEE: '443',
@@ -460,6 +465,124 @@ export async function createEcriturePaiementClient(params) {
   });
 }
 
+export async function createEcritureDepense(params) {
+  const {
+    entrepriseId,
+    reference,
+    dateRemboursement,
+    employeNom,
+    description,
+    montant,
+    modePaiement,
+    categorieCompte
+  } = params;
+
+  const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
+  const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
+
+  const compteCharge = await getCompteByNumero(entrepriseId, categorieCompte || COMPTES_SYSCOHADA.AUTRES_CHARGES_EXTERNES);
+  const compteTresorerie = modePaiement === 'especes' 
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE)
+    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE);
+
+  const ecrituresLignes = [];
+
+  if (compteCharge) {
+    ecrituresLignes.push({
+      compteComptableId: compteCharge.id,
+      debit: montant,
+      credit: 0,
+      libelle: `Dépense: ${description}`
+    });
+  }
+
+  if (compteTresorerie) {
+    ecrituresLignes.push({
+      compteComptableId: compteTresorerie.id,
+      debit: 0,
+      credit: montant,
+      libelle: `Remboursement ${employeNom}`
+    });
+  }
+
+  if (ecrituresLignes.length < 2) {
+    console.warn('Pas assez de comptes comptables pour créer écriture dépense');
+    return null;
+  }
+
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode,
+    journalNom,
+    journalType: modePaiement === 'especes' ? 'caisse' : 'banque',
+    dateEcriture: dateRemboursement,
+    libelle: `Remboursement dépense ${employeNom} - ${description}`,
+    numeroPiece: reference,
+    lignes: ecrituresLignes,
+    valide: false
+  });
+}
+
+export async function createEcriturePaiementImpot(params) {
+  const {
+    entrepriseId,
+    reference,
+    datePaiement,
+    typeImpot,
+    montant,
+    periode,
+    modePaiement = 'virement'
+  } = params;
+
+  const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
+  const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
+
+  const compteImpot = typeImpot === 'tva' 
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE)
+    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ETAT_IMPOTS);
+  
+  const compteTresorerie = modePaiement === 'especes' 
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE)
+    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE);
+
+  const ecrituresLignes = [];
+
+  if (compteImpot) {
+    ecrituresLignes.push({
+      compteComptableId: compteImpot.id,
+      debit: montant,
+      credit: 0,
+      libelle: `Paiement ${typeImpot.toUpperCase()} ${periode}`
+    });
+  }
+
+  if (compteTresorerie) {
+    ecrituresLignes.push({
+      compteComptableId: compteTresorerie.id,
+      debit: 0,
+      credit: montant,
+      libelle: `Règlement impôt ${typeImpot.toUpperCase()}`
+    });
+  }
+
+  if (ecrituresLignes.length < 2) {
+    console.warn('Pas assez de comptes comptables pour créer écriture paiement impôt');
+    return null;
+  }
+
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode,
+    journalNom,
+    journalType: modePaiement === 'especes' ? 'caisse' : 'banque',
+    dateEcriture: datePaiement,
+    libelle: `Paiement ${typeImpot.toUpperCase()} - ${periode}`,
+    numeroPiece: reference,
+    lignes: ecrituresLignes,
+    valide: false
+  });
+}
+
 export default {
   JOURNAL_CODES,
   COMPTES_SYSCOHADA,
@@ -470,5 +593,7 @@ export default {
   createEcritureFactureAchat,
   createEcritureFactureVente,
   createEcriturePaiementFournisseur,
-  createEcriturePaiementClient
+  createEcriturePaiementClient,
+  createEcritureDepense,
+  createEcriturePaiementImpot
 };

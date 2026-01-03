@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { parametresFiscaux, declarationsFiscales, factures, comptesComptables } from '../schema.js';
 import { eq, and, sql, gte, lte } from 'drizzle-orm';
 import crypto from 'crypto';
+import { createEcriturePaiementImpot } from '../services/comptabiliteService.js';
 
 const router = express.Router();
 
@@ -295,6 +296,80 @@ router.post('/declarations/tva', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la création de la déclaration TVA',
+      error: error.message
+    });
+  }
+});
+
+// ==========================================
+// PAIEMENT DES IMPÔTS
+// ==========================================
+
+router.post('/declarations/:id/payer', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { datePaiement, modePaiement = 'virement', reference } = req.body;
+
+    const [declaration] = await db
+      .select()
+      .from(declarationsFiscales)
+      .where(and(
+        eq(declarationsFiscales.id, parseInt(id)),
+        eq(declarationsFiscales.entrepriseId, req.entrepriseId)
+      ))
+      .limit(1);
+
+    if (!declaration) {
+      return res.status(404).json({
+        success: false,
+        message: 'Déclaration non trouvée'
+      });
+    }
+
+    if (declaration.statut === 'payée') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cette déclaration est déjà payée'
+      });
+    }
+
+    // Mettre à jour le statut de la déclaration
+    const [updated] = await db
+      .update(declarationsFiscales)
+      .set({
+        statut: 'payée',
+        datePaiement: new Date(datePaiement || new Date()),
+        referencePaiement: reference || `PAY-${Date.now()}`
+      })
+      .where(eq(declarationsFiscales.id, parseInt(id)))
+      .returning();
+
+    // Créer écriture comptable automatique
+    try {
+      await createEcriturePaiementImpot({
+        entrepriseId: req.entrepriseId,
+        reference: reference || `IMP-${declaration.numeroDeclaration}`,
+        datePaiement: new Date(datePaiement || new Date()),
+        typeImpot: declaration.type,
+        montant: parseFloat(declaration.montant),
+        periode: declaration.periode,
+        modePaiement
+      });
+      console.log(`Écriture comptable créée pour paiement impôt ${declaration.type} - ${declaration.periode}`);
+    } catch (comptaError) {
+      console.error('Erreur création écriture comptable impôt:', comptaError.message);
+    }
+
+    res.json({
+      success: true,
+      message: 'Paiement enregistré avec succès',
+      data: updated
+    });
+  } catch (error) {
+    console.error('Erreur POST /api/impots/declarations/:id/payer:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de l\'enregistrement du paiement',
       error: error.message
     });
   }
