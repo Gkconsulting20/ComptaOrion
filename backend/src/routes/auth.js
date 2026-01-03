@@ -10,6 +10,7 @@ import {
   verifyRefreshToken,
   verifyToken,
 } from '../auth.js';
+import { initializeSyscohadaForEnterprise } from '../services/syscohadaService.js';
 
 const router = express.Router();
 
@@ -75,6 +76,14 @@ router.post('/register', async (req, res) => {
         actif: true,
       })
       .returning();
+
+    // Initialiser automatiquement le plan comptable SYSCOHADA
+    try {
+      const syscohadaResult = await initializeSyscohadaForEnterprise(newEntreprise.id);
+      console.log(`Plan comptable SYSCOHADA initialisé pour entreprise ${newEntreprise.id}:`, syscohadaResult);
+    } catch (syscohadaError) {
+      console.error('Erreur initialisation SYSCOHADA:', syscohadaError.message);
+    }
 
     // Générer les tokens
     const token = generateToken(newUser);
