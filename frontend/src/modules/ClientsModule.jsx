@@ -15,8 +15,8 @@ export function ClientsModule() {
     { id: 'factures', label: '💵 Factures Client', icon: '💵' },
     { id: 'bons-livraison', label: '📦 Bons de Livraison', icon: '📦' },
     { id: 'paiements', label: '💳 Paiements', icon: '💳' },
+    { id: 'table-prix', label: '💰 Table de Prix', icon: '💰' },
     { id: 'etats-compte', label: '📋 États de Compte', icon: '📋' },
-    // { id: 'relances', label: '🔔 Relances', icon: '🔔' },
     { id: 'rapports', label: '📊 Rapports', icon: '📊' },
     { id: 'parametres', label: '⚙️ Paramètres Client', icon: '⚙️' },
   ];
@@ -63,6 +63,7 @@ export function ClientsModule() {
       {activeTab === 'factures' && <FacturesClientTab />}
       {activeTab === 'bons-livraison' && <BonsLivraisonTab />}
       {activeTab === 'paiements' && <PaiementsTab />}
+      {activeTab === 'table-prix' && <TablePrixTab />}
       {activeTab === 'etats-compte' && <EtatsCompteTab />}
       {activeTab === 'relances' && <RelancesTab />}
       {activeTab === 'rapports' && <RapportsTab />}
@@ -3052,6 +3053,306 @@ function EtatsCompteTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ==========================================
+// ONGLET: TABLE DE PRIX (Marge Brute)
+// ==========================================
+function TablePrixTab() {
+  const [prixList, setPrixList] = useState([]);
+  const [produits, setProduits] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingPrix, setEditingPrix] = useState(null);
+  const [calculPreview, setCalculPreview] = useState(null);
+  const [formData, setFormData] = useState({
+    produitId: '',
+    coutAchat: '',
+    margeBruteCible: '30',
+    prixVenteManuel: '',
+    categorieClient: 'standard',
+    canalVente: 'tous',
+    dateEffet: new Date().toISOString().split('T')[0],
+    dateExpiration: ''
+  });
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [prixRes, produitsRes] = await Promise.all([
+        api.get('/clients/prix-produits'),
+        api.get('/produits')
+      ]);
+      setPrixList(prixRes.data || []);
+      setProduits(produitsRes.data || []);
+    } catch (error) {
+      console.error('Erreur:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCalculPreview = async () => {
+    if (!formData.coutAchat || !formData.margeBruteCible) return;
+    
+    try {
+      const res = await api.post('/clients/prix-produits/calculer', {
+        coutAchat: parseFloat(formData.coutAchat),
+        margeBruteCible: parseFloat(formData.margeBruteCible)
+      });
+      setCalculPreview(res.data);
+    } catch (error) {
+      console.error('Erreur calcul:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (formData.coutAchat && formData.margeBruteCible) {
+      const timer = setTimeout(handleCalculPreview, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [formData.coutAchat, formData.margeBruteCible]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingPrix) {
+        await api.put(`/clients/prix-produits/${editingPrix.id}`, formData);
+      } else {
+        await api.post('/clients/prix-produits', formData);
+      }
+      setShowModal(false);
+      setEditingPrix(null);
+      resetForm();
+      loadData();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleEdit = (prix) => {
+    setEditingPrix(prix);
+    setFormData({
+      produitId: prix.produitId,
+      coutAchat: prix.coutAchat,
+      margeBruteCible: prix.margeBruteCible,
+      prixVenteManuel: prix.prixVenteManuel || '',
+      categorieClient: prix.categorieClient || 'standard',
+      canalVente: prix.canalVente || 'tous',
+      dateEffet: prix.dateEffet?.split('T')[0] || '',
+      dateExpiration: prix.dateExpiration?.split('T')[0] || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Supprimer ce prix ?')) return;
+    try {
+      await api.delete(`/clients/prix-produits/${id}`);
+      loadData();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      produitId: '',
+      coutAchat: '',
+      margeBruteCible: '30',
+      prixVenteManuel: '',
+      categorieClient: 'standard',
+      canalVente: 'tous',
+      dateEffet: new Date().toISOString().split('T')[0],
+      dateExpiration: ''
+    });
+    setCalculPreview(null);
+  };
+
+  if (loading) return <div>Chargement...</div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3>💰 Table de Prix avec Marge Brute</h3>
+        <Button variant="success" onClick={() => { resetForm(); setShowModal(true); }}>
+          + Nouveau Prix
+        </Button>
+      </div>
+
+      <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e8f4fd', borderRadius: '8px' }}>
+        <h4 style={{ margin: '0 0 10px 0' }}>📊 Formule de calcul</h4>
+        <p style={{ margin: 0, color: '#555' }}>
+          <strong>Prix de Vente = Coût d'Achat ÷ (1 - Marge Brute %)</strong>
+          <br />
+          <span style={{ fontSize: '13px', color: '#777' }}>
+            Exemple: Coût 100 FCFA avec marge 30% → Prix = 100 ÷ (1 - 0.30) = 143 FCFA
+          </span>
+        </p>
+      </div>
+
+      {prixList.length > 0 ? (
+        <Table
+          columns={[
+            { key: 'produitNom', label: 'Produit' },
+            { key: 'produitReference', label: 'Référence' },
+            { key: 'coutAchat', label: 'Coût d\'achat', render: (val) => `${parseFloat(val).toLocaleString('fr-FR')} FCFA` },
+            { key: 'margeBruteCible', label: 'Marge %', render: (val) => `${val}%` },
+            { key: 'prixVenteCalcule', label: 'Prix Calculé', render: (val) => `${parseFloat(val).toLocaleString('fr-FR')} FCFA` },
+            { key: 'prixVenteManuel', label: 'Prix Manuel', render: (val) => val ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' },
+            { key: 'categorieClient', label: 'Catégorie' },
+            { key: 'actif', label: 'Actif', render: (val) => val ? '✅' : '❌' }
+          ]}
+          data={prixList}
+          actions={(row) => (
+            <div style={{ display: 'flex', gap: '5px' }}>
+              <Button size="sm" variant="secondary" onClick={() => handleEdit(row)}>Modifier</Button>
+              <Button size="sm" variant="danger" onClick={() => handleDelete(row.id)}>Supprimer</Button>
+            </div>
+          )}
+        />
+      ) : (
+        <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+          <p style={{ color: '#666' }}>Aucun prix configuré. Cliquez sur "Nouveau Prix" pour commencer.</p>
+        </div>
+      )}
+
+      <Modal
+        isOpen={showModal}
+        onClose={() => { setShowModal(false); setEditingPrix(null); resetForm(); }}
+        title={editingPrix ? 'Modifier le Prix' : 'Nouveau Prix Produit'}
+      >
+        <form onSubmit={handleSubmit}>
+          <FormField
+            label="Produit"
+            type="select"
+            value={formData.produitId}
+            onChange={(e) => setFormData({ ...formData, produitId: e.target.value })}
+            required
+            disabled={!!editingPrix}
+          >
+            <option value="">Sélectionner un produit</option>
+            {produits.map(p => (
+              <option key={p.id} value={p.id}>{p.reference} - {p.nom}</option>
+            ))}
+          </FormField>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <FormField
+              label="Coût d'achat (FCFA)"
+              type="number"
+              value={formData.coutAchat}
+              onChange={(e) => setFormData({ ...formData, coutAchat: e.target.value })}
+              required
+              min="0"
+              step="0.01"
+            />
+            <FormField
+              label="Marge brute cible (%)"
+              type="number"
+              value={formData.margeBruteCible}
+              onChange={(e) => setFormData({ ...formData, margeBruteCible: e.target.value })}
+              required
+              min="0"
+              max="99"
+              step="0.1"
+            />
+          </div>
+
+          {calculPreview && (
+            <div style={{ 
+              padding: '15px', 
+              backgroundColor: '#d4edda', 
+              borderRadius: '8px', 
+              marginBottom: '15px',
+              border: '1px solid #c3e6cb'
+            }}>
+              <h4 style={{ margin: '0 0 10px 0', color: '#155724' }}>💡 Calcul automatique</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <span style={{ color: '#666', fontSize: '12px' }}>Prix de vente calculé:</span>
+                  <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#155724' }}>
+                    {calculPreview.prixVenteCalcule?.toLocaleString('fr-FR')} FCFA
+                  </p>
+                </div>
+                <div>
+                  <span style={{ color: '#666', fontSize: '12px' }}>Bénéfice brut:</span>
+                  <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#28a745' }}>
+                    {calculPreview.beneficeBrut?.toLocaleString('fr-FR')} FCFA
+                  </p>
+                </div>
+              </div>
+              <p style={{ margin: '10px 0 0 0', fontSize: '12px', color: '#666' }}>
+                {calculPreview.formule}
+              </p>
+            </div>
+          )}
+
+          <FormField
+            label="Prix de vente manuel (optionnel - surcharge le calcul)"
+            type="number"
+            value={formData.prixVenteManuel}
+            onChange={(e) => setFormData({ ...formData, prixVenteManuel: e.target.value })}
+            min="0"
+            step="0.01"
+          />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <FormField
+              label="Catégorie client"
+              type="select"
+              value={formData.categorieClient}
+              onChange={(e) => setFormData({ ...formData, categorieClient: e.target.value })}
+            >
+              <option value="standard">Standard</option>
+              <option value="premium">Premium</option>
+              <option value="grossiste">Grossiste</option>
+              <option value="revendeur">Revendeur</option>
+            </FormField>
+            <FormField
+              label="Canal de vente"
+              type="select"
+              value={formData.canalVente}
+              onChange={(e) => setFormData({ ...formData, canalVente: e.target.value })}
+            >
+              <option value="tous">Tous</option>
+              <option value="boutique">Boutique</option>
+              <option value="en_ligne">En ligne</option>
+              <option value="grossiste">Grossiste</option>
+            </FormField>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <FormField
+              label="Date d'effet"
+              type="date"
+              value={formData.dateEffet}
+              onChange={(e) => setFormData({ ...formData, dateEffet: e.target.value })}
+              required
+            />
+            <FormField
+              label="Date d'expiration (optionnel)"
+              type="date"
+              value={formData.dateExpiration}
+              onChange={(e) => setFormData({ ...formData, dateExpiration: e.target.value })}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+            <Button type="submit" variant="success">
+              {editingPrix ? 'Mettre à jour' : 'Enregistrer'}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => { setShowModal(false); setEditingPrix(null); resetForm(); }}>
+              Annuler
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

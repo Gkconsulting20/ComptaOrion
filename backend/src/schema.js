@@ -1537,3 +1537,38 @@ export const importMappingTemplates = pgTable('import_mapping_templates', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+// ==========================================
+// MODULE: TABLE DE PRIX PRODUITS (Marge Brute)
+// ==========================================
+
+export const produitPrix = pgTable('produit_prix', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  produitId: integer('produit_id').references(() => produits.id).notNull(),
+  
+  // Prix et coûts
+  coutAchat: decimal('cout_achat', { precision: 15, scale: 2 }).notNull(),
+  margeBruteCible: decimal('marge_brute_cible', { precision: 5, scale: 2 }).notNull(), // En pourcentage (ex: 30 pour 30%)
+  prixVenteCalcule: decimal('prix_vente_calcule', { precision: 15, scale: 2 }).notNull(),
+  prixVenteManuel: decimal('prix_vente_manuel', { precision: 15, scale: 2 }), // Surcharge manuelle optionnelle
+  
+  // Catégorie client (prix différenciés)
+  categorieClient: varchar('categorie_client', { length: 100 }).default('standard'),
+  
+  // Canal de vente
+  canalVente: varchar('canal_vente', { length: 100 }).default('tous'), // tous, boutique, en_ligne, grossiste
+  
+  // Dates de validité
+  dateEffet: date('date_effet').defaultNow(),
+  dateExpiration: date('date_expiration'),
+  
+  // Devise
+  devise: varchar('devise', { length: 10 }).default('FCFA'),
+  
+  // Statut
+  actif: boolean('actif').default(true),
+  
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});

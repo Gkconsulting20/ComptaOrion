@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db.js';
-import { clients, factures, paiements } from '../schema.js';
-import { eq, and, desc, sql, gte, lte, between, gt } from 'drizzle-orm';
+import { clients, factures, paiements, produitPrix, produits } from '../schema.js';
+import { eq, and, desc, sql, gte, lte, between, gt, isNull, or } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import emailService from '../services/emailService.js';
 
@@ -1379,6 +1379,284 @@ router.get('/detail/impayes', async (req, res) => {
   } catch (error) {
     console.error('Erreur drill-down impayés:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// TABLE DE PRIX PRODUITS (Marge Brute)
+// ==========================================
+
+/**
+ * GET /api/clients/prix-produits
+ * Liste tous les prix produits avec calcul de marge
+ */
+router.get('/prix-produits', async (req, res) => {
+  try {
+    const { categorieClient, canalVente, actifOnly } = req.query;
+    
+    let conditions = [eq(produitPrix.entrepriseId, req.entrepriseId)];
+    
+    if (categorieClient) {
+      conditions.push(eq(produitPrix.categorieClient, categorieClient));
+    }
+    if (canalVente) {
+      conditions.push(eq(produitPrix.canalVente, canalVente));
+    }
+    if (actifOnly === 'true') {
+      conditions.push(eq(produitPrix.actif, true));
+      conditions.push(or(
+        isNull(produitPrix.dateExpiration),
+        gte(produitPrix.dateExpiration, sql`CURRENT_DATE`)
+      ));
+    }
+    
+    const prixList = await db
+      .select({
+        id: produitPrix.id,
+        produitId: produitPrix.produitId,
+        produitNom: produits.nom,
+        produitReference: produits.reference,
+        coutAchat: produitPrix.coutAchat,
+        margeBruteCible: produitPrix.margeBruteCible,
+        prixVenteCalcule: produitPrix.prixVenteCalcule,
+        prixVenteManuel: produitPrix.prixVenteManuel,
+        categorieClient: produitPrix.categorieClient,
+        canalVente: produitPrix.canalVente,
+        dateEffet: produitPrix.dateEffet,
+        dateExpiration: produitPrix.dateExpiration,
+        devise: produitPrix.devise,
+        actif: produitPrix.actif,
+        createdAt: produitPrix.createdAt
+      })
+      .from(produitPrix)
+      .leftJoin(produits, eq(produitPrix.produitId, produits.id))
+      .where(and(...conditions))
+      .orderBy(desc(produitPrix.createdAt));
+    
+    res.json({
+      success: true,
+      count: prixList.length,
+      data: prixList
+    });
+  } catch (error) {
+    console.error('Erreur GET /api/clients/prix-produits:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/clients/prix-produits
+ * Créer un nouveau prix produit avec calcul automatique
+ */
+router.post('/prix-produits', async (req, res) => {
+  try {
+    const { 
+      produitId, 
+      coutAchat, 
+      margeBruteCible, 
+      prixVenteManuel,
+      categorieClient = 'standard',
+      canalVente = 'tous',
+      dateEffet,
+      dateExpiration,
+      devise = 'FCFA'
+    } = req.body;
+    
+    if (!produitId || coutAchat === undefined || margeBruteCible === undefined) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'produitId, coutAchat et margeBruteCible sont requis' 
+      });
+    }
+    
+    const marge = parseFloat(margeBruteCible);
+    if (marge >= 100) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'La marge brute doit être inférieure à 100%' 
+      });
+    }
+    
+    // Formule: Prix de vente = Coût d'achat / (1 - Marge brute)
+    const cout = parseFloat(coutAchat);
+    const prixVenteCalcule = cout / (1 - marge / 100);
+    
+    const [newPrix] = await db
+      .insert(produitPrix)
+      .values({
+        entrepriseId: req.entrepriseId,
+        produitId: parseInt(produitId),
+        coutAchat: cout.toFixed(2),
+        margeBruteCible: marge.toFixed(2),
+        prixVenteCalcule: prixVenteCalcule.toFixed(2),
+        prixVenteManuel: prixVenteManuel ? parseFloat(prixVenteManuel).toFixed(2) : null,
+        categorieClient,
+        canalVente,
+        dateEffet: dateEffet || new Date().toISOString().split('T')[0],
+        dateExpiration: dateExpiration || null,
+        devise,
+        actif: true
+      })
+      .returning();
+    
+    // Mettre à jour le prix de vente du produit
+    const prixFinal = prixVenteManuel ? parseFloat(prixVenteManuel) : prixVenteCalcule;
+    await db.update(produits)
+      .set({ 
+        prixVente: prixFinal.toFixed(2),
+        prixAchat: cout.toFixed(2),
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(produits.id, parseInt(produitId)),
+        eq(produits.entrepriseId, req.entrepriseId)
+      ));
+    
+    res.status(201).json({
+      success: true,
+      data: newPrix,
+      message: `Prix calculé: ${prixVenteCalcule.toFixed(0)} ${devise} (marge ${marge}%)`
+    });
+  } catch (error) {
+    console.error('Erreur POST /api/clients/prix-produits:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /api/clients/prix-produits/:id
+ * Mettre à jour un prix produit
+ */
+router.put('/prix-produits/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      coutAchat, 
+      margeBruteCible, 
+      prixVenteManuel,
+      categorieClient,
+      canalVente,
+      dateEffet,
+      dateExpiration,
+      actif
+    } = req.body;
+    
+    const updates = { updatedAt: new Date() };
+    
+    if (coutAchat !== undefined) updates.coutAchat = parseFloat(coutAchat).toFixed(2);
+    if (margeBruteCible !== undefined) {
+      const marge = parseFloat(margeBruteCible);
+      if (marge >= 100) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'La marge brute doit être inférieure à 100%' 
+        });
+      }
+      updates.margeBruteCible = marge.toFixed(2);
+    }
+    if (prixVenteManuel !== undefined) updates.prixVenteManuel = prixVenteManuel ? parseFloat(prixVenteManuel).toFixed(2) : null;
+    if (categorieClient) updates.categorieClient = categorieClient;
+    if (canalVente) updates.canalVente = canalVente;
+    if (dateEffet) updates.dateEffet = dateEffet;
+    if (dateExpiration !== undefined) updates.dateExpiration = dateExpiration || null;
+    if (actif !== undefined) updates.actif = actif;
+    
+    // Recalculer le prix si coût ou marge changent
+    if (updates.coutAchat || updates.margeBruteCible) {
+      const [existing] = await db.select()
+        .from(produitPrix)
+        .where(and(eq(produitPrix.id, parseInt(id)), eq(produitPrix.entrepriseId, req.entrepriseId)));
+      
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Prix non trouvé' });
+      }
+      
+      const cout = updates.coutAchat ? parseFloat(updates.coutAchat) : parseFloat(existing.coutAchat);
+      const marge = updates.margeBruteCible ? parseFloat(updates.margeBruteCible) : parseFloat(existing.margeBruteCible);
+      updates.prixVenteCalcule = (cout / (1 - marge / 100)).toFixed(2);
+    }
+    
+    const [updated] = await db
+      .update(produitPrix)
+      .set(updates)
+      .where(and(eq(produitPrix.id, parseInt(id)), eq(produitPrix.entrepriseId, req.entrepriseId)))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Prix non trouvé' });
+    }
+    
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Erreur PUT /api/clients/prix-produits:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/clients/prix-produits/:id
+ * Supprimer un prix produit
+ */
+router.delete('/prix-produits/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [deleted] = await db
+      .delete(produitPrix)
+      .where(and(eq(produitPrix.id, parseInt(id)), eq(produitPrix.entrepriseId, req.entrepriseId)))
+      .returning();
+    
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'Prix non trouvé' });
+    }
+    
+    res.json({ success: true, message: 'Prix supprimé' });
+  } catch (error) {
+    console.error('Erreur DELETE /api/clients/prix-produits:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/clients/prix-produits/calculer
+ * Calculer le prix de vente sans enregistrer (preview)
+ */
+router.post('/prix-produits/calculer', async (req, res) => {
+  try {
+    const { coutAchat, margeBruteCible } = req.body;
+    
+    if (coutAchat === undefined || margeBruteCible === undefined) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'coutAchat et margeBruteCible sont requis' 
+      });
+    }
+    
+    const marge = parseFloat(margeBruteCible);
+    if (marge >= 100) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'La marge brute doit être inférieure à 100%' 
+      });
+    }
+    
+    const cout = parseFloat(coutAchat);
+    const prixVenteCalcule = cout / (1 - marge / 100);
+    const beneficeBrut = prixVenteCalcule - cout;
+    
+    res.json({
+      success: true,
+      data: {
+        coutAchat: cout,
+        margeBruteCible: marge,
+        prixVenteCalcule: Math.round(prixVenteCalcule * 100) / 100,
+        beneficeBrut: Math.round(beneficeBrut * 100) / 100,
+        formule: `${cout} / (1 - ${marge}%) = ${prixVenteCalcule.toFixed(2)}`
+      }
+    });
+  } catch (error) {
+    console.error('Erreur calcul prix:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
