@@ -342,7 +342,7 @@ export function DashboardView() {
         />
         <KpiCard 
           title="Marge brute" 
-          value={`${kpis?.margeBrute || 0}%`} 
+          value={kpis?.margeBrute !== null && kpis?.margeBrute !== undefined ? `${kpis.margeBrute}%` : 'N/A'} 
           color="#17a2b8"
           icon="💹"
           onClick={() => openDrillDown('marge', 'Détail de la marge brute')}

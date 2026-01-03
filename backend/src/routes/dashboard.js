@@ -74,10 +74,12 @@ router.get('/global', async (req, res) => {
       return parseFloat(p.quantite || 0) < parseFloat(p.stockMinimum || 0);
     });
 
-    // Calcul du VRAI Coût des Marchandises Vendues (CMV)
-    // CMV = somme (quantité vendue × prix d'achat du produit)
+    // Calcul du Coût des Marchandises Vendues (CMV)
+    // Méthode 1: À partir des lignes de factures (si disponibles)
+    // Méthode 2: Estimation basée sur les achats de la période (fallback)
     const facturesIds = ventesData.map(f => f.id);
     let cmv = 0;
+    let cmvMethode = 'lignes_factures';
     
     if (facturesIds.length > 0) {
       // Récupérer tous les produits pour avoir leurs prix d'achat
@@ -109,10 +111,24 @@ router.get('/global', async (req, res) => {
       });
     }
 
+    // Si CMV = 0, utiliser les achats (factures fournisseurs) comme estimation
+    if (cmv === 0 && depensesMois > 0) {
+      // Utiliser le total HT des achats comme approximation du CMV
+      cmv = depensesData.reduce((sum, f) => sum + parseFloat(f.totalHT || f.totalTTC * 0.82 || 0), 0);
+      cmvMethode = 'achats_periode';
+    }
+
     // Marge brute = (Ventes HT - CMV) / Ventes HT × 100
-    // On utilise ventesMois (TTC) - approximation acceptable, ou on calcule le HT
     const ventesHT = ventesData.reduce((sum, f) => sum + parseFloat(f.totalHT || f.totalTTC * 0.82 || 0), 0);
-    const margeBrute = ventesHT > 0 ? ((ventesHT - cmv) / ventesHT * 100).toFixed(2) : 0;
+    
+    // Calculer la marge brute (limiter entre 0 et 100% pour éviter les valeurs aberrantes)
+    let margeBrute = 0;
+    if (ventesHT > 0 && cmv > 0) {
+      margeBrute = Math.max(0, Math.min(100, ((ventesHT - cmv) / ventesHT * 100))).toFixed(2);
+    } else if (ventesHT > 0 && cmv === 0) {
+      // Pas de données CMV fiables - afficher N/A ou estimation
+      margeBrute = null; // Sera affiché comme "N/A" sur le frontend
+    }
 
     // Cashflow = Ventes - Dépenses
     const cashflow = ventesMois - depensesMois;
@@ -203,7 +219,7 @@ router.get('/global', async (req, res) => {
         nombre: produitsFaibles.length,
         produits: produitsFaibles.slice(0, 5)
       },
-      margeBrute: parseFloat(margeBrute),
+      margeBrute: margeBrute !== null ? parseFloat(margeBrute) : null,
       cmv: Math.round(cmv),
       ventesHT: Math.round(ventesHT),
       cashflow: parseFloat(cashflow).toFixed(2),
