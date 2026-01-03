@@ -425,7 +425,7 @@ router.get('/rapprochements/preview', async (req, res) => {
     toutesTransactions.forEach(t => {
       if (t.type === 'encaissement') {
         soldeComptable += parseFloat(t.montant || 0);
-      } else {
+      } else if (t.type === 'decaissement') {
         soldeComptable -= parseFloat(t.montant || 0);
       }
     });
@@ -436,7 +436,8 @@ router.get('/rapprochements/preview', async (req, res) => {
       transactionsCount: transactions.length,
       transactions: transactions.map(t => ({
         ...t,
-        montant: parseFloat(t.montant || 0)
+        montant: parseFloat(t.montant || 0),
+        type: t.type
       }))
     });
   } catch (err) {

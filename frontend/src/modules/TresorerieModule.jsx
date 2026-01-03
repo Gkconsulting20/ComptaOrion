@@ -1208,6 +1208,8 @@ export function TresorerieModule() {
             onClick={() => {
               loadComptes();
               setShowRapprochementModal(true);
+              setRapprochementPreview(null);
+              setLoadingPreview(false);
               setFormData({
                 dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
                 dateFin: new Date().toISOString().split('T')[0]
@@ -1325,7 +1327,7 @@ export function TresorerieModule() {
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Compte Bancaire</label>
                 <select
                   value={formData.compteBancaireId || ''}
-                  onChange={(e) => setFormData({ ...formData, compteBancaireId: e.target.value })}
+                  onChange={(e) => { setFormData({ ...formData, compteBancaireId: e.target.value }); setRapprochementPreview(null); }}
                   style={{
                     width: '100%',
                     padding: '10px',
@@ -1345,7 +1347,7 @@ export function TresorerieModule() {
                 <input
                   type="date"
                   value={formData.dateDebut || ''}
-                  onChange={(e) => setFormData({ ...formData, dateDebut: e.target.value })}
+                  onChange={(e) => { setFormData({ ...formData, dateDebut: e.target.value }); setRapprochementPreview(null); }}
                   style={{
                     width: '100%',
                     padding: '10px',
@@ -1360,7 +1362,7 @@ export function TresorerieModule() {
                 <input
                   type="date"
                   value={formData.dateFin || ''}
-                  onChange={(e) => setFormData({ ...formData, dateFin: e.target.value })}
+                  onChange={(e) => { setFormData({ ...formData, dateFin: e.target.value }); setRapprochementPreview(null); }}
                   style={{
                     width: '100%',
                     padding: '10px',
