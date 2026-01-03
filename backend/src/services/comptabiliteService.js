@@ -15,6 +15,7 @@ const COMPTES_SYSCOHADA = {
   FOURNISSEURS: '401',
   FOURNISSEURS_FACTURES_NON_PARVENUES: '408',
   CLIENTS: '411',
+  PERSONNEL_AVANCES: '421',
   ETAT_TVA_DUE: '4434',
   ETAT_IMPOTS: '44',
   BANQUE: '52',
@@ -480,19 +481,23 @@ export async function createEcritureDepense(params) {
   const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
   const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
 
-  const compteCharge = await getCompteByNumero(entrepriseId, categorieCompte || COMPTES_SYSCOHADA.AUTRES_CHARGES_EXTERNES);
+  // Pour le remboursement d'une dépense employé:
+  // - On débite le compte Personnel - Avances (421) pour solder l'avance faite par l'employé
+  // - On crédite la trésorerie (52 ou 57) pour le décaissement
+  // Note: La charge a déjà été comptabilisée lors de l'approbation de la dépense
+  const compteAvance = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.PERSONNEL_AVANCES);
   const compteTresorerie = modePaiement === 'especes' 
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE)
     : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE);
 
   const ecrituresLignes = [];
 
-  if (compteCharge) {
+  if (compteAvance) {
     ecrituresLignes.push({
-      compteComptableId: compteCharge.id,
+      compteComptableId: compteAvance.id,
       debit: montant,
       credit: 0,
-      libelle: `Dépense: ${description}`
+      libelle: `Remboursement avance ${employeNom}`
     });
   }
 
@@ -501,7 +506,7 @@ export async function createEcritureDepense(params) {
       compteComptableId: compteTresorerie.id,
       debit: 0,
       credit: montant,
-      libelle: `Remboursement ${employeNom}`
+      libelle: `Décaissement remboursement ${employeNom}`
     });
   }
 
@@ -537,8 +542,10 @@ export async function createEcriturePaiementImpot(params) {
   const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
   const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
 
+  // Pour TVA: débiter le compte 4434 (TVA due à l'État) pour solder la dette fiscale
+  // Pour autres impôts: débiter le compte 44 (État et collectivités)
   const compteImpot = typeImpot === 'tva' 
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE)
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ETAT_TVA_DUE)
     : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ETAT_IMPOTS);
   
   const compteTresorerie = modePaiement === 'especes' 
