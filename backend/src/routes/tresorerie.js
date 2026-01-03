@@ -386,6 +386,65 @@ router.get('/comptes-comptables', async (req, res) => {
 // RAPPROCHEMENTS BANCAIRES
 // ==========================================
 
+// GET prévisualisation des opérations pour un rapprochement (avant création)
+router.get('/rapprochements/preview', async (req, res) => {
+  try {
+    const { compteBancaireId, dateDebut, dateFin } = req.query;
+
+    if (!compteBancaireId || !dateDebut || !dateFin) {
+      return res.status(400).json({ error: 'compteBancaireId, dateDebut et dateFin sont requis' });
+    }
+
+    const compte = await db.select().from(comptesBancaires)
+      .where(and(
+        eq(comptesBancaires.id, parseInt(compteBancaireId)),
+        eq(comptesBancaires.entrepriseId, req.entrepriseId)
+      ))
+      .limit(1);
+
+    if (compte.length === 0) {
+      return res.status(404).json({ error: 'Compte bancaire non trouvé' });
+    }
+
+    const transactions = await db.select().from(transactionsTresorerie)
+      .where(and(
+        eq(transactionsTresorerie.compteBancaireId, parseInt(compteBancaireId)),
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
+        between(transactionsTresorerie.dateTransaction, dateDebut, dateFin)
+      ))
+      .orderBy(transactionsTresorerie.dateTransaction);
+
+    let soldeComptable = parseFloat(compte[0].soldeInitial || 0);
+    const toutesTransactions = await db.select().from(transactionsTresorerie)
+      .where(and(
+        eq(transactionsTresorerie.compteBancaireId, parseInt(compteBancaireId)),
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
+        sql`${transactionsTresorerie.dateTransaction} <= ${dateFin}`
+      ));
+
+    toutesTransactions.forEach(t => {
+      if (t.type === 'encaissement') {
+        soldeComptable += parseFloat(t.montant || 0);
+      } else {
+        soldeComptable -= parseFloat(t.montant || 0);
+      }
+    });
+
+    res.json({
+      compte: compte[0],
+      soldeComptable,
+      transactionsCount: transactions.length,
+      transactions: transactions.map(t => ({
+        ...t,
+        montant: parseFloat(t.montant || 0)
+      }))
+    });
+  } catch (err) {
+    console.error('Erreur preview rapprochement:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET tous les rapprochements bancaires
 router.get('/rapprochements', async (req, res) => {
   try {

@@ -21,6 +21,8 @@ export function TresorerieModule() {
   const [transactionDateDebut, setTransactionDateDebut] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [transactionDateFin, setTransactionDateFin] = useState(new Date().toISOString().split('T')[0]);
   const [transactionsFiltered, setTransactionsFiltered] = useState([]);
+  const [rapprochementPreview, setRapprochementPreview] = useState(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   
   const ENTREPRISE_ID = parseInt(localStorage.getItem('entrepriseId')) || 1;
 
@@ -960,11 +962,28 @@ export function TresorerieModule() {
     </div>
   );
 
+  const handlePreviewRapprochement = async () => {
+    if (!formData.compteBancaireId || !formData.dateDebut || !formData.dateFin) {
+      alert('Veuillez sélectionner un compte et les dates de la période');
+      return;
+    }
+    setLoadingPreview(true);
+    try {
+      const data = await api.get(`/tresorerie/rapprochements/preview?compteBancaireId=${formData.compteBancaireId}&dateDebut=${formData.dateDebut}&dateFin=${formData.dateFin}`);
+      setRapprochementPreview(data);
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
   const handleCreerRapprochement = async () => {
     try {
       const data = await api.post('/tresorerie/rapprochements', formData);
       setShowRapprochementModal(false);
       setFormData({});
+      setRapprochementPreview(null);
       await loadRapprochements();
       setRapprochementActif(data.rapprochement.id);
     } catch (err) {
@@ -1352,6 +1371,66 @@ export function TresorerieModule() {
               </div>
 
               <div style={{ marginBottom: '15px' }}>
+                <button
+                  onClick={handlePreviewRapprochement}
+                  disabled={loadingPreview || !formData.compteBancaireId || !formData.dateDebut || !formData.dateFin}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: loadingPreview ? 'wait' : 'pointer',
+                    fontWeight: 'bold',
+                    opacity: (!formData.compteBancaireId || !formData.dateDebut || !formData.dateFin) ? 0.6 : 1
+                  }}
+                >
+                  {loadingPreview ? '⏳ Chargement...' : '🔍 Afficher les opérations de la période'}
+                </button>
+              </div>
+
+              {rapprochementPreview && (
+                <div style={{ marginBottom: '15px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <strong>Solde comptable calculé:</strong>
+                    <span style={{ fontWeight: 'bold', color: '#2c3e50' }}>
+                      {rapprochementPreview.soldeComptable.toLocaleString()} FCFA
+                    </span>
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>{rapprochementPreview.transactionsCount} opération(s) sur la période</strong>
+                  </div>
+                  {rapprochementPreview.transactions.length > 0 ? (
+                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                      <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#e9ecef' }}>
+                            <th style={{ padding: '6px', textAlign: 'left' }}>Date</th>
+                            <th style={{ padding: '6px', textAlign: 'left' }}>Libellé</th>
+                            <th style={{ padding: '6px', textAlign: 'right' }}>Montant</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rapprochementPreview.transactions.map((t, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
+                              <td style={{ padding: '6px' }}>{new Date(t.dateTransaction).toLocaleDateString('fr-FR')}</td>
+                              <td style={{ padding: '6px' }}>{t.libelle || t.description || '-'}</td>
+                              <td style={{ padding: '6px', textAlign: 'right', color: t.type === 'encaissement' ? '#27ae60' : '#e74c3c' }}>
+                                {t.type === 'encaissement' ? '+' : '-'}{t.montant.toLocaleString()} FCFA
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p style={{ color: '#95a5a6', fontStyle: 'italic', margin: 0 }}>Aucune opération sur cette période</p>
+                  )}
+                </div>
+              )}
+
+              <div style={{ marginBottom: '15px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Solde Relevé Bancaire</label>
                 <input
                   type="number"
@@ -1404,6 +1483,7 @@ export function TresorerieModule() {
                   onClick={() => {
                     setShowRapprochementModal(false);
                     setFormData({});
+                    setRapprochementPreview(null);
                   }}
                   style={{
                     flex: 1,
