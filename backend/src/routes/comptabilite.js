@@ -1080,11 +1080,9 @@ router.get('/ecritures', async (req, res) => {
         id: ecritures.id,
         numeroEcriture: ecritures.numeroEcriture,
         dateEcriture: ecritures.dateEcriture,
-        reference: ecritures.reference,
-        description: ecritures.description,
+        reference: ecritures.numeroPiece,
+        description: ecritures.libelle,
         valide: ecritures.valide,
-        totalDebit: ecritures.totalDebit,
-        totalCredit: ecritures.totalCredit,
         journalId: ecritures.journalId,
         journalCode: journaux.code,
         journalNom: journaux.nom,
@@ -1095,7 +1093,16 @@ router.get('/ecritures', async (req, res) => {
       .where(and(...conditions))
       .orderBy(desc(ecritures.dateEcriture));
 
-    res.json(entries);
+    const entriesWithTotals = await Promise.all(entries.map(async (entry) => {
+      const lignes = await db.query.lignesEcritures.findMany({
+        where: eq(lignesEcritures.ecritureId, entry.id)
+      });
+      const totalDebit = lignes.reduce((acc, l) => acc + parseFloat(l.debit || 0), 0);
+      const totalCredit = lignes.reduce((acc, l) => acc + parseFloat(l.credit || 0), 0);
+      return { ...entry, totalDebit, totalCredit };
+    }));
+
+    res.json(entriesWithTotals);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
