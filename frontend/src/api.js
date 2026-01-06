@@ -1,5 +1,3 @@
-const ENTREPRISE_ID = 1;
-
 class ApiClient {
   constructor(baseURL = '/api') {
     this.baseURL = baseURL;
@@ -100,34 +98,29 @@ class ApiClient {
   }
 
   async get(endpoint, params = {}) {
-    const queryParams = new URLSearchParams({
-      entrepriseId: ENTREPRISE_ID,
-      ...params,
-    });
-    return this.request(`${endpoint}?${queryParams}`, { method: 'GET' });
+    const queryParams = new URLSearchParams(params);
+    const queryString = queryParams.toString();
+    return this.request(queryString ? `${endpoint}?${queryString}` : endpoint, { method: 'GET' });
   }
 
   async post(endpoint, data = {}) {
     return this.request(endpoint, {
       method: 'POST',
-      body: { entrepriseId: ENTREPRISE_ID, ...data },
+      body: data,
     });
   }
 
   async put(endpoint, data = {}) {
     return this.request(endpoint, {
       method: 'PUT',
-      body: { entrepriseId: ENTREPRISE_ID, ...data },
+      body: data,
     });
   }
 
   async delete(endpoint, data = {}) {
-    const queryParams = new URLSearchParams({
-      entrepriseId: ENTREPRISE_ID,
-    });
-    return this.request(`${endpoint}?${queryParams}`, {
+    return this.request(endpoint, {
       method: 'DELETE',
-      body: { entrepriseId: ENTREPRISE_ID, ...data },
+      body: data,
     });
   }
 }
