@@ -664,18 +664,19 @@ export function ModuleComptabilite() {
             </div>
             <Button variant="success" style={{ marginTop: '15px', fontWeight: 'bold', padding: '10px 20px' }} onClick={async () => {
               try {
-                const balance = await api.get('/comptabilite/balance', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                const balanceData = data.comptes.map(c => {
-                  const soldes = balance[c.id] || { debit: 0, credit: 0 };
-                  return {
-                    ...c,
-                    totalDebit: soldes.debit || 0,
-                    totalCredit: soldes.credit || 0,
-                    soldeDebit: (soldes.debit - soldes.credit) > 0 ? soldes.debit - soldes.credit : 0,
-                    soldeCredit: (soldes.credit - soldes.debit) > 0 ? soldes.credit - soldes.debit : 0
-                  };
-                }).filter(c => c.totalDebit > 0 || c.totalCredit > 0);
-                setData(prev => ({ ...prev, balanceData: balanceData }));
+                const response = await api.get('/comptabilite/balance', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                const balanceComptes = response.comptes || [];
+                const balanceData = balanceComptes.map(c => ({
+                  id: c.compteId,
+                  numero: c.numero,
+                  nom: c.nom,
+                  type: c.type,
+                  totalDebit: c.debit || 0,
+                  totalCredit: c.credit || 0,
+                  soldeDebit: c.solde > 0 ? c.solde : 0,
+                  soldeCredit: c.solde < 0 ? Math.abs(c.solde) : 0
+                }));
+                setData(prev => ({ ...prev, balanceData, balanceTotaux: response.totaux, balanceEquilibre: response.equilibre }));
               } catch (err) {
                 alert('Erreur: ' + err.message);
               }
@@ -683,18 +684,30 @@ export function ModuleComptabilite() {
           </div>
 
           {data.balanceData && data.balanceData.length > 0 ? (
-            <Table
-              columns={[
-                { key: 'numero', label: 'N° Compte' },
-                { key: 'nom', label: 'Libellé' },
-                { key: 'totalDebit', label: 'Mouv. Débit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
-                { key: 'totalCredit', label: 'Mouv. Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
-                { key: 'soldeDebit', label: 'Solde Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
-                { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' }
-              ]}
-              data={data.balanceData}
-              actions={false}
-            />
+            <>
+              <Table
+                columns={[
+                  { key: 'numero', label: 'N° Compte' },
+                  { key: 'nom', label: 'Libellé' },
+                  { key: 'totalDebit', label: 'Mouv. Débit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                  { key: 'totalCredit', label: 'Mouv. Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                  { key: 'soldeDebit', label: 'Solde Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
+                  { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' }
+                ]}
+                data={data.balanceData}
+                actions={false}
+              />
+              {data.balanceTotaux && (
+                <div style={{ marginTop: '15px', padding: '15px', background: data.balanceEquilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <strong>TOTAUX:</strong> Débit: <strong>{parseFloat(data.balanceTotaux.totalDebit || 0).toLocaleString()} FCFA</strong> | Crédit: <strong>{parseFloat(data.balanceTotaux.totalCredit || 0).toLocaleString()} FCFA</strong>
+                  </div>
+                  <div style={{ color: data.balanceEquilibre ? '#388e3c' : '#d32f2f', fontWeight: 'bold' }}>
+                    {data.balanceEquilibre ? '✅ Balance équilibrée' : '❌ Balance non équilibrée'}
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
               <p style={{ color: '#7f8c8d', margin: 0 }}>Sélectionnez la période et cliquez sur "Générer" pour afficher la balance</p>
