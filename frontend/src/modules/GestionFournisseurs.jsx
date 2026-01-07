@@ -721,6 +721,148 @@ export function GestionFournisseurs() {
     dateFin: new Date().toISOString().split('T')[0]
   });
   const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], loading: false, type: null });
+  const [chequeModal, setChequeModal] = useState({ open: false });
+  const [chequeForm, setChequeForm] = useState({
+    fournisseurId: '',
+    montant: 0,
+    numeroCheque: '',
+    dateCheque: new Date().toISOString().split('T')[0],
+    banque: '',
+    memo: ''
+  });
+
+  const nombreEnLettres = (n) => {
+    const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
+    const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante', 'quatre-vingt', 'quatre-vingt'];
+    if (n === 0) return 'zéro';
+    if (n < 0) return 'moins ' + nombreEnLettres(-n);
+    if (n < 20) return units[n];
+    if (n < 100) {
+      const t = Math.floor(n / 10);
+      const u = n % 10;
+      if (t === 7 || t === 9) return tens[t] + (u === 1 ? '-et-' : '-') + units[10 + u];
+      if (t === 8 && u === 0) return 'quatre-vingts';
+      return tens[t] + (u === 1 && t < 8 ? '-et-' : (u > 0 ? '-' : '')) + units[u];
+    }
+    if (n < 1000) {
+      const h = Math.floor(n / 100);
+      const r = n % 100;
+      return (h === 1 ? 'cent' : units[h] + ' cent' + (r === 0 && h > 1 ? 's' : '')) + (r > 0 ? ' ' + nombreEnLettres(r) : '');
+    }
+    if (n < 1000000) {
+      const m = Math.floor(n / 1000);
+      const r = n % 1000;
+      return (m === 1 ? 'mille' : nombreEnLettres(m) + ' mille') + (r > 0 ? ' ' + nombreEnLettres(r) : '');
+    }
+    if (n < 1000000000) {
+      const m = Math.floor(n / 1000000);
+      const r = n % 1000000;
+      return nombreEnLettres(m) + ' million' + (m > 1 ? 's' : '') + (r > 0 ? ' ' + nombreEnLettres(r) : '');
+    }
+    return n.toString();
+  };
+
+  const imprimerCheque = () => {
+    const fournisseur = data.fournisseurs.find(f => f.id === parseInt(chequeForm.fournisseurId));
+    if (!fournisseur) {
+      alert('Veuillez sélectionner un fournisseur');
+      return;
+    }
+    const montant = parseFloat(chequeForm.montant) || 0;
+    const montantLettres = nombreEnLettres(Math.floor(montant)).toUpperCase() + ' FRANCS CFA';
+    const dateCheque = new Date(chequeForm.dateCheque).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Chèque N° ${chequeForm.numeroCheque}</title>
+        <style>
+          @page { size: 200mm 85mm; margin: 0; }
+          body { font-family: 'Courier New', monospace; margin: 0; padding: 0; }
+          .cheque { 
+            width: 200mm; height: 85mm; 
+            border: 2px solid #333; 
+            position: relative; 
+            padding: 10mm;
+            box-sizing: border-box;
+            background: linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%);
+          }
+          .banque { font-size: 16pt; font-weight: bold; color: #1a5276; margin-bottom: 5mm; }
+          .numero-cheque { position: absolute; top: 10mm; right: 15mm; font-size: 12pt; color: #666; }
+          .ligne { margin: 4mm 0; display: flex; align-items: baseline; }
+          .label { font-size: 9pt; color: #666; width: 25mm; }
+          .valeur { font-size: 11pt; font-weight: bold; border-bottom: 1px solid #333; flex: 1; padding-left: 2mm; min-height: 6mm; }
+          .montant-chiffres { 
+            position: absolute; top: 10mm; right: 15mm; 
+            font-size: 14pt; font-weight: bold; 
+            border: 2px solid #333; padding: 2mm 5mm;
+            background: #fff;
+            margin-top: 15mm;
+          }
+          .montant-lettres { 
+            font-size: 10pt; 
+            text-transform: uppercase; 
+            border: 1px solid #999; 
+            padding: 3mm;
+            margin: 4mm 0;
+            min-height: 12mm;
+            background: #fff;
+          }
+          .signature-zone {
+            position: absolute;
+            bottom: 10mm;
+            right: 15mm;
+            text-align: center;
+          }
+          .signature-ligne { width: 50mm; border-top: 1px solid #333; margin-top: 15mm; }
+          .signature-label { font-size: 8pt; color: #666; }
+          .memo { font-size: 9pt; color: #666; font-style: italic; margin-top: 5mm; }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="cheque">
+          <div class="banque">${chequeForm.banque || 'BANQUE'}</div>
+          <div class="numero-cheque">N° ${chequeForm.numeroCheque || '________'}</div>
+          
+          <div class="montant-chiffres">
+            **${montant.toLocaleString('fr-FR')} FCFA**
+          </div>
+          
+          <div style="margin-top: 20mm;">
+            <div class="ligne">
+              <span class="label">Payez contre ce chèque à</span>
+              <span class="valeur">${fournisseur.nom || ''}</span>
+            </div>
+            
+            <div class="montant-lettres">
+              La somme de: ${montantLettres}
+            </div>
+            
+            <div class="ligne">
+              <span class="label">À</span>
+              <span class="valeur">Lomé, le ${dateCheque}</span>
+            </div>
+          </div>
+          
+          ${chequeForm.memo ? `<div class="memo">Mémo: ${chequeForm.memo}</div>` : ''}
+          
+          <div class="signature-zone">
+            <div class="signature-ligne"></div>
+            <div class="signature-label">Signature</div>
+          </div>
+        </div>
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    setChequeModal({ open: false });
+  };
 
   const openDrillDown = async (type, title) => {
     setDrillModal({ open: true, title, data: [], loading: true, type });
@@ -1036,7 +1178,25 @@ export function GestionFournisseurs() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h3>💰 Paiements Fournisseurs</h3>
-            <Button onClick={() => openModal('paiement')}>+ Nouveau Paiement</Button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <Button 
+                onClick={() => {
+                  setChequeForm({
+                    fournisseurId: '',
+                    montant: 0,
+                    numeroCheque: '',
+                    dateCheque: new Date().toISOString().split('T')[0],
+                    banque: '',
+                    memo: ''
+                  });
+                  setChequeModal({ open: true });
+                }}
+                style={{ backgroundColor: '#9b59b6' }}
+              >
+                🖨️ Imprimer Chèque
+              </Button>
+              <Button onClick={() => openModal('paiement')}>+ Nouveau Paiement</Button>
+            </div>
           </div>
           <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
             <p style={{ color: '#7f8c8d', margin: 0 }}>Aucun paiement enregistré</p>
@@ -1662,6 +1822,114 @@ export function GestionFournisseurs() {
               <Button variant="secondary" onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false, type: null })}>
                 Fermer
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Impression Chèque */}
+      {chequeModal.open && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '8px', width: '500px',
+            maxHeight: '80vh', overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid #eee',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              backgroundColor: '#9b59b6', color: 'white'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '18px' }}>🖨️ Imprimer un Chèque</h3>
+              <button onClick={() => setChequeModal({ open: false })} style={{
+                background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: 'white'
+              }}>&times;</button>
+            </div>
+            <div style={{ padding: '20px' }}>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Fournisseur (Bénéficiaire) *</label>
+                <select
+                  value={chequeForm.fournisseurId}
+                  onChange={(e) => setChequeForm({...chequeForm, fournisseurId: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                >
+                  <option value="">-- Sélectionner --</option>
+                  {data.fournisseurs.map(f => (
+                    <option key={f.id} value={f.id}>{f.nom}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Montant (FCFA) *</label>
+                <input
+                  type="number"
+                  value={chequeForm.montant}
+                  onChange={(e) => setChequeForm({...chequeForm, montant: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  placeholder="0"
+                />
+                {chequeForm.montant > 0 && (
+                  <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
+                    {nombreEnLettres(Math.floor(parseFloat(chequeForm.montant) || 0)).toUpperCase()} FRANCS CFA
+                  </p>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>N° Chèque</label>
+                  <input
+                    type="text"
+                    value={chequeForm.numeroCheque}
+                    onChange={(e) => setChequeForm({...chequeForm, numeroCheque: e.target.value})}
+                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                    placeholder="Ex: 0001234"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Date du Chèque</label>
+                  <input
+                    type="date"
+                    value={chequeForm.dateCheque}
+                    onChange={(e) => setChequeForm({...chequeForm, dateCheque: e.target.value})}
+                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  />
+                </div>
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Banque</label>
+                <input
+                  type="text"
+                  value={chequeForm.banque}
+                  onChange={(e) => setChequeForm({...chequeForm, banque: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  placeholder="Ex: ECOBANK TOGO"
+                />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Mémo (optionnel)</label>
+                <input
+                  type="text"
+                  value={chequeForm.memo}
+                  onChange={(e) => setChequeForm({...chequeForm, memo: e.target.value})}
+                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  placeholder="Ex: Facture N° FA-2024-001"
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" onClick={() => setChequeModal({ open: false })}>
+                  Annuler
+                </Button>
+                <Button 
+                  onClick={imprimerCheque}
+                  style={{ backgroundColor: '#9b59b6' }}
+                  disabled={!chequeForm.fournisseurId || !chequeForm.montant}
+                >
+                  🖨️ Imprimer le Chèque
+                </Button>
+              </div>
             </div>
           </div>
         </div>
