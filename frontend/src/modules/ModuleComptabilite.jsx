@@ -830,20 +830,12 @@ export function ModuleComptabilite() {
 
             <div style={{ padding: '30px', background: '#fff9e6', borderRadius: '8px', cursor: 'pointer' }}
               onClick={async () => {
+                setRapportModal({ open: true, type: 'journaux', data: null, loading: true });
                 try {
                   const rapport = await api.get('/comptabilite/rapport-journaux', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                  let message = `📚 Rapport des Journaux\n\n`;
-                  message += `Total général: ${rapport.totaux.nombreEcritures} écritures\n`;
-                  message += `Débit: ${rapport.totaux.debit.toLocaleString()} FCFA\n`;
-                  message += `Crédit: ${rapport.totaux.credit.toLocaleString()} FCFA\n\n`;
-                  rapport.journaux.forEach(j => {
-                    if (j.nombreEcritures > 0) {
-                      message += `${j.code} - ${j.nom}:\n`;
-                      message += `  ${j.nombreEcritures} écritures, Débit: ${j.totalDebit.toLocaleString()} FCFA\n`;
-                    }
-                  });
-                  alert(message);
+                  setRapportModal({ open: true, type: 'journaux', data: rapport, loading: false });
                 } catch (err) {
+                  setRapportModal({ open: false, type: null, data: null, loading: false });
                   alert('Erreur génération Rapport Journaux: ' + err.message);
                 }
               }}>
@@ -854,7 +846,16 @@ export function ModuleComptabilite() {
             </div>
 
             <div style={{ padding: '30px', background: '#e8f5e9', borderRadius: '8px', cursor: 'pointer' }}
-              onClick={() => alert('Tableau des Flux de Trésorerie (à venir)')}>
+              onClick={async () => {
+                setRapportModal({ open: true, type: 'flux', data: null, loading: true });
+                try {
+                  const rapport = await api.get('/comptabilite/rapports/flux-tresorerie', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                  setRapportModal({ open: true, type: 'flux', data: rapport, loading: false });
+                } catch (err) {
+                  setRapportModal({ open: false, type: null, data: null, loading: false });
+                  alert('Erreur génération Flux de Trésorerie: ' + err.message);
+                }
+              }}>
               <h4 style={{ margin: '0 0 10px 0', color: '#388e3c' }}>💰 Tableau des Flux de Trésorerie</h4>
               <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
                 Mouvements de trésorerie par activité
@@ -862,7 +863,16 @@ export function ModuleComptabilite() {
             </div>
 
             <div style={{ padding: '30px', background: '#fff3e0', borderRadius: '8px', cursor: 'pointer' }}
-              onClick={() => alert('Journal Général: utilisez l\'onglet Écritures pour voir toutes les écritures')}>
+              onClick={async () => {
+                setRapportModal({ open: true, type: 'journal-general', data: null, loading: true });
+                try {
+                  const rapport = await api.get('/comptabilite/rapports/journal-general', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
+                  setRapportModal({ open: true, type: 'journal-general', data: rapport, loading: false });
+                } catch (err) {
+                  setRapportModal({ open: false, type: null, data: null, loading: false });
+                  alert('Erreur génération Journal Général: ' + err.message);
+                }
+              }}>
               <h4 style={{ margin: '0 0 10px 0', color: '#f57c00' }}>📖 Journal Général</h4>
               <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
                 Toutes les écritures comptables chronologiques
@@ -1505,20 +1515,29 @@ export function ModuleComptabilite() {
             <div style={{
               padding: '16px 20px', borderBottom: '1px solid #eee',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: rapportModal.type === 'bilan' ? '#e3f2fd' : '#f3e5f5'
+              backgroundColor: rapportModal.type === 'bilan' ? '#e3f2fd' : rapportModal.type === 'resultat' ? '#f3e5f5' : rapportModal.type === 'journaux' ? '#fff9e6' : rapportModal.type === 'flux' ? '#e8f5e9' : '#fff3e0'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 {rapportModal.data?.entreprise?.logo && (
                   <img src={rapportModal.data.entreprise.logo} alt="Logo" 
-                    style={{ height: '45px', width: 'auto', objectFit: 'contain', borderRadius: '4px' }} />
+                    style={{ height: '50px', width: 'auto', objectFit: 'contain', borderRadius: '4px' }} />
                 )}
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '18px', color: rapportModal.type === 'bilan' ? '#1976d2' : '#7b1fa2' }}>
-                    {rapportModal.type === 'bilan' ? '📄 Bilan Comptable' : '📊 Compte de Résultat'}
+                  <h3 style={{ margin: 0, fontSize: '18px', color: rapportModal.type === 'bilan' ? '#1976d2' : rapportModal.type === 'resultat' ? '#7b1fa2' : rapportModal.type === 'journaux' ? '#f9a825' : rapportModal.type === 'flux' ? '#388e3c' : '#f57c00' }}>
+                    {rapportModal.type === 'bilan' ? '📄 Bilan Comptable' : 
+                     rapportModal.type === 'resultat' ? '📊 Compte de Résultat' :
+                     rapportModal.type === 'journaux' ? '📚 Rapport des Journaux' :
+                     rapportModal.type === 'flux' ? '💰 Tableau des Flux de Trésorerie' :
+                     '📖 Journal Général'}
                   </h3>
                   {rapportModal.data?.entreprise?.nom && (
-                    <div style={{ fontSize: '13px', color: '#666', marginTop: '2px' }}>
+                    <div style={{ fontSize: '14px', color: '#333', marginTop: '3px', fontWeight: 'bold' }}>
                       {rapportModal.data.entreprise.nom}
+                    </div>
+                  )}
+                  {rapportModal.data?.entreprise && (rapportModal.data.entreprise.adresse || rapportModal.data.entreprise.telephone || rapportModal.data.entreprise.rccm) && (
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+                      {[rapportModal.data.entreprise.adresse, rapportModal.data.entreprise.telephone, rapportModal.data.entreprise.rccm ? `RCCM: ${rapportModal.data.entreprise.rccm}` : null, rapportModal.data.entreprise.ifu ? `IFU: ${rapportModal.data.entreprise.ifu}` : null].filter(Boolean).join(' | ')}
                     </div>
                   )}
                 </div>
@@ -1826,6 +1845,250 @@ export function ModuleComptabilite() {
                       </div>
                     </div>
                   </div>
+                </div>
+              ) : rapportModal.type === 'journaux' && rapportModal.data ? (
+                <div>
+                  {/* Totaux généraux */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '25px' }}>
+                    <div style={{ padding: '15px', background: '#f8f9fa', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Journaux actifs</div>
+                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f9a825' }}>{rapportModal.data.journaux?.length || 0}</div>
+                    </div>
+                    <div style={{ padding: '15px', background: '#f8f9fa', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Total Écritures</div>
+                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#333' }}>{rapportModal.data.totaux?.nombreEcritures || 0}</div>
+                    </div>
+                    <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Total Débit</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString()} FCFA</div>
+                    </div>
+                    <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Total Crédit</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString()} FCFA</div>
+                    </div>
+                  </div>
+                  
+                  {/* Liste des journaux */}
+                  {(rapportModal.data.journaux || []).map((journal, idx) => (
+                    <div key={idx} style={{ marginBottom: '20px', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+                      <div style={{ padding: '12px 15px', background: '#fff9e6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontWeight: 'bold', color: '#f9a825' }}>{journal.code}</span>
+                          <span style={{ marginLeft: '10px', color: '#333' }}>{journal.nom}</span>
+                          <span style={{ marginLeft: '10px', fontSize: '12px', color: '#666', background: '#f5f5f5', padding: '2px 8px', borderRadius: '4px' }}>{journal.type}</span>
+                        </div>
+                        <span style={{ fontSize: '13px', color: '#666' }}>{journal.nombreEcritures} écriture(s)</span>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#fafafa' }}>
+                            <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #eee', fontSize: '12px' }}>Date</th>
+                            <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #eee', fontSize: '12px' }}>Référence</th>
+                            <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #eee', fontSize: '12px' }}>Libellé</th>
+                            <th style={{ padding: '10px', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '12px' }}>Débit</th>
+                            <th style={{ padding: '10px', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '12px' }}>Crédit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(journal.ecritures || []).map((e, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                              <td style={{ padding: '8px 10px', fontSize: '13px' }}>{e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-'}</td>
+                              <td style={{ padding: '8px 10px', fontSize: '13px' }}>{e.reference || '-'}</td>
+                              <td style={{ padding: '8px 10px', fontSize: '13px' }}>{e.libelle || '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#1976d2' }}>{e.debit > 0 ? e.debit.toLocaleString() : '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#7b1fa2' }}>{e.credit > 0 ? e.credit.toLocaleString() : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ background: '#fff9e6', fontWeight: 'bold' }}>
+                            <td colSpan="3" style={{ padding: '10px' }}>Total {journal.code}</td>
+                            <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2' }}>{(journal.debit || 0).toLocaleString()} FCFA</td>
+                            <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2' }}>{(journal.credit || 0).toLocaleString()} FCFA</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ))}
+                  
+                  {/* Équilibre */}
+                  <div style={{ marginTop: '15px', padding: '15px', background: rapportModal.data.totaux?.equilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                    {rapportModal.data.totaux?.equilibre 
+                      ? <span style={{ color: '#2e7d32', fontWeight: 'bold' }}>✅ Tous les journaux sont équilibrés</span>
+                      : <span style={{ color: '#c62828', fontWeight: 'bold' }}>⚠️ Écart détecté entre débits et crédits</span>
+                    }
+                  </div>
+                </div>
+              ) : rapportModal.type === 'flux' && rapportModal.data ? (
+                <div>
+                  {/* Flux d'exploitation */}
+                  <div style={{ marginBottom: '25px' }}>
+                    <h4 style={{ color: '#388e3c', borderBottom: '2px solid #388e3c', paddingBottom: '10px' }}>Flux de Trésorerie liés à l'Exploitation</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                      <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Encaissements</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxExploitation?.encaissements || 0).toLocaleString()} FCFA</div>
+                      </div>
+                      <div style={{ padding: '20px', background: '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Décaissements</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxExploitation?.decaissements || 0).toLocaleString()} FCFA</div>
+                      </div>
+                      <div style={{ padding: '20px', background: rapportModal.data.fluxExploitation?.net >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Flux Net Exploitation</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxExploitation?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxExploitation?.net || 0).toLocaleString()} FCFA</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Flux d'investissement */}
+                  <div style={{ marginBottom: '25px' }}>
+                    <h4 style={{ color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '10px' }}>Flux de Trésorerie liés aux Investissements</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                      <div style={{ padding: '20px', background: '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Acquisitions</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxInvestissement?.acquisitions || 0).toLocaleString()} FCFA</div>
+                      </div>
+                      <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Cessions</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxInvestissement?.cessions || 0).toLocaleString()} FCFA</div>
+                      </div>
+                      <div style={{ padding: '20px', background: rapportModal.data.fluxInvestissement?.net >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Flux Net Investissement</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxInvestissement?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxInvestissement?.net || 0).toLocaleString()} FCFA</div>
+                      </div>
+                    </div>
+                    {(rapportModal.data.fluxInvestissement?.details || []).length > 0 && (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+                        <thead>
+                          <tr style={{ background: '#e3f2fd' }}>
+                            <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px' }}>Compte</th>
+                            <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px' }}>Libellé</th>
+                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '12px' }}>Acquisitions</th>
+                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '12px' }}>Cessions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(rapportModal.data.fluxInvestissement?.details || []).map((d, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                              <td style={{ padding: '8px 10px', fontSize: '13px' }}>{d.compte}</td>
+                              <td style={{ padding: '8px 10px', fontSize: '13px' }}>{d.nom}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#c62828' }}>{d.acquisitions > 0 ? d.acquisitions.toLocaleString() : '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#2e7d32' }}>{d.cessions > 0 ? d.cessions.toLocaleString() : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  {/* Comptes de Trésorerie */}
+                  <div style={{ marginBottom: '25px' }}>
+                    <h4 style={{ color: '#7b1fa2', borderBottom: '2px solid #7b1fa2', paddingBottom: '10px' }}>Mouvements des Comptes de Trésorerie</h4>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: '#f3e5f5' }}>
+                          <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px' }}>Compte</th>
+                          <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px' }}>Libellé</th>
+                          <th style={{ padding: '10px', textAlign: 'right', fontSize: '12px' }}>Entrées</th>
+                          <th style={{ padding: '10px', textAlign: 'right', fontSize: '12px' }}>Sorties</th>
+                          <th style={{ padding: '10px', textAlign: 'right', fontSize: '12px' }}>Solde</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(rapportModal.data.fluxTresorerie?.comptes || []).map((c, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                            <td style={{ padding: '8px 10px', fontSize: '13px' }}>{c.numero}</td>
+                            <td style={{ padding: '8px 10px', fontSize: '13px' }}>{c.nom}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#2e7d32' }}>{c.entrees > 0 ? c.entrees.toLocaleString() : '-'}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#c62828' }}>{c.sorties > 0 ? c.sorties.toLocaleString() : '-'}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', fontWeight: 'bold', color: c.solde >= 0 ? '#2e7d32' : '#c62828' }}>{c.solde.toLocaleString()} FCFA</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: '#f3e5f5', fontWeight: 'bold' }}>
+                          <td colSpan="2" style={{ padding: '10px' }}>TOTAL</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: '#2e7d32' }}>{(rapportModal.data.fluxTresorerie?.totalEntrees || 0).toLocaleString()} FCFA</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: '#c62828' }}>{(rapportModal.data.fluxTresorerie?.totalSorties || 0).toLocaleString()} FCFA</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString()} FCFA</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Variation nette */}
+                  <div style={{ padding: '20px', background: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>Variation Nette de Trésorerie</div>
+                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#2e7d32' : '#c62828' }}>
+                      {(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString()} FCFA
+                    </div>
+                  </div>
+                </div>
+              ) : rapportModal.type === 'journal-general' && rapportModal.data ? (
+                <div>
+                  {/* Statistiques */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '25px' }}>
+                    <div style={{ padding: '15px', background: '#f8f9fa', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Nombre d'écritures</div>
+                      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f57c00' }}>{rapportModal.data.totaux?.nombreEcritures || 0}</div>
+                    </div>
+                    <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Total Débit</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString()} FCFA</div>
+                    </div>
+                    <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Total Crédit</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString()} FCFA</div>
+                    </div>
+                    <div style={{ padding: '15px', background: rapportModal.data.totaux?.equilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666' }}>Équilibre</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: rapportModal.data.totaux?.equilibre ? '#2e7d32' : '#c62828' }}>
+                        {rapportModal.data.totaux?.equilibre ? '✅ Oui' : '❌ Non'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Liste des écritures */}
+                  {(rapportModal.data.ecritures || []).map((ecriture, idx) => (
+                    <div key={idx} style={{ marginBottom: '15px', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+                      <div style={{ padding: '10px 15px', background: '#fff3e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontWeight: 'bold', color: '#f57c00' }}>{ecriture.reference || `ECR-${ecriture.id}`}</span>
+                          <span style={{ marginLeft: '15px', color: '#333' }}>{ecriture.libelle}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                          <span style={{ fontSize: '12px', color: '#666', background: '#f5f5f5', padding: '2px 8px', borderRadius: '4px' }}>{ecriture.journal?.code}</span>
+                          <span style={{ fontSize: '13px', color: '#666' }}>{ecriture.date ? new Date(ecriture.date).toLocaleDateString('fr-FR') : '-'}</span>
+                        </div>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#fafafa' }}>
+                            <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid #eee' }}>Compte</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid #eee' }}>Libellé</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '12px', borderBottom: '1px solid #eee' }}>Débit</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '12px', borderBottom: '1px solid #eee' }}>Crédit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(ecriture.lignes || []).map((ligne, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                              <td style={{ padding: '6px 10px', fontSize: '13px' }}>{ligne.compte} - {ligne.nomCompte}</td>
+                              <td style={{ padding: '6px 10px', fontSize: '13px' }}>{ligne.libelle}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: '13px', color: '#1976d2', fontWeight: ligne.debit > 0 ? 'bold' : 'normal' }}>{ligne.debit > 0 ? ligne.debit.toLocaleString() : '-'}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: '13px', color: '#7b1fa2', fontWeight: ligne.credit > 0 ? 'bold' : 'normal' }}>{ligne.credit > 0 ? ligne.credit.toLocaleString() : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+
+                  {(rapportModal.data.ecritures || []).length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '40px', background: '#f8f9fa', borderRadius: '8px', color: '#666' }}>
+                      Aucune écriture trouvée pour cette période
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>
