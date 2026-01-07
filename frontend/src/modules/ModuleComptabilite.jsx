@@ -287,23 +287,25 @@ export function ModuleComptabilite() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const comptesRes = await api.get('/comptabilite/comptes');
-      const journauxRes = await api.get('/comptabilite/journaux');
-      const ecrituresRes = await api.get('/comptabilite/ecritures');
-      const immosRes = await api.get('/immobilisations/list');
-      const recurrentesRes = await api.get('/ecritures-recurrentes');
-      const parametresRes = await api.get('/ecritures-recurrentes/parametres/comptables');
+      const [comptesRes, journauxRes, ecrituresRes, immosRes, recurrentesRes, parametresRes] = await Promise.allSettled([
+        api.get('/comptabilite/comptes'),
+        api.get('/comptabilite/journaux'),
+        api.get('/comptabilite/ecritures'),
+        api.get('/immobilisations/list'),
+        api.get('/ecritures-recurrentes'),
+        api.get('/ecritures-recurrentes/parametres/comptables')
+      ]);
       
       setData({
-        comptes: comptesRes || [],
-        journaux: journauxRes || [],
-        ecritures: ecrituresRes || [],
-        immobilisations: immosRes || [],
-        ecrituresRecurrentes: recurrentesRes || [],
-        parametresComptables: parametresRes || null
+        comptes: comptesRes.status === 'fulfilled' ? (Array.isArray(comptesRes.value) ? comptesRes.value : []) : [],
+        journaux: journauxRes.status === 'fulfilled' ? (Array.isArray(journauxRes.value) ? journauxRes.value : []) : [],
+        ecritures: ecrituresRes.status === 'fulfilled' ? (Array.isArray(ecrituresRes.value) ? ecrituresRes.value : []) : [],
+        immobilisations: immosRes.status === 'fulfilled' ? (Array.isArray(immosRes.value) ? immosRes.value : []) : [],
+        ecrituresRecurrentes: recurrentesRes.status === 'fulfilled' ? (Array.isArray(recurrentesRes.value) ? recurrentesRes.value : []) : [],
+        parametresComptables: parametresRes.status === 'fulfilled' ? parametresRes.value : null
       });
     } catch (error) {
-      console.error('Erreur chargement:', error);
+      console.error('Erreur chargement:', error?.message || error);
     } finally {
       setLoading(false);
     }
