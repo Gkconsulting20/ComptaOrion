@@ -757,7 +757,7 @@ export function StockInventaire() {
               </div>
               <Button 
                 variant="success" 
-                onClick={loadData}
+                onClick={() => reload('produits')}
                 style={{ fontWeight: 'bold', padding: '10px 20px' }}
               >
                 Générer
