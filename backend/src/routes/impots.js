@@ -7,6 +7,8 @@ import { createEcriturePaiementImpot } from '../services/comptabiliteService.js'
 
 const router = express.Router();
 
+import { lignesEcritures, ecritures } from '../schema.js';
+
 const ENCRYPTION_KEY = process.env.FISCAL_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
 const IV_LENGTH = 16;
 
@@ -32,6 +34,61 @@ function decrypt(text) {
     return null;
   }
 }
+
+// API pour récupérer les montants de TVA depuis les écritures comptables
+router.get('/tva/resume', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId;
+    
+    // Calculer TVA Collectée (compte 4431) - solde crédit
+    const tvaCollecteeData = await db.execute(sql`
+      SELECT COALESCE(SUM(le.credit), 0) - COALESCE(SUM(le.debit), 0) as montant
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      WHERE e.entreprise_id = ${eId}
+      AND cc.numero LIKE '4431%'
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+    `);
+    
+    // Calculer TVA Déductible (compte 4452) - solde débit
+    const tvaDeductibleData = await db.execute(sql`
+      SELECT COALESCE(SUM(le.debit), 0) - COALESCE(SUM(le.credit), 0) as montant
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      WHERE e.entreprise_id = ${eId}
+      AND cc.numero LIKE '4452%'
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+    `);
+    
+    const rowsCollectee = tvaCollecteeData.rows || tvaCollecteeData || [];
+    const rowsDeductible = tvaDeductibleData.rows || tvaDeductibleData || [];
+    
+    const tvaCollectee = parseFloat(rowsCollectee[0]?.montant || 0);
+    const tvaDeductible = parseFloat(rowsDeductible[0]?.montant || 0);
+    const tvaADecaisser = tvaCollectee - tvaDeductible;
+    
+    res.json({
+      success: true,
+      periode: { dateDebut, dateFin },
+      tvaCollectee,
+      tvaDeductible,
+      tvaADecaisser,
+      creditTVA: tvaADecaisser < 0 ? Math.abs(tvaADecaisser) : 0
+    });
+  } catch (error) {
+    console.error('Erreur GET /api/impots/tva/resume:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors du calcul de la TVA',
+      error: error.message
+    });
+  }
+});
 
 router.get('/parametres', async (req, res) => {
   try {

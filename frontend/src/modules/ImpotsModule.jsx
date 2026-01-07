@@ -17,10 +17,37 @@ export function ImpotsModule() {
     apiCleSecrete: ''
   });
   const [periodeDeclaration, setPeriodeDeclaration] = useState(new Date().toISOString().slice(0, 7));
+  const [tvaResume, setTvaResume] = useState({ tvaCollectee: 0, tvaDeductible: 0, tvaADecaisser: 0 });
+  const [periodeTVA, setPeriodeTVA] = useState({
+    dateDebut: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
+    dateFin: new Date().toISOString().split('T')[0]
+  });
 
   useEffect(() => {
     loadData();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'tva') {
+      loadTVAResume();
+    }
+  }, [activeTab, periodeTVA]);
+
+  const loadTVAResume = async () => {
+    try {
+      const res = await api.get('/impots/tva/resume', { 
+        dateDebut: periodeTVA.dateDebut, 
+        dateFin: periodeTVA.dateFin 
+      });
+      setTvaResume({
+        tvaCollectee: res.tvaCollectee || 0,
+        tvaDeductible: res.tvaDeductible || 0,
+        tvaADecaisser: res.tvaADecaisser || 0
+      });
+    } catch (error) {
+      console.error('Erreur chargement TVA:', error);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -150,23 +177,53 @@ export function ImpotsModule() {
       <div>
         <h3 style={{ marginBottom: '20px' }}>Gestion de la TVA</h3>
         
+        {/* Sélecteur de période */}
+        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', color: '#666' }}>Date Début</label>
+              <input 
+                type="date" 
+                value={periodeTVA.dateDebut}
+                onChange={(e) => setPeriodeTVA({...periodeTVA, dateDebut: e.target.value})}
+                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', color: '#666' }}>Date Fin</label>
+              <input 
+                type="date" 
+                value={periodeTVA.dateFin}
+                onChange={(e) => setPeriodeTVA({...periodeTVA, dateFin: e.target.value})}
+                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </div>
+            <button 
+              onClick={loadTVAResume}
+              style={{ padding: '8px 16px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginTop: '20px' }}
+            >
+              Générer
+            </button>
+          </div>
+        </div>
+        
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
           <div style={{ padding: '20px', backgroundColor: '#3498db', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Collectée</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>0 XOF</div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur ventes</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaCollectee.toLocaleString()} FCFA</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur ventes (compte 4431)</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Déductible</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>0 XOF</div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur achats</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaDeductible.toLocaleString()} FCFA</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur achats (compte 4452)</div>
           </div>
 
-          <div style={{ padding: '20px', backgroundColor: '#27ae60', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
-            <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA à Décaisser</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>0 XOF</div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Collectée - Déductible</div>
+          <div style={{ padding: '20px', backgroundColor: tvaResume.tvaADecaisser >= 0 ? '#27ae60' : '#9b59b6', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ fontSize: '14px', opacity: 0.9 }}>{tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{Math.abs(tvaResume.tvaADecaisser).toLocaleString()} FCFA</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>{tvaResume.tvaADecaisser >= 0 ? 'Collectée - Déductible' : 'À reporter'}</div>
           </div>
         </div>
 
