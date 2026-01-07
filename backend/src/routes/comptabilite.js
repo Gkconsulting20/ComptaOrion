@@ -1429,7 +1429,7 @@ router.get('/grand-livre', async (req, res) => {
         credit: lignesEcritures.credit,
         libelle: lignesEcritures.libelle,
         dateEcriture: ecritures.dateEcriture,
-        reference: ecritures.reference,
+        reference: ecritures.numeroPiece,
         journalCode: journaux.code,
         journalNom: journaux.nom
       })

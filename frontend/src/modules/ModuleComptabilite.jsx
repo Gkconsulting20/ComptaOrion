@@ -611,8 +611,8 @@ export function ModuleComptabilite() {
                 try {
                   const params = { dateDebut: periode.dateDebut, dateFin: periode.dateFin };
                   if (compteId) params.compteId = compteId;
-                  const lignes = await api.get('/comptabilite/grand-livre', params);
-                  setData(prev => ({ ...prev, grandLivre: lignes }));
+                  const response = await api.get('/comptabilite/grand-livre', params);
+                  setData(prev => ({ ...prev, grandLivreComptes: response.comptes || [], grandLivreTotaux: response.totaux }));
                 } catch (err) {
                   alert('Erreur: ' + err.message);
                 }
@@ -620,20 +620,44 @@ export function ModuleComptabilite() {
             </div>
           </div>
 
-          {data.grandLivre && data.grandLivre.length > 0 ? (
-            <Table
-              columns={[
-                { key: 'date', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
-                { key: 'reference', label: 'Référence' },
-                { key: 'compte', label: 'Compte' },
-                { key: 'libelle', label: 'Libellé' },
-                { key: 'debit', label: 'Débit', render: (val) => val ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
-                { key: 'credit', label: 'Crédit', render: (val) => val ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
-                { key: 'solde', label: 'Solde', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
-              ]}
-              data={data.grandLivre}
-              actions={false}
-            />
+          {data.grandLivreComptes && data.grandLivreComptes.length > 0 ? (
+            <div>
+              {data.grandLivreComptes.map(compte => (
+                <div key={compte.compteId} style={{ marginBottom: '25px', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 15px', background: '#f5f5f5', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '15px' }}>{compte.numero} - {compte.nom}</strong>
+                    <span style={{ color: compte.solde >= 0 ? '#388e3c' : '#d32f2f', fontWeight: 'bold' }}>
+                      Solde: {compte.solde.toLocaleString()} FCFA
+                    </span>
+                  </div>
+                  <Table
+                    columns={[
+                      { key: 'date', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
+                      { key: 'journal', label: 'Journal' },
+                      { key: 'reference', label: 'Référence' },
+                      { key: 'libelle', label: 'Libellé' },
+                      { key: 'debit', label: 'Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
+                      { key: 'credit', label: 'Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' }
+                    ]}
+                    data={compte.lignes}
+                    actions={false}
+                  />
+                  <div style={{ padding: '10px 15px', background: '#fafafa', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'flex-end', gap: '30px' }}>
+                    <span>Total Débit: <strong>{compte.totalDebit.toLocaleString()} FCFA</strong></span>
+                    <span>Total Crédit: <strong>{compte.totalCredit.toLocaleString()} FCFA</strong></span>
+                  </div>
+                </div>
+              ))}
+              {data.grandLivreTotaux && (
+                <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>TOTAUX GÉNÉRAUX</strong>
+                  <div>
+                    <span style={{ marginRight: '30px' }}>Débit: <strong>{data.grandLivreTotaux.totalDebit.toLocaleString()} FCFA</strong></span>
+                    <span>Crédit: <strong>{data.grandLivreTotaux.totalCredit.toLocaleString()} FCFA</strong></span>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
               <p style={{ color: '#7f8c8d', margin: 0 }}>Sélectionnez les filtres et cliquez sur "Générer" pour afficher le grand livre</p>
