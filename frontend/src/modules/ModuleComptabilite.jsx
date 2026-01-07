@@ -1551,7 +1551,7 @@ export function ModuleComptabilite() {
                 }}>&times;</button>
               </div>
             </div>
-            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+            <div id="rapport-content" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
               {rapportModal.loading ? (
                 <div style={{ textAlign: 'center', padding: '60px', color: '#666' }}>Chargement du rapport...</div>
               ) : rapportModal.type === 'bilan' && rapportModal.data ? (
@@ -2092,7 +2092,97 @@ export function ModuleComptabilite() {
                 </div>
               ) : null}
             </div>
-            <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', textAlign: 'right' }}>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="no-print">
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button 
+                  onClick={() => {
+                    const printContent = document.getElementById('rapport-content');
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`
+                      <html>
+                        <head>
+                          <title>${rapportModal.type === 'bilan' ? 'Bilan Comptable' : rapportModal.type === 'resultat' ? 'Compte de Résultat' : rapportModal.type === 'journaux' ? 'Rapport des Journaux' : rapportModal.type === 'flux' ? 'Flux de Trésorerie' : 'Journal Général'} - ${rapportModal.data?.entreprise?.nom || 'ComptaOrion'}</title>
+                          <style>
+                            body { font-family: Arial, sans-serif; margin: 20px; font-size: 12px; }
+                            h3, h4 { color: #333; }
+                            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                            th { background-color: #f5f5f5; }
+                            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 20px; }
+                            .logo { max-height: 60px; }
+                            .company-info { text-align: right; }
+                            .totals { background-color: #f5f5f5; font-weight: bold; }
+                            .debit { color: #1976d2; }
+                            .credit { color: #7b1fa2; }
+                            @media print { body { margin: 0; } }
+                          </style>
+                        </head>
+                        <body>
+                          <div class="header">
+                            <div>
+                              ${rapportModal.data?.entreprise?.logo ? `<img src="${rapportModal.data.entreprise.logo}" class="logo" />` : ''}
+                              <h2 style="margin: 5px 0;">${rapportModal.data?.entreprise?.nom || ''}</h2>
+                            </div>
+                            <div class="company-info">
+                              <div>${rapportModal.data?.entreprise?.adresse || ''}</div>
+                              <div>${rapportModal.data?.entreprise?.telephone || ''} ${rapportModal.data?.entreprise?.email ? '| ' + rapportModal.data.entreprise.email : ''}</div>
+                              <div>${rapportModal.data?.entreprise?.rccm ? 'RCCM: ' + rapportModal.data.entreprise.rccm : ''} ${rapportModal.data?.entreprise?.ifu ? '| IFU: ' + rapportModal.data.entreprise.ifu : ''}</div>
+                            </div>
+                          </div>
+                          <h3>${rapportModal.type === 'bilan' ? 'Bilan Comptable' : rapportModal.type === 'resultat' ? 'Compte de Résultat' : rapportModal.type === 'journaux' ? 'Rapport des Journaux' : rapportModal.type === 'flux' ? 'Tableau des Flux de Trésorerie' : 'Journal Général'}</h3>
+                          <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
+                          ${printContent.innerHTML}
+                          <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
+                            Document généré par ComptaOrion le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
+                          </div>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }}
+                  style={{ padding: '8px 16px', backgroundColor: '#1976d2', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                >
+                  🖨️ Imprimer
+                </button>
+                <button 
+                  onClick={() => {
+                    const content = document.getElementById('rapport-content');
+                    const reportTitle = rapportModal.type === 'bilan' ? 'Bilan_Comptable' : rapportModal.type === 'resultat' ? 'Compte_Resultat' : rapportModal.type === 'journaux' ? 'Rapport_Journaux' : rapportModal.type === 'flux' ? 'Flux_Tresorerie' : 'Journal_General';
+                    const htmlContent = `
+                      <html>
+                        <head>
+                          <meta charset="utf-8">
+                          <title>${reportTitle}</title>
+                          <style>
+                            body { font-family: Arial, sans-serif; margin: 20px; font-size: 12px; }
+                            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                            th { background-color: #f5f5f5; }
+                          </style>
+                        </head>
+                        <body>
+                          <h2>${rapportModal.data?.entreprise?.nom || 'ComptaOrion'}</h2>
+                          <p>${rapportModal.data?.entreprise?.adresse || ''} | ${rapportModal.data?.entreprise?.telephone || ''}</p>
+                          <h3>${reportTitle.replace(/_/g, ' ')}</h3>
+                          <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
+                          ${content.innerHTML}
+                        </body>
+                      </html>
+                    `;
+                    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${reportTitle}_${rapportModal.data?.entreprise?.nom?.replace(/\s+/g, '_') || 'rapport'}_${periode.dateDebut}_${periode.dateFin}.html`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                >
+                  ⬇️ Télécharger
+                </button>
+              </div>
               <Button variant="secondary" onClick={() => setRapportModal({ open: false, type: null, data: null, loading: false })}>
                 Fermer
               </Button>
