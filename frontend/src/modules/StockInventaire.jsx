@@ -188,7 +188,6 @@ export function StockInventaire() {
     produits: [],
     categories: [],
     entrepots: [],
-    mouvements: [],
     receptions: [],
     fournisseurs: [],
     commandes: []
@@ -197,9 +196,7 @@ export function StockInventaire() {
   const [modal, setModal] = useState({ open: false, type: null, item: null });
   const [form, setForm] = useState({});
   const [selectedProduit, setSelectedProduit] = useState(null);
-  const [selectedMouvement, setSelectedMouvement] = useState(null);
   const [showProduitDetails, setShowProduitDetails] = useState(false);
-  const [showMouvementDetails, setShowMouvementDetails] = useState(false);
   const [periode, setPeriode] = useState({
     dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     dateFin: new Date().toISOString().split('T')[0]
@@ -208,11 +205,10 @@ export function StockInventaire() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [p, c, e, m, r, f, cmd] = await Promise.all([
+        const [p, c, e, r, f, cmd] = await Promise.all([
           api.get('/produits').catch(() => ({ data: { data: [] } })),
           api.get('/stock/categories').catch(() => ({ data: [] })),
           api.get('/stock/entrepots').catch(() => ({ data: [] })),
-          api.get('/stock/mouvements').catch(() => ({ data: [] })),
           api.get('/stock/receptions').catch(() => ({ data: [] })),
           api.get('/fournisseurs').catch(() => ({ data: { data: [] } })),
           api.get('/commandes-achat').catch(() => ({ data: { data: [] } }))
@@ -221,7 +217,6 @@ export function StockInventaire() {
           produits: p.data.data || p.data || [],
           categories: c.data || [],
           entrepots: e.data || [],
-          mouvements: m.data || [],
           receptions: r.data || [],
           fournisseurs: f.data.data || f.data || [],
           commandes: cmd.data?.data || cmd.data || []
@@ -244,9 +239,6 @@ export function StockInventaire() {
       } else if (type === 'entrepots') {
         const res = await api.get('/stock/entrepots');
         setData(d => ({ ...d, entrepots: res.data || [] }));
-      } else if (type === 'mouvements') {
-        const res = await api.get('/stock/mouvements');
-        setData(d => ({ ...d, mouvements: res.data || [] }));
       } else if (type === 'receptions') {
         const res = await api.get('/stock/receptions');
         setData(d => ({ ...d, receptions: res.data || [] }));
@@ -409,7 +401,7 @@ export function StockInventaire() {
       <h2>📦 Stock & Inventaire</h2>
       
       <div style={{ display: 'flex', borderBottom: '2px solid #e1e8ed', marginBottom: '20px', flexWrap: 'wrap' }}>
-        {['parametres', 'commandes', 'receptions', 'mouvements', 'inventaires', 'alertes', 'nonfacture', 'rapports'].map(tab => (
+        {['parametres', 'commandes', 'receptions', 'inventaires', 'alertes', 'nonfacture', 'rapports'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             style={{
               padding: '12px 20px', background: activeTab === tab ? '#fff' : 'transparent',
@@ -420,7 +412,6 @@ export function StockInventaire() {
             {tab === 'parametres' ? '⚙️ Paramètres' :
              tab === 'commandes' ? '📦 Commandes Achat' :
              tab === 'receptions' ? '📥 Réceptions' :
-             tab === 'mouvements' ? '🔄 Mouvements' :
              tab === 'inventaires' ? '📋 Inventaires' :
              tab === 'alertes' ? '⚠️ Alertes' :
              tab === 'nonfacture' ? '📄 Non Facturé' : '📊 Rapports'}
@@ -647,32 +638,6 @@ export function StockInventaire() {
         </div>
       )}
 
-      {activeTab === 'mouvements' && (
-        <div>
-          <h3>🔄 Mouvements de Stock (Lecture Seule)</h3>
-          <p style={{ color: '#7f8c8d', marginBottom: '15px' }}>
-            Générés automatiquement depuis les factures clients et fournisseurs.
-          </p>
-          {data.mouvements.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
-              <p style={{ color: '#7f8c8d' }}>Aucun mouvement enregistré</p>
-            </div>
-          ) : (
-            <Table
-              columns={[
-                { key: 'createdAt', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
-                { key: 'type', label: 'Type', render: (val) => val === 'entree' ? '📥 Entrée' : val === 'sortie' ? '📤 Sortie' : '🔄 Ajustement' },
-                { key: 'produitId', label: 'Produit', render: (val) => data.produits.find(p => p.id === val)?.nom || `ID ${val}` },
-                { key: 'quantite', label: 'Quantité' },
-                { key: 'reference', label: 'Référence' }
-              ]}
-              data={data.mouvements}
-              onRowClick={(item) => { setSelectedMouvement(item); setShowMouvementDetails(true); }}
-            />
-          )}
-        </div>
-      )}
-
       {activeTab === 'inventaires' && (
         <div>
           <h3>📋 Inventaires Tournants</h3>
@@ -859,76 +824,6 @@ export function StockInventaire() {
               <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>VALORISATION TOTALE DU STOCK</p>
               <h2 style={{ margin: '5px 0 0 0', color: '#388e3c' }}>{valorisation.toLocaleString()} FCFA</h2>
             </div>
-          </div>
-
-          <div style={{ marginBottom: '30px' }}>
-            <h4 style={{ marginBottom: '15px' }}>📊 Rapport des Mouvements par Période</h4>
-            <p style={{ color: '#7f8c8d', fontSize: '14px', marginBottom: '15px' }}>
-              Mouvements de stock survenus entre le {new Date(periode.dateDebut).toLocaleDateString('fr-FR')} et le {new Date(periode.dateFin).toLocaleDateString('fr-FR')}
-            </p>
-            {(() => {
-              const mouvementsPeriode = data.mouvements.filter(m => {
-                const dateMvt = new Date(m.createdAt);
-                const debut = new Date(periode.dateDebut);
-                const fin = new Date(periode.dateFin);
-                return dateMvt >= debut && dateMvt <= fin;
-              });
-
-              const entrees = mouvementsPeriode.filter(m => m.type === 'entree').reduce((sum, m) => sum + parseFloat(m.quantite || 0), 0);
-              const sorties = mouvementsPeriode.filter(m => m.type === 'sortie').reduce((sum, m) => sum + parseFloat(m.quantite || 0), 0);
-              const ajustements = mouvementsPeriode.filter(m => m.type === 'ajustement').reduce((sum, m) => sum + parseFloat(m.quantite || 0), 0);
-
-              return (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '20px' }}>
-                    <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px' }}>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>📥 ENTRÉES</p>
-                      <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{entrees.toFixed(0)} unités</h3>
-                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
-                        {mouvementsPeriode.filter(m => m.type === 'entree').length} mouvements
-                      </p>
-                    </div>
-                    <div style={{ padding: '15px', background: '#ffebee', borderRadius: '8px' }}>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>📤 SORTIES</p>
-                      <h3 style={{ margin: '5px 0 0 0', color: '#d32f2f' }}>{sorties.toFixed(0)} unités</h3>
-                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
-                        {mouvementsPeriode.filter(m => m.type === 'sortie').length} mouvements
-                      </p>
-                    </div>
-                    <div style={{ padding: '15px', background: '#fff3e0', borderRadius: '8px' }}>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>🔄 AJUSTEMENTS</p>
-                      <h3 style={{ margin: '5px 0 0 0', color: '#f57c00' }}>{ajustements.toFixed(0)} unités</h3>
-                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>
-                        {mouvementsPeriode.filter(m => m.type === 'ajustement').length} mouvements
-                      </p>
-                    </div>
-                  </div>
-
-                  {mouvementsPeriode.length === 0 ? (
-                    <div style={{ padding: '30px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
-                      <p style={{ color: '#7f8c8d', margin: 0 }}>Aucun mouvement pour cette période</p>
-                    </div>
-                  ) : (
-                    <Table
-                      columns={[
-                        { key: 'createdAt', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
-                        { key: 'type', label: 'Type', render: (val) => 
-                          val === 'entree' ? '📥 Entrée' : val === 'sortie' ? '📤 Sortie' : '🔄 Ajustement' 
-                        },
-                        { key: 'produitId', label: 'Produit', render: (val) => {
-                          const prod = data.produits.find(p => p.id === val);
-                          return prod ? prod.nom : `ID ${val}`;
-                        }},
-                        { key: 'quantite', label: 'Quantité' },
-                        { key: 'reference', label: 'Référence' },
-                        { key: 'notes', label: 'Notes' }
-                      ]}
-                      data={mouvementsPeriode}
-                    />
-                  )}
-                </>
-              );
-            })()}
           </div>
 
           <div>
@@ -1251,31 +1146,6 @@ export function StockInventaire() {
         />
       )}
 
-      {/* MODAL DE DÉTAILS MOUVEMENT */}
-      {selectedMouvement && (
-        <DetailsModal
-          isOpen={showMouvementDetails}
-          onClose={() => { setShowMouvementDetails(false); setSelectedMouvement(null); }}
-          title="Détails Mouvement de Stock"
-          sections={[
-            {
-              title: 'Informations',
-              fields: [
-                { label: 'Date', value: new Date(selectedMouvement.createdAt).toLocaleDateString('fr-FR') },
-                { label: 'Type', value: selectedMouvement.type === 'entree' ? '📥 Entrée' : selectedMouvement.type === 'sortie' ? '📤 Sortie' : '🔄 Ajustement' },
-                { label: 'Produit', value: (() => {
-                  const prod = data.produits.find(p => p.id === selectedMouvement.produitId);
-                  return prod ? `${prod.reference} - ${prod.nom}` : `ID ${selectedMouvement.produitId}`;
-                })() },
-                { label: 'Quantité', value: selectedMouvement.quantite },
-                { label: 'Prix Unitaire', value: `${selectedMouvement.prixUnitaire || 0} FCFA` },
-                { label: 'Référence', value: selectedMouvement.reference || '-' },
-                { label: 'Notes', value: selectedMouvement.notes || '-' }
-              ]
-            }
-          ]}
-        />
-      )}
     </div>
   );
 }
