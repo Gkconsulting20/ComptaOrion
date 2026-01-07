@@ -266,13 +266,29 @@ router.get('/rapports/bilan', async (req, res) => {
       };
     });
     
+    // Calculer le résultat net (Produits classe 7 - Charges classe 6)
+    let totalCharges = 0;
+    let totalProduits = 0;
+    allComptes.forEach(compte => {
+      const solde = soldesMap[compte.id] || { debit: 0, credit: 0 };
+      if (compte.numero.startsWith('6')) {
+        totalCharges += solde.debit;
+      } else if (compte.numero.startsWith('7')) {
+        totalProduits += solde.credit;
+      }
+    });
+    const resultatNet = totalProduits - totalCharges;
+    
     // Structurer le bilan
     const actif = { immobilise: [], circulant: [], tresorerie: [], total: 0 };
-    const passif = { capitaux: [], dettes: [], total: 0 };
+    const passif = { capitaux: [], dettes: [], resultatExercice: 0, total: 0 };
     
     allComptes.forEach(compte => {
       const solde = soldesMap[compte.id] || { debit: 0, credit: 0 };
       const soldeFinal = solde.debit - solde.credit;
+      
+      // Ignorer les comptes de charges (6) et produits (7) - ils sont dans l'État de Résultat
+      if (compte.numero.startsWith('6') || compte.numero.startsWith('7')) return;
       
       // Ignorer les comptes sans solde
       if (soldeFinal === 0) return;
@@ -288,7 +304,7 @@ router.get('/rapports/bilan', async (req, res) => {
         actif.immobilise.push(compteData);
         actif.total += soldeFinal > 0 ? soldeFinal : 0;
       } else if (compte.numero.startsWith('3') || compte.numero.startsWith('4')) {
-        if (compte.categorie === 'Actif') {
+        if (compte.categorie === 'Actif' || compte.type === 'actif') {
           actif.circulant.push(compteData);
           actif.total += soldeFinal > 0 ? soldeFinal : 0;
         } else {
@@ -304,6 +320,18 @@ router.get('/rapports/bilan', async (req, res) => {
       }
     });
     
+    // Ajouter le résultat de l'exercice aux capitaux propres
+    if (resultatNet !== 0) {
+      passif.resultatExercice = resultatNet;
+      passif.capitaux.push({
+        id: 'resultat',
+        numero: resultatNet >= 0 ? '120' : '129',
+        nom: resultatNet >= 0 ? 'Résultat de l\'exercice (Bénéfice)' : 'Résultat de l\'exercice (Perte)',
+        solde: Math.abs(resultatNet)
+      });
+      passif.total += resultatNet;
+    }
+    
     // Récupérer les infos de l'entreprise pour le logo
     const entreprise = await db.query.entreprises.findFirst({
       where: eq(entreprises.id, eId)
@@ -316,6 +344,9 @@ router.get('/rapports/bilan', async (req, res) => {
       },
       actif,
       passif,
+      resultatNet,
+      totalCharges,
+      totalProduits,
       equilibre: Math.abs(actif.total - passif.total) < 0.01
     });
   } catch (error) {
