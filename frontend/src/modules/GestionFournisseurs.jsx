@@ -766,9 +766,11 @@ export function GestionFournisseurs() {
   const loadComptesBancaires = async () => {
     try {
       const res = await api.get('/tresorerie/comptes');
+      console.log('Comptes bancaires chargés:', res.data);
       setComptesBancaires(res.data || []);
     } catch (err) {
       console.error('Erreur chargement comptes bancaires:', err);
+      setComptesBancaires([]);
     }
   };
 
@@ -1917,9 +1919,9 @@ export function GestionFournisseurs() {
               </div>
               <div style={{ marginBottom: '15px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Compte Bancaire *</label>
-                {comptesBancaires.length === 0 ? (
+                {comptesBancaires.filter(c => c.type === 'banque').length === 0 ? (
                   <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '4px', color: '#856404', fontSize: '14px' }}>
-                    Aucun compte bancaire configuré. Veuillez d'abord ajouter un compte dans le module Trésorerie.
+                    Aucun compte bancaire configuré. Veuillez d'abord ajouter un compte de type "banque" dans le module Trésorerie.
                   </div>
                 ) : (
                   <select
@@ -1928,7 +1930,7 @@ export function GestionFournisseurs() {
                     style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
                   >
                     <option value="">-- Sélectionner un compte --</option>
-                    {comptesBancaires.filter(c => c.type === 'banque' && c.actif).map(c => (
+                    {comptesBancaires.filter(c => c.type === 'banque').map(c => (
                       <option key={c.id} value={c.id}>
                         {c.banque || c.nomCompte} - {c.numeroCompte || 'N/A'}
                       </option>
