@@ -717,8 +717,76 @@ export function StockInventaire() {
 
       {activeTab === 'rapports' && (
         <div>
-          <h3>📊 Rapports d'Inventaire</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h3 style={{ margin: 0 }}>📊 Rapports d'Inventaire</h3>
+            <div style={{ display: 'flex', gap: '10px' }} className="no-print">
+              <button 
+                onClick={() => {
+                  const content = document.getElementById('stock-rapport-content');
+                  const printWindow = window.open('', '_blank');
+                  printWindow.document.write(`
+                    <html>
+                      <head>
+                        <title>Rapport d'Inventaire - ComptaOrion</title>
+                        <style>
+                          body { font-family: Arial, sans-serif; margin: 20px; font-size: 11px; }
+                          table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                          th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+                          th { background-color: #f5f5f5; }
+                          h3, h4 { color: #333; margin-top: 20px; }
+                          .summary { display: flex; gap: 20px; margin: 15px 0; }
+                          .summary-box { padding: 15px; background: #f5f5f5; border-radius: 8px; }
+                          @media print { body { margin: 0; } }
+                        </style>
+                      </head>
+                      <body>
+                        <h2>Rapport d'Inventaire</h2>
+                        <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
+                        ${content.innerHTML}
+                        <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
+                          Document généré par ComptaOrion le ${new Date().toLocaleDateString('fr-FR')}
+                        </div>
+                      </body>
+                    </html>
+                  `);
+                  printWindow.document.close();
+                  printWindow.print();
+                }}
+                style={{ padding: '8px 16px', backgroundColor: '#1976d2', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                🖨️ Imprimer
+              </button>
+              <button 
+                onClick={() => {
+                  const content = document.getElementById('stock-rapport-content');
+                  const htmlContent = `
+                    <html>
+                      <head><meta charset="utf-8"><title>Rapport Inventaire</title>
+                        <style>body { font-family: Arial; margin: 20px; font-size: 11px; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 6px; } th { background: #f5f5f5; }</style>
+                      </head>
+                      <body>
+                        <h2>Rapport d'Inventaire</h2>
+                        <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
+                        ${content.innerHTML}
+                      </body>
+                    </html>
+                  `;
+                  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `Rapport_Inventaire_${periode.dateDebut}_${periode.dateFin}.html`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                ⬇️ Télécharger
+              </button>
+            </div>
+          </div>
           
+          <div id="stock-rapport-content">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '20px', marginBottom: '30px' }}>
             <div style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px' }}>
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL PRODUITS</p>
@@ -886,6 +954,7 @@ export function StockInventaire() {
               ]}
               data={data.categories}
             />
+          </div>
           </div>
         </div>
       )}
