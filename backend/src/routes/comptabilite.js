@@ -447,6 +447,308 @@ router.get('/rapports/resultat', async (req, res) => {
   }
 });
 
+// Rapport des Journaux
+router.get('/rapport-journaux', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    
+    // Récupérer tous les journaux de l'entreprise
+    const allJournaux = await db.query.journaux.findMany({
+      where: eq(journaux.entrepriseId, eId)
+    });
+    
+    // Pour chaque journal, calculer les totaux
+    const journauxRapport = [];
+    let totalGeneralDebit = 0;
+    let totalGeneralCredit = 0;
+    let totalGeneralEcritures = 0;
+    
+    for (const journal of allJournaux) {
+      const ecrituresJournal = await db.execute(sql`
+        SELECT e.id, e.date_ecriture, e.numero_piece, e.libelle,
+               SUM(COALESCE(le.debit, 0)) as total_debit,
+               SUM(COALESCE(le.credit, 0)) as total_credit
+        FROM ecritures e
+        LEFT JOIN lignes_ecriture le ON le.ecriture_id = e.id
+        WHERE e.entreprise_id = ${eId}
+        AND e.journal_id = ${journal.id}
+        ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+        ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+        GROUP BY e.id, e.date_ecriture, e.numero_piece, e.libelle
+        ORDER BY e.date_ecriture
+      `);
+      
+      const rows = ecrituresJournal.rows || ecrituresJournal || [];
+      const nombreEcritures = rows.length;
+      const debitJournal = rows.reduce((sum, r) => sum + parseFloat(r.total_debit || 0), 0);
+      const creditJournal = rows.reduce((sum, r) => sum + parseFloat(r.total_credit || 0), 0);
+      
+      if (nombreEcritures > 0) {
+        journauxRapport.push({
+          code: journal.code,
+          nom: journal.nom,
+          type: journal.type,
+          nombreEcritures,
+          debit: debitJournal,
+          credit: creditJournal,
+          ecritures: rows.map(r => ({
+            date: r.date_ecriture,
+            reference: r.numero_piece,
+            libelle: r.libelle,
+            debit: parseFloat(r.total_debit || 0),
+            credit: parseFloat(r.total_credit || 0)
+          }))
+        });
+        
+        totalGeneralDebit += debitJournal;
+        totalGeneralCredit += creditJournal;
+        totalGeneralEcritures += nombreEcritures;
+      }
+    }
+    
+    // Infos entreprise
+    const entreprise = await db.query.entreprises.findFirst({
+      where: eq(entreprises.id, eId)
+    });
+    
+    res.json({
+      entreprise: {
+        nom: entreprise?.nom,
+        logo: entreprise?.logo,
+        adresse: entreprise?.adresse,
+        telephone: entreprise?.telephone,
+        email: entreprise?.email,
+        rccm: entreprise?.rccm,
+        ifu: entreprise?.ifu
+      },
+      periode: { dateDebut, dateFin },
+      journaux: journauxRapport,
+      totaux: {
+        nombreEcritures: totalGeneralEcritures,
+        debit: totalGeneralDebit,
+        credit: totalGeneralCredit,
+        equilibre: Math.abs(totalGeneralDebit - totalGeneralCredit) < 0.01
+      }
+    });
+  } catch (error) {
+    console.error('Erreur rapport journaux:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Tableau des Flux de Trésorerie
+router.get('/rapports/flux-tresorerie', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    
+    // Récupérer les mouvements des comptes de trésorerie (classe 5)
+    const fluxData = await db.execute(sql`
+      SELECT cc.numero, cc.nom,
+             SUM(COALESCE(le.debit, 0)) as entrees,
+             SUM(COALESCE(le.credit, 0)) as sorties
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      WHERE e.entreprise_id = ${eId}
+      AND cc.numero LIKE '5%'
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      GROUP BY cc.numero, cc.nom
+      ORDER BY cc.numero
+    `);
+    
+    // Flux d'exploitation (produits et charges)
+    const fluxExploitation = await db.execute(sql`
+      SELECT 
+        CASE 
+          WHEN cc.numero LIKE '7%' THEN 'Encaissements clients'
+          WHEN cc.numero LIKE '6%' THEN 'Décaissements fournisseurs'
+        END as categorie,
+        SUM(CASE WHEN cc.numero LIKE '7%' THEN COALESCE(le.credit, 0) ELSE 0 END) as encaissements,
+        SUM(CASE WHEN cc.numero LIKE '6%' THEN COALESCE(le.debit, 0) ELSE 0 END) as decaissements
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      WHERE e.entreprise_id = ${eId}
+      AND (cc.numero LIKE '6%' OR cc.numero LIKE '7%')
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      GROUP BY CASE WHEN cc.numero LIKE '7%' THEN 'Encaissements clients' WHEN cc.numero LIKE '6%' THEN 'Décaissements fournisseurs' END
+    `);
+    
+    // Flux d'investissement (classe 2)
+    const fluxInvestissement = await db.execute(sql`
+      SELECT cc.numero, cc.nom,
+             SUM(COALESCE(le.debit, 0)) as acquisitions,
+             SUM(COALESCE(le.credit, 0)) as cessions
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      WHERE e.entreprise_id = ${eId}
+      AND cc.numero LIKE '2%'
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      GROUP BY cc.numero, cc.nom
+      ORDER BY cc.numero
+    `);
+    
+    const rowsFlux = fluxData.rows || fluxData || [];
+    const rowsExpl = fluxExploitation.rows || fluxExploitation || [];
+    const rowsInv = fluxInvestissement.rows || fluxInvestissement || [];
+    
+    // Calculer les totaux
+    const totalEntrees = rowsFlux.reduce((sum, r) => sum + parseFloat(r.entrees || 0), 0);
+    const totalSorties = rowsFlux.reduce((sum, r) => sum + parseFloat(r.sorties || 0), 0);
+    
+    // Encaissements exploitation
+    const encaissementsExpl = rowsExpl.find(r => r.categorie === 'Encaissements clients');
+    const decaissementsExpl = rowsExpl.find(r => r.categorie === 'Décaissements fournisseurs');
+    
+    // Investissements
+    const totalAcquisitions = rowsInv.reduce((sum, r) => sum + parseFloat(r.acquisitions || 0), 0);
+    const totalCessions = rowsInv.reduce((sum, r) => sum + parseFloat(r.cessions || 0), 0);
+    
+    // Infos entreprise
+    const entreprise = await db.query.entreprises.findFirst({
+      where: eq(entreprises.id, eId)
+    });
+    
+    res.json({
+      entreprise: {
+        nom: entreprise?.nom,
+        logo: entreprise?.logo,
+        adresse: entreprise?.adresse,
+        telephone: entreprise?.telephone,
+        email: entreprise?.email,
+        rccm: entreprise?.rccm,
+        ifu: entreprise?.ifu
+      },
+      periode: { dateDebut, dateFin },
+      fluxExploitation: {
+        encaissements: parseFloat(encaissementsExpl?.encaissements || 0),
+        decaissements: parseFloat(decaissementsExpl?.decaissements || 0),
+        net: parseFloat(encaissementsExpl?.encaissements || 0) - parseFloat(decaissementsExpl?.decaissements || 0)
+      },
+      fluxInvestissement: {
+        acquisitions: totalAcquisitions,
+        cessions: totalCessions,
+        net: totalCessions - totalAcquisitions,
+        details: rowsInv.map(r => ({
+          compte: r.numero,
+          nom: r.nom,
+          acquisitions: parseFloat(r.acquisitions || 0),
+          cessions: parseFloat(r.cessions || 0)
+        }))
+      },
+      fluxTresorerie: {
+        comptes: rowsFlux.map(r => ({
+          numero: r.numero,
+          nom: r.nom,
+          entrees: parseFloat(r.entrees || 0),
+          sorties: parseFloat(r.sorties || 0),
+          solde: parseFloat(r.entrees || 0) - parseFloat(r.sorties || 0)
+        })),
+        totalEntrees,
+        totalSorties,
+        variationNette: totalEntrees - totalSorties
+      }
+    });
+  } catch (error) {
+    console.error('Erreur flux trésorerie:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Journal Général
+router.get('/rapports/journal-general', async (req, res) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    
+    // Récupérer toutes les écritures avec leurs lignes
+    const ecrituresData = await db.execute(sql`
+      SELECT e.id, e.date_ecriture, e.numero_piece, e.libelle, 
+             j.code as journal_code, j.nom as journal_nom,
+             cc.numero as compte_numero, cc.nom as compte_nom,
+             le.libelle as ligne_libelle,
+             COALESCE(le.debit, 0) as debit,
+             COALESCE(le.credit, 0) as credit
+      FROM ecritures e
+      JOIN journaux j ON e.journal_id = j.id
+      LEFT JOIN lignes_ecriture le ON le.ecriture_id = e.id
+      LEFT JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      WHERE e.entreprise_id = ${eId}
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      ORDER BY e.date_ecriture, e.id, cc.numero
+    `);
+    
+    const rows = ecrituresData.rows || ecrituresData || [];
+    
+    // Grouper par écriture
+    const ecrituresMap = new Map();
+    let totalDebit = 0;
+    let totalCredit = 0;
+    
+    rows.forEach(row => {
+      if (!ecrituresMap.has(row.id)) {
+        ecrituresMap.set(row.id, {
+          id: row.id,
+          date: row.date_ecriture,
+          reference: row.numero_piece,
+          libelle: row.libelle,
+          journal: { code: row.journal_code, nom: row.journal_nom },
+          lignes: []
+        });
+      }
+      
+      if (row.compte_numero) {
+        const debit = parseFloat(row.debit || 0);
+        const credit = parseFloat(row.credit || 0);
+        ecrituresMap.get(row.id).lignes.push({
+          compte: row.compte_numero,
+          nomCompte: row.compte_nom,
+          libelle: row.ligne_libelle || row.libelle,
+          debit,
+          credit
+        });
+        totalDebit += debit;
+        totalCredit += credit;
+      }
+    });
+    
+    // Infos entreprise
+    const entreprise = await db.query.entreprises.findFirst({
+      where: eq(entreprises.id, eId)
+    });
+    
+    res.json({
+      entreprise: {
+        nom: entreprise?.nom,
+        logo: entreprise?.logo,
+        adresse: entreprise?.adresse,
+        telephone: entreprise?.telephone,
+        email: entreprise?.email,
+        rccm: entreprise?.rccm,
+        ifu: entreprise?.ifu
+      },
+      periode: { dateDebut, dateFin },
+      ecritures: Array.from(ecrituresMap.values()),
+      totaux: {
+        nombreEcritures: ecrituresMap.size,
+        debit: totalDebit,
+        credit: totalCredit,
+        equilibre: Math.abs(totalDebit - totalCredit) < 0.01
+      }
+    });
+  } catch (error) {
+    console.error('Erreur journal général:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Export CSV des comptes
 router.get('/export/comptes', async (req, res) => {
   try {
