@@ -722,12 +722,13 @@ export function GestionFournisseurs() {
   });
   const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], loading: false, type: null });
   const [chequeModal, setChequeModal] = useState({ open: false });
+  const [comptesBancaires, setComptesBancaires] = useState([]);
   const [chequeForm, setChequeForm] = useState({
     fournisseurId: '',
     montant: 0,
     numeroCheque: '',
     dateCheque: new Date().toISOString().split('T')[0],
-    banque: '',
+    compteBancaireId: '',
     memo: ''
   });
 
@@ -762,10 +763,24 @@ export function GestionFournisseurs() {
     return n.toString();
   };
 
+  const loadComptesBancaires = async () => {
+    try {
+      const res = await api.get('/tresorerie/comptes');
+      setComptesBancaires(res.data || []);
+    } catch (err) {
+      console.error('Erreur chargement comptes bancaires:', err);
+    }
+  };
+
   const imprimerCheque = () => {
     const fournisseur = data.fournisseurs.find(f => f.id === parseInt(chequeForm.fournisseurId));
     if (!fournisseur) {
       alert('Veuillez sélectionner un fournisseur');
+      return;
+    }
+    const compteBancaire = comptesBancaires.find(c => c.id === parseInt(chequeForm.compteBancaireId));
+    if (!compteBancaire) {
+      alert('Veuillez sélectionner un compte bancaire');
       return;
     }
     const montant = parseFloat(chequeForm.montant) || 0;
@@ -826,7 +841,8 @@ export function GestionFournisseurs() {
       </head>
       <body>
         <div class="cheque">
-          <div class="banque">${chequeForm.banque || 'BANQUE'}</div>
+          <div class="banque">${compteBancaire.banque || compteBancaire.nomCompte || 'BANQUE'}</div>
+          <div style="font-size: 10pt; color: #666;">Compte: ${compteBancaire.numeroCompte || ''}</div>
           <div class="numero-cheque">N° ${chequeForm.numeroCheque || '________'}</div>
           
           <div class="montant-chiffres">
@@ -1180,15 +1196,16 @@ export function GestionFournisseurs() {
             <h3>💰 Paiements Fournisseurs</h3>
             <div style={{ display: 'flex', gap: '10px' }}>
               <Button 
-                onClick={() => {
+                onClick={async () => {
                   setChequeForm({
                     fournisseurId: '',
                     montant: 0,
                     numeroCheque: '',
                     dateCheque: new Date().toISOString().split('T')[0],
-                    banque: '',
+                    compteBancaireId: '',
                     memo: ''
                   });
+                  await loadComptesBancaires();
                   setChequeModal({ open: true });
                 }}
                 style={{ backgroundColor: '#9b59b6' }}
@@ -1899,14 +1916,25 @@ export function GestionFournisseurs() {
                 </div>
               </div>
               <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Banque</label>
-                <input
-                  type="text"
-                  value={chequeForm.banque}
-                  onChange={(e) => setChequeForm({...chequeForm, banque: e.target.value})}
-                  style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
-                  placeholder="Ex: ECOBANK TOGO"
-                />
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Compte Bancaire *</label>
+                {comptesBancaires.length === 0 ? (
+                  <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '4px', color: '#856404', fontSize: '14px' }}>
+                    Aucun compte bancaire configuré. Veuillez d'abord ajouter un compte dans le module Trésorerie.
+                  </div>
+                ) : (
+                  <select
+                    value={chequeForm.compteBancaireId}
+                    onChange={(e) => setChequeForm({...chequeForm, compteBancaireId: e.target.value})}
+                    style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  >
+                    <option value="">-- Sélectionner un compte --</option>
+                    {comptesBancaires.filter(c => c.type === 'banque' && c.actif).map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.banque || c.nomCompte} - {c.numeroCompte || 'N/A'}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Mémo (optionnel)</label>
@@ -1925,7 +1953,7 @@ export function GestionFournisseurs() {
                 <Button 
                   onClick={imprimerCheque}
                   style={{ backgroundColor: '#9b59b6' }}
-                  disabled={!chequeForm.fournisseurId || !chequeForm.montant}
+                  disabled={!chequeForm.fournisseurId || !chequeForm.montant || !chequeForm.compteBancaireId}
                 >
                   🖨️ Imprimer le Chèque
                 </Button>
