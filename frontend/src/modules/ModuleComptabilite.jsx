@@ -622,6 +622,72 @@ export function ModuleComptabilite() {
 
           {data.grandLivreComptes && data.grandLivreComptes.length > 0 ? (
             <div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '15px' }} className="no-print">
+                <button 
+                  onClick={() => {
+                    const printContent = document.getElementById('grandlivre-content');
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`
+                      <html>
+                        <head>
+                          <title>Grand Livre - ${entrepriseInfo?.nom || 'ComptaOrion'}</title>
+                          <style>
+                            body { font-family: Arial, sans-serif; margin: 20px; font-size: 11px; }
+                            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                            th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+                            th { background-color: #f5f5f5; }
+                            .compte-header { background-color: #e3f2fd; padding: 10px; margin: 15px 0 5px 0; font-weight: bold; }
+                            @media print { body { margin: 0; } }
+                          </style>
+                        </head>
+                        <body>
+                          <h2>${entrepriseInfo?.nom || ''}</h2>
+                          <p>${entrepriseInfo?.adresse || ''} | ${entrepriseInfo?.telephone || ''}</p>
+                          <h3>Grand Livre</h3>
+                          <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
+                          ${printContent.innerHTML}
+                          <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
+                            Document généré par ComptaOrion le ${new Date().toLocaleDateString('fr-FR')}
+                          </div>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }}
+                  style={{ padding: '8px 16px', backgroundColor: '#1976d2', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  🖨️ Imprimer
+                </button>
+                <button 
+                  onClick={() => {
+                    const content = document.getElementById('grandlivre-content');
+                    const htmlContent = `
+                      <html>
+                        <head><meta charset="utf-8"><title>Grand Livre</title>
+                          <style>body { font-family: Arial; margin: 20px; font-size: 11px; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 6px; } th { background: #f5f5f5; }</style>
+                        </head>
+                        <body>
+                          <h2>${entrepriseInfo?.nom || ''}</h2>
+                          <h3>Grand Livre - ${periode.dateDebut} au ${periode.dateFin}</h3>
+                          ${content.innerHTML}
+                        </body>
+                      </html>
+                    `;
+                    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Grand_Livre_${periode.dateDebut}_${periode.dateFin}.html`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  ⬇️ Télécharger
+                </button>
+              </div>
+              <div id="grandlivre-content">
               {data.grandLivreComptes.map(compte => (
                 <div key={compte.compteId} style={{ marginBottom: '25px', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
                   <div style={{ padding: '12px 15px', background: '#f5f5f5', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -657,6 +723,7 @@ export function ModuleComptabilite() {
                   </div>
                 </div>
               )}
+              </div>
             </div>
           ) : (
             <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
@@ -709,6 +776,71 @@ export function ModuleComptabilite() {
 
           {data.balanceData && data.balanceData.length > 0 ? (
             <>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '15px' }} className="no-print">
+                <button 
+                  onClick={() => {
+                    const printContent = document.getElementById('balance-content');
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`
+                      <html>
+                        <head>
+                          <title>Balance Générale - ${entrepriseInfo?.nom || 'ComptaOrion'}</title>
+                          <style>
+                            body { font-family: Arial, sans-serif; margin: 20px; font-size: 11px; }
+                            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                            th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+                            th { background-color: #f5f5f5; }
+                            @media print { body { margin: 0; } }
+                          </style>
+                        </head>
+                        <body>
+                          <h2>${entrepriseInfo?.nom || ''}</h2>
+                          <p>${entrepriseInfo?.adresse || ''} | ${entrepriseInfo?.telephone || ''}</p>
+                          <h3>Balance Générale</h3>
+                          <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
+                          ${printContent.innerHTML}
+                          <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
+                            Document généré par ComptaOrion le ${new Date().toLocaleDateString('fr-FR')}
+                          </div>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }}
+                  style={{ padding: '8px 16px', backgroundColor: '#1976d2', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  🖨️ Imprimer
+                </button>
+                <button 
+                  onClick={() => {
+                    const content = document.getElementById('balance-content');
+                    const htmlContent = `
+                      <html>
+                        <head><meta charset="utf-8"><title>Balance Générale</title>
+                          <style>body { font-family: Arial; margin: 20px; font-size: 11px; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 6px; } th { background: #f5f5f5; }</style>
+                        </head>
+                        <body>
+                          <h2>${entrepriseInfo?.nom || ''}</h2>
+                          <h3>Balance Générale - ${periode.dateDebut} au ${periode.dateFin}</h3>
+                          ${content.innerHTML}
+                        </body>
+                      </html>
+                    `;
+                    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Balance_Generale_${periode.dateDebut}_${periode.dateFin}.html`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  ⬇️ Télécharger
+                </button>
+              </div>
+              <div id="balance-content">
               <Table
                 columns={[
                   { key: 'numero', label: 'N° Compte' },
@@ -731,6 +863,7 @@ export function ModuleComptabilite() {
                   </div>
                 </div>
               )}
+              </div>
             </>
           ) : (
             <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
