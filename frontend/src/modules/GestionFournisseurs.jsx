@@ -2039,6 +2039,47 @@ function EtatsCompteFournisseurTab() {
 
   const selectedFournisseur = fournisseurs.find(f => f.id == selectedFournisseurId);
 
+  const imprimerEtatCompte = () => {
+    if (!etatCompte || !selectedFournisseur) return;
+
+    const facturesRows = (etatCompte.factures || []).map(f => {
+      const statut = f.statut === 'payee' ? 'Payée' : f.statut === 'validee' ? 'Validée' : f.statut;
+      const montant = Math.round(parseFloat(f.totalTTC || f.montantTotal || f.montantHT || 0)).toLocaleString('fr-FR');
+      return '<tr><td>' + (f.numeroFacture || 'N/A') + '</td><td>' + new Date(f.dateFacture).toLocaleDateString('fr-FR') + '</td><td class="text-right amount">' + montant + ' FCFA</td><td class="text-center"><span class="status status-' + f.statut + '">' + statut + '</span></td></tr>';
+    }).join('');
+
+    const paiementsRows = (etatCompte.paiements || []).map(p => {
+      const montant = Math.round(parseFloat(p.montant || 0)).toLocaleString('fr-FR');
+      return '<tr><td>' + new Date(p.datePaiement).toLocaleDateString('fr-FR') + '</td><td>' + (p.reference || '-') + '</td><td>' + (p.modePaiement || '-') + '</td><td class="text-right amount" style="color: #388e3c;">' + montant + ' FCFA</td></tr>';
+    }).join('');
+
+    const facturesTable = facturesRows ? '<table><thead><tr><th>N° Facture</th><th>Date</th><th class="text-right">Montant TTC</th><th class="text-center">Statut</th></tr></thead><tbody>' + facturesRows + '</tbody></table>' : '<div class="no-data">Aucune facture sur cette période</div>';
+    const paiementsTable = paiementsRows ? '<table><thead><tr><th>Date</th><th>Référence</th><th>Mode</th><th class="text-right">Montant</th></tr></thead><tbody>' + paiementsRows + '</tbody></table>' : '<div class="no-data">Aucun paiement sur cette période</div>';
+
+    const printWindow = window.open('', '_blank');
+    const printContent = '<!DOCTYPE html><html><head><title>État de Compte Fournisseur - ' + selectedFournisseur.raisonSociale + '</title><style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: "Segoe UI", Arial, sans-serif; padding: 30px; color: #333; } .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #1976d2; } .header h1 { color: #1976d2; font-size: 24px; margin-bottom: 15px; } .fournisseur-info { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px; } .fournisseur-info h3 { margin-bottom: 10px; color: #1976d2; } .fournisseur-info p { margin: 5px 0; font-size: 13px; } .periode { color: #666; font-style: italic; margin-top: 10px; } .summary { display: flex; justify-content: space-between; margin-bottom: 30px; } .summary-box { flex: 1; padding: 15px; margin: 0 10px; border-radius: 8px; text-align: center; } .summary-box:first-child { margin-left: 0; } .summary-box:last-child { margin-right: 0; } .summary-box.facture { background: #e3f2fd; } .summary-box.paye { background: #e8f5e9; } .summary-box.solde { background: #fff3e0; } .summary-box .label { color: #666; font-size: 12px; margin-bottom: 5px; } .summary-box .value { font-size: 20px; font-weight: bold; } .summary-box.facture .value { color: #1976d2; } .summary-box.paye .value { color: #388e3c; } .summary-box.solde .value { color: #e65100; } .section { margin-bottom: 25px; } .section h3 { margin-bottom: 15px; color: #333; font-size: 16px; } table { width: 100%; border-collapse: collapse; } th { background: #f8f9fa; padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size: 12px; } td { padding: 10px; border-bottom: 1px solid #dee2e6; font-size: 12px; } .text-right { text-align: right; } .text-center { text-align: center; } .amount { font-weight: bold; } .status { padding: 3px 8px; border-radius: 4px; font-size: 11px; } .status-payee { background: #d4edda; color: #155724; } .status-validee { background: #fff3cd; color: #856404; } .status-brouillon { background: #e2e3e5; color: #383d41; } .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 11px; } .no-data { color: #999; font-style: italic; padding: 20px; text-align: center; } @media print { body { padding: 15px; } }</style></head><body>' +
+      '<div class="header"><h1>ÉTAT DE COMPTE FOURNISSEUR</h1></div>' +
+      '<div class="fournisseur-info"><h3>' + selectedFournisseur.raisonSociale + '</h3>' +
+      '<p><strong>Code:</strong> ' + (selectedFournisseur.codeAuxiliaire || selectedFournisseur.numeroFournisseur || '-') + '</p>' +
+      (selectedFournisseur.adresse ? '<p><strong>Adresse:</strong> ' + selectedFournisseur.adresse + '</p>' : '') +
+      (selectedFournisseur.email ? '<p><strong>Email:</strong> ' + selectedFournisseur.email + '</p>' : '') +
+      (selectedFournisseur.telephone ? '<p><strong>Téléphone:</strong> ' + selectedFournisseur.telephone + '</p>' : '') +
+      '<p class="periode"><strong>Période:</strong> ' + new Date(periode.dateDebut).toLocaleDateString('fr-FR') + ' au ' + new Date(periode.dateFin).toLocaleDateString('fr-FR') + '</p></div>' +
+      '<div class="summary"><div class="summary-box facture"><div class="label">Total Facturé</div><div class="value">' + Math.round(etatCompte.totalFacture || 0).toLocaleString('fr-FR') + ' FCFA</div></div>' +
+      '<div class="summary-box paye"><div class="label">Total Payé</div><div class="value">' + Math.round(etatCompte.totalPaye || 0).toLocaleString('fr-FR') + ' FCFA</div></div>' +
+      '<div class="summary-box solde"><div class="label">Solde Dû</div><div class="value">' + Math.round(etatCompte.solde || 0).toLocaleString('fr-FR') + ' FCFA</div></div></div>' +
+      '<div class="section"><h3>Factures</h3>' + facturesTable + '</div>' +
+      '<div class="section"><h3>Paiements</h3>' + paiementsTable + '</div>' +
+      '<div class="footer"><p>Document généré le ' + new Date().toLocaleDateString('fr-FR') + ' à ' + new Date().toLocaleTimeString('fr-FR') + '</p><p>ComptaOrion - Système de Gestion Comptable</p></div>' +
+      '</body></html>';
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
+
   return (
     <div>
       <h3>📋 États de Compte Fournisseur</h3>
@@ -2059,7 +2100,7 @@ function EtatsCompteFournisseurTab() {
             }}
             options={[
               { value: '', label: '-- Sélectionner un fournisseur --' },
-              ...fournisseurs.map(f => ({ value: f.id, label: f.nom }))
+              ...fournisseurs.map(f => ({ value: f.id, label: f.raisonSociale || f.nom }))
             ]}
           />
           <FormField
@@ -2086,6 +2127,11 @@ function EtatsCompteFournisseurTab() {
           <Button onClick={genererEtatCompte} disabled={loading || !selectedFournisseurId}>
             {loading ? '⏳ Génération...' : '📄 Générer État de Compte'}
           </Button>
+          {etatCompte && (
+            <Button variant="secondary" onClick={imprimerEtatCompte}>
+              🖨️ Imprimer / PDF
+            </Button>
+          )}
           {etatCompte && selectedFournisseur?.email && (
             <Button variant="success" onClick={envoyerParEmail} disabled={sending}>
               {sending ? '📧 Envoi...' : `📧 Envoyer à ${selectedFournisseur.email}`}
@@ -2101,11 +2147,18 @@ function EtatsCompteFournisseurTab() {
           borderRadius: '8px',
           border: '1px solid #e0e0e0'
         }}>
-          <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #1976d2', paddingBottom: '20px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #1976d2', paddingBottom: '20px' }}>
             <h2 style={{ color: '#1976d2', margin: '0 0 10px 0' }}>ÉTAT DE COMPTE FOURNISSEUR</h2>
-            <p style={{ margin: '5px 0', fontSize: '16px' }}><strong>{selectedFournisseur?.nom}</strong></p>
-            <p style={{ margin: '5px 0', color: '#666' }}>
-              Période: {new Date(periode.dateDebut).toLocaleDateString('fr-FR')} au {new Date(periode.dateFin).toLocaleDateString('fr-FR')}
+          </div>
+
+          <div style={{ backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '25px' }}>
+            <h3 style={{ margin: '0 0 10px 0', color: '#1976d2' }}>{selectedFournisseur?.raisonSociale}</h3>
+            <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Code:</strong> {selectedFournisseur?.codeAuxiliaire || selectedFournisseur?.numeroFournisseur || '-'}</p>
+            {selectedFournisseur?.adresse && <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Adresse:</strong> {selectedFournisseur.adresse}</p>}
+            {selectedFournisseur?.email && <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Email:</strong> {selectedFournisseur.email}</p>}
+            {selectedFournisseur?.telephone && <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Téléphone:</strong> {selectedFournisseur.telephone}</p>}
+            <p style={{ margin: '10px 0 0 0', fontSize: '14px', fontStyle: 'italic', color: '#666' }}>
+              <strong>Période:</strong> {new Date(periode.dateDebut).toLocaleDateString('fr-FR')} au {new Date(periode.dateFin).toLocaleDateString('fr-FR')}
             </p>
           </div>
 
