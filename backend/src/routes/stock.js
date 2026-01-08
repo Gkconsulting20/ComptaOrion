@@ -338,6 +338,14 @@ router.post('/mouvements', async (req, res) => {
   try {
     const { entrepriseId, produitId, entrepotId, type, quantite, prixUnitaire, reference } = req.body;
     
+    // Validation: entrepôt obligatoire
+    if (!entrepotId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Un entrepôt est obligatoire pour tout mouvement de stock' 
+      });
+    }
+    
     const entId = parseInt(entrepriseId) || req.entrepriseId;
     const prodId = parseInt(produitId);
     const qte = parseFloat(quantite);

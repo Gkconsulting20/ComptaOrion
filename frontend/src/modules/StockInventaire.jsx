@@ -260,7 +260,7 @@ export function StockInventaire() {
     } else if (type === 'entrepot') {
       setForm(item || { nom: '', adresse: '', responsable: '' });
     } else if (type === 'inventaire') {
-      setForm({ produitId: null, quantiteComptee: 0, notes: '' });
+      setForm({ produitId: null, entrepotId: '', quantiteComptee: 0, notes: '' });
     } else if (type === 'reception') {
       setForm({ 
         fournisseurId: '', 
@@ -314,12 +314,13 @@ export function StockInventaire() {
       } else if (type === 'inventaire') {
         const produit = data.produits.find(p => p.id === parseInt(form.produitId));
         if (!produit) return alert('Sélectionnez un produit');
+        if (!form.entrepotId) return alert('Veuillez sélectionner un entrepôt. Créez-en un dans Paramètres → Entrepôts si nécessaire.');
         
         const ecart = parseFloat(form.quantiteComptee) - parseFloat(produit.quantite || 0);
         if (ecart !== 0) {
           await api.post('/stock/mouvements', {
-            entrepriseId: 1,
             produitId: form.produitId,
+            entrepotId: parseInt(form.entrepotId),
             type: 'ajustement',
             quantite: Math.abs(ecart),
             prixUnitaire: produit.prixAchat || 0,
@@ -910,6 +911,21 @@ export function StockInventaire() {
 
           {modal.type === 'inventaire' && (
             <>
+              {data.entrepots.length === 0 && (
+                <div style={{ padding: '15px', backgroundColor: '#fff3cd', borderRadius: '8px', marginBottom: '15px', border: '1px solid #ffc107' }}>
+                  <strong>⚠️ Aucun entrepôt configuré</strong>
+                  <p style={{ margin: '10px 0 0 0', fontSize: '14px' }}>
+                    Vous devez d'abord créer un entrepôt dans <strong>Paramètres → Entrepôts</strong> avant de pouvoir effectuer un inventaire.
+                  </p>
+                </div>
+              )}
+              <FormField label="Entrepôt *" type="select" value={form.entrepotId || ''} 
+                onChange={(e) => setForm({...form, entrepotId: e.target.value})}
+                options={data.entrepots.length > 0 
+                  ? [{ value: '', label: '-- Sélectionner un entrepôt --' }, ...data.entrepots.map(e => ({ value: e.id, label: e.nom }))]
+                  : [{ value: '', label: '-- Créez d\'abord un entrepôt --' }]
+                }
+                required />
               <FormField label="Produit" type="select" value={form.produitId || ''} 
                 onChange={(e) => setForm({...form, produitId: parseInt(e.target.value) || null})}
                 options={[{ value: '', label: '-- Sélectionner --' }, ...data.produits.map(p => ({ value: p.id, label: `${p.reference} - ${p.nom} (Stock: ${p.quantite || 0})` }))]}
