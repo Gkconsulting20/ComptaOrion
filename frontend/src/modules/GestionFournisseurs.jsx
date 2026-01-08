@@ -698,7 +698,7 @@ function RapportsClotureComptable({ periode, fournisseurs }) {
 }
 
 export function GestionFournisseurs() {
-  const [activeTab, setActiveTab] = useState('parametres');
+  const [activeTab, setActiveTab] = useState('facturation');
   const [subTab, setSubTab] = useState('fournisseurs');
   const [data, setData] = useState({
     fournisseurs: [],
@@ -1043,12 +1043,12 @@ export function GestionFournisseurs() {
   };
 
   const tabs = [
-    { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' },
     { id: 'facturation', label: '📄 Facturation', icon: '📄' },
     { id: 'factures', label: '🧾 Factures', icon: '🧾' },
     { id: 'paiements', label: '💰 Paiements', icon: '💰' },
     { id: 'etats-compte', label: '📋 États de Compte', icon: '📋' },
-    { id: 'rapports', label: '📊 Rapports', icon: '📊' }
+    { id: 'rapports', label: '📊 Rapports', icon: '📊' },
+    { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
   ];
 
   if (loading) return <div style={{ padding: '20px' }}>Chargement...</div>;

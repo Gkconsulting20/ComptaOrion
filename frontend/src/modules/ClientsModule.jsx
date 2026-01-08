@@ -8,7 +8,7 @@ import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 
 export function ClientsModule() {
-  const [activeTab, setActiveTab] = useState('parametres');
+  const [activeTab, setActiveTab] = useState('devis');
 
   const tabs = [
     { id: 'devis', label: '📝 Devis', icon: '📝' },
