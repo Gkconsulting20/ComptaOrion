@@ -961,21 +961,40 @@ export function ModuleComptabilite() {
               </p>
             </div>
 
-            <div style={{ padding: '30px', background: '#fff9e6', borderRadius: '8px', cursor: 'pointer' }}
-              onClick={async () => {
-                setRapportModal({ open: true, type: 'journaux', data: null, loading: true });
-                try {
-                  const rapport = await api.get('/comptabilite/rapport-journaux', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                  setRapportModal({ open: true, type: 'journaux', data: rapport, loading: false });
-                } catch (err) {
-                  setRapportModal({ open: false, type: null, data: null, loading: false });
-                  alert('Erreur génération Rapport Journaux: ' + err.message);
-                }
-              }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#f9a825' }}>📚 Rapport des Journaux</h4>
-              <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>
-                Synthèse des écritures par journal comptable
+            <div style={{ padding: '30px', background: '#fff9e6', borderRadius: '8px' }}>
+              <h4 style={{ margin: '0 0 15px 0', color: '#f9a825' }}>📚 Rapport des Journaux</h4>
+              <p style={{ margin: '0 0 15px 0', color: '#666', fontSize: '14px' }}>
+                Sélectionnez un journal ou générez le rapport complet
               </p>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <select 
+                  id="rapportJournalSelect"
+                  style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                >
+                  <option value="">Tous les journaux</option>
+                  {data.journaux.map(j => (
+                    <option key={j.id} value={j.id}>{j.code} - {j.nom}</option>
+                  ))}
+                </select>
+                <Button 
+                  variant="success"
+                  onClick={async () => {
+                    const journalId = document.getElementById('rapportJournalSelect').value;
+                    setRapportModal({ open: true, type: 'journaux', data: null, loading: true });
+                    try {
+                      const params = { dateDebut: periode.dateDebut, dateFin: periode.dateFin };
+                      if (journalId) params.journalId = journalId;
+                      const rapport = await api.get('/comptabilite/rapport-journaux', params);
+                      setRapportModal({ open: true, type: 'journaux', data: rapport, loading: false });
+                    } catch (err) {
+                      setRapportModal({ open: false, type: null, data: null, loading: false });
+                      alert('Erreur génération Rapport Journaux: ' + err.message);
+                    }
+                  }}
+                >
+                  Générer
+                </Button>
+              </div>
             </div>
 
             <div style={{ padding: '30px', background: '#e8f5e9', borderRadius: '8px', cursor: 'pointer' }}

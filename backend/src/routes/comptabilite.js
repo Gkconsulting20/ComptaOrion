@@ -450,13 +450,20 @@ router.get('/rapports/resultat', async (req, res) => {
 // Rapport des Journaux
 router.get('/rapport-journaux', async (req, res) => {
   try {
-    const { dateDebut, dateFin } = req.query;
+    const { dateDebut, dateFin, journalId } = req.query;
     const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
     
-    // Récupérer tous les journaux de l'entreprise
-    const allJournaux = await db.query.journaux.findMany({
-      where: eq(journaux.entrepriseId, eId)
-    });
+    // Récupérer les journaux de l'entreprise (filtrer par journalId si fourni)
+    let allJournaux;
+    if (journalId) {
+      allJournaux = await db.query.journaux.findMany({
+        where: and(eq(journaux.entrepriseId, eId), eq(journaux.id, parseInt(journalId)))
+      });
+    } else {
+      allJournaux = await db.query.journaux.findMany({
+        where: eq(journaux.entrepriseId, eId)
+      });
+    }
     
     // Pour chaque journal, calculer les totaux
     const journauxRapport = [];
