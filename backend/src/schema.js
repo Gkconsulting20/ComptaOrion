@@ -256,7 +256,8 @@ export const produits = pgTable('produits', {
   stockMinimum: decimal('stock_minimum', { precision: 15, scale: 3 }).default('0'),
   prixAchat: decimal('prix_achat', { precision: 15, scale: 2 }).default('0'),
   prixVente: decimal('prix_vente', { precision: 15, scale: 2 }).default('0'),
-  valorisationMethod: varchar('valorisation_method', { length: 20 }).default('FIFO'), // FIFO, CMP
+  coutMoyen: decimal('cout_moyen', { precision: 15, scale: 2 }).default('0'),
+  valorisationMethod: varchar('valorisation_method', { length: 20 }).default('CMP'),
   fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id),
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),

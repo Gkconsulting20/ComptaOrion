@@ -6,6 +6,57 @@ import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
+async function calculerCoutMoyenPondere(produitId, nouvelleQuantite, nouveauPrixUnitaire, entrepriseId) {
+  try {
+    const produitData = await db.execute(sql`
+      SELECT quantite, cout_moyen, prix_achat FROM produits 
+      WHERE id = ${produitId} AND entreprise_id = ${entrepriseId}
+    `);
+    
+    if (!produitData.rows || produitData.rows.length === 0) {
+      return nouveauPrixUnitaire;
+    }
+    
+    const produit = produitData.rows[0];
+    const quantiteActuelle = parseFloat(produit.quantite || 0);
+    const coutMoyenActuel = parseFloat(produit.cout_moyen || produit.prix_achat || 0);
+    const qteEntree = parseFloat(nouvelleQuantite);
+    const prixEntree = parseFloat(nouveauPrixUnitaire);
+    
+    if (quantiteActuelle <= 0) {
+      return prixEntree;
+    }
+    
+    const valeurStockActuel = quantiteActuelle * coutMoyenActuel;
+    const valeurEntree = qteEntree * prixEntree;
+    const nouvelleQuantiteTotale = quantiteActuelle + qteEntree;
+    
+    if (nouvelleQuantiteTotale <= 0) {
+      return coutMoyenActuel;
+    }
+    
+    const nouveauCMP = (valeurStockActuel + valeurEntree) / nouvelleQuantiteTotale;
+    return Math.round(nouveauCMP * 100) / 100;
+  } catch (error) {
+    console.error('Erreur calcul CMP:', error);
+    return nouveauPrixUnitaire;
+  }
+}
+
+async function mettreAJourCoutMoyen(produitId, coutMoyen, entrepriseId) {
+  try {
+    await db.execute(sql`
+      UPDATE produits 
+      SET cout_moyen = ${coutMoyen}, 
+          derniere_maj_cout = NOW(),
+          updated_at = NOW()
+      WHERE id = ${produitId} AND entreprise_id = ${entrepriseId}
+    `);
+  } catch (error) {
+    console.error('Erreur mise à jour CMP:', error);
+  }
+}
+
 // CRUD Catégories
 router.get('/categories', async (req, res) => {
   try {
@@ -287,14 +338,24 @@ router.post('/mouvements', async (req, res) => {
   try {
     const { entrepriseId, produitId, entrepotId, type, quantite, prixUnitaire, reference } = req.body;
     
+    const entId = parseInt(entrepriseId) || req.entrepriseId;
+    const prodId = parseInt(produitId);
+    const qte = parseFloat(quantite);
+    const prix = prixUnitaire ? parseFloat(prixUnitaire) : null;
+    
+    if (type === 'entree' && prix) {
+      const nouveauCMP = await calculerCoutMoyenPondere(prodId, qte, prix, entId);
+      await mettreAJourCoutMoyen(prodId, nouveauCMP, entId);
+    }
+    
     // Insérer le mouvement
     const movement = await db.insert(mouvementsStock).values({
-      entrepriseId: parseInt(entrepriseId),
-      produitId: parseInt(produitId),
+      entrepriseId: entId,
+      produitId: prodId,
       entrepotId: entrepotId ? parseInt(entrepotId) : null,
       type,
-      quantite: parseFloat(quantite),
-      prixUnitaire: prixUnitaire ? parseFloat(prixUnitaire) : null,
+      quantite: qte,
+      prixUnitaire: prix,
       reference
     }).returning();
 

@@ -394,7 +394,11 @@ export function StockInventaire() {
 
   const alertes = data.produits.filter(p => parseFloat(p.quantite || 0) < parseFloat(p.stockMinimum || 0) && parseFloat(p.quantite || 0) > 0);
   const totalStock = data.produits.reduce((s, p) => s + parseFloat(p.quantite || 0), 0);
-  const valorisation = data.produits.reduce((s, p) => s + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || p.prixRevient || 0)), 0);
+  const valorisation = data.produits.reduce((s, p) => {
+    const qty = parseFloat(p.quantite || 0);
+    const coutUnit = parseFloat(p.coutMoyen || p.prixAchat || 0);
+    return s + (qty * coutUnit);
+  }, 0);
 
   return (
     <div>
@@ -799,9 +803,9 @@ export function StockInventaire() {
           </div>
 
           <div style={{ marginBottom: '30px' }}>
-            <h4 style={{ marginBottom: '15px' }}>📋 Rapport de Valorisation par Produit</h4>
+            <h4 style={{ marginBottom: '15px' }}>📋 Rapport de Valorisation par Produit (Méthode CMP)</h4>
             <p style={{ color: '#7f8c8d', fontSize: '14px', marginBottom: '15px' }}>
-              Valorisation de chaque produit basée sur le stock actuel et le prix d'achat
+              Valorisation selon le <strong>Coût Moyen Pondéré (CMP)</strong> - recalculé automatiquement à chaque entrée de stock
             </p>
             <Table
               columns={[
@@ -812,9 +816,13 @@ export function StockInventaire() {
                   return cat ? cat.nom : '-';
                 }},
                 { key: 'quantite', label: 'Quantité', render: (val, row) => `${val || 0} ${row.uniteMesure || 'pièce'}` },
-                { key: 'prixAchat', label: 'Prix Achat', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} FCFA` },
+                { key: 'coutMoyen', label: 'Coût Moyen (CMP)', render: (val, row) => {
+                  const cmp = parseFloat(val || row.prixAchat || 0);
+                  return `${Math.round(cmp).toLocaleString('fr-FR')} FCFA`;
+                }},
                 { key: 'valorisation', label: 'Valorisation Totale', render: (_, row) => {
-                  const val = Math.round(parseFloat(row.quantite || 0) * parseFloat(row.prixAchat || row.prixRevient || 0));
+                  const coutUnit = parseFloat(row.coutMoyen || row.prixAchat || 0);
+                  const val = Math.round(parseFloat(row.quantite || 0) * coutUnit);
                   return <strong style={{ color: '#388e3c' }}>{val.toLocaleString('fr-FR')} FCFA</strong>;
                 }}
               ]}
@@ -843,7 +851,7 @@ export function StockInventaire() {
                 { key: 'valorisation', label: 'Valorisation', render: (_, row) => {
                   const val = Math.round(data.produits
                     .filter(p => p.categorieId === row.id)
-                    .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || p.prixRevient || 0)), 0));
+                    .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.coutMoyen || p.prixAchat || 0)), 0));
                   return <strong style={{ color: '#388e3c' }}>{val.toLocaleString('fr-FR')} FCFA</strong>;
                 }}
               ]}
