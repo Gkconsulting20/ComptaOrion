@@ -334,10 +334,13 @@ export function StockInventaire() {
         if (!form.fournisseurId || lignesValides.length === 0) {
           return alert('Veuillez saisir un fournisseur et au moins une ligne valide');
         }
+        if (!form.entrepotId) {
+          return alert('Veuillez sélectionner un entrepôt. Créez-en un dans Paramètres → Entrepôts si nécessaire.');
+        }
         await api.post('/stock/receptions', {
           fournisseurId: parseInt(form.fournisseurId),
           dateReception: form.dateReception,
-          entrepotId: form.entrepotId ? parseInt(form.entrepotId) : null,
+          entrepotId: parseInt(form.entrepotId),
           notes: form.notes,
           lignes: lignesValides.map(l => ({
             produitId: parseInt(l.produitId),
@@ -918,15 +921,27 @@ export function StockInventaire() {
 
           {modal.type === 'reception' && (
             <>
+              {data.entrepots.length === 0 && (
+                <div style={{ padding: '15px', backgroundColor: '#fff3cd', borderRadius: '8px', marginBottom: '15px', border: '1px solid #ffc107' }}>
+                  <strong>⚠️ Aucun entrepôt configuré</strong>
+                  <p style={{ margin: '10px 0 0 0', fontSize: '14px' }}>
+                    Vous devez d'abord créer un entrepôt dans <strong>Paramètres → Entrepôts</strong> avant de pouvoir réceptionner du stock.
+                  </p>
+                </div>
+              )}
               <FormField label="Fournisseur" type="select" value={form.fournisseurId || ''} 
                 onChange={(e) => setForm({...form, fournisseurId: e.target.value})}
                 options={[{ value: '', label: '-- Sélectionner --' }, ...data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))]}
                 required />
               <FormField label="Date Réception" type="date" value={form.dateReception || ''} 
                 onChange={(e) => setForm({...form, dateReception: e.target.value})} required />
-              <FormField label="Entrepôt" type="select" value={form.entrepotId || ''} 
+              <FormField label="Entrepôt *" type="select" value={form.entrepotId || ''} 
                 onChange={(e) => setForm({...form, entrepotId: e.target.value})}
-                options={[{ value: '', label: '-- Aucun --' }, ...data.entrepots.map(e => ({ value: e.id, label: e.nom }))]} />
+                options={data.entrepots.length > 0 
+                  ? [{ value: '', label: '-- Sélectionner un entrepôt --' }, ...data.entrepots.map(e => ({ value: e.id, label: e.nom }))]
+                  : [{ value: '', label: '-- Créez d\'abord un entrepôt --' }]
+                }
+                required />
               <FormField label="Notes" type="textarea" value={form.notes || ''} 
                 onChange={(e) => setForm({...form, notes: e.target.value})} />
 

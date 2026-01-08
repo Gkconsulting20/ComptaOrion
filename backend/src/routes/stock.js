@@ -547,6 +547,10 @@ router.post('/receptions', async (req, res) => {
       return res.status(400).json({ error: 'Fournisseur, date et au moins une ligne requis' });
     }
 
+    if (!entrepotId) {
+      return res.status(400).json({ error: 'Un entrepôt est obligatoire pour réceptionner du stock. Créez-en un dans Paramètres → Entrepôts.' });
+    }
+
     const numero = await generateReceptionNumber(req.entrepriseId);
     
     // Calculer total HT
