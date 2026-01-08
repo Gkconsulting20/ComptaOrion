@@ -260,6 +260,261 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
   );
 }
 
+function ClotureExerciceTab({ api }) {
+  const [annee, setAnnee] = useState(new Date().getFullYear());
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const loadPreview = async () => {
+    setLoading(true);
+    setPreview(null);
+    setResult(null);
+    try {
+      const res = await api.get(`/comptabilite/cloture-exercice/preview?annee=${annee}`);
+      setPreview(res);
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const executerCloture = async () => {
+    if (!confirm(`ATTENTION: Vous allez clôturer l'exercice ${annee}.\n\nCette opération va:\n- Solder tous les comptes de charges (classe 6)\n- Solder tous les comptes de produits (classe 7)\n- Reporter le résultat sur le compte ${preview?.compteResultat}\n- Créer le bilan d'ouverture ${annee + 1}\n\nContinuer ?`)) {
+      return;
+    }
+    setExecuting(true);
+    try {
+      const res = await api.post('/comptabilite/cloture-exercice', { annee });
+      setResult(res);
+      alert('Clôture effectuée avec succès !');
+    } catch (err) {
+      alert('Erreur clôture: ' + err.message);
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  const formatMontant = (val) => {
+    return Math.abs(parseFloat(val || 0)).toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' FCFA';
+  };
+
+  return (
+    <div>
+      <h3 style={{ marginBottom: '20px' }}>Clôture d'Exercice Comptable</h3>
+
+      <div style={{ 
+        padding: '20px', 
+        background: '#fff3e0', 
+        borderRadius: '8px', 
+        marginBottom: '20px',
+        border: '1px solid #ffb74d'
+      }}>
+        <h4 style={{ margin: '0 0 10px 0', color: '#e65100' }}>Information importante</h4>
+        <p style={{ margin: 0, color: '#e65100' }}>
+          La clôture d'exercice est une opération irréversible qui:
+        </p>
+        <ul style={{ margin: '10px 0 0 0', color: '#e65100' }}>
+          <li>Solde tous les comptes de résultat (classes 6 et 7)</li>
+          <li>Transfère le résultat net vers le compte de bilan approprié (120 ou 129)</li>
+          <li>Crée automatiquement les écritures d'ouverture du nouvel exercice</li>
+        </ul>
+      </div>
+
+      <div style={{ 
+        display: 'flex', 
+        gap: '15px', 
+        alignItems: 'flex-end', 
+        marginBottom: '25px',
+        padding: '20px',
+        background: '#f5f5f5',
+        borderRadius: '8px'
+      }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Exercice à clôturer</label>
+          <select 
+            value={annee}
+            onChange={(e) => setAnnee(parseInt(e.target.value))}
+            style={{ 
+              padding: '10px 15px', 
+              fontSize: '16px', 
+              borderRadius: '6px', 
+              border: '1px solid #ddd',
+              minWidth: '150px'
+            }}
+          >
+            {[2023, 2024, 2025, 2026].map(a => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        <Button onClick={loadPreview} disabled={loading}>
+          {loading ? 'Chargement...' : 'Générer la prévisualisation'}
+        </Button>
+      </div>
+
+      {preview && (
+        <div style={{ display: 'grid', gap: '20px' }}>
+          <div style={{ 
+            padding: '25px', 
+            background: preview.typeResultat === 'benefice' ? '#e8f5e9' : '#ffebee',
+            borderRadius: '12px',
+            border: `2px solid ${preview.typeResultat === 'benefice' ? '#4caf50' : '#f44336'}`
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, color: preview.typeResultat === 'benefice' ? '#2e7d32' : '#c62828' }}>
+                  Résultat de l'exercice {annee}
+                </h3>
+                <p style={{ margin: '5px 0 0 0', color: '#666' }}>{preview.message}</p>
+              </div>
+              <div style={{ 
+                fontSize: '32px', 
+                fontWeight: 'bold', 
+                color: preview.typeResultat === 'benefice' ? '#2e7d32' : '#c62828'
+              }}>
+                {preview.typeResultat === 'benefice' ? '+' : '-'}{formatMontant(preview.resultatNet)}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={{ 
+              padding: '20px', 
+              background: '#fff', 
+              borderRadius: '8px',
+              border: '1px solid #e0e0e0'
+            }}>
+              <h4 style={{ margin: '0 0 15px 0', color: '#1976d2' }}>
+                Produits (Classe 7) - Total: {formatMontant(preview.comptesResultat.totalProduits)}
+              </h4>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5' }}>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>Compte</th>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>Nom</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Solde</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.comptesResultat.produits.map((c, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '8px', fontFamily: 'monospace' }}>{c.numero}</td>
+                      <td style={{ padding: '8px' }}>{c.nom}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', color: '#4caf50' }}>{formatMontant(c.solde)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ 
+              padding: '20px', 
+              background: '#fff', 
+              borderRadius: '8px',
+              border: '1px solid #e0e0e0'
+            }}>
+              <h4 style={{ margin: '0 0 15px 0', color: '#c62828' }}>
+                Charges (Classe 6) - Total: {formatMontant(preview.comptesResultat.totalCharges)}
+              </h4>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5' }}>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>Compte</th>
+                    <th style={{ padding: '8px', textAlign: 'left' }}>Nom</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Solde</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.comptesResultat.charges.map((c, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '8px', fontFamily: 'monospace' }}>{c.numero}</td>
+                      <td style={{ padding: '8px' }}>{c.nom}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', color: '#f44336' }}>{formatMontant(c.solde)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={{ 
+            padding: '20px', 
+            background: '#e3f2fd', 
+            borderRadius: '8px',
+            border: '1px solid #1976d2'
+          }}>
+            <h4 style={{ margin: '0 0 15px 0', color: '#1565c0' }}>Écritures qui seront générées</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>
+                <strong>1. Écriture de clôture (CLO-{annee}-001)</strong>
+                <p style={{ margin: '10px 0 0 0', color: '#666', fontSize: '14px' }}>
+                  - Crédit des comptes de charges pour les solder<br/>
+                  - Débit des comptes de produits pour les solder<br/>
+                  - {preview.typeResultat === 'benefice' ? 'Crédit' : 'Débit'} du compte {preview.compteResultat}
+                </p>
+              </div>
+              <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>
+                <strong>2. Bilan d'ouverture (AN-{annee + 1}-001)</strong>
+                <p style={{ margin: '10px 0 0 0', color: '#666', fontSize: '14px' }}>
+                  - Report des soldes de tous les comptes de bilan<br/>
+                  - Incluant le résultat de l'exercice {annee}<br/>
+                  - {preview.comptesBilan.length} comptes à reporter
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <Button 
+              variant="danger" 
+              onClick={executerCloture}
+              disabled={executing}
+              style={{ padding: '15px 40px', fontSize: '16px' }}
+            >
+              {executing ? 'Clôture en cours...' : `Exécuter la clôture de l'exercice ${annee}`}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div style={{ 
+          marginTop: '20px',
+          padding: '20px', 
+          background: '#e8f5e9', 
+          borderRadius: '8px',
+          border: '2px solid #4caf50'
+        }}>
+          <h4 style={{ margin: '0 0 15px 0', color: '#2e7d32' }}>Clôture effectuée avec succès</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
+            <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>
+              <strong>Résultat</strong>
+              <p style={{ margin: '5px 0 0 0', color: result.details.typeResultat === 'benefice' ? '#4caf50' : '#f44336' }}>
+                {result.details.typeResultat === 'benefice' ? 'Bénéfice' : 'Perte'}: {formatMontant(result.details.resultatNet)}
+              </p>
+            </div>
+            <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>
+              <strong>Écriture de clôture</strong>
+              <p style={{ margin: '5px 0 0 0' }}>
+                {result.details.ecritureCloture.numero} ({result.details.ecritureCloture.lignes} lignes)
+              </p>
+            </div>
+            <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>
+              <strong>Bilan d'ouverture</strong>
+              <p style={{ margin: '5px 0 0 0' }}>
+                {result.details.ecritureOuverture.numero} ({result.details.ecritureOuverture.lignes} lignes)
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ModuleComptabilite() {
   const [activeTab, setActiveTab] = useState('plan');
   const [data, setData] = useState({
@@ -471,6 +726,7 @@ export function ModuleComptabilite() {
     { id: 'balance', label: '⚖️ Balance', icon: '⚖️' },
     { id: 'immobilisations', label: '🏢 Immobilisations', icon: '🏢' },
     { id: 'rapports', label: '📊 Rapports', icon: '📊' },
+    { id: 'cloture', label: '🔒 Clôture Exercice', icon: '🔒' },
     { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
   ];
 
@@ -1100,6 +1356,10 @@ export function ModuleComptabilite() {
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'cloture' && (
+        <ClotureExerciceTab api={api} />
       )}
 
       {activeTab === 'parametres' && (
