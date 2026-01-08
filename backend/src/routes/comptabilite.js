@@ -2699,6 +2699,131 @@ router.post('/cloture-exercice', async (req, res) => {
 });
 
 // ==========================================
+// DRILL-DOWN MOUVEMENTS PAR COMPTE
+// ==========================================
+
+router.get('/compte-mouvements/:numeroCompte', async (req, res) => {
+  try {
+    const { numeroCompte } = req.params;
+    const { dateDebut, dateFin, page = 1, limit = 100 } = req.query;
+    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    
+    if (!numeroCompte) {
+      return res.status(400).json({ error: 'Numéro de compte requis' });
+    }
+    
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    const mouvementsData = await db.execute(sql`
+      SELECT 
+        le.id,
+        e.date_ecriture as date,
+        j.code as journal_code,
+        j.nom as journal_nom,
+        e.numero_piece as reference,
+        e.libelle as libelle_ecriture,
+        le.libelle as libelle_ligne,
+        COALESCE(le.debit, 0) as debit,
+        COALESCE(le.credit, 0) as credit,
+        cc.numero as numero_compte,
+        cc.nom as nom_compte,
+        e.id as ecriture_id
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      JOIN journaux j ON e.journal_id = j.id
+      WHERE e.entreprise_id = ${eId}
+      AND cc.numero LIKE ${numeroCompte + '%'}
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      ORDER BY e.date_ecriture, e.id, le.id
+      LIMIT ${parseInt(limit)} OFFSET ${offset}
+    `);
+    
+    const countResult = await db.execute(sql`
+      SELECT COUNT(*) as total
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      WHERE e.entreprise_id = ${eId}
+      AND cc.numero LIKE ${numeroCompte + '%'}
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+    `);
+    
+    const totauxResult = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(CAST(le.debit AS DECIMAL)), 0) as total_debit,
+        COALESCE(SUM(CAST(le.credit AS DECIMAL)), 0) as total_credit
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      WHERE e.entreprise_id = ${eId}
+      AND cc.numero LIKE ${numeroCompte + '%'}
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+    `);
+    
+    const rows = mouvementsData.rows || mouvementsData || [];
+    const countRows = countResult.rows || countResult || [];
+    const totauxRows = totauxResult.rows || totauxResult || [];
+    
+    const total = parseInt(countRows[0]?.total || 0);
+    const totalDebit = parseFloat(totauxRows[0]?.total_debit || 0);
+    const totalCredit = parseFloat(totauxRows[0]?.total_credit || 0);
+    const solde = totalDebit - totalCredit;
+    
+    let soldeCumul = 0;
+    const mouvements = rows.map(row => {
+      const debit = parseFloat(row.debit || 0);
+      const credit = parseFloat(row.credit || 0);
+      soldeCumul += debit - credit;
+      return {
+        id: row.id,
+        date: row.date,
+        journal: row.journal_code,
+        journalNom: row.journal_nom,
+        reference: row.reference,
+        libelle: row.libelle_ligne || row.libelle_ecriture,
+        debit,
+        credit,
+        soldeCumul,
+        ecritureId: row.ecriture_id
+      };
+    });
+    
+    const compteInfo = await db.execute(sql`
+      SELECT numero, nom FROM comptes_comptables 
+      WHERE entreprise_id = ${eId} AND numero = ${numeroCompte}
+      LIMIT 1
+    `);
+    const compteRows = compteInfo.rows || compteInfo || [];
+    
+    res.json({
+      compte: {
+        numero: numeroCompte,
+        nom: compteRows[0]?.nom || 'Compte ' + numeroCompte
+      },
+      mouvements,
+      totaux: {
+        totalDebit,
+        totalCredit,
+        solde
+      },
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Erreur mouvements compte:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
 // EXPORT
 // ==========================================
 
