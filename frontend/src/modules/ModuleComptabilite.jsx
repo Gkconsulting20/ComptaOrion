@@ -2114,6 +2114,47 @@ export function ModuleComptabilite() {
                     )}
                   </div>
 
+                  {/* Flux de financement */}
+                  <div style={{ marginBottom: '25px' }}>
+                    <h4 style={{ color: '#f57c00', borderBottom: '2px solid #f57c00', paddingBottom: '10px' }}>Flux de Trésorerie liés au Financement</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                      <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Apports (Capital, Emprunts)</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxFinancement?.apports || 0).toLocaleString('fr-FR')} FCFA</div>
+                      </div>
+                      <div style={{ padding: '20px', background: '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Remboursements</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxFinancement?.remboursements || 0).toLocaleString('fr-FR')} FCFA</div>
+                      </div>
+                      <div style={{ padding: '20px', background: rapportModal.data.fluxFinancement?.net >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>Flux Net Financement</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxFinancement?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxFinancement?.net || 0).toLocaleString('fr-FR')} FCFA</div>
+                      </div>
+                    </div>
+                    {(rapportModal.data.fluxFinancement?.details || []).length > 0 && (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+                        <thead>
+                          <tr style={{ background: '#fff3e0' }}>
+                            <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px' }}>Compte</th>
+                            <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px' }}>Libellé</th>
+                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '12px' }}>Apports</th>
+                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '12px' }}>Remboursements</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(rapportModal.data.fluxFinancement?.details || []).map((d, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                              <td style={{ padding: '8px 10px', fontSize: '13px' }}>{d.compte}</td>
+                              <td style={{ padding: '8px 10px', fontSize: '13px' }}>{d.nom}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#2e7d32' }}>{d.apports > 0 ? d.apports.toLocaleString('fr-FR') : '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#c62828' }}>{d.remboursements > 0 ? d.remboursements.toLocaleString('fr-FR') : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
                   {/* Comptes de Trésorerie */}
                   <div style={{ marginBottom: '25px' }}>
                     <h4 style={{ color: '#7b1fa2', borderBottom: '2px solid #7b1fa2', paddingBottom: '10px' }}>Mouvements des Comptes de Trésorerie</h4>

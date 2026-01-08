@@ -593,10 +593,29 @@ router.get('/rapports/flux-tresorerie', async (req, res) => {
       GROUP BY cc.numero, cc.nom
       ORDER BY cc.numero
     `);
+
+    // Flux de financement (classe 1 - capitaux, emprunts)
+    const fluxFinancement = await db.execute(sql`
+      SELECT cc.numero, cc.nom,
+             SUM(COALESCE(le.credit, 0)) as apports,
+             SUM(COALESCE(le.debit, 0)) as remboursements
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
+      WHERE e.entreprise_id = ${eId}
+      AND (cc.numero LIKE '10%' OR cc.numero LIKE '11%' OR cc.numero LIKE '12%' 
+           OR cc.numero LIKE '13%' OR cc.numero LIKE '14%' OR cc.numero LIKE '15%' 
+           OR cc.numero LIKE '16%' OR cc.numero LIKE '17%' OR cc.numero LIKE '18%' OR cc.numero LIKE '19%')
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      GROUP BY cc.numero, cc.nom
+      ORDER BY cc.numero
+    `);
     
     const rowsFlux = fluxData.rows || fluxData || [];
     const rowsExpl = fluxExploitation.rows || fluxExploitation || [];
     const rowsInv = fluxInvestissement.rows || fluxInvestissement || [];
+    const rowsFin = fluxFinancement.rows || fluxFinancement || [];
     
     // Calculer les totaux
     const totalEntrees = rowsFlux.reduce((sum, r) => sum + parseFloat(r.entrees || 0), 0);
@@ -609,6 +628,10 @@ router.get('/rapports/flux-tresorerie', async (req, res) => {
     // Investissements
     const totalAcquisitions = rowsInv.reduce((sum, r) => sum + parseFloat(r.acquisitions || 0), 0);
     const totalCessions = rowsInv.reduce((sum, r) => sum + parseFloat(r.cessions || 0), 0);
+
+    // Financement
+    const totalApports = rowsFin.reduce((sum, r) => sum + parseFloat(r.apports || 0), 0);
+    const totalRemboursements = rowsFin.reduce((sum, r) => sum + parseFloat(r.remboursements || 0), 0);
     
     // Infos entreprise
     const entreprise = await db.query.entreprises.findFirst({
@@ -640,6 +663,17 @@ router.get('/rapports/flux-tresorerie', async (req, res) => {
           nom: r.nom,
           acquisitions: parseFloat(r.acquisitions || 0),
           cessions: parseFloat(r.cessions || 0)
+        }))
+      },
+      fluxFinancement: {
+        apports: totalApports,
+        remboursements: totalRemboursements,
+        net: totalApports - totalRemboursements,
+        details: rowsFin.map(r => ({
+          compte: r.numero,
+          nom: r.nom,
+          apports: parseFloat(r.apports || 0),
+          remboursements: parseFloat(r.remboursements || 0)
         }))
       },
       fluxTresorerie: {
