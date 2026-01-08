@@ -419,14 +419,22 @@ router.get('/rapports/bilan', async (req, res) => {
     // Ajouter le résultat de l'exercice aux capitaux propres
     passif.resultatExercice = resultatNet;
     if (Math.abs(resultatNet) > 0.01) {
+      const isPerte = resultatNet < 0;
       passif.capitaux.push({
         id: 'resultat',
-        numero: resultatNet >= 0 ? '120' : '129',
-        nom: resultatNet >= 0 ? 'Résultat de l\'exercice (Bénéfice)' : 'Résultat de l\'exercice (Perte)',
-        solde: resultatNet,
-        isResultat: true
+        numero: isPerte ? '129' : '120',
+        nom: isPerte ? 'Résultat de l\'exercice (Perte)' : 'Résultat de l\'exercice (Bénéfice)',
+        solde: Math.abs(resultatNet),
+        isResultat: true,
+        isPerte: isPerte
       });
-      passif.total += resultatNet;
+      // Une perte réduit les capitaux propres, un bénéfice les augmente
+      // Mathématiquement: Total Passif = Capitaux + Résultat + Dettes
+      if (isPerte) {
+        passif.total -= Math.abs(resultatNet);
+      } else {
+        passif.total += Math.abs(resultatNet);
+      }
     }
     
     // Trier les comptes par numéro

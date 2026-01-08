@@ -2088,19 +2088,19 @@ export function ModuleComptabilite() {
                             <div key={i} style={{ 
                               display: 'flex', justifyContent: 'space-between', padding: '6px 8px', 
                               borderBottom: '1px solid #f5f5f5', fontSize: '13px',
-                              backgroundColor: c.isResultat ? (c.solde >= 0 ? '#e8f5e9' : '#ffebee') : 'transparent'
+                              backgroundColor: c.isResultat ? (c.isPerte ? '#ffebee' : '#e8f5e9') : 'transparent'
                             }}>
-                              <span style={{ color: c.isResultat ? (c.solde >= 0 ? '#2e7d32' : '#c62828') : '#333', fontWeight: c.isResultat ? 'bold' : 'normal' }}>
+                              <span style={{ color: c.isResultat ? (c.isPerte ? '#c62828' : '#2e7d32') : '#333', fontWeight: c.isResultat ? 'bold' : 'normal' }}>
                                 {c.numero} - {c.nom}
                               </span>
-                              <span style={{ fontWeight: 'bold', color: c.isResultat ? (c.solde >= 0 ? '#2e7d32' : '#c62828') : '#7b1fa2' }}>
-                                {c.solde < 0 ? '-' : ''}{Math.round(Math.abs(c.solde)).toLocaleString('fr-FR')} FCFA
+                              <span style={{ fontWeight: 'bold', color: c.isResultat ? (c.isPerte ? '#c62828' : '#2e7d32') : '#7b1fa2' }}>
+                                {c.isPerte ? '-' : ''}{Math.round(c.solde).toLocaleString('fr-FR')} FCFA
                               </span>
                             </div>
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
                             <span>Sous-total Capitaux Propres</span>
-                            <span>{Math.round((rapportModal.data.passif?.capitaux || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} FCFA</span>
+                            <span>{Math.round((rapportModal.data.passif?.capitaux || []).reduce((s,c) => s + (c.isPerte ? -(c.solde || 0) : (c.solde || 0)), 0)).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         </div>
 
