@@ -144,7 +144,7 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
               { key: 'nom', label: 'Nom du Compte' },
               { key: 'categorie', label: 'Catégorie' },
               { key: 'sousCategorie', label: 'Classe' },
-              { key: 'solde', label: 'Solde', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` }
+              { key: 'solde', label: 'Solde', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` }
             ]}
             data={filteredComptes}
             onEdit={(item) => openModal('compte', item)}
@@ -238,7 +238,7 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
                               <td style={{ padding: '10px' }}>{compte.nom}</td>
                               <td style={{ padding: '10px', color: '#666' }}>{compte.categorie || '-'}</td>
                               <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold' }}>
-                                {parseFloat(compte.solde || 0).toLocaleString()} {compte.devise || 'FCFA'}
+                                {parseFloat(compte.solde || 0).toLocaleString('fr-FR')} {compte.devise || 'FCFA'}
                               </td>
                             </tr>
                           ))}
@@ -557,8 +557,8 @@ export function ModuleComptabilite() {
                 { key: 'dateEcriture', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
                 { key: 'reference', label: 'Référence' },
                 { key: 'description', label: 'Description' },
-                { key: 'totalDebit', label: 'Débit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
-                { key: 'totalCredit', label: 'Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                { key: 'totalDebit', label: 'Débit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
+                { key: 'totalCredit', label: 'Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
                 { key: 'statut', label: 'Statut', render: (val) => {
                   const colors = { brouillon: '#ff9800', validée: '#4caf50' };
                   return <span style={{ color: colors[val] || '#666', fontWeight: 'bold' }}>{val?.toUpperCase()}</span>;
@@ -693,7 +693,7 @@ export function ModuleComptabilite() {
                   <div style={{ padding: '12px 15px', background: '#f5f5f5', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong style={{ fontSize: '15px' }}>{compte.numero} - {compte.nom}</strong>
                     <span style={{ color: compte.solde >= 0 ? '#388e3c' : '#d32f2f', fontWeight: 'bold' }}>
-                      Solde: {compte.solde.toLocaleString()} FCFA
+                      Solde: {compte.solde.toLocaleString('fr-FR')} FCFA
                     </span>
                   </div>
                   <Table
@@ -702,15 +702,15 @@ export function ModuleComptabilite() {
                       { key: 'journal', label: 'Journal' },
                       { key: 'reference', label: 'Référence' },
                       { key: 'libelle', label: 'Libellé' },
-                      { key: 'debit', label: 'Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
-                      { key: 'credit', label: 'Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' }
+                      { key: 'debit', label: 'Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' },
+                      { key: 'credit', label: 'Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' }
                     ]}
                     data={compte.lignes}
                     actions={false}
                   />
                   <div style={{ padding: '10px 15px', background: '#fafafa', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'flex-end', gap: '30px' }}>
-                    <span>Total Débit: <strong>{compte.totalDebit.toLocaleString()} FCFA</strong></span>
-                    <span>Total Crédit: <strong>{compte.totalCredit.toLocaleString()} FCFA</strong></span>
+                    <span>Total Débit: <strong>{compte.totalDebit.toLocaleString('fr-FR')} FCFA</strong></span>
+                    <span>Total Crédit: <strong>{compte.totalCredit.toLocaleString('fr-FR')} FCFA</strong></span>
                   </div>
                 </div>
               ))}
@@ -718,8 +718,8 @@ export function ModuleComptabilite() {
                 <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px', display: 'flex', justifyContent: 'space-between' }}>
                   <strong>TOTAUX GÉNÉRAUX</strong>
                   <div>
-                    <span style={{ marginRight: '30px' }}>Débit: <strong>{data.grandLivreTotaux.totalDebit.toLocaleString()} FCFA</strong></span>
-                    <span>Crédit: <strong>{data.grandLivreTotaux.totalCredit.toLocaleString()} FCFA</strong></span>
+                    <span style={{ marginRight: '30px' }}>Débit: <strong>{data.grandLivreTotaux.totalDebit.toLocaleString('fr-FR')} FCFA</strong></span>
+                    <span>Crédit: <strong>{data.grandLivreTotaux.totalCredit.toLocaleString('fr-FR')} FCFA</strong></span>
                   </div>
                 </div>
               )}
@@ -845,10 +845,10 @@ export function ModuleComptabilite() {
                 columns={[
                   { key: 'numero', label: 'N° Compte' },
                   { key: 'nom', label: 'Libellé' },
-                  { key: 'totalDebit', label: 'Mouv. Débit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
-                  { key: 'totalCredit', label: 'Mouv. Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
-                  { key: 'soldeDebit', label: 'Solde Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' },
-                  { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString()} FCFA` : '-' }
+                  { key: 'totalDebit', label: 'Mouv. Débit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
+                  { key: 'totalCredit', label: 'Mouv. Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
+                  { key: 'soldeDebit', label: 'Solde Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' },
+                  { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' }
                 ]}
                 data={data.balanceData}
                 actions={false}
@@ -856,7 +856,7 @@ export function ModuleComptabilite() {
               {data.balanceTotaux && (
                 <div style={{ marginTop: '15px', padding: '15px', background: data.balanceEquilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <strong>TOTAUX:</strong> Débit: <strong>{parseFloat(data.balanceTotaux.totalDebit || 0).toLocaleString()} FCFA</strong> | Crédit: <strong>{parseFloat(data.balanceTotaux.totalCredit || 0).toLocaleString()} FCFA</strong>
+                    <strong>TOTAUX:</strong> Débit: <strong>{parseFloat(data.balanceTotaux.totalDebit || 0).toLocaleString('fr-FR')} FCFA</strong> | Crédit: <strong>{parseFloat(data.balanceTotaux.totalCredit || 0).toLocaleString('fr-FR')} FCFA</strong>
                   </div>
                   <div style={{ color: data.balanceEquilibre ? '#388e3c' : '#d32f2f', fontWeight: 'bold' }}>
                     {data.balanceEquilibre ? '✅ Balance équilibrée' : '❌ Balance non équilibrée'}
@@ -885,9 +885,9 @@ export function ModuleComptabilite() {
                 { key: 'reference', label: 'Référence' },
                 { key: 'description', label: 'Description' },
                 { key: 'dateAcquisition', label: 'Date Acquisition', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
-                { key: 'valeurAcquisition', label: 'Valeur Acquisition', render: (val) => `${parseFloat(val).toLocaleString()} FCFA` },
-                { key: 'amortissementCumule', label: 'Amort. Cumulé', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
-                { key: 'valeurNetteComptable', label: 'VNC', render: (val) => `${parseFloat(val).toLocaleString()} FCFA` },
+                { key: 'valeurAcquisition', label: 'Valeur Acquisition', render: (val) => `${parseFloat(val).toLocaleString('fr-FR')} FCFA` },
+                { key: 'amortissementCumule', label: 'Amort. Cumulé', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
+                { key: 'valeurNetteComptable', label: 'VNC', render: (val) => `${parseFloat(val).toLocaleString('fr-FR')} FCFA` },
                 { key: 'statut', label: 'Statut', render: (val) => {
                   const colors = { actif: '#4caf50', 'cédée': '#ff9800', amortie: '#9e9e9e' };
                   return <span style={{ color: colors[val] || '#666', fontWeight: 'bold' }}>{val?.toUpperCase()}</span>;
@@ -1411,16 +1411,16 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL DÉBIT</p>
-                        <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{totalDebit.toLocaleString()} FCFA</h3>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{totalDebit.toLocaleString('fr-FR')} FCFA</h3>
                       </div>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL CRÉDIT</p>
-                        <h3 style={{ margin: '5px 0 0 0', color: '#7b1fa2' }}>{totalCredit.toLocaleString()} FCFA</h3>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#7b1fa2' }}>{totalCredit.toLocaleString('fr-FR')} FCFA</h3>
                       </div>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>DIFFÉRENCE</p>
                         <h3 style={{ margin: '5px 0 0 0', color: difference === 0 ? '#388e3c' : '#d32f2f' }}>
-                          {difference.toLocaleString()} FCFA {difference === 0 ? '✓' : '✗'}
+                          {difference.toLocaleString('fr-FR')} FCFA {difference === 0 ? '✓' : '✗'}
                         </h3>
                       </div>
                     </div>
@@ -1494,16 +1494,16 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL DÉBIT</p>
-                        <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{totalDebit.toLocaleString()} FCFA</h3>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{totalDebit.toLocaleString('fr-FR')} FCFA</h3>
                       </div>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL CRÉDIT</p>
-                        <h3 style={{ margin: '5px 0 0 0', color: '#7b1fa2' }}>{totalCredit.toLocaleString()} FCFA</h3>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#7b1fa2' }}>{totalCredit.toLocaleString('fr-FR')} FCFA</h3>
                       </div>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>DIFFÉRENCE</p>
                         <h3 style={{ margin: '5px 0 0 0', color: difference === 0 ? '#388e3c' : '#d32f2f' }}>
-                          {difference.toLocaleString()} FCFA {difference === 0 ? '✓' : '✗'}
+                          {difference.toLocaleString('fr-FR')} FCFA {difference === 0 ? '✓' : '✗'}
                         </h3>
                       </div>
                     </div>
@@ -1577,10 +1577,10 @@ export function ModuleComptabilite() {
                 <div>
                   <h4 style={{ marginBottom: '15px', color: '#3498db' }}>Totaux</h4>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>Total Débit:</strong> {parseFloat(modal.item.totalDebit || 0).toLocaleString()} FCFA
+                    <strong>Total Débit:</strong> {parseFloat(modal.item.totalDebit || 0).toLocaleString('fr-FR')} FCFA
                   </div>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>Total Crédit:</strong> {parseFloat(modal.item.totalCredit || 0).toLocaleString()} FCFA
+                    <strong>Total Crédit:</strong> {parseFloat(modal.item.totalCredit || 0).toLocaleString('fr-FR')} FCFA
                   </div>
                   <div style={{ marginBottom: '10px' }}>
                     <strong>Équilibre:</strong> {
@@ -1612,10 +1612,10 @@ export function ModuleComptabilite() {
                           </td>
                           <td style={{ padding: '10px' }}>{ligne.description || '-'}</td>
                           <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2', fontWeight: 'bold' }}>
-                            {ligne.type === 'debit' ? `${parseFloat(ligne.montant).toLocaleString()} FCFA` : '-'}
+                            {ligne.type === 'debit' ? `${parseFloat(ligne.montant).toLocaleString('fr-FR')} FCFA` : '-'}
                           </td>
                           <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2', fontWeight: 'bold' }}>
-                            {ligne.type === 'credit' ? `${parseFloat(ligne.montant).toLocaleString()} FCFA` : '-'}
+                            {ligne.type === 'credit' ? `${parseFloat(ligne.montant).toLocaleString('fr-FR')} FCFA` : '-'}
                           </td>
                         </tr>
                       ))}
@@ -1711,12 +1711,12 @@ export function ModuleComptabilite() {
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                             <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         ))}
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '5px' }}>
                           <span>Sous-total Immobilisations</span>
-                          <span>{(rapportModal.data.actif?.immobilise || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                          <span>{(rapportModal.data.actif?.immobilise || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
                         </div>
                       </div>
 
@@ -1736,12 +1736,12 @@ export function ModuleComptabilite() {
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                             <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         ))}
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '5px' }}>
                           <span>Sous-total Actif Circulant</span>
-                          <span>{(rapportModal.data.actif?.circulant || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                          <span>{(rapportModal.data.actif?.circulant || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
                         </div>
                       </div>
 
@@ -1761,18 +1761,18 @@ export function ModuleComptabilite() {
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                             <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         ))}
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '5px' }}>
                           <span>Sous-total Trésorerie</span>
-                          <span>{(rapportModal.data.actif?.tresorerie || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                          <span>{(rapportModal.data.actif?.tresorerie || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#1976d2', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
                         <span>TOTAL ACTIF</span>
-                        <span>{parseFloat(rapportModal.data.actif?.total || 0).toLocaleString()} FCFA</span>
+                        <span>{parseFloat(rapportModal.data.actif?.total || 0).toLocaleString('fr-FR')} FCFA</span>
                       </div>
                     </div>
 
@@ -1796,12 +1796,12 @@ export function ModuleComptabilite() {
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fce4ec'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                             <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         ))}
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '5px' }}>
                           <span>Sous-total Capitaux</span>
-                          <span>{(rapportModal.data.passif?.capitaux || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                          <span>{(rapportModal.data.passif?.capitaux || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
                         </div>
                       </div>
 
@@ -1821,18 +1821,18 @@ export function ModuleComptabilite() {
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fce4ec'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                             <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{parseFloat(c.solde).toLocaleString()} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         ))}
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '5px' }}>
                           <span>Sous-total Dettes</span>
-                          <span>{(rapportModal.data.passif?.dettes || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString()} FCFA</span>
+                          <span>{(rapportModal.data.passif?.dettes || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#7b1fa2', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
                         <span>TOTAL PASSIF</span>
-                        <span>{parseFloat(rapportModal.data.passif?.total || 0).toLocaleString()} FCFA</span>
+                        <span>{parseFloat(rapportModal.data.passif?.total || 0).toLocaleString('fr-FR')} FCFA</span>
                       </div>
                     </div>
                   </div>
@@ -1840,7 +1840,7 @@ export function ModuleComptabilite() {
                   <div style={{ marginTop: '20px', padding: '15px', backgroundColor: rapportModal.data.equilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                     {rapportModal.data.equilibre 
                       ? <span style={{ color: '#2e7d32', fontWeight: 'bold' }}>✅ Bilan équilibré</span>
-                      : <span style={{ color: '#c62828', fontWeight: 'bold' }}>⚠️ Bilan non équilibré (écart: {Math.abs(rapportModal.data.actif?.total - rapportModal.data.passif?.total).toLocaleString()} FCFA)</span>
+                      : <span style={{ color: '#c62828', fontWeight: 'bold' }}>⚠️ Bilan non équilibré (écart: {Math.abs(rapportModal.data.actif?.total - rapportModal.data.passif?.total).toLocaleString('fr-FR')} FCFA)</span>
                     }
                   </div>
                 </div>
@@ -1867,7 +1867,7 @@ export function ModuleComptabilite() {
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e8f5e9'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                             <span>{c.compte}</span>
-                            <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{parseFloat(c.montant).toLocaleString()} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{parseFloat(c.montant).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         ))}
                       </div>
@@ -1888,14 +1888,14 @@ export function ModuleComptabilite() {
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e8f5e9'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                             <span>{c.compte}</span>
-                            <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{parseFloat(c.montant).toLocaleString()} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{parseFloat(c.montant).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         ))}
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#2e7d32', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
                         <span>TOTAL PRODUITS</span>
-                        <span>{parseFloat(rapportModal.data.produits?.total || 0).toLocaleString()} FCFA</span>
+                        <span>{parseFloat(rapportModal.data.produits?.total || 0).toLocaleString('fr-FR')} FCFA</span>
                       </div>
                     </div>
 
@@ -1919,7 +1919,7 @@ export function ModuleComptabilite() {
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffebee'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                             <span>{c.compte}</span>
-                            <span style={{ fontWeight: 'bold', color: '#c62828' }}>{parseFloat(c.montant).toLocaleString()} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#c62828' }}>{parseFloat(c.montant).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         ))}
                       </div>
@@ -1940,14 +1940,14 @@ export function ModuleComptabilite() {
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffebee'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                             <span>{c.compte}</span>
-                            <span style={{ fontWeight: 'bold', color: '#c62828' }}>{parseFloat(c.montant).toLocaleString()} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#c62828' }}>{parseFloat(c.montant).toLocaleString('fr-FR')} FCFA</span>
                           </div>
                         ))}
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#c62828', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
                         <span>TOTAL CHARGES</span>
-                        <span>{parseFloat(rapportModal.data.charges?.total || 0).toLocaleString()} FCFA</span>
+                        <span>{parseFloat(rapportModal.data.charges?.total || 0).toLocaleString('fr-FR')} FCFA</span>
                       </div>
                     </div>
                   </div>
@@ -1958,19 +1958,19 @@ export function ModuleComptabilite() {
                       <div style={{ textAlign: 'center', padding: '15px', backgroundColor: 'white', borderRadius: '8px' }}>
                         <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat Exploitation</div>
                         <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.resultatExploitation >= 0 ? '#2e7d32' : '#c62828' }}>
-                          {parseFloat(rapportModal.data.resultatExploitation || 0).toLocaleString()} FCFA
+                          {parseFloat(rapportModal.data.resultatExploitation || 0).toLocaleString('fr-FR')} FCFA
                         </div>
                       </div>
                       <div style={{ textAlign: 'center', padding: '15px', backgroundColor: 'white', borderRadius: '8px' }}>
                         <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat Financier</div>
                         <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.resultatFinancier >= 0 ? '#2e7d32' : '#c62828' }}>
-                          {parseFloat(rapportModal.data.resultatFinancier || 0).toLocaleString()} FCFA
+                          {parseFloat(rapportModal.data.resultatFinancier || 0).toLocaleString('fr-FR')} FCFA
                         </div>
                       </div>
                       <div style={{ textAlign: 'center', padding: '15px', backgroundColor: rapportModal.data.benefice ? '#e8f5e9' : '#ffebee', borderRadius: '8px' }}>
                         <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat Net</div>
                         <div style={{ fontSize: '24px', fontWeight: 'bold', color: rapportModal.data.benefice ? '#2e7d32' : '#c62828' }}>
-                          {parseFloat(rapportModal.data.resultatNet || 0).toLocaleString()} FCFA
+                          {parseFloat(rapportModal.data.resultatNet || 0).toLocaleString('fr-FR')} FCFA
                         </div>
                         <div style={{ fontSize: '12px', marginTop: '5px' }}>
                           {rapportModal.data.benefice ? '✅ Bénéfice' : '❌ Perte'}
@@ -1993,11 +1993,11 @@ export function ModuleComptabilite() {
                     </div>
                     <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Total Débit</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString()} FCFA</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString('fr-FR')} FCFA</div>
                     </div>
                     <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Total Crédit</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString()} FCFA</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString('fr-FR')} FCFA</div>
                     </div>
                   </div>
                   
@@ -2028,16 +2028,16 @@ export function ModuleComptabilite() {
                               <td style={{ padding: '8px 10px', fontSize: '13px' }}>{e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-'}</td>
                               <td style={{ padding: '8px 10px', fontSize: '13px' }}>{e.reference || '-'}</td>
                               <td style={{ padding: '8px 10px', fontSize: '13px' }}>{e.libelle || '-'}</td>
-                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#1976d2' }}>{e.debit > 0 ? e.debit.toLocaleString() : '-'}</td>
-                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#7b1fa2' }}>{e.credit > 0 ? e.credit.toLocaleString() : '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#1976d2' }}>{e.debit > 0 ? e.debit.toLocaleString('fr-FR') : '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#7b1fa2' }}>{e.credit > 0 ? e.credit.toLocaleString('fr-FR') : '-'}</td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot>
                           <tr style={{ background: '#fff9e6', fontWeight: 'bold' }}>
                             <td colSpan="3" style={{ padding: '10px' }}>Total {journal.code}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2' }}>{(journal.debit || 0).toLocaleString()} FCFA</td>
-                            <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2' }}>{(journal.credit || 0).toLocaleString()} FCFA</td>
+                            <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2' }}>{(journal.debit || 0).toLocaleString('fr-FR')} FCFA</td>
+                            <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2' }}>{(journal.credit || 0).toLocaleString('fr-FR')} FCFA</td>
                           </tr>
                         </tfoot>
                       </table>
@@ -2060,15 +2060,15 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                       <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Encaissements</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxExploitation?.encaissements || 0).toLocaleString()} FCFA</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxExploitation?.encaissements || 0).toLocaleString('fr-FR')} FCFA</div>
                       </div>
                       <div style={{ padding: '20px', background: '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Décaissements</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxExploitation?.decaissements || 0).toLocaleString()} FCFA</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxExploitation?.decaissements || 0).toLocaleString('fr-FR')} FCFA</div>
                       </div>
                       <div style={{ padding: '20px', background: rapportModal.data.fluxExploitation?.net >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Flux Net Exploitation</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxExploitation?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxExploitation?.net || 0).toLocaleString()} FCFA</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxExploitation?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxExploitation?.net || 0).toLocaleString('fr-FR')} FCFA</div>
                       </div>
                     </div>
                   </div>
@@ -2079,15 +2079,15 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
                       <div style={{ padding: '20px', background: '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Acquisitions</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxInvestissement?.acquisitions || 0).toLocaleString()} FCFA</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxInvestissement?.acquisitions || 0).toLocaleString('fr-FR')} FCFA</div>
                       </div>
                       <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Cessions</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxInvestissement?.cessions || 0).toLocaleString()} FCFA</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxInvestissement?.cessions || 0).toLocaleString('fr-FR')} FCFA</div>
                       </div>
                       <div style={{ padding: '20px', background: rapportModal.data.fluxInvestissement?.net >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Flux Net Investissement</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxInvestissement?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxInvestissement?.net || 0).toLocaleString()} FCFA</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxInvestissement?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxInvestissement?.net || 0).toLocaleString('fr-FR')} FCFA</div>
                       </div>
                     </div>
                     {(rapportModal.data.fluxInvestissement?.details || []).length > 0 && (
@@ -2105,8 +2105,8 @@ export function ModuleComptabilite() {
                             <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
                               <td style={{ padding: '8px 10px', fontSize: '13px' }}>{d.compte}</td>
                               <td style={{ padding: '8px 10px', fontSize: '13px' }}>{d.nom}</td>
-                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#c62828' }}>{d.acquisitions > 0 ? d.acquisitions.toLocaleString() : '-'}</td>
-                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#2e7d32' }}>{d.cessions > 0 ? d.cessions.toLocaleString() : '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#c62828' }}>{d.acquisitions > 0 ? d.acquisitions.toLocaleString('fr-FR') : '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#2e7d32' }}>{d.cessions > 0 ? d.cessions.toLocaleString('fr-FR') : '-'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -2132,18 +2132,18 @@ export function ModuleComptabilite() {
                           <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
                             <td style={{ padding: '8px 10px', fontSize: '13px' }}>{c.numero}</td>
                             <td style={{ padding: '8px 10px', fontSize: '13px' }}>{c.nom}</td>
-                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#2e7d32' }}>{c.entrees > 0 ? c.entrees.toLocaleString() : '-'}</td>
-                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#c62828' }}>{c.sorties > 0 ? c.sorties.toLocaleString() : '-'}</td>
-                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', fontWeight: 'bold', color: c.solde >= 0 ? '#2e7d32' : '#c62828' }}>{c.solde.toLocaleString()} FCFA</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#2e7d32' }}>{c.entrees > 0 ? c.entrees.toLocaleString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#c62828' }}>{c.sorties > 0 ? c.sorties.toLocaleString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', fontWeight: 'bold', color: c.solde >= 0 ? '#2e7d32' : '#c62828' }}>{c.solde.toLocaleString('fr-FR')} FCFA</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr style={{ background: '#f3e5f5', fontWeight: 'bold' }}>
                           <td colSpan="2" style={{ padding: '10px' }}>TOTAL</td>
-                          <td style={{ padding: '10px', textAlign: 'right', color: '#2e7d32' }}>{(rapportModal.data.fluxTresorerie?.totalEntrees || 0).toLocaleString()} FCFA</td>
-                          <td style={{ padding: '10px', textAlign: 'right', color: '#c62828' }}>{(rapportModal.data.fluxTresorerie?.totalSorties || 0).toLocaleString()} FCFA</td>
-                          <td style={{ padding: '10px', textAlign: 'right', color: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString()} FCFA</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: '#2e7d32' }}>{(rapportModal.data.fluxTresorerie?.totalEntrees || 0).toLocaleString('fr-FR')} FCFA</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: '#c62828' }}>{(rapportModal.data.fluxTresorerie?.totalSorties || 0).toLocaleString('fr-FR')} FCFA</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString('fr-FR')} FCFA</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -2153,7 +2153,7 @@ export function ModuleComptabilite() {
                   <div style={{ padding: '20px', background: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                     <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>Variation Nette de Trésorerie</div>
                     <div style={{ fontSize: '28px', fontWeight: 'bold', color: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#2e7d32' : '#c62828' }}>
-                      {(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString()} FCFA
+                      {(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString('fr-FR')} FCFA
                     </div>
                   </div>
                 </div>
@@ -2167,11 +2167,11 @@ export function ModuleComptabilite() {
                     </div>
                     <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Total Débit</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString()} FCFA</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString('fr-FR')} FCFA</div>
                     </div>
                     <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Total Crédit</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString()} FCFA</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString('fr-FR')} FCFA</div>
                     </div>
                     <div style={{ padding: '15px', background: rapportModal.data.totaux?.equilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Équilibre</div>
@@ -2208,8 +2208,8 @@ export function ModuleComptabilite() {
                             <tr key={i} style={{ borderBottom: '1px solid #f5f5f5' }}>
                               <td style={{ padding: '6px 10px', fontSize: '13px' }}>{ligne.compte} - {ligne.nomCompte}</td>
                               <td style={{ padding: '6px 10px', fontSize: '13px' }}>{ligne.libelle}</td>
-                              <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: '13px', color: '#1976d2', fontWeight: ligne.debit > 0 ? 'bold' : 'normal' }}>{ligne.debit > 0 ? ligne.debit.toLocaleString() : '-'}</td>
-                              <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: '13px', color: '#7b1fa2', fontWeight: ligne.credit > 0 ? 'bold' : 'normal' }}>{ligne.credit > 0 ? ligne.credit.toLocaleString() : '-'}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: '13px', color: '#1976d2', fontWeight: ligne.debit > 0 ? 'bold' : 'normal' }}>{ligne.debit > 0 ? ligne.debit.toLocaleString('fr-FR') : '-'}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: '13px', color: '#7b1fa2', fontWeight: ligne.credit > 0 ? 'bold' : 'normal' }}>{ligne.credit > 0 ? ligne.credit.toLocaleString('fr-FR') : '-'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -2366,10 +2366,10 @@ export function ModuleComptabilite() {
                         <td style={{ padding: '10px' }}>{e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-'}</td>
                         <td style={{ padding: '10px' }}>{e.libelle || e.description || '-'}</td>
                         <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2', fontWeight: e.debit > 0 ? 'bold' : 'normal' }}>
-                          {e.debit > 0 ? parseFloat(e.debit).toLocaleString() + ' FCFA' : '-'}
+                          {e.debit > 0 ? parseFloat(e.debit).toLocaleString('fr-FR') + ' FCFA' : '-'}
                         </td>
                         <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2', fontWeight: e.credit > 0 ? 'bold' : 'normal' }}>
-                          {e.credit > 0 ? parseFloat(e.credit).toLocaleString() + ' FCFA' : '-'}
+                          {e.credit > 0 ? parseFloat(e.credit).toLocaleString('fr-FR') + ' FCFA' : '-'}
                         </td>
                       </tr>
                     ))}
@@ -2378,10 +2378,10 @@ export function ModuleComptabilite() {
                     <tr style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
                       <td colSpan="2" style={{ padding: '10px' }}>TOTAL</td>
                       <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2' }}>
-                        {drillModal.data.reduce((s, e) => s + parseFloat(e.debit || 0), 0).toLocaleString()} FCFA
+                        {drillModal.data.reduce((s, e) => s + parseFloat(e.debit || 0), 0).toLocaleString('fr-FR')} FCFA
                       </td>
                       <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2' }}>
-                        {drillModal.data.reduce((s, e) => s + parseFloat(e.credit || 0), 0).toLocaleString()} FCFA
+                        {drillModal.data.reduce((s, e) => s + parseFloat(e.credit || 0), 0).toLocaleString('fr-FR')} FCFA
                       </td>
                     </tr>
                   </tfoot>

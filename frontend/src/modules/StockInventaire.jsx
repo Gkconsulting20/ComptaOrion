@@ -65,18 +65,18 @@ function NonFactureTab({ fournisseurs, produits }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '25px' }}>
         <div style={{ padding: '20px', background: '#fff3e0', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>STOCK EN ATTENTE</p>
-          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{stockPending.totaux?.valeur?.toLocaleString() || 0} FCFA</h2>
+          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{stockPending.totaux?.valeur?.toLocaleString('fr-FR') || 0} FCFA</h2>
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{stockPending.totaux?.lignes || 0} lignes</p>
         </div>
         <div style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>LOGISTIQUE EN ATTENTE</p>
-          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{logistiquePending.totaux?.montant?.toLocaleString() || 0} FCFA</h2>
+          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{logistiquePending.totaux?.montant?.toLocaleString('fr-FR') || 0} FCFA</h2>
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{logistiquePending.totaux?.lignes || 0} lignes</p>
         </div>
         <div style={{ padding: '20px', background: '#fce4ec', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL NON FACTURÉ</p>
           <h2 style={{ margin: '10px 0 0 0', color: '#c2185b' }}>
-            {((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString()} FCFA
+            {((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString('fr-FR')} FCFA
           </h2>
         </div>
       </div>
@@ -111,8 +111,8 @@ function NonFactureTab({ fournisseurs, produits }) {
                 { key: 'reception_numero', label: 'N° Réception' },
                 { key: 'produit_nom', label: 'Produit', render: (val, row) => `${row.produit_reference || ''} ${val || ''}` },
                 { key: 'quantite_pending', label: 'Qté', render: (val) => parseFloat(val).toFixed(0) },
-                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
-                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
+                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} FCFA</strong> }
               ]}
               data={stockPending.items || []}
             />
@@ -131,7 +131,7 @@ function NonFactureTab({ fournisseurs, produits }) {
               <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
                 {(logistiquePending.parType || []).map(t => (
                   <div key={t.type} style={{ padding: '10px 15px', background: '#f5f5f5', borderRadius: '8px' }}>
-                    <strong>{typeLabels[t.type] || t.type}:</strong> {t.montant.toLocaleString()} FCFA ({t.lignes})
+                    <strong>{typeLabels[t.type] || t.type}:</strong> {t.montant.toLocaleString('fr-FR')} FCFA ({t.lignes})
                   </div>
                 ))}
               </div>
@@ -143,7 +143,7 @@ function NonFactureTab({ fournisseurs, produits }) {
                   { key: 'reception_numero', label: 'N° Réception' },
                   { key: 'type', label: 'Type', render: (val) => typeLabels[val] || val },
                   { key: 'description', label: 'Description' },
-                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} FCFA</strong> }
                 ]}
                 data={logistiquePending.items || []}
               />
@@ -160,7 +160,7 @@ function NonFactureTab({ fournisseurs, produits }) {
               { key: 'nom', label: 'Fournisseur' },
               { key: 'lignes', label: 'Lignes' },
               { key: 'quantite', label: 'Quantité', render: (val) => parseFloat(val).toFixed(0) },
-              { key: 'valeur', label: 'Valeur Stock', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+              { key: 'valeur', label: 'Valeur Stock', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} FCFA</strong> }
             ]}
             data={stockPending.parFournisseur || []}
           />
@@ -170,7 +170,7 @@ function NonFactureTab({ fournisseurs, produits }) {
             columns={[
               { key: 'nom', label: 'Fournisseur' },
               { key: 'lignes', label: 'Lignes' },
-              { key: 'montant', label: 'Montant Total', render: (val) => <strong>{parseFloat(val || 0).toLocaleString()} FCFA</strong> }
+              { key: 'montant', label: 'Montant Total', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} FCFA</strong> }
             ]}
             data={logistiquePending.parFournisseur || []}
           />
@@ -454,7 +454,7 @@ export function StockInventaire() {
                       {val || 0} {row.uniteMesure || 'pièce'} {low && '⚠️'}
                     </span>;
                   }},
-                  { key: 'prixVente', label: 'Prix', render: (val) => `${val || 0} FCFA` }
+                  { key: 'prixVente', label: 'Prix', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} FCFA` }
                 ]}
                 data={data.produits}
                 onRowClick={(item) => { setSelectedProduit(item); setShowProduitDetails(true); }}
@@ -529,7 +529,7 @@ export function StockInventaire() {
                 { key: 'numeroCommande', label: 'N° Commande' },
                 { key: 'fournisseur', label: 'Fournisseur', render: (val, row) => row.fournisseur?.nom || val?.nom || '-' },
                 { key: 'dateCommande', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString('fr-FR') : '-' },
-                { key: 'totalHT', label: 'Total HT', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                { key: 'totalHT', label: 'Total HT', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
                 { key: 'statut', label: 'Statut', render: (val) => {
                   const statut = val || 'brouillon';
                   const colors = { brouillon: '#95a5a6', validee: '#3498db', recue: '#27ae60', annulee: '#e74c3c' };
@@ -578,7 +578,7 @@ export function StockInventaire() {
                 { key: 'date_reception', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
                 { key: 'fournisseur_nom', label: 'Fournisseur' },
                 { key: 'entrepot_nom', label: 'Entrepôt', render: (val) => val || '-' },
-                { key: 'total_ht', label: 'Total HT', render: (val) => `${parseFloat(val || 0).toLocaleString()} FCFA` },
+                { key: 'total_ht', label: 'Total HT', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
                 { key: 'nb_lignes', label: 'Lignes' },
                 { key: 'statut', label: 'Statut', render: (val) => (
                   <span style={{ 
@@ -763,7 +763,7 @@ export function StockInventaire() {
             </div>
             <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px' }}>
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>VALORISATION TOTALE</p>
-              <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{valorisation.toLocaleString()} FCFA</h2>
+              <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{valorisation.toLocaleString('fr-FR')} FCFA</h2>
             </div>
           </div>
 
@@ -812,17 +812,17 @@ export function StockInventaire() {
                   return cat ? cat.nom : '-';
                 }},
                 { key: 'quantite', label: 'Quantité', render: (val, row) => `${val || 0} ${row.uniteMesure || 'pièce'}` },
-                { key: 'prixAchat', label: 'Prix Achat', render: (val) => `${val || 0} FCFA` },
+                { key: 'prixAchat', label: 'Prix Achat', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} FCFA` },
                 { key: 'valorisation', label: 'Valorisation Totale', render: (_, row) => {
                   const val = (parseFloat(row.quantite || 0) * parseFloat(row.prixAchat || 0));
-                  return <strong style={{ color: '#388e3c' }}>{val.toLocaleString()} FCFA</strong>;
+                  return <strong style={{ color: '#388e3c' }}>{val.toLocaleString('fr-FR')} FCFA</strong>;
                 }}
               ]}
               data={data.produits}
             />
             <div style={{ marginTop: '15px', padding: '15px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'right' }}>
               <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>VALORISATION TOTALE DU STOCK</p>
-              <h2 style={{ margin: '5px 0 0 0', color: '#388e3c' }}>{valorisation.toLocaleString()} FCFA</h2>
+              <h2 style={{ margin: '5px 0 0 0', color: '#388e3c' }}>{valorisation.toLocaleString('fr-FR')} FCFA</h2>
             </div>
           </div>
 
@@ -844,7 +844,7 @@ export function StockInventaire() {
                   const val = data.produits
                     .filter(p => p.categorieId === row.id)
                     .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || 0)), 0);
-                  return <strong style={{ color: '#388e3c' }}>{val.toLocaleString()} FCFA</strong>;
+                  return <strong style={{ color: '#388e3c' }}>{val.toLocaleString('fr-FR')} FCFA</strong>;
                 }}
               ]}
               data={data.categories}
@@ -996,7 +996,7 @@ export function StockInventaire() {
                 
                 <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px', textAlign: 'right' }}>
                   <strong>Total HT estimé: </strong>
-                  {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantiteRecue || 0) * parseFloat(l.prixUnitaireEstime || 0)), 0).toLocaleString()} FCFA
+                  {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantiteRecue || 0) * parseFloat(l.prixUnitaireEstime || 0)), 0).toLocaleString('fr-FR')} FCFA
                 </div>
               </div>
             </>
@@ -1089,7 +1089,7 @@ export function StockInventaire() {
                 
                 <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px', textAlign: 'right' }}>
                   <strong>Total HT: </strong>
-                  {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantite || 0) * parseFloat(l.prixUnitaire || 0)), 0).toLocaleString()} FCFA
+                  {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantite || 0) * parseFloat(l.prixUnitaire || 0)), 0).toLocaleString('fr-FR')} FCFA
                 </div>
               </div>
             </>
@@ -1127,9 +1127,9 @@ export function StockInventaire() {
                 { label: 'Stock Actuel', value: `${selectedProduit.quantite || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
                 { label: 'Stock Minimum', value: `${selectedProduit.stockMinimum || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
                 { label: 'Méthode de Valorisation', value: selectedProduit.valorisationMethod || 'FIFO' },
-                { label: 'Prix Achat', value: `${selectedProduit.prixAchat || 0} FCFA` },
-                { label: 'Prix Vente', value: `${selectedProduit.prixVente || 0} FCFA` },
-                { label: 'Marge', value: `${((selectedProduit.prixVente || 0) - (selectedProduit.prixAchat || 0))} FCFA` }
+                { label: 'Prix Achat', value: `${Math.round(parseFloat(selectedProduit.prixAchat || 0)).toLocaleString('fr-FR')} FCFA` },
+                { label: 'Prix Vente', value: `${Math.round(parseFloat(selectedProduit.prixVente || 0)).toLocaleString('fr-FR')} FCFA` },
+                { label: 'Marge', value: `${Math.round((parseFloat(selectedProduit.prixVente || 0) - parseFloat(selectedProduit.prixAchat || 0))).toLocaleString('fr-FR')} FCFA` }
               ]
             }
           ]}

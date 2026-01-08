@@ -196,7 +196,7 @@ function DevisTab() {
       render: (val, row) => row.client?.nom || '-'
     },
     { key: 'dateDevis', label: 'Date', render: (val) => val?.split('T')[0] || '-' },
-    { key: 'totalTTC', label: 'Montant TTC', render: (val) => `${val || 0} FCFA` },
+    { key: 'totalTTC', label: 'Montant TTC', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} FCFA` },
     { 
       key: 'statut', 
       label: 'Statut',
@@ -465,9 +465,9 @@ function DevisTab() {
             {
               title: 'Totaux',
               fields: [
-                { label: 'Total HT', value: `${selectedDevis.totalHT || 0} FCFA` },
-                { label: 'TVA', value: `${selectedDevis.montantTVA || 0} FCFA` },
-                { label: 'Total TTC', value: `${selectedDevis.totalTTC || 0} FCFA` }
+                { label: 'Total HT', value: `${Math.round(parseFloat(selectedDevis.totalHT || 0)).toLocaleString('fr-FR')} FCFA` },
+                { label: 'TVA', value: `${Math.round(parseFloat(selectedDevis.montantTVA || 0)).toLocaleString('fr-FR')} FCFA` },
+                { label: 'Total TTC', value: `${Math.round(parseFloat(selectedDevis.totalTTC || 0)).toLocaleString('fr-FR')} FCFA` }
               ]
             }
           ]}
@@ -476,7 +476,7 @@ function DevisTab() {
             columns: [
               { key: 'description', label: 'Description' },
               { key: 'quantite', label: 'Qté', align: 'center' },
-              { key: 'prixUnitaire', label: 'P.U.', align: 'right', render: (val) => `${val || 0} FCFA` },
+              { key: 'prixUnitaire', label: 'P.U.', align: 'right', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} FCFA` },
               { key: 'remise', label: 'Remise', align: 'right', render: (val) => `${val || 0}%` },
               { key: 'total', label: 'Total', align: 'right', render: (val, row) => {
                 const montant = row.quantite * row.prixUnitaire;
@@ -1905,7 +1905,7 @@ function PaiementsTab() {
       render: (val) => val?.numeroFacture || '-'
     },
     { key: 'datePaiement', label: 'Date', render: (val) => val?.split('T')[0] || '-' },
-    { key: 'montant', label: 'Montant', render: (val) => `${val || 0} FCFA` },
+    { key: 'montant', label: 'Montant', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} FCFA` },
     { 
       key: 'modePaiement', 
       label: 'Mode',
@@ -2873,7 +2873,7 @@ function ParametresTab() {
                   return compte ? `${compte.numero} - ${compte.nom}` : 'Non configuré';
                 })() },
                 { label: 'Délai Paiement', value: `${selectedClient.delaiPaiement || 30} jours` },
-                { label: 'Limite Crédit', value: `${selectedClient.limiteCredit || 0} FCFA` },
+                { label: 'Limite Crédit', value: `${Math.round(parseFloat(selectedClient.limiteCredit || 0)).toLocaleString('fr-FR')} FCFA` },
                 { label: 'Catégorie', value: selectedClient.categorieClient || 'Standard' }
               ]
             }

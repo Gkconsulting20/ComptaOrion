@@ -383,7 +383,7 @@ export function DepensesModule() {
               fields: [
                 { label: 'ID', value: selectedDepense.id },
                 { label: 'Description', value: selectedDepense.description || '-' },
-                { label: 'Montant', value: `${selectedDepense.montant || 0} FCFA` },
+                { label: 'Montant', value: `${Math.round(parseFloat(selectedDepense.montant || 0)).toLocaleString('fr-FR')} FCFA` },
                 { label: 'Date', value: selectedDepense.dateDepense?.split('T')[0] || '-' },
                 { label: 'Statut', value: selectedDepense.statut?.replace('_', ' ') }
               ]

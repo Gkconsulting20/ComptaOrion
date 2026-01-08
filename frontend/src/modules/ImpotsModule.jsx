@@ -229,9 +229,9 @@ export function ImpotsModule() {
                     <p>Période: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}</p>
                     <table>
                       <tr><th>Type</th><th>Montant</th></tr>
-                      <tr><td>TVA Collectée (compte 4431)</td><td>${tvaResume.tvaCollectee.toLocaleString()} FCFA</td></tr>
-                      <tr><td>TVA Déductible (compte 4452)</td><td>${tvaResume.tvaDeductible.toLocaleString()} FCFA</td></tr>
-                      <tr class="total"><td>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</td><td>${Math.abs(tvaResume.tvaADecaisser).toLocaleString()} FCFA</td></tr>
+                      <tr><td>TVA Collectée (compte 4431)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</td></tr>
+                      <tr><td>TVA Déductible (compte 4452)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</td></tr>
+                      <tr class="total"><td>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</td><td>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} FCFA</td></tr>
                     </table>
                     <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
                       Document généré par ComptaOrion le ${new Date().toLocaleDateString('fr-FR')}
@@ -258,9 +258,9 @@ export function ImpotsModule() {
                     <p>Période: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}</p>
                     <table>
                       <tr><th>Type</th><th>Montant</th></tr>
-                      <tr><td>TVA Collectée</td><td>${tvaResume.tvaCollectee.toLocaleString()} FCFA</td></tr>
-                      <tr><td>TVA Déductible</td><td>${tvaResume.tvaDeductible.toLocaleString()} FCFA</td></tr>
-                      <tr><td><strong>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</strong></td><td><strong>${Math.abs(tvaResume.tvaADecaisser).toLocaleString()} FCFA</strong></td></tr>
+                      <tr><td>TVA Collectée</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</td></tr>
+                      <tr><td>TVA Déductible</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</td></tr>
+                      <tr><td><strong>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</strong></td><td><strong>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} FCFA</strong></td></tr>
                     </table>
                   </body>
                 </html>
@@ -282,19 +282,19 @@ export function ImpotsModule() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
           <div style={{ padding: '20px', backgroundColor: '#3498db', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Collectée</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaCollectee.toLocaleString()} FCFA</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur ventes (compte 4431)</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Déductible</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaDeductible.toLocaleString()} FCFA</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur achats (compte 4452)</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: tvaResume.tvaADecaisser >= 0 ? '#27ae60' : '#9b59b6', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>{tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{Math.abs(tvaResume.tvaADecaisser).toLocaleString()} FCFA</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} FCFA</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>{tvaResume.tvaADecaisser >= 0 ? 'Collectée - Déductible' : 'À reporter'}</div>
           </div>
         </div>
