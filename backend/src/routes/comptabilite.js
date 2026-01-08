@@ -2053,6 +2053,114 @@ router.get('/balance', async (req, res) => {
   }
 });
 
+// Drill-down des mouvements d'un compte par numéro (pour TVA et comptes créditeurs)
+router.get('/compte-mouvements/:numeroCompte', async (req, res) => {
+  try {
+    const entrepriseId = req.entrepriseId;
+    if (!entrepriseId) {
+      return res.status(401).json({ error: 'Authentification requise' });
+    }
+    
+    const { numeroCompte } = req.params;
+    const { dateDebut, dateFin, page = 1, limit = 100 } = req.query;
+    
+    // Trouver le compte par son numéro
+    const compte = await db.query.comptesComptables.findFirst({
+      where: and(
+        eq(comptesComptables.entrepriseId, entrepriseId),
+        eq(comptesComptables.numero, numeroCompte)
+      )
+    });
+    
+    if (!compte) {
+      return res.status(404).json({ error: 'Compte non trouvé' });
+    }
+    
+    // Construire les conditions de filtre
+    const conditions = [
+      eq(lignesEcritures.entrepriseId, entrepriseId),
+      eq(lignesEcritures.compteComptableId, compte.id)
+    ];
+    
+    if (dateDebut) {
+      conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
+    }
+    if (dateFin) {
+      conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
+    }
+    
+    // Récupérer les mouvements avec jointures via SQL brut
+    const mouvementsRaw = await db.execute(sql`
+      SELECT 
+        le.id,
+        e.date_ecriture as date,
+        COALESCE(j.code, '') as journal_code,
+        COALESCE(e.numero_piece, '') as reference,
+        COALESCE(e.libelle, '') as libelle,
+        COALESCE(le.debit, 0) as debit,
+        COALESCE(le.credit, 0) as credit
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      LEFT JOIN journaux j ON e.journal_id = j.id
+      WHERE le.compte_comptable_id = ${compte.id}
+        AND e.entreprise_id = ${entrepriseId}
+        ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+        ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      ORDER BY e.date_ecriture, e.id
+    `);
+    
+    const mouvements = mouvementsRaw.rows || mouvementsRaw || [];
+    
+    // Calculer le solde cumulé
+    let soldeCumule = 0;
+    const mouvementsAvecSolde = mouvements.map(m => {
+      const debit = parseFloat(m.debit || 0);
+      const credit = parseFloat(m.credit || 0);
+      soldeCumule += debit - credit;
+      return {
+        id: m.id,
+        date: m.date ? new Date(m.date).toLocaleDateString('fr-FR') : '',
+        journal: m.journal_code || '',
+        reference: m.reference || '',
+        libelle: m.libelle || '',
+        debit: debit,
+        credit: credit,
+        soldeCumule: soldeCumule
+      };
+    });
+    
+    // Pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedData = mouvementsAvecSolde.slice(offset, offset + parseInt(limit));
+    
+    // Totaux
+    const totaux = {
+      totalDebit: mouvementsAvecSolde.reduce((s, m) => s + m.debit, 0),
+      totalCredit: mouvementsAvecSolde.reduce((s, m) => s + m.credit, 0),
+      solde: soldeCumule
+    };
+    
+    res.json({
+      compte: {
+        numero: compte.numero,
+        nom: compte.nom,
+        type: compte.type
+      },
+      mouvements: paginatedData,
+      totaux,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: mouvementsAvecSolde.length,
+        totalPages: Math.ceil(mouvementsAvecSolde.length / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Erreur drill-down compte:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==========================================
 // RAPPORTS FINANCIERS
 // ==========================================

@@ -2721,7 +2721,7 @@ export function ModuleComptabilite() {
                   <tbody>
                     {drillModal.data.map((e, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '8px' }}>{e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td style={{ padding: '8px' }}>{e.date || '-'}</td>
                         <td style={{ padding: '8px' }}>{e.journal || '-'}</td>
                         <td style={{ padding: '8px', fontSize: '12px', color: '#666' }}>{e.reference || '-'}</td>
                         <td style={{ padding: '8px' }}>{e.libelle || e.description || '-'}</td>
@@ -2731,8 +2731,8 @@ export function ModuleComptabilite() {
                         <td style={{ padding: '8px', textAlign: 'right', color: '#7b1fa2', fontWeight: e.credit > 0 ? 'bold' : 'normal' }}>
                           {e.credit > 0 ? Math.round(e.credit).toLocaleString('fr-FR') + ' FCFA' : '-'}
                         </td>
-                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: e.soldeCumul >= 0 ? '#388e3c' : '#d32f2f' }}>
-                          {Math.round(e.soldeCumul || 0).toLocaleString('fr-FR')} FCFA
+                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: (e.soldeCumule || e.soldeCumul || 0) >= 0 ? '#388e3c' : '#d32f2f' }}>
+                          {Math.round(e.soldeCumule || e.soldeCumul || 0).toLocaleString('fr-FR')} FCFA
                         </td>
                       </tr>
                     ))}
@@ -2761,13 +2761,13 @@ export function ModuleComptabilite() {
                   onClick={() => {
                     const headers = ['Date', 'Journal', 'Référence', 'Libellé', 'Débit', 'Crédit', 'Solde Cumulé'];
                     const rows = drillModal.data.map(e => [
-                      e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '',
+                      e.date || '',
                       e.journal || '',
                       e.reference || '',
                       (e.libelle || '').replace(/"/g, '""'),
                       e.debit || 0,
                       e.credit || 0,
-                      e.soldeCumul || 0
+                      e.soldeCumule || e.soldeCumul || 0
                     ]);
                     const csv = [headers.join(';'), ...rows.map(r => r.map(c => `"${c}"`).join(';'))].join('\n');
                     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
