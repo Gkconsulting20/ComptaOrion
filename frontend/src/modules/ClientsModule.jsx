@@ -2965,6 +2965,142 @@ function EtatsCompteTab() {
 
   const selectedClient = clients.find(c => c.id == selectedClientId);
 
+  const imprimerEtatCompte = () => {
+    if (!etatCompte || !selectedClient) return;
+
+    const printWindow = window.open('', '_blank');
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>État de Compte - ${selectedClient.nom}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; color: #333; }
+          .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #3498db; }
+          .header h1 { color: #3498db; font-size: 24px; margin-bottom: 10px; }
+          .header .client-name { font-size: 18px; font-weight: bold; margin: 10px 0; }
+          .header .periode { color: #666; }
+          .summary { display: flex; justify-content: space-between; margin-bottom: 30px; }
+          .summary-box { flex: 1; padding: 15px; margin: 0 10px; border-radius: 8px; text-align: center; }
+          .summary-box:first-child { margin-left: 0; }
+          .summary-box:last-child { margin-right: 0; }
+          .summary-box.facture { background: #e8f4f8; }
+          .summary-box.paye { background: #e8f8f0; }
+          .summary-box.solde { background: #fff3e0; }
+          .summary-box .label { color: #666; font-size: 12px; margin-bottom: 5px; }
+          .summary-box .value { font-size: 20px; font-weight: bold; }
+          .summary-box.facture .value { color: #3498db; }
+          .summary-box.paye .value { color: #27ae60; }
+          .summary-box.solde .value { color: #e74c3c; }
+          .section { margin-bottom: 25px; }
+          .section h3 { margin-bottom: 15px; color: #333; font-size: 16px; }
+          table { width: 100%; border-collapse: collapse; }
+          th { background: #f8f9fa; padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size: 12px; }
+          td { padding: 10px; border-bottom: 1px solid #dee2e6; font-size: 12px; }
+          .text-right { text-align: right; }
+          .text-center { text-align: center; }
+          .amount { font-weight: bold; }
+          .status { padding: 3px 8px; border-radius: 4px; font-size: 11px; }
+          .status-payee { background: #d4edda; color: #155724; }
+          .status-envoyee { background: #fff3cd; color: #856404; }
+          .status-retard { background: #f8d7da; color: #721c24; }
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 11px; }
+          .no-data { color: #999; font-style: italic; padding: 20px; text-align: center; }
+          @media print { body { padding: 15px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>ÉTAT DE COMPTE CLIENT</h1>
+          <div class="client-name">${selectedClient.nom}</div>
+          <div class="periode">Période: ${new Date(periode.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(periode.dateFin).toLocaleDateString('fr-FR')}</div>
+        </div>
+
+        <div class="summary">
+          <div class="summary-box facture">
+            <div class="label">Total Facturé</div>
+            <div class="value">${etatCompte.totalFacture?.toLocaleString('fr-FR') || 0} FCFA</div>
+          </div>
+          <div class="summary-box paye">
+            <div class="label">Total Payé</div>
+            <div class="value">${etatCompte.totalPaye?.toLocaleString('fr-FR') || 0} FCFA</div>
+          </div>
+          <div class="summary-box solde">
+            <div class="label">Solde Restant</div>
+            <div class="value">${etatCompte.solde?.toLocaleString('fr-FR') || 0} FCFA</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Factures</h3>
+          ${etatCompte.factures && etatCompte.factures.length > 0 ? `
+            <table>
+              <thead>
+                <tr>
+                  <th>N° Facture</th>
+                  <th>Date</th>
+                  <th class="text-right">Montant TTC</th>
+                  <th class="text-center">Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${etatCompte.factures.map(f => `
+                  <tr>
+                    <td>${f.numeroFacture}</td>
+                    <td>${new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
+                    <td class="text-right amount">${parseFloat(f.totalTTC || 0).toLocaleString('fr-FR')} FCFA</td>
+                    <td class="text-center">
+                      <span class="status status-${f.statut}">${f.statut === 'payee' ? 'Payée' : f.statut === 'envoyee' ? 'Envoyée' : f.statut === 'retard' ? 'En retard' : f.statut}</span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : '<div class="no-data">Aucune facture sur cette période</div>'}
+        </div>
+
+        <div class="section">
+          <h3>Paiements</h3>
+          ${etatCompte.paiements && etatCompte.paiements.length > 0 ? `
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Référence</th>
+                  <th>Mode</th>
+                  <th class="text-right">Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${etatCompte.paiements.map(p => `
+                  <tr>
+                    <td>${new Date(p.datePaiement).toLocaleDateString('fr-FR')}</td>
+                    <td>${p.reference || '-'}</td>
+                    <td>${p.modePaiement}</td>
+                    <td class="text-right amount" style="color: #27ae60;">${parseFloat(p.montant || 0).toLocaleString('fr-FR')} FCFA</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : '<div class="no-data">Aucun paiement sur cette période</div>'}
+        </div>
+
+        <div class="footer">
+          <p>Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}</p>
+          <p>ComptaOrion - Système de Gestion Comptable</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
+
   return (
     <div>
       <h3>📋 États de Compte Client</h3>
@@ -3012,6 +3148,11 @@ function EtatsCompteTab() {
           <Button onClick={genererEtatCompte} disabled={loading || !selectedClientId}>
             {loading ? '⏳ Génération...' : '📄 Générer État de Compte'}
           </Button>
+          {etatCompte && (
+            <Button variant="secondary" onClick={() => imprimerEtatCompte()}>
+              🖨️ Imprimer / PDF
+            </Button>
+          )}
           {etatCompte && selectedClient?.email && (
             <Button variant="success" onClick={envoyerParEmail} disabled={sending}>
               {sending ? '📧 Envoi...' : `📧 Envoyer à ${selectedClient.email}`}
