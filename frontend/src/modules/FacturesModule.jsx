@@ -192,7 +192,7 @@ export function FacturesModule() {
       render: (val, row) => row.client?.nom || row.facture?.clientId || '-'
     },
     { key: 'dateFacture', label: 'Date', render: (val) => val?.split('T')[0] || '-' },
-    { key: 'totalTTC', label: 'Montant TTC', render: (val) => `${val || 0} FCFA` },
+    { key: 'totalTTC', label: 'Montant TTC', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} FCFA` },
     { 
       key: 'statut', 
       label: 'Statut',
@@ -346,15 +346,15 @@ export function FacturesModule() {
           <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
               <strong>Total HT:</strong>
-              <span>{totals.totalHT.toFixed(2)} FCFA</span>
+              <span>{Math.round(totals.totalHT).toLocaleString('fr-FR')} FCFA</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
               <strong>TVA ({tauxTVA}%):</strong>
-              <span>{totals.montantTVA.toFixed(2)} FCFA</span>
+              <span>{Math.round(totals.montantTVA).toLocaleString('fr-FR')} FCFA</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 'bold', paddingTop: '10px', borderTop: '2px solid #dee2e6' }}>
               <strong>Total TTC:</strong>
-              <span>{totals.totalTTC.toFixed(2)} FCFA</span>
+              <span>{Math.round(totals.totalTTC).toLocaleString('fr-FR')} FCFA</span>
             </div>
           </div>
 
@@ -499,9 +499,9 @@ export function FacturesModule() {
                         <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
                           <td style={{ padding: '10px' }}>{item.description}</td>
                           <td style={{ padding: '10px', textAlign: 'right' }}>{item.quantite}</td>
-                          <td style={{ padding: '10px', textAlign: 'right' }}>{item.prixUnitaire} FCFA</td>
+                          <td style={{ padding: '10px', textAlign: 'right' }}>{Math.round(parseFloat(item.prixUnitaire || 0)).toLocaleString('fr-FR')} FCFA</td>
                           <td style={{ padding: '10px', textAlign: 'right' }}>{item.remise}%</td>
-                          <td style={{ padding: '10px', textAlign: 'right' }}>{total.toFixed(2)} FCFA</td>
+                          <td style={{ padding: '10px', textAlign: 'right' }}>{Math.round(total).toLocaleString('fr-FR')} FCFA</td>
                         </tr>
                       );
                     })}
@@ -513,15 +513,15 @@ export function FacturesModule() {
             <div style={{ marginTop: '30px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <strong>Total HT:</strong>
-                <span>{selectedFacture.totalHT?.toFixed(2) || 0} FCFA</span>
+                <span>{Math.round(parseFloat(selectedFacture.totalHT || 0)).toLocaleString('fr-FR')} FCFA</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <strong>TVA ({selectedFacture.tauxTVA || 18}%):</strong>
-                <span>{selectedFacture.montantTVA?.toFixed(2) || 0} FCFA</span>
+                <span>{Math.round(parseFloat(selectedFacture.montantTVA || 0)).toLocaleString('fr-FR')} FCFA</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 'bold', paddingTop: '10px', borderTop: '2px solid #dee2e6' }}>
                 <strong>Total TTC:</strong>
-                <span>{selectedFacture.totalTTC?.toFixed(2) || 0} FCFA</span>
+                <span>{Math.round(parseFloat(selectedFacture.totalTTC || 0)).toLocaleString('fr-FR')} FCFA</span>
               </div>
             </div>
 
