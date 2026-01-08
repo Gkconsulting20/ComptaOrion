@@ -23,6 +23,7 @@ export function TresorerieModule() {
   const [transactionsFiltered, setTransactionsFiltered] = useState([]);
   const [rapprochementPreview, setRapprochementPreview] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [selectedTransactions, setSelectedTransactions] = useState([]);
   
   const ENTREPRISE_ID = parseInt(localStorage.getItem('entrepriseId')) || 1;
 
@@ -1011,6 +1012,42 @@ export function TresorerieModule() {
     }
   };
 
+  const handleToggleSelection = (transactionId) => {
+    setSelectedTransactions(prev => 
+      prev.includes(transactionId) 
+        ? prev.filter(id => id !== transactionId)
+        : [...prev, transactionId]
+    );
+  };
+
+  const handleSelectAll = (transactionIds) => {
+    setSelectedTransactions(prev => {
+      const allSelected = transactionIds.every(id => prev.includes(id));
+      if (allSelected) {
+        return prev.filter(id => !transactionIds.includes(id));
+      } else {
+        return [...new Set([...prev, ...transactionIds])];
+      }
+    });
+  };
+
+  const handleRapprocherSelection = async (rapprochementId, rapprocher = true) => {
+    if (selectedTransactions.length === 0) {
+      alert('Veuillez sélectionner au moins une transaction');
+      return;
+    }
+    try {
+      for (const transactionId of selectedTransactions) {
+        await api.put(`/tresorerie/rapprochements/${rapprochementId}/transactions/${transactionId}`, { rapproche: rapprocher });
+      }
+      const data = await api.get(`/tresorerie/rapprochements/${rapprochementId}`);
+      setRapprochementActif(data);
+      setSelectedTransactions([]);
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+    }
+  };
+
   const renderRapprochement = () => {
     if (rapprochementActif) {
       const { rapprochement, transactions: transactionsRapprochement } = rapprochementActif;
@@ -1066,20 +1103,69 @@ export function TresorerieModule() {
             </div>
           </div>
 
-          <h4 style={{ marginTop: '30px', marginBottom: '15px' }}>Transactions à rapprocher ({transactionsNonRapprochees.length})</h4>
+          <div style={{ marginTop: '30px', marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h4 style={{ margin: 0 }}>Transactions à rapprocher ({transactionsNonRapprochees.length})</h4>
+            {transactionsNonRapprochees.length > 0 && (
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', color: '#666' }}>
+                  {selectedTransactions.filter(id => transactionsNonRapprochees.some(t => t.id === id)).length} sélectionnée(s)
+                </span>
+                <button
+                  onClick={() => handleRapprocherSelection(rapprochement.id, true)}
+                  disabled={selectedTransactions.filter(id => transactionsNonRapprochees.some(t => t.id === id)).length === 0}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: selectedTransactions.filter(id => transactionsNonRapprochees.some(t => t.id === id)).length > 0 ? '#27ae60' : '#ccc',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: selectedTransactions.filter(id => transactionsNonRapprochees.some(t => t.id === id)).length > 0 ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ✓ Rapprocher la sélection
+                </button>
+              </div>
+            )}
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                <th style={{ padding: '12px', textAlign: 'center', width: '50px' }}>
+                  <input 
+                    type="checkbox"
+                    checked={transactionsNonRapprochees.length > 0 && transactionsNonRapprochees.every(t => selectedTransactions.includes(t.id))}
+                    onChange={() => handleSelectAll(transactionsNonRapprochees.map(t => t.id))}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    title="Tout sélectionner"
+                  />
+                </th>
                 <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
                 <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
                 <th style={{ padding: '12px', textAlign: 'left' }}>Description</th>
                 <th style={{ padding: '12px', textAlign: 'right' }}>Montant</th>
-                <th style={{ padding: '12px', textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {transactionsNonRapprochees.map(t => (
-                <tr key={t.id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                <tr 
+                  key={t.id} 
+                  style={{ 
+                    borderBottom: '1px solid #dee2e6',
+                    backgroundColor: selectedTransactions.includes(t.id) ? '#e3f2fd' : 'transparent',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => handleToggleSelection(t.id)}
+                >
+                  <td style={{ padding: '12px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    <input 
+                      type="checkbox"
+                      checked={selectedTransactions.includes(t.id)}
+                      onChange={() => handleToggleSelection(t.id)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                  </td>
                   <td style={{ padding: '12px' }}>{new Date(t.dateTransaction).toLocaleDateString('fr-FR')}</td>
                   <td style={{ padding: '12px' }}>
                     <span style={{
@@ -1097,22 +1183,6 @@ export function TresorerieModule() {
                   <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
                     {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString('fr-FR')} FCFA
                   </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => handleToggletransactionRapprochee(rapprochement.id, t.id, t.rapproche)}
-                      style={{
-                        padding: '6px 12px',
-                        backgroundColor: '#27ae60',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      ✓ Rapprocher
-                    </button>
-                  </td>
                 </tr>
               ))}
               {transactionsNonRapprochees.length === 0 && (
@@ -1125,20 +1195,73 @@ export function TresorerieModule() {
             </tbody>
           </table>
 
-          <h4 style={{ marginTop: '30px', marginBottom: '15px' }}>Transactions rapprochées ({transactionsRapprochees.length})</h4>
+          <div style={{ marginTop: '30px', marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h4 style={{ margin: 0 }}>Transactions rapprochées ({transactionsRapprochees.length})</h4>
+            {transactionsRapprochees.length > 0 && rapprochement.statut !== 'valide' && (
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', color: '#666' }}>
+                  {selectedTransactions.filter(id => transactionsRapprochees.some(t => t.id === id)).length} sélectionnée(s)
+                </span>
+                <button
+                  onClick={() => handleRapprocherSelection(rapprochement.id, false)}
+                  disabled={selectedTransactions.filter(id => transactionsRapprochees.some(t => t.id === id)).length === 0}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: selectedTransactions.filter(id => transactionsRapprochees.some(t => t.id === id)).length > 0 ? '#e74c3c' : '#ccc',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: selectedTransactions.filter(id => transactionsRapprochees.some(t => t.id === id)).length > 0 ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ✗ Annuler la sélection
+                </button>
+              </div>
+            )}
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
             <thead>
               <tr style={{ backgroundColor: '#e8f5e9', borderBottom: '2px solid #388e3c' }}>
+                {rapprochement.statut !== 'valide' && (
+                  <th style={{ padding: '12px', textAlign: 'center', width: '50px' }}>
+                    <input 
+                      type="checkbox"
+                      checked={transactionsRapprochees.length > 0 && transactionsRapprochees.every(t => selectedTransactions.includes(t.id))}
+                      onChange={() => handleSelectAll(transactionsRapprochees.map(t => t.id))}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      title="Tout sélectionner"
+                    />
+                  </th>
+                )}
                 <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
                 <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
                 <th style={{ padding: '12px', textAlign: 'left' }}>Description</th>
                 <th style={{ padding: '12px', textAlign: 'right' }}>Montant</th>
-                <th style={{ padding: '12px', textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {transactionsRapprochees.map(t => (
-                <tr key={t.id} style={{ borderBottom: '1px solid #dee2e6', backgroundColor: '#f1f8f4' }}>
+                <tr 
+                  key={t.id} 
+                  style={{ 
+                    borderBottom: '1px solid #dee2e6', 
+                    backgroundColor: selectedTransactions.includes(t.id) ? '#ffebee' : '#f1f8f4',
+                    cursor: rapprochement.statut !== 'valide' ? 'pointer' : 'default'
+                  }}
+                  onClick={() => rapprochement.statut !== 'valide' && handleToggleSelection(t.id)}
+                >
+                  {rapprochement.statut !== 'valide' && (
+                    <td style={{ padding: '12px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <input 
+                        type="checkbox"
+                        checked={selectedTransactions.includes(t.id)}
+                        onChange={() => handleToggleSelection(t.id)}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                    </td>
+                  )}
                   <td style={{ padding: '12px' }}>{new Date(t.dateTransaction).toLocaleDateString('fr-FR')}</td>
                   <td style={{ padding: '12px' }}>
                     <span style={{
@@ -1155,22 +1278,6 @@ export function TresorerieModule() {
                   <td style={{ padding: '12px' }}>{t.description || '-'}</td>
                   <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
                     {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString('fr-FR')} FCFA
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => handleToggletransactionRapprochee(rapprochement.id, t.id, t.rapproche)}
-                      style={{
-                        padding: '6px 12px',
-                        backgroundColor: '#e74c3c',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      ✗ Annuler
-                    </button>
                   </td>
                 </tr>
               ))}
