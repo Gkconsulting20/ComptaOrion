@@ -392,9 +392,9 @@ export function StockInventaire() {
     }
   };
 
-  const alertes = data.produits.filter(p => parseFloat(p.quantite || 0) < parseFloat(p.stockMinimum || 0));
+  const alertes = data.produits.filter(p => parseFloat(p.quantite || 0) < parseFloat(p.stockMinimum || 0) && parseFloat(p.quantite || 0) > 0);
   const totalStock = data.produits.reduce((s, p) => s + parseFloat(p.quantite || 0), 0);
-  const valorisation = data.produits.reduce((s, p) => s + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || 0)), 0);
+  const valorisation = data.produits.reduce((s, p) => s + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || p.prixRevient || 0)), 0);
 
   return (
     <div>
@@ -763,7 +763,7 @@ export function StockInventaire() {
             </div>
             <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px' }}>
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>VALORISATION TOTALE</p>
-              <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{valorisation.toLocaleString('fr-FR')} FCFA</h2>
+              <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{Math.round(valorisation).toLocaleString('fr-FR')} FCFA</h2>
             </div>
           </div>
 
@@ -814,7 +814,7 @@ export function StockInventaire() {
                 { key: 'quantite', label: 'Quantité', render: (val, row) => `${val || 0} ${row.uniteMesure || 'pièce'}` },
                 { key: 'prixAchat', label: 'Prix Achat', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} FCFA` },
                 { key: 'valorisation', label: 'Valorisation Totale', render: (_, row) => {
-                  const val = (parseFloat(row.quantite || 0) * parseFloat(row.prixAchat || 0));
+                  const val = Math.round(parseFloat(row.quantite || 0) * parseFloat(row.prixAchat || row.prixRevient || 0));
                   return <strong style={{ color: '#388e3c' }}>{val.toLocaleString('fr-FR')} FCFA</strong>;
                 }}
               ]}
@@ -822,7 +822,7 @@ export function StockInventaire() {
             />
             <div style={{ marginTop: '15px', padding: '15px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'right' }}>
               <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>VALORISATION TOTALE DU STOCK</p>
-              <h2 style={{ margin: '5px 0 0 0', color: '#388e3c' }}>{valorisation.toLocaleString('fr-FR')} FCFA</h2>
+              <h2 style={{ margin: '5px 0 0 0', color: '#388e3c' }}>{Math.round(valorisation).toLocaleString('fr-FR')} FCFA</h2>
             </div>
           </div>
 
@@ -841,9 +841,9 @@ export function StockInventaire() {
                   return total.toFixed(0);
                 }},
                 { key: 'valorisation', label: 'Valorisation', render: (_, row) => {
-                  const val = data.produits
+                  const val = Math.round(data.produits
                     .filter(p => p.categorieId === row.id)
-                    .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || 0)), 0);
+                    .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || p.prixRevient || 0)), 0));
                   return <strong style={{ color: '#388e3c' }}>{val.toLocaleString('fr-FR')} FCFA</strong>;
                 }}
               ]}
