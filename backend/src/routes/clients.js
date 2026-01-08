@@ -1229,8 +1229,8 @@ router.post('/etat-compte', async (req, res) => {
       return !!facture;
     });
 
-    const totalFacture = facturesList.reduce((sum, f) => sum + (f.totalTTC || 0), 0);
-    const totalPaye = paiementsClient.reduce((sum, p) => sum + (p.montant || 0), 0);
+    const totalFacture = facturesList.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
+    const totalPaye = paiementsClient.reduce((sum, p) => sum + parseFloat(p.montant || 0), 0);
     const solde = totalFacture - totalPaye;
 
     res.json({
@@ -1320,8 +1320,8 @@ router.post('/etat-compte/email', async (req, res) => {
       return !!facture;
     });
 
-    const totalFacture = facturesList.reduce((sum, f) => sum + (f.totalTTC || 0), 0);
-    const totalPaye = paiementsClient.reduce((sum, p) => sum + (p.montant || 0), 0);
+    const totalFacture = facturesList.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
+    const totalPaye = paiementsClient.reduce((sum, p) => sum + parseFloat(p.montant || 0), 0);
     const solde = totalFacture - totalPaye;
 
     const dateDebutFr = new Date(dateDebut).toLocaleDateString('fr-FR');
