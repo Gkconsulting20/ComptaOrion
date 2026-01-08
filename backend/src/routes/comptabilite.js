@@ -2706,7 +2706,11 @@ router.get('/compte-mouvements/:numeroCompte', async (req, res) => {
   try {
     const { numeroCompte } = req.params;
     const { dateDebut, dateFin, page = 1, limit = 100 } = req.query;
-    const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const eId = req.entrepriseId;
+    
+    if (!eId) {
+      return res.status(401).json({ error: 'Authentification requise' });
+    }
     
     if (!numeroCompte) {
       return res.status(400).json({ error: 'Numéro de compte requis' });

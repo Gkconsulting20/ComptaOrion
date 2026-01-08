@@ -1104,7 +1104,50 @@ export function ModuleComptabilite() {
                   { key: 'totalDebit', label: 'Mouv. Débit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
                   { key: 'totalCredit', label: 'Mouv. Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
                   { key: 'soldeDebit', label: 'Solde Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' },
-                  { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' }
+                  { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' },
+                  { key: 'actions', label: 'Détails', render: (val, row) => {
+                    const numero = row.numero || '';
+                    const isTVA = numero.startsWith('4431') || numero.startsWith('4452') || numero.startsWith('443') || numero.startsWith('445');
+                    const isCredit = row.soldeCredit > 0 && numero.startsWith('4');
+                    if (isTVA || isCredit) {
+                      return (
+                        <button
+                          onClick={async () => {
+                            setDrillModal({ open: true, title: `${numero} - ${row.nom}`, data: [], loading: true, compte: numero });
+                            try {
+                              const response = await api.get(`/comptabilite/compte-mouvements/${numero}`, { 
+                                dateDebut: periode.dateDebut, 
+                                dateFin: periode.dateFin 
+                              });
+                              setDrillModal({ 
+                                open: true, 
+                                title: `${response.compte.numero} - ${response.compte.nom}`, 
+                                data: response.mouvements, 
+                                totaux: response.totaux,
+                                loading: false,
+                                compte: numero
+                              });
+                            } catch (err) {
+                              alert('Erreur: ' + err.message);
+                              setDrillModal({ open: false, title: '', data: [], loading: false });
+                            }
+                          }}
+                          style={{ 
+                            padding: '4px 8px', 
+                            background: isTVA ? '#ff9800' : '#2196f3', 
+                            color: 'white', 
+                            border: 'none', 
+                            borderRadius: '4px', 
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}
+                        >
+                          🔍 Détails
+                        </button>
+                      );
+                    }
+                    return null;
+                  }}
                 ]}
                 data={data.balanceData}
                 actions={false}
@@ -2652,8 +2695,8 @@ export function ModuleComptabilite() {
           justifyContent: 'center', alignItems: 'center', zIndex: 1001
         }}>
           <div style={{
-            backgroundColor: 'white', borderRadius: '8px', width: '90%', maxWidth: '800px',
-            maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column'
+            backgroundColor: 'white', borderRadius: '8px', width: '95%', maxWidth: '1100px',
+            maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column'
           }}>
             <div style={{
               padding: '16px 20px', borderBottom: '1px solid #eee',
@@ -2671,37 +2714,48 @@ export function ModuleComptabilite() {
               ) : drillModal.data.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>Aucune écriture trouvée pour cette période</div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f8f9fa' }}>
-                      <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
-                      <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Libellé</th>
-                      <th style={{ padding: '10px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Débit</th>
-                      <th style={{ padding: '10px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Crédit</th>
+                      <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
+                      <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Journal</th>
+                      <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Réf.</th>
+                      <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Libellé</th>
+                      <th style={{ padding: '8px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Débit</th>
+                      <th style={{ padding: '8px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Crédit</th>
+                      <th style={{ padding: '8px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Solde Cumul.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {drillModal.data.map((e, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '10px' }}>{e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-'}</td>
-                        <td style={{ padding: '10px' }}>{e.libelle || e.description || '-'}</td>
-                        <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2', fontWeight: e.debit > 0 ? 'bold' : 'normal' }}>
-                          {e.debit > 0 ? parseFloat(e.debit).toLocaleString('fr-FR') + ' FCFA' : '-'}
+                        <td style={{ padding: '8px' }}>{e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td style={{ padding: '8px' }}>{e.journal || '-'}</td>
+                        <td style={{ padding: '8px', fontSize: '12px', color: '#666' }}>{e.reference || '-'}</td>
+                        <td style={{ padding: '8px' }}>{e.libelle || e.description || '-'}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#1976d2', fontWeight: e.debit > 0 ? 'bold' : 'normal' }}>
+                          {e.debit > 0 ? Math.round(e.debit).toLocaleString('fr-FR') + ' FCFA' : '-'}
                         </td>
-                        <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2', fontWeight: e.credit > 0 ? 'bold' : 'normal' }}>
-                          {e.credit > 0 ? parseFloat(e.credit).toLocaleString('fr-FR') + ' FCFA' : '-'}
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#7b1fa2', fontWeight: e.credit > 0 ? 'bold' : 'normal' }}>
+                          {e.credit > 0 ? Math.round(e.credit).toLocaleString('fr-FR') + ' FCFA' : '-'}
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: e.soldeCumul >= 0 ? '#388e3c' : '#d32f2f' }}>
+                          {Math.round(e.soldeCumul || 0).toLocaleString('fr-FR')} FCFA
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
-                      <td colSpan="2" style={{ padding: '10px' }}>TOTAL</td>
+                    <tr style={{ backgroundColor: '#e3f2fd', fontWeight: 'bold' }}>
+                      <td colSpan="4" style={{ padding: '10px' }}>TOTAL</td>
                       <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2' }}>
-                        {drillModal.data.reduce((s, e) => s + parseFloat(e.debit || 0), 0).toLocaleString('fr-FR')} FCFA
+                        {Math.round(drillModal.totaux?.totalDebit || drillModal.data.reduce((s, e) => s + parseFloat(e.debit || 0), 0)).toLocaleString('fr-FR')} FCFA
                       </td>
                       <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2' }}>
-                        {drillModal.data.reduce((s, e) => s + parseFloat(e.credit || 0), 0).toLocaleString('fr-FR')} FCFA
+                        {Math.round(drillModal.totaux?.totalCredit || drillModal.data.reduce((s, e) => s + parseFloat(e.credit || 0), 0)).toLocaleString('fr-FR')} FCFA
+                      </td>
+                      <td style={{ padding: '10px', textAlign: 'right', color: (drillModal.totaux?.solde || 0) >= 0 ? '#388e3c' : '#d32f2f' }}>
+                        {Math.round(drillModal.totaux?.solde || 0).toLocaleString('fr-FR')} FCFA
                       </td>
                     </tr>
                   </tfoot>
@@ -2709,10 +2763,37 @@ export function ModuleComptabilite() {
               )}
             </div>
             <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#666', fontSize: '13px' }}>{drillModal.data.length} écriture(s)</span>
-              <Button variant="secondary" onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false })}>
-                Fermer
-              </Button>
+              <span style={{ color: '#666', fontSize: '13px' }}>{drillModal.data.length} mouvement(s)</span>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button 
+                  onClick={() => {
+                    const headers = ['Date', 'Journal', 'Référence', 'Libellé', 'Débit', 'Crédit', 'Solde Cumulé'];
+                    const rows = drillModal.data.map(e => [
+                      e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '',
+                      e.journal || '',
+                      e.reference || '',
+                      (e.libelle || '').replace(/"/g, '""'),
+                      e.debit || 0,
+                      e.credit || 0,
+                      e.soldeCumul || 0
+                    ]);
+                    const csv = [headers.join(';'), ...rows.map(r => r.map(c => `"${c}"`).join(';'))].join('\n');
+                    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Mouvements_${drillModal.compte || 'compte'}_${new Date().toISOString().split('T')[0]}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  ⬇️ Export CSV
+                </button>
+                <Button variant="secondary" onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false })}>
+                  Fermer
+                </Button>
+              </div>
             </div>
           </div>
         </div>
