@@ -34,6 +34,7 @@ ComptaOrion features a modular architecture covering 8 domains:
 3.  **Supplier & Purchase Management:** CRUD for suppliers, purchase orders, goods receipts, and supplier invoices. Includes a two-stage costing workflow for import operations with logistics costs.
 4.  **Stock & Inventory:** Multi-warehouse management, movement tracking, and FIFO/CMP valorization.
 5.  **Accounting & Compliance:** Chart of Accounts (SYSCOHADA/IFRS/PCG), Journals, Accounting Entries, General Ledger, Trial Balance, Fixed Assets management with amortization, Financial Reports, and recurrent entries. Includes a Chart of Accounts Report with SYSCOHADA class grouping.
+    -   **Drill-Down TVA & Crédit:** Clicking on TVA collectée (4431), TVA déductible (4452), or credit accounts in the Balance report opens a detailed modal showing all component transactions with date, journal, reference, libellé, debit, credit, and cumulative balance. Supports CSV export.
 6.  **Treasury & Finance:** Bank balances, cash management, automated bank reconciliation, expense management, and cash flow forecasting with automated predictions.
 7.  **Configuration & Security:** Currency management, accounting settings, country-specific parameters, authentication, RLS, audit log, and customizable invoice branding.
 8.  **Intelligence & Assistance:** AI Assistant via OpenAI for Q&A and suggestions.
