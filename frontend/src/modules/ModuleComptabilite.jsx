@@ -2013,158 +2013,150 @@ export function ModuleComptabilite() {
                 <div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
                     {/* ACTIF */}
-                    <div>
-                      <h4 style={{ color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '10px' }}>ACTIF</h4>
+                    <div style={{ border: '1px solid #bbdefb', borderRadius: '8px', overflow: 'hidden' }}>
+                      <h4 style={{ color: 'white', backgroundColor: '#1976d2', padding: '12px 16px', margin: 0, textAlign: 'center', fontSize: '16px' }}>ACTIF</h4>
                       
-                      <div style={{ marginBottom: '20px' }}>
-                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Immobilisations</h5>
-                        {(rapportModal.data.actif?.immobilise || []).map((c, i) => (
-                          <div key={i} onClick={async () => {
-                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
-                            try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
-                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
-                          }} style={{ 
-                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
-                            borderBottom: '1px solid #eee', cursor: 'pointer', 
-                            transition: 'background 0.2s'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                            <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                      <div style={{ padding: '15px' }}>
+                        <div style={{ marginBottom: '20px' }}>
+                          <h5 style={{ color: '#1976d2', marginBottom: '10px', fontSize: '14px', borderBottom: '1px solid #e3f2fd', paddingBottom: '5px' }}>ACTIF IMMOBILISÉ</h5>
+                          {(rapportModal.data.actif?.immobilise || []).map((c, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px' }}>
+                              <span style={{ color: '#333' }}>{c.numero} - {c.nom}</span>
+                              <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                            </div>
+                          ))}
+                          {(rapportModal.data.actif?.amortissements || []).length > 0 && (
+                            <>
+                              <div style={{ fontSize: '12px', color: '#666', marginTop: '10px', marginBottom: '5px', fontStyle: 'italic' }}>Amortissements (en déduction)</div>
+                              {(rapportModal.data.actif?.amortissements || []).map((c, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px', backgroundColor: '#fff3e0' }}>
+                                  <span style={{ color: '#666' }}>{c.numero} - {c.nom}</span>
+                                  <span style={{ fontWeight: 'bold', color: '#e65100' }}>-{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
+                            <span>Sous-total Immobilisations nettes</span>
+                            <span>{Math.round((rapportModal.data.actif?.immobilise || []).reduce((s,c) => s + (c.solde || 0), 0) - (rapportModal.data.actif?.amortissements || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} FCFA</span>
                           </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '5px' }}>
-                          <span>Sous-total Immobilisations</span>
-                          <span>{(rapportModal.data.actif?.immobilise || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                          <h5 style={{ color: '#1976d2', marginBottom: '10px', fontSize: '14px', borderBottom: '1px solid #e3f2fd', paddingBottom: '5px' }}>ACTIF CIRCULANT</h5>
+                          {(rapportModal.data.actif?.circulant || []).map((c, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px' }}>
+                              <span style={{ color: '#333' }}>{c.numero} - {c.nom}</span>
+                              <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                            </div>
+                          ))}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
+                            <span>Sous-total Actif Circulant</span>
+                            <span>{Math.round((rapportModal.data.actif?.circulant || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} FCFA</span>
+                          </div>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                          <h5 style={{ color: '#1976d2', marginBottom: '10px', fontSize: '14px', borderBottom: '1px solid #e3f2fd', paddingBottom: '5px' }}>TRÉSORERIE ACTIF</h5>
+                          {(rapportModal.data.actif?.tresorerie || []).map((c, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px' }}>
+                              <span style={{ color: '#333' }}>{c.numero} - {c.nom}</span>
+                              <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                            </div>
+                          ))}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
+                            <span>Sous-total Trésorerie</span>
+                            <span>{Math.round((rapportModal.data.actif?.tresorerie || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} FCFA</span>
+                          </div>
                         </div>
                       </div>
 
-                      <div style={{ marginBottom: '20px' }}>
-                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Actif Circulant</h5>
-                        {(rapportModal.data.actif?.circulant || []).map((c, i) => (
-                          <div key={i} onClick={async () => {
-                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
-                            try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
-                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
-                          }} style={{ 
-                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
-                            borderBottom: '1px solid #eee', cursor: 'pointer'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                            <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
-                          </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '5px' }}>
-                          <span>Sous-total Actif Circulant</span>
-                          <span>{(rapportModal.data.actif?.circulant || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
-                        </div>
-                      </div>
-
-                      <div style={{ marginBottom: '20px' }}>
-                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Trésorerie</h5>
-                        {(rapportModal.data.actif?.tresorerie || []).map((c, i) => (
-                          <div key={i} onClick={async () => {
-                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
-                            try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
-                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
-                          }} style={{ 
-                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
-                            borderBottom: '1px solid #eee', cursor: 'pointer'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                            <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
-                          </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '5px' }}>
-                          <span>Sous-total Trésorerie</span>
-                          <span>{(rapportModal.data.actif?.tresorerie || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#1976d2', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '15px', backgroundColor: '#1565c0', color: 'white', fontWeight: 'bold', fontSize: '15px' }}>
                         <span>TOTAL ACTIF</span>
-                        <span>{parseFloat(rapportModal.data.actif?.total || 0).toLocaleString('fr-FR')} FCFA</span>
+                        <span>{Math.round(rapportModal.data.actif?.total || 0).toLocaleString('fr-FR')} FCFA</span>
                       </div>
                     </div>
 
                     {/* PASSIF */}
-                    <div>
-                      <h4 style={{ color: '#7b1fa2', borderBottom: '2px solid #7b1fa2', paddingBottom: '10px' }}>PASSIF</h4>
+                    <div style={{ border: '1px solid #e1bee7', borderRadius: '8px', overflow: 'hidden' }}>
+                      <h4 style={{ color: 'white', backgroundColor: '#7b1fa2', padding: '12px 16px', margin: 0, textAlign: 'center', fontSize: '16px' }}>PASSIF</h4>
                       
-                      <div style={{ marginBottom: '20px' }}>
-                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Capitaux Propres</h5>
-                        {(rapportModal.data.passif?.capitaux || []).map((c, i) => (
-                          <div key={i} onClick={async () => {
-                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
-                            try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
-                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
-                          }} style={{ 
-                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
-                            borderBottom: '1px solid #eee', cursor: 'pointer'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fce4ec'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                            <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                      <div style={{ padding: '15px' }}>
+                        <div style={{ marginBottom: '20px' }}>
+                          <h5 style={{ color: '#7b1fa2', marginBottom: '10px', fontSize: '14px', borderBottom: '1px solid #f3e5f5', paddingBottom: '5px' }}>CAPITAUX PROPRES</h5>
+                          {(rapportModal.data.passif?.capitaux || []).map((c, i) => (
+                            <div key={i} style={{ 
+                              display: 'flex', justifyContent: 'space-between', padding: '6px 8px', 
+                              borderBottom: '1px solid #f5f5f5', fontSize: '13px',
+                              backgroundColor: c.isResultat ? (c.solde >= 0 ? '#e8f5e9' : '#ffebee') : 'transparent'
+                            }}>
+                              <span style={{ color: c.isResultat ? (c.solde >= 0 ? '#2e7d32' : '#c62828') : '#333', fontWeight: c.isResultat ? 'bold' : 'normal' }}>
+                                {c.numero} - {c.nom}
+                              </span>
+                              <span style={{ fontWeight: 'bold', color: c.isResultat ? (c.solde >= 0 ? '#2e7d32' : '#c62828') : '#7b1fa2' }}>
+                                {c.solde < 0 ? '-' : ''}{Math.round(Math.abs(c.solde)).toLocaleString('fr-FR')} FCFA
+                              </span>
+                            </div>
+                          ))}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
+                            <span>Sous-total Capitaux Propres</span>
+                            <span>{Math.round((rapportModal.data.passif?.capitaux || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} FCFA</span>
                           </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '5px' }}>
-                          <span>Sous-total Capitaux</span>
-                          <span>{(rapportModal.data.passif?.capitaux || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                          <h5 style={{ color: '#7b1fa2', marginBottom: '10px', fontSize: '14px', borderBottom: '1px solid #f3e5f5', paddingBottom: '5px' }}>DETTES</h5>
+                          {(rapportModal.data.passif?.dettes || []).map((c, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px' }}>
+                              <span style={{ color: '#333' }}>{c.numero} - {c.nom}</span>
+                              <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                            </div>
+                          ))}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
+                            <span>Sous-total Dettes</span>
+                            <span>{Math.round((rapportModal.data.passif?.dettes || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} FCFA</span>
+                          </div>
                         </div>
                       </div>
 
-                      <div style={{ marginBottom: '20px' }}>
-                        <h5 style={{ color: '#666', marginBottom: '10px' }}>Dettes</h5>
-                        {(rapportModal.data.passif?.dettes || []).map((c, i) => (
-                          <div key={i} onClick={async () => {
-                            setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: [], loading: true });
-                            try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                              setDrillModal({ open: true, title: `Détail: ${c.numero} - ${c.nom}`, data: ecritures || [], loading: false });
-                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
-                          }} style={{ 
-                            display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
-                            borderBottom: '1px solid #eee', cursor: 'pointer'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fce4ec'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                            <span>{c.numero} - {c.nom}</span>
-                            <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{parseFloat(c.solde).toLocaleString('fr-FR')} FCFA</span>
-                          </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '5px' }}>
-                          <span>Sous-total Dettes</span>
-                          <span>{(rapportModal.data.passif?.dettes || []).reduce((s,c) => s + parseFloat(c.solde || 0), 0).toLocaleString('fr-FR')} FCFA</span>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#7b1fa2', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '15px', backgroundColor: '#6a1b9a', color: 'white', fontWeight: 'bold', fontSize: '15px' }}>
                         <span>TOTAL PASSIF</span>
-                        <span>{parseFloat(rapportModal.data.passif?.total || 0).toLocaleString('fr-FR')} FCFA</span>
+                        <span>{Math.round(rapportModal.data.passif?.total || 0).toLocaleString('fr-FR')} FCFA</span>
                       </div>
                     </div>
                   </div>
                   
-                  <div style={{ marginTop: '20px', padding: '15px', backgroundColor: rapportModal.data.equilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
-                    {rapportModal.data.equilibre 
-                      ? <span style={{ color: '#2e7d32', fontWeight: 'bold' }}>✅ Bilan équilibré</span>
-                      : <span style={{ color: '#c62828', fontWeight: 'bold' }}>⚠️ Bilan non équilibré (écart: {Math.abs(rapportModal.data.actif?.total - rapportModal.data.passif?.total).toLocaleString('fr-FR')} FCFA)</span>
-                    }
+                  {/* Vérification équilibre */}
+                  <div style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                    <div style={{ padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Total Actif</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{Math.round(rapportModal.data.actif?.total || 0).toLocaleString('fr-FR')} FCFA</div>
+                    </div>
+                    <div style={{ padding: '15px', backgroundColor: rapportModal.data.equilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                      {rapportModal.data.equilibre 
+                        ? <div style={{ color: '#2e7d32', fontWeight: 'bold', fontSize: '16px' }}>✅ BILAN ÉQUILIBRÉ</div>
+                        : <div>
+                            <div style={{ color: '#c62828', fontWeight: 'bold' }}>⚠️ ÉCART</div>
+                            <div style={{ color: '#c62828', fontSize: '14px' }}>{Math.round(Math.abs(rapportModal.data.actif?.total - rapportModal.data.passif?.total)).toLocaleString('fr-FR')} FCFA</div>
+                          </div>
+                      }
+                    </div>
+                    <div style={{ padding: '15px', backgroundColor: '#f3e5f5', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Total Passif</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{Math.round(rapportModal.data.passif?.total || 0).toLocaleString('fr-FR')} FCFA</div>
+                    </div>
                   </div>
+
+                  {/* Résultat de l'exercice */}
+                  {rapportModal.data.resultatNet !== undefined && (
+                    <div style={{ marginTop: '15px', padding: '15px', backgroundColor: rapportModal.data.resultatNet >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat de l'exercice</div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.resultatNet >= 0 ? '#2e7d32' : '#c62828' }}>
+                        {rapportModal.data.resultatNet >= 0 ? 'BÉNÉFICE: ' : 'PERTE: '}
+                        {Math.round(Math.abs(rapportModal.data.resultatNet)).toLocaleString('fr-FR')} FCFA
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : rapportModal.type === 'resultat' && rapportModal.data ? (
                 <div>

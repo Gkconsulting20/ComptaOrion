@@ -239,12 +239,10 @@ router.get('/rapports/bilan', async (req, res) => {
     const { dateDebut, dateFin } = req.query;
     const eId = req.entrepriseId || parseInt(req.query.entrepriseId);
     
-    // Récupérer tous les comptes comptables
     const allComptes = await db.query.comptesComptables.findMany({
       where: eq(comptesComptables.entrepriseId, eId)
     });
     
-    // Calculer les soldes à partir des écritures
     const ecrituresData = await db.execute(sql`
       SELECT le.compte_comptable_id, 
              SUM(COALESCE(le.debit, 0)) as total_debit,
@@ -272,67 +270,173 @@ router.get('/rapports/bilan', async (req, res) => {
     allComptes.forEach(compte => {
       const solde = soldesMap[compte.id] || { debit: 0, credit: 0 };
       if (compte.numero.startsWith('6')) {
-        totalCharges += solde.debit;
+        totalCharges += solde.debit - solde.credit;
       } else if (compte.numero.startsWith('7')) {
-        totalProduits += solde.credit;
+        totalProduits += solde.credit - solde.debit;
       }
     });
     const resultatNet = totalProduits - totalCharges;
     
-    // Structurer le bilan
-    const actif = { immobilise: [], circulant: [], tresorerie: [], total: 0 };
-    const passif = { capitaux: [], dettes: [], resultatExercice: 0, total: 0 };
+    // Structurer le bilan selon SYSCOHADA
+    const actif = { 
+      immobilise: [], 
+      amortissements: [],
+      circulant: [], 
+      tresorerie: [], 
+      total: 0,
+      totalBrut: 0,
+      totalAmortissements: 0
+    };
+    const passif = { 
+      capitaux: [], 
+      dettes: [], 
+      resultatExercice: 0, 
+      total: 0 
+    };
     
     allComptes.forEach(compte => {
       const solde = soldesMap[compte.id] || { debit: 0, credit: 0 };
-      const soldeFinal = solde.debit - solde.credit;
+      const soldeBrut = solde.debit - solde.credit;
       
-      // Ignorer les comptes de charges (6) et produits (7) - ils sont dans l'État de Résultat
+      // Ignorer les comptes de charges (6) et produits (7)
       if (compte.numero.startsWith('6') || compte.numero.startsWith('7')) return;
+      if (compte.numero.startsWith('8')) return;
       
       // Ignorer les comptes sans solde
-      if (soldeFinal === 0) return;
+      if (Math.abs(soldeBrut) < 0.01) return;
       
-      const compteData = {
-        id: compte.id,
-        numero: compte.numero,
-        nom: compte.nom,
-        solde: Math.abs(soldeFinal)
-      };
+      const numero = compte.numero;
       
-      if (compte.numero.startsWith('2')) {
-        actif.immobilise.push(compteData);
-        actif.total += soldeFinal > 0 ? soldeFinal : 0;
-      } else if (compte.numero.startsWith('3') || compte.numero.startsWith('4')) {
-        if (compte.categorie === 'Actif' || compte.type === 'actif') {
-          actif.circulant.push(compteData);
-          actif.total += soldeFinal > 0 ? soldeFinal : 0;
+      // CLASSE 1 - Capitaux propres et dettes financières (solde créditeur = passif)
+      if (numero.startsWith('1')) {
+        const montant = Math.abs(soldeBrut);
+        passif.capitaux.push({
+          id: compte.id,
+          numero: numero,
+          nom: compte.nom,
+          solde: montant
+        });
+        passif.total += montant;
+      }
+      // CLASSE 2 - Immobilisations
+      else if (numero.startsWith('2')) {
+        // Comptes 28x et 29x = Amortissements et provisions (solde créditeur, à déduire de l'actif)
+        if (numero.startsWith('28') || numero.startsWith('29')) {
+          const montant = Math.abs(soldeBrut);
+          actif.amortissements.push({
+            id: compte.id,
+            numero: numero,
+            nom: compte.nom,
+            solde: montant
+          });
+          actif.totalAmortissements += montant;
+          actif.total -= montant;
         } else {
-          passif.dettes.push(compteData);
-          passif.total += soldeFinal < 0 ? Math.abs(soldeFinal) : 0;
+          // Immobilisations brutes (solde débiteur)
+          const montant = soldeBrut > 0 ? soldeBrut : 0;
+          if (montant > 0) {
+            actif.immobilise.push({
+              id: compte.id,
+              numero: numero,
+              nom: compte.nom,
+              solde: montant
+            });
+            actif.totalBrut += montant;
+            actif.total += montant;
+          }
         }
-      } else if (compte.numero.startsWith('5')) {
-        actif.tresorerie.push(compteData);
-        actif.total += soldeFinal > 0 ? soldeFinal : 0;
-      } else if (compte.numero.startsWith('1')) {
-        passif.capitaux.push(compteData);
-        passif.total += Math.abs(soldeFinal);
+      }
+      // CLASSE 3 - Stocks (solde débiteur = actif)
+      else if (numero.startsWith('3')) {
+        if (numero.startsWith('39')) {
+          // Provisions pour dépréciation de stocks
+          const montant = Math.abs(soldeBrut);
+          actif.total -= montant;
+        } else {
+          const montant = soldeBrut > 0 ? soldeBrut : 0;
+          if (montant > 0) {
+            actif.circulant.push({
+              id: compte.id,
+              numero: numero,
+              nom: compte.nom,
+              solde: montant
+            });
+            actif.total += montant;
+          }
+        }
+      }
+      // CLASSE 4 - Comptes de tiers (classement selon le signe du solde)
+      else if (numero.startsWith('4')) {
+        if (numero.startsWith('49')) {
+          // Provisions pour dépréciation des comptes de tiers
+          const montant = Math.abs(soldeBrut);
+          actif.total -= montant;
+        } else if (soldeBrut > 0) {
+          // Solde débiteur = créances (actif)
+          actif.circulant.push({
+            id: compte.id,
+            numero: numero,
+            nom: compte.nom,
+            solde: soldeBrut
+          });
+          actif.total += soldeBrut;
+        } else if (soldeBrut < 0) {
+          // Solde créditeur = dettes (passif)
+          const montant = Math.abs(soldeBrut);
+          passif.dettes.push({
+            id: compte.id,
+            numero: numero,
+            nom: compte.nom,
+            solde: montant
+          });
+          passif.total += montant;
+        }
+      }
+      // CLASSE 5 - Trésorerie
+      else if (numero.startsWith('5')) {
+        if (soldeBrut > 0) {
+          actif.tresorerie.push({
+            id: compte.id,
+            numero: numero,
+            nom: compte.nom,
+            solde: soldeBrut
+          });
+          actif.total += soldeBrut;
+        } else if (soldeBrut < 0) {
+          // Découvert bancaire = passif
+          const montant = Math.abs(soldeBrut);
+          passif.dettes.push({
+            id: compte.id,
+            numero: numero,
+            nom: compte.nom,
+            solde: montant
+          });
+          passif.total += montant;
+        }
       }
     });
     
     // Ajouter le résultat de l'exercice aux capitaux propres
-    if (resultatNet !== 0) {
-      passif.resultatExercice = resultatNet;
+    passif.resultatExercice = resultatNet;
+    if (Math.abs(resultatNet) > 0.01) {
       passif.capitaux.push({
         id: 'resultat',
         numero: resultatNet >= 0 ? '120' : '129',
         nom: resultatNet >= 0 ? 'Résultat de l\'exercice (Bénéfice)' : 'Résultat de l\'exercice (Perte)',
-        solde: Math.abs(resultatNet)
+        solde: resultatNet,
+        isResultat: true
       });
       passif.total += resultatNet;
     }
     
-    // Récupérer les infos de l'entreprise pour le logo
+    // Trier les comptes par numéro
+    actif.immobilise.sort((a, b) => a.numero.localeCompare(b.numero));
+    actif.amortissements.sort((a, b) => a.numero.localeCompare(b.numero));
+    actif.circulant.sort((a, b) => a.numero.localeCompare(b.numero));
+    actif.tresorerie.sort((a, b) => a.numero.localeCompare(b.numero));
+    passif.capitaux.sort((a, b) => a.numero.localeCompare(b.numero));
+    passif.dettes.sort((a, b) => a.numero.localeCompare(b.numero));
+    
     const entreprise = await db.query.entreprises.findFirst({
       where: eq(entreprises.id, eId)
     });
@@ -340,16 +444,22 @@ router.get('/rapports/bilan', async (req, res) => {
     res.json({
       entreprise: {
         nom: entreprise?.nom,
-        logo: entreprise?.logo
+        logo: entreprise?.logo,
+        adresse: entreprise?.adresse,
+        telephone: entreprise?.telephone,
+        email: entreprise?.email,
+        rccm: entreprise?.rccm,
+        ifu: entreprise?.ifu
       },
       actif,
       passif,
       resultatNet,
       totalCharges,
       totalProduits,
-      equilibre: Math.abs(actif.total - passif.total) < 0.01
+      equilibre: Math.abs(actif.total - passif.total) < 1
     });
   } catch (error) {
+    console.error('Erreur bilan:', error);
     res.status(500).json({ error: error.message });
   }
 });
