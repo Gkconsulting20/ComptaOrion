@@ -1397,13 +1397,13 @@ export function TresorerieModule() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                     <strong>Solde comptable calculé:</strong>
                     <span style={{ fontWeight: 'bold', color: '#2c3e50' }}>
-                      {rapprochementPreview.soldeComptable.toLocaleString('fr-FR')} FCFA
+                      {Math.round(parseFloat(rapprochementPreview.soldeComptable || 0)).toLocaleString('fr-FR')} FCFA
                     </span>
                   </div>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>{rapprochementPreview.transactionsCount} opération(s) sur la période</strong>
+                    <strong>{rapprochementPreview.transactionsCount || 0} opération(s) sur la période</strong>
                   </div>
-                  {rapprochementPreview.transactions.length > 0 ? (
+                  {rapprochementPreview.transactions && rapprochementPreview.transactions.length > 0 ? (
                     <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                       <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
                         <thead>
@@ -1416,10 +1416,10 @@ export function TresorerieModule() {
                         <tbody>
                           {rapprochementPreview.transactions.map((t, idx) => (
                             <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
-                              <td style={{ padding: '6px' }}>{new Date(t.dateTransaction).toLocaleDateString('fr-FR')}</td>
+                              <td style={{ padding: '6px' }}>{t.dateTransaction ? new Date(t.dateTransaction).toLocaleDateString('fr-FR') : '-'}</td>
                               <td style={{ padding: '6px' }}>{t.libelle || t.description || '-'}</td>
                               <td style={{ padding: '6px', textAlign: 'right', color: t.type === 'encaissement' ? '#27ae60' : '#e74c3c' }}>
-                                {t.type === 'encaissement' ? '+' : '-'}{t.montant.toLocaleString('fr-FR')} FCFA
+                                {t.type === 'encaissement' ? '+' : '-'}{Math.round(parseFloat(t.montant || 0)).toLocaleString('fr-FR')} FCFA
                               </td>
                             </tr>
                           ))}
