@@ -3049,7 +3049,7 @@ function EtatsCompteTab() {
                   <tr>
                     <td>${f.numeroFacture}</td>
                     <td>${new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
-                    <td class="text-right amount">${parseFloat(f.totalTTC || 0).toLocaleString('fr-FR')} FCFA</td>
+                    <td class="text-right amount">${Math.round(parseFloat(f.totalTTC || 0)).toLocaleString('fr-FR')} FCFA</td>
                     <td class="text-center">
                       <span class="status status-${f.statut}">${f.statut === 'payee' ? 'Payée' : f.statut === 'envoyee' ? 'Envoyée' : f.statut === 'retard' ? 'En retard' : f.statut}</span>
                     </td>
@@ -3078,7 +3078,7 @@ function EtatsCompteTab() {
                     <td>${new Date(p.datePaiement).toLocaleDateString('fr-FR')}</td>
                     <td>${p.reference || '-'}</td>
                     <td>${p.modePaiement}</td>
-                    <td class="text-right amount" style="color: #27ae60;">${parseFloat(p.montant || 0).toLocaleString('fr-FR')} FCFA</td>
+                    <td class="text-right amount" style="color: #27ae60;">${Math.round(parseFloat(p.montant || 0)).toLocaleString('fr-FR')} FCFA</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -3214,7 +3214,7 @@ function EtatsCompteTab() {
                     <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
                       <td style={{ padding: '12px' }}>{f.numeroFacture}</td>
                       <td style={{ padding: '12px' }}>{new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{f.totalTTC?.toLocaleString('fr-FR')} FCFA</td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{Math.round(parseFloat(f.totalTTC || 0)).toLocaleString('fr-FR')} FCFA</td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         <InvoiceStatusBadge 
                           statut={f.statut} 
@@ -3250,7 +3250,7 @@ function EtatsCompteTab() {
                       <td style={{ padding: '12px' }}>{p.reference || '-'}</td>
                       <td style={{ padding: '12px' }}>{p.modePaiement}</td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
-                        {p.montant?.toLocaleString('fr-FR')} FCFA
+                        {Math.round(parseFloat(p.montant || 0)).toLocaleString('fr-FR')} FCFA
                       </td>
                     </tr>
                   ))}
