@@ -22,6 +22,47 @@ export function ImpotsModule() {
     dateDebut: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
     dateFin: new Date().toISOString().split('T')[0]
   });
+  const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], totaux: null, loading: false, compte: '' });
+
+  const loadDrillDown = async (numeroCompte, nomCompte) => {
+    setDrillModal({ open: true, title: `${numeroCompte} - ${nomCompte}`, data: [], totaux: null, loading: true, compte: numeroCompte });
+    try {
+      const response = await api.get(`/comptabilite/compte-mouvements/${numeroCompte}`, {
+        dateDebut: periodeTVA.dateDebut,
+        dateFin: periodeTVA.dateFin
+      });
+      setDrillModal({
+        open: true,
+        title: `${response.compte.numero} - ${response.compte.nom}`,
+        data: response.mouvements || [],
+        totaux: response.totaux,
+        loading: false,
+        compte: numeroCompte
+      });
+    } catch (err) {
+      alert('Erreur: ' + err.message);
+      setDrillModal({ open: false, title: '', data: [], totaux: null, loading: false, compte: '' });
+    }
+  };
+
+  const exportDrillDownCSV = () => {
+    if (!drillModal.data.length) return;
+    let csv = `Compte: ${drillModal.title}\nPériode: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}\n\n`;
+    csv += 'Date;Journal;Référence;Libellé;Débit;Crédit;Solde Cumulé\n';
+    drillModal.data.forEach(m => {
+      csv += `${m.date};${m.journal};${m.reference};${m.libelle};${Math.round(m.debit || 0)};${Math.round(m.credit || 0)};${Math.round(m.soldeCumule || 0)}\n`;
+    });
+    if (drillModal.totaux) {
+      csv += `\nTOTAUX;;;${Math.round(drillModal.totaux.totalDebit || 0)};${Math.round(drillModal.totaux.totalCredit || 0)};${Math.round(drillModal.totaux.solde || 0)}\n`;
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Detail_${drillModal.compte}_${periodeTVA.dateDebut}_${periodeTVA.dateFin}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     loadData();
@@ -280,16 +321,26 @@ export function ImpotsModule() {
         </div>
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-          <div style={{ padding: '20px', backgroundColor: '#3498db', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+          <div 
+            onClick={() => loadDrillDown('4431', 'TVA Collectée')}
+            style={{ padding: '20px', backgroundColor: '#3498db', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)'; }}
+          >
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Collectée</div>
             <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur ventes (compte 4431)</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur ventes (compte 4431) - Cliquez pour détails</div>
           </div>
 
-          <div style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+          <div 
+            onClick={() => loadDrillDown('4452', 'TVA Déductible')}
+            style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)'; }}
+          >
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Déductible</div>
             <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur achats (compte 4452)</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur achats (compte 4452) - Cliquez pour détails</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: tvaResume.tvaADecaisser >= 0 ? '#27ae60' : '#9b59b6', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
@@ -639,6 +690,69 @@ export function ImpotsModule() {
         </div>
       ) : (
         renderContent()
+      )}
+
+      {drillModal.open && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '12px', width: '95%', maxWidth: '1100px', maxHeight: '85vh', overflow: 'hidden', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8f9fa' }}>
+              <h3 style={{ margin: 0 }}>📊 {drillModal.title}</h3>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={exportDrillDownCSV} style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                  📥 Export CSV
+                </button>
+                <button onClick={() => setDrillModal({ open: false, title: '', data: [], totaux: null, loading: false, compte: '' })} style={{ padding: '8px 16px', backgroundColor: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                  ✕ Fermer
+                </button>
+              </div>
+            </div>
+            <div style={{ padding: '20px', maxHeight: 'calc(85vh - 140px)', overflowY: 'auto' }}>
+              {drillModal.loading ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>Chargement des mouvements...</div>
+              ) : drillModal.data.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#7f8c8d' }}>Aucun mouvement pour cette période</div>
+              ) : (
+                <>
+                  <p style={{ marginBottom: '15px', color: '#666' }}>Période: {periodeTVA.dateDebut} au {periodeTVA.dateFin} - {drillModal.data.length} mouvement(s)</p>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f5f5f5' }}>
+                        <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th>
+                        <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Journal</th>
+                        <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Réf.</th>
+                        <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Libellé</th>
+                        <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>Débit</th>
+                        <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>Crédit</th>
+                        <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>Solde Cumul.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drillModal.data.map((m, idx) => (
+                        <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#fafafa' }}>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.date}</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.journal}</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.reference}</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.libelle}</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{m.debit > 0 ? `${Math.round(m.debit).toLocaleString('fr-FR')} FCFA` : '-'}</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{m.credit > 0 ? `${Math.round(m.credit).toLocaleString('fr-FR')} FCFA` : '-'}</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right', fontWeight: '500' }}>{Math.round(m.soldeCumule).toLocaleString('fr-FR')} FCFA</td>
+                        </tr>
+                      ))}
+                      {drillModal.totaux && (
+                        <tr style={{ backgroundColor: '#e8f4f8', fontWeight: 'bold' }}>
+                          <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>TOTAUX</td>
+                          <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.totalDebit).toLocaleString('fr-FR')} FCFA</td>
+                          <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.totalCredit).toLocaleString('fr-FR')} FCFA</td>
+                          <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.solde).toLocaleString('fr-FR')} FCFA</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
