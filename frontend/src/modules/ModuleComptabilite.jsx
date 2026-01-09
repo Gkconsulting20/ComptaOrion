@@ -725,7 +725,6 @@ export function ModuleComptabilite() {
     { id: 'balance', label: '⚖️ Balance', icon: '⚖️' },
     { id: 'immobilisations', label: '🏢 Immobilisations', icon: '🏢' },
     { id: 'rapports', label: '📊 Rapports', icon: '📊' },
-    { id: 'cloture', label: '🔒 Clôture Exercice', icon: '🔒' },
     { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
   ];
   
@@ -1331,10 +1330,6 @@ export function ModuleComptabilite() {
         </div>
       )}
 
-      {activeTab === 'cloture' && (
-        <ClotureExerciceTab api={api} />
-      )}
-
       {activeTab === 'parametres' && (
         <div>
           <h3>⚙️ Paramètres Comptables</h3>
@@ -1342,6 +1337,7 @@ export function ModuleComptabilite() {
           <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #e1e8ed' }}>
             {[
               { id: 'journaux', label: '📚 Journaux' },
+              { id: 'cloture', label: '🔒 Clôture Exercice' },
               { id: 'numerotation', label: '📝 Numérotation' },
               { id: 'validation', label: '✓ Validation' },
               { id: 'exercice', label: '📅 Exercice' },
@@ -1391,6 +1387,10 @@ export function ModuleComptabilite() {
                 actions={true}
               />
             </div>
+          )}
+
+          {parametresSubTab === 'cloture' && (
+            <ClotureExerciceTab api={api} />
           )}
 
           {parametresSubTab === 'numerotation' && (
