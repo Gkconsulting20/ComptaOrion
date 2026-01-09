@@ -1104,50 +1104,7 @@ export function ModuleComptabilite() {
                   { key: 'totalDebit', label: 'Mouv. Débit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
                   { key: 'totalCredit', label: 'Mouv. Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
                   { key: 'soldeDebit', label: 'Solde Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' },
-                  { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' },
-                  { key: 'actions', label: 'Détails', render: (val, row) => {
-                    const numero = row.numero || '';
-                    const isTVA = numero.startsWith('4431') || numero.startsWith('4452') || numero.startsWith('443') || numero.startsWith('445');
-                    const isCredit = row.soldeCredit > 0 && numero.startsWith('4');
-                    if (isTVA || isCredit) {
-                      return (
-                        <button
-                          onClick={async () => {
-                            setDrillModal({ open: true, title: `${numero} - ${row.nom}`, data: [], loading: true, compte: numero });
-                            try {
-                              const response = await api.get(`/comptabilite/compte-mouvements/${numero}`, { 
-                                dateDebut: periode.dateDebut, 
-                                dateFin: periode.dateFin 
-                              });
-                              setDrillModal({ 
-                                open: true, 
-                                title: `${response.compte.numero} - ${response.compte.nom}`, 
-                                data: response.mouvements, 
-                                totaux: response.totaux,
-                                loading: false,
-                                compte: numero
-                              });
-                            } catch (err) {
-                              alert('Erreur: ' + err.message);
-                              setDrillModal({ open: false, title: '', data: [], loading: false });
-                            }
-                          }}
-                          style={{ 
-                            padding: '4px 8px', 
-                            background: isTVA ? '#ff9800' : '#2196f3', 
-                            color: 'white', 
-                            border: 'none', 
-                            borderRadius: '4px', 
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          🔍 Détails
-                        </button>
-                      );
-                    }
-                    return null;
-                  }}
+                  { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' }
                 ]}
                 data={data.balanceData}
                 actions={false}

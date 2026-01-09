@@ -181,7 +181,7 @@ function NonFactureTab({ fournisseurs, produits }) {
 }
 
 export function StockInventaire() {
-  const [activeTab, setActiveTab] = useState('parametres');
+  const [activeTab, setActiveTab] = useState('commandes');
   const [subTab, setSubTab] = useState('produits');
   
   const [data, setData] = useState({
@@ -409,7 +409,7 @@ export function StockInventaire() {
       <h2>📦 Stock & Inventaire</h2>
       
       <div style={{ display: 'flex', borderBottom: '2px solid #e1e8ed', marginBottom: '20px', flexWrap: 'wrap' }}>
-        {['parametres', 'commandes', 'receptions', 'inventaires', 'alertes', 'nonfacture', 'rapports'].map(tab => (
+        {['commandes', 'receptions', 'inventaires', 'alertes', 'nonfacture', 'rapports', 'parametres'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             style={{
               padding: '12px 20px', background: activeTab === tab ? '#fff' : 'transparent',
@@ -417,12 +417,12 @@ export function StockInventaire() {
               color: activeTab === tab ? '#3498db' : '#7f8c8d',
               fontWeight: activeTab === tab ? 'bold' : 'normal', cursor: 'pointer'
             }}>
-            {tab === 'parametres' ? '⚙️ Paramètres' :
-             tab === 'commandes' ? '📦 Commandes Achat' :
+            {tab === 'commandes' ? '📦 Commandes Achat' :
              tab === 'receptions' ? '📥 Réceptions' :
              tab === 'inventaires' ? '📋 Inventaires' :
              tab === 'alertes' ? '⚠️ Alertes' :
-             tab === 'nonfacture' ? '📄 Non Facturé' : '📊 Rapports'}
+             tab === 'nonfacture' ? '📄 Non Facturé' :
+             tab === 'rapports' ? '📊 Rapports' : '⚙️ Paramètres'}
           </button>
         ))}
       </div>
