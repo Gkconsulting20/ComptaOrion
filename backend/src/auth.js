@@ -126,8 +126,9 @@ export function entrepriseIsolation(req, res, next) {
     return res.status(401).json({ error: 'Entreprise non identifiée' });
   }
   
-  // Ajouter l'entrepriseId aux données pour toutes les requêtes
+  // Ajouter l'entrepriseId et userId aux données pour toutes les requêtes
   req.entrepriseId = req.user.entrepriseId;
+  req.userId = req.user.id;
   next();
 }
 
