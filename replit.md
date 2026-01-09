@@ -81,6 +81,7 @@ It offers a modern, responsive platform for managing accounting, inventory, cust
 - Itération rapide avec visibilité sur les progrès
 - Code lisible, maintenable et production-ready
 - Confirmation demandée avant refactorings majeurs
+- **Performance:** Application rapide et légère (chargement minimal, bundles optimisés, requêtes efficaces)
 
 ## System Architecture
 
