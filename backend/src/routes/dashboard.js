@@ -450,18 +450,24 @@ router.get('/detail/depenses', async (req, res) => {
   }
 });
 
-// Détail factures en retard
+// Détail factures en retard (dans la période sélectionnée)
 router.get('/detail/factures-retard', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
+    const { dateDebut, dateFin } = req.query;
+    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
+    const fin = dateFin ? new Date(dateFin) : defaultFin;
     const now = new Date();
     
     const facturesRetard = await db.query.factures.findMany({
       where: and(
         eq(factures.entrepriseId, eId),
-        eq(factures.statut, 'retard')
+        eq(factures.statut, 'retard'),
+        gte(factures.createdAt, debut),
+        lte(factures.createdAt, fin)
       ),
       with: { client: true },
       orderBy: [desc(factures.dateEcheance)]
@@ -618,10 +624,10 @@ router.get('/detail/marge', async (req, res) => {
   }
 });
 
-// Drill-down: Ventes d'un mois spécifique
+// Drill-down: Ventes d'un mois spécifique (dans la période sélectionnée)
 router.get('/detail/ventes-mois', async (req, res) => {
   try {
-    const { mois } = req.query;
+    const { mois, dateDebut, dateFin } = req.query;
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     
@@ -644,8 +650,20 @@ router.get('/detail/ventes-mois', async (req, res) => {
       targetYear = now.getFullYear();
     }
     
-    const debut = new Date(targetYear, targetMonth, 1);
-    const fin = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+    // Bornes du mois cliqué
+    let debut = new Date(targetYear, targetMonth, 1);
+    let fin = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+    
+    // Contraindre aux bornes de la période sélectionnée si fournies
+    if (dateDebut) {
+      const periodStart = new Date(dateDebut);
+      if (periodStart > debut) debut = periodStart;
+    }
+    if (dateFin) {
+      const periodEnd = new Date(dateFin);
+      periodEnd.setHours(23, 59, 59);
+      if (periodEnd < fin) fin = periodEnd;
+    }
     
     const ventesData = await db.query.factures.findMany({
       where: and(
@@ -682,10 +700,13 @@ router.get('/detail/ventes-mois', async (req, res) => {
 // Drill-down: Dépenses par catégorie
 router.get('/detail/depenses-categorie', async (req, res) => {
   try {
-    const { categorie } = req.query;
+    const { categorie, dateDebut, dateFin } = req.query;
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
-    const { debut, fin } = getMonthDates();
+    
+    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
+    const fin = dateFin ? new Date(dateFin) : defaultFin;
     
     let whereCondition = and(
       eq(facturesAchat.entrepriseId, eId),

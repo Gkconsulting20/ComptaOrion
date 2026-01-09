@@ -259,7 +259,8 @@ export function DashboardView() {
       const mois = data.activePayload[0].payload.mois;
       setDrillDown({ open: true, type: 'ventes-mois', title: `Ventes - ${mois}`, data: [], loading: true });
       try {
-        const result = await api.get(`/dashboard/detail/ventes-mois?mois=${encodeURIComponent(mois)}`);
+        const params = `?mois=${encodeURIComponent(mois)}&dateDebut=${dateDebut}&dateFin=${dateFin}`;
+        const result = await api.get(`/dashboard/detail/ventes-mois${params}`);
         setDrillDown(prev => ({ ...prev, data: result || [], loading: false }));
       } catch (error) {
         console.error('Erreur drill-down mois:', error);
@@ -272,7 +273,8 @@ export function DashboardView() {
     if (data && data.categorie) {
       setDrillDown({ open: true, type: 'depenses-categorie', title: `Dépenses - ${data.categorie}`, data: [], loading: true });
       try {
-        const result = await api.get(`/dashboard/detail/depenses-categorie?categorie=${encodeURIComponent(data.categorie)}`);
+        const params = `?categorie=${encodeURIComponent(data.categorie)}&dateDebut=${dateDebut}&dateFin=${dateFin}`;
+        const result = await api.get(`/dashboard/detail/depenses-categorie${params}`);
         setDrillDown(prev => ({ ...prev, data: result || [], loading: false }));
       } catch (error) {
         console.error('Erreur drill-down catégorie:', error);
