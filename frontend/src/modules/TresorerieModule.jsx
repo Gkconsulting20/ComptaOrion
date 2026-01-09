@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 
 export function TresorerieModule() {
@@ -18,8 +19,8 @@ export function TresorerieModule() {
   const [rapprochements, setRapprochements] = useState([]);
   const [rapprochementActif, setRapprochementActif] = useState(null);
   const [showRapprochementModal, setShowRapprochementModal] = useState(false);
-  const [transactionDateDebut, setTransactionDateDebut] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
-  const [transactionDateFin, setTransactionDateFin] = useState(new Date().toISOString().split('T')[0]);
+  const [transactionDateDebut, setTransactionDateDebut] = useState(getPeriodeDates('annee').dateDebut);
+  const [transactionDateFin, setTransactionDateFin] = useState(getPeriodeDates('annee').dateFin);
   const [transactionsFiltered, setTransactionsFiltered] = useState([]);
   const [rapprochementPreview, setRapprochementPreview] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);

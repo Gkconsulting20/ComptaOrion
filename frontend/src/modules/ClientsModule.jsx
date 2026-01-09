@@ -4,6 +4,7 @@ import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
+import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 
@@ -1110,11 +1111,11 @@ function RapportsTab() {
   const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], loading: false, type: null });
   
   const [dateDebut, setDateDebut] = useState(() => {
-    const date = new Date();
-    date.setMonth(date.getMonth() - 1);
-    return date.toISOString().split('T')[0];
+    return getPeriodeDates('annee').dateDebut;
   });
-  const [dateFin, setDateFin] = useState(new Date().toISOString().split('T')[0]);
+  const [dateFin, setDateFin] = useState(() => {
+    return getPeriodeDates('annee').dateFin;
+  });
 
   const openDrillDown = async (type, title) => {
     setDrillModal({ open: true, title, data: [], loading: true, type });
@@ -1277,57 +1278,15 @@ function RapportsTab() {
       {/* RAPPORT PAR PÉRIODE */}
       <div className="form-card" style={{ marginTop: '20px', backgroundColor: '#fff' }}>
         <h3 style={{ marginBottom: '20px', color: '#2c3e50' }}>📅 Rapport Client par Période</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '15px', marginBottom: '20px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Date de début</label>
-            <input
-              type="date"
-              value={dateDebut}
-              onChange={(e) => setDateDebut(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '14px'
-              }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Date de fin</label>
-            <input
-              type="date"
-              value={dateFin}
-              onChange={(e) => setDateFin(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '14px'
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <button
-              onClick={genererRapportPeriode}
-              disabled={loadingPeriode}
-              style={{
-                padding: '10px 24px',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: loadingPeriode ? 'not-allowed' : 'pointer',
-                fontWeight: 'bold',
-                fontSize: '14px',
-                opacity: loadingPeriode ? 0.7 : 1
-              }}
-            >
-              {loadingPeriode ? 'Chargement...' : 'Générer'}
-            </button>
-          </div>
-        </div>
+        <PeriodFilter
+          dateDebut={dateDebut}
+          dateFin={dateFin}
+          onDateDebutChange={setDateDebut}
+          onDateFinChange={setDateFin}
+          onApply={genererRapportPeriode}
+          loading={loadingPeriode}
+          compact={true}
+        />
 
         {erreurPeriode && (
           <div style={{

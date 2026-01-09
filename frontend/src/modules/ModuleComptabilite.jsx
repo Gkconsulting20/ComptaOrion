@@ -3,6 +3,7 @@ import { Modal } from '../components/Modal';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
+import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 
 const CLASSES_SYSCOHADA = {
@@ -529,8 +530,8 @@ export function ModuleComptabilite() {
   const [modal, setModal] = useState({ open: false, type: null, item: null });
   const [form, setForm] = useState({});
   const [periode, setPeriode] = useState({
-    dateDebut: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
-    dateFin: new Date().toISOString().split('T')[0]
+    dateDebut: getPeriodeDates('annee').dateDebut,
+    dateFin: getPeriodeDates('annee').dateFin
   });
   const [rapportModal, setRapportModal] = useState({ open: false, type: null, data: null, loading: false });
   const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], loading: false });

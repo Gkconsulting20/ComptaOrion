@@ -4,6 +4,7 @@ import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
+import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 
@@ -717,8 +718,8 @@ export function GestionFournisseurs() {
   const [showFournisseurDetails, setShowFournisseurDetails] = useState(false);
   const [showCommandeDetails, setShowCommandeDetails] = useState(false);
   const [periode, setPeriode] = useState({
-    dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    dateFin: new Date().toISOString().split('T')[0]
+    dateDebut: getPeriodeDates('annee').dateDebut,
+    dateFin: getPeriodeDates('annee').dateFin
   });
   const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], loading: false, type: null });
   const [chequeModal, setChequeModal] = useState({ open: false });
@@ -1972,8 +1973,8 @@ function EtatsCompteFournisseurTab() {
   const [fournisseurs, setFournisseurs] = useState([]);
   const [selectedFournisseurId, setSelectedFournisseurId] = useState('');
   const [periode, setPeriode] = useState({
-    dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    dateFin: new Date().toISOString().split('T')[0]
+    dateDebut: getPeriodeDates('annee').dateDebut,
+    dateFin: getPeriodeDates('annee').dateFin
   });
   const [etatCompte, setEtatCompte] = useState(null);
   const [loading, setLoading] = useState(false);
