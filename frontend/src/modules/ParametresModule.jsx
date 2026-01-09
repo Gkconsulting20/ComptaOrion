@@ -794,12 +794,12 @@ function AuditLogTab() {
 
 function TauxChangeTab({ entreprise }) {
   const [tauxList, setTauxList] = useState([]);
-  const [devises, setDevises] = useState([]);
+  const [devisesList, setDevisesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     deviseSource: 'EUR',
-    deviseCible: 'XOF',
+    deviseCible: 'USD',
     taux: '',
     dateEffet: new Date().toISOString().split('T')[0],
     notes: ''
@@ -807,12 +807,20 @@ function TauxChangeTab({ entreprise }) {
   const [converteur, setConverteur] = useState({
     montant: 1000,
     deviseSource: 'EUR',
+    deviseCible: 'XOF',
     resultat: null
   });
+
+  const deviseMaison = entreprise?.devise || 'XOF';
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, deviseCible: deviseMaison }));
+    setConverteur(prev => ({ ...prev, deviseCible: deviseMaison }));
+  }, [deviseMaison]);
 
   const loadData = async () => {
     try {
@@ -820,8 +828,8 @@ function TauxChangeTab({ entreprise }) {
         api.get('/devises/taux').catch(() => ({ data: [] })),
         api.get('/devises/devises').catch(() => ({ data: [] }))
       ]);
-      setTauxList(tauxRes.data || []);
-      setDevises(devisesRes.data || []);
+      setTauxList(Array.isArray(tauxRes) ? tauxRes : (tauxRes.data || []));
+      setDevisesList(Array.isArray(devisesRes) ? devisesRes : (devisesRes.data || []));
     } catch (error) {
       console.error('Erreur chargement taux:', error);
     } finally {
@@ -831,20 +839,24 @@ function TauxChangeTab({ entreprise }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.deviseSource === formData.deviseCible) {
+      alert('Les devises source et cible doivent être différentes');
+      return;
+    }
     try {
       await api.post('/devises/taux', formData);
       alert('Taux de change ajouté avec succès');
       setShowForm(false);
       setFormData({
         deviseSource: 'EUR',
-        deviseCible: 'XOF',
+        deviseCible: deviseMaison,
         taux: '',
         dateEffet: new Date().toISOString().split('T')[0],
         notes: ''
       });
       loadData();
     } catch (error) {
-      alert('Erreur: ' + error.message);
+      alert('Erreur: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -859,13 +871,18 @@ function TauxChangeTab({ entreprise }) {
   };
 
   const handleConversion = async () => {
+    if (converteur.deviseSource === converteur.deviseCible) {
+      alert('Les devises doivent être différentes');
+      return;
+    }
     try {
       const response = await api.post('/devises/convertir', {
         montant: converteur.montant,
         deviseSource: converteur.deviseSource,
-        deviseCible: 'XOF'
+        deviseCible: converteur.deviseCible
       });
-      setConverteur({ ...converteur, resultat: response.data });
+      const data = response.data || response;
+      setConverteur({ ...converteur, resultat: data });
     } catch (error) {
       alert('Erreur: ' + (error.response?.data?.message || error.message));
     }
@@ -877,8 +894,6 @@ function TauxChangeTab({ entreprise }) {
   };
 
   if (loading) return <p>Chargement...</p>;
-
-  const deviseMaison = entreprise?.devise || 'XOF';
 
   return (
     <div>

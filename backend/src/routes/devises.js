@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db.js';
-import { tauxChange, devises, users } from '../schema.js';
-import { eq, and, desc, gte, lte } from 'drizzle-orm';
+import { tauxChange, devises, entreprises } from '../schema.js';
+import { eq, and, desc, lte, or } from 'drizzle-orm';
 import { authMiddleware, entrepriseIsolation } from '../auth.js';
 
 const router = express.Router();
@@ -27,7 +27,18 @@ const DEVISES_PREDEFINIES = [
   { code: 'TND', nom: 'Dinar tunisien', symbole: 'TND', decimales: 3 },
   { code: 'DZD', nom: 'Dinar algérien', symbole: 'DA', decimales: 2 },
   { code: 'EGP', nom: 'Livre égyptienne', symbole: 'E£', decimales: 2 },
+  { code: 'CNY', nom: 'Yuan chinois', symbole: '¥', decimales: 2 },
+  { code: 'JPY', nom: 'Yen japonais', symbole: '¥', decimales: 0 },
+  { code: 'INR', nom: 'Roupie indienne', symbole: '₹', decimales: 2 },
 ];
+
+async function getHomeCurrency(entrepriseId) {
+  const entreprise = await db.select({ devise: entreprises.devise })
+    .from(entreprises)
+    .where(eq(entreprises.id, entrepriseId))
+    .limit(1);
+  return entreprise[0]?.devise || 'XOF';
+}
 
 router.get('/devises', async (req, res) => {
   try {
@@ -47,11 +58,19 @@ router.get('/devises', async (req, res) => {
   }
 });
 
+router.get('/home-currency', async (req, res) => {
+  try {
+    const homeCurrency = await getHomeCurrency(req.entrepriseId);
+    res.json({ homeCurrency });
+  } catch (error) {
+    console.error('Erreur GET home-currency:', error);
+    res.status(500).json({ message: 'Erreur serveur', error: error.message });
+  }
+});
+
 router.get('/taux', async (req, res) => {
   try {
-    const { deviseSource, dateDebut, dateFin } = req.query;
-    
-    let query = db.select({
+    const taux = await db.select({
       id: tauxChange.id,
       deviseSource: tauxChange.deviseSource,
       deviseCible: tauxChange.deviseCible,
@@ -59,12 +78,12 @@ router.get('/taux', async (req, res) => {
       dateEffet: tauxChange.dateEffet,
       source: tauxChange.source,
       notes: tauxChange.notes,
+      actif: tauxChange.actif,
       createdAt: tauxChange.createdAt
     })
     .from(tauxChange)
-    .where(eq(tauxChange.entrepriseId, req.entrepriseId));
-    
-    const taux = await query.orderBy(desc(tauxChange.dateEffet));
+    .where(eq(tauxChange.entrepriseId, req.entrepriseId))
+    .orderBy(desc(tauxChange.dateEffet));
     
     res.json(taux);
   } catch (error) {
@@ -73,33 +92,56 @@ router.get('/taux', async (req, res) => {
   }
 });
 
-router.get('/taux/actuel/:deviseSource', async (req, res) => {
+router.get('/taux/paire/:source/:cible', async (req, res) => {
   try {
-    const { deviseSource } = req.params;
-    const today = new Date().toISOString().split('T')[0];
+    const { source, cible } = req.params;
+    const date = req.query.date || new Date().toISOString().split('T')[0];
     
     const taux = await db.select()
       .from(tauxChange)
       .where(and(
         eq(tauxChange.entrepriseId, req.entrepriseId),
-        eq(tauxChange.deviseSource, deviseSource.toUpperCase()),
-        lte(tauxChange.dateEffet, today),
+        eq(tauxChange.deviseSource, source.toUpperCase()),
+        eq(tauxChange.deviseCible, cible.toUpperCase()),
+        lte(tauxChange.dateEffet, date),
         eq(tauxChange.actif, true)
       ))
       .orderBy(desc(tauxChange.dateEffet))
       .limit(1);
     
     if (taux.length === 0) {
+      const tauxInverse = await db.select()
+        .from(tauxChange)
+        .where(and(
+          eq(tauxChange.entrepriseId, req.entrepriseId),
+          eq(tauxChange.deviseSource, cible.toUpperCase()),
+          eq(tauxChange.deviseCible, source.toUpperCase()),
+          lte(tauxChange.dateEffet, date),
+          eq(tauxChange.actif, true)
+        ))
+        .orderBy(desc(tauxChange.dateEffet))
+        .limit(1);
+      
+      if (tauxInverse.length > 0) {
+        const tauxCalcule = 1 / parseFloat(tauxInverse[0].taux);
+        return res.json({
+          ...tauxInverse[0],
+          deviseSource: source.toUpperCase(),
+          deviseCible: cible.toUpperCase(),
+          taux: tauxCalcule.toFixed(6),
+          inverse: true
+        });
+      }
+      
       return res.status(404).json({ 
-        message: `Aucun taux de change trouvé pour ${deviseSource}`,
-        deviseSource,
-        suggestion: 'Veuillez ajouter un taux de change pour cette devise'
+        message: `Aucun taux de change trouvé pour ${source}/${cible}`,
+        suggestion: 'Veuillez ajouter un taux de change pour cette paire de devises'
       });
     }
     
-    res.json(taux[0]);
+    res.json({ ...taux[0], inverse: false });
   } catch (error) {
-    console.error('Erreur GET taux actuel:', error);
+    console.error('Erreur GET taux paire:', error);
     res.status(500).json({ message: 'Erreur serveur', error: error.message });
   }
 });
@@ -108,10 +150,14 @@ router.post('/taux', async (req, res) => {
   try {
     const { deviseSource, deviseCible, taux, dateEffet, notes } = req.body;
     
-    if (!deviseSource || !taux || !dateEffet) {
+    if (!deviseSource || !deviseCible || !taux || !dateEffet) {
       return res.status(400).json({ 
-        message: 'Champs requis: deviseSource, taux, dateEffet' 
+        message: 'Champs requis: deviseSource, deviseCible, taux, dateEffet' 
       });
+    }
+    
+    if (deviseSource.toUpperCase() === deviseCible.toUpperCase()) {
+      return res.status(400).json({ message: 'Les devises source et cible doivent être différentes' });
     }
     
     const tauxNum = parseFloat(taux);
@@ -122,7 +168,7 @@ router.post('/taux', async (req, res) => {
     const nouveauTaux = await db.insert(tauxChange).values({
       entrepriseId: req.entrepriseId,
       deviseSource: deviseSource.toUpperCase(),
-      deviseCible: (deviseCible || 'XOF').toUpperCase(),
+      deviseCible: deviseCible.toUpperCase(),
       taux: tauxNum.toString(),
       dateEffet,
       source: 'manuel',
@@ -193,13 +239,13 @@ router.post('/convertir', async (req, res) => {
   try {
     const { montant, deviseSource, deviseCible, date } = req.body;
     
-    if (!montant || !deviseSource) {
-      return res.status(400).json({ message: 'Champs requis: montant, deviseSource' });
+    if (!montant || !deviseSource || !deviseCible) {
+      return res.status(400).json({ message: 'Champs requis: montant, deviseSource, deviseCible' });
     }
     
     const dateRecherche = date || new Date().toISOString().split('T')[0];
-    const cible = (deviseCible || 'XOF').toUpperCase();
     const source = deviseSource.toUpperCase();
+    const cible = deviseCible.toUpperCase();
     
     if (source === cible) {
       return res.json({
@@ -208,11 +254,16 @@ router.post('/convertir', async (req, res) => {
         montantConverti: parseFloat(montant),
         deviseCible: cible,
         tauxUtilise: 1,
-        dateEffet: dateRecherche
+        dateEffet: dateRecherche,
+        inverse: false
       });
     }
     
-    const taux = await db.select()
+    let tauxUtilise = null;
+    let inverse = false;
+    let dateEffet = null;
+    
+    const tauxDirect = await db.select()
       .from(tauxChange)
       .where(and(
         eq(tauxChange.entrepriseId, req.entrepriseId),
@@ -224,14 +275,36 @@ router.post('/convertir', async (req, res) => {
       .orderBy(desc(tauxChange.dateEffet))
       .limit(1);
     
-    if (taux.length === 0) {
+    if (tauxDirect.length > 0) {
+      tauxUtilise = parseFloat(tauxDirect[0].taux);
+      dateEffet = tauxDirect[0].dateEffet;
+    } else {
+      const tauxInverse = await db.select()
+        .from(tauxChange)
+        .where(and(
+          eq(tauxChange.entrepriseId, req.entrepriseId),
+          eq(tauxChange.deviseSource, cible),
+          eq(tauxChange.deviseCible, source),
+          lte(tauxChange.dateEffet, dateRecherche),
+          eq(tauxChange.actif, true)
+        ))
+        .orderBy(desc(tauxChange.dateEffet))
+        .limit(1);
+      
+      if (tauxInverse.length > 0) {
+        tauxUtilise = 1 / parseFloat(tauxInverse[0].taux);
+        dateEffet = tauxInverse[0].dateEffet;
+        inverse = true;
+      }
+    }
+    
+    if (tauxUtilise === null) {
       return res.status(404).json({
-        message: `Aucun taux de change trouvé pour ${source} vers ${cible}`,
-        suggestion: 'Veuillez ajouter un taux de change'
+        message: `Aucun taux de change trouvé pour ${source}/${cible}`,
+        suggestion: 'Veuillez ajouter un taux de change pour cette paire de devises'
       });
     }
     
-    const tauxUtilise = parseFloat(taux[0].taux);
     const montantConverti = parseFloat(montant) * tauxUtilise;
     
     res.json({
@@ -239,8 +312,9 @@ router.post('/convertir', async (req, res) => {
       deviseSource: source,
       montantConverti: Math.round(montantConverti * 100) / 100,
       deviseCible: cible,
-      tauxUtilise,
-      dateEffet: taux[0].dateEffet
+      tauxUtilise: parseFloat(tauxUtilise.toFixed(6)),
+      dateEffet,
+      inverse
     });
   } catch (error) {
     console.error('Erreur conversion:', error);

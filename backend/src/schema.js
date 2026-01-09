@@ -1584,16 +1584,16 @@ export const tauxChange = pgTable('taux_change', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
   
-  // Devises
-  deviseSource: varchar('devise_source', { length: 10 }).notNull(), // EUR, USD, GBP, etc.
-  deviseCible: varchar('devise_cible', { length: 10 }).notNull().default('XOF'), // Devise de base (FCFA)
+  // Paire de devises (ex: EUR/USD, USD/XOF, EUR/XOF)
+  deviseSource: varchar('devise_source', { length: 10 }).notNull(), // Devise de départ
+  deviseCible: varchar('devise_cible', { length: 10 }).notNull(), // Devise d'arrivée (flexible, pas fixe)
   
-  // Taux et date
-  taux: decimal('taux', { precision: 18, scale: 6 }).notNull(), // Ex: 1 EUR = 655.957 XOF
-  dateEffet: date('date_effet').notNull(), // Date à laquelle le taux s'applique
+  // Taux et date (1 deviseSource = X deviseCible)
+  taux: decimal('taux', { precision: 18, scale: 6 }).notNull(),
+  dateEffet: date('date_effet').notNull(),
   
   // Source du taux
-  source: varchar('source', { length: 50 }).default('manuel'), // manuel, api_bceao, api_ecb, etc.
+  source: varchar('source', { length: 50 }).default('manuel'), // manuel, bceao, ecb, etc.
   
   // Métadonnées
   notes: text('notes'),
