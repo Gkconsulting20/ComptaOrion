@@ -719,7 +719,6 @@ export function ModuleComptabilite() {
 
   const tabs = [
     { id: 'plan', label: '📋 Plan Comptable', icon: '📋' },
-    { id: 'journaux', label: '📚 Journaux', icon: '📚' },
     { id: 'ecritures', label: '✍️ Écritures', icon: '✍️' },
     { id: 'recurrentes', label: '🔄 Écritures Récurrentes', icon: '🔄' },
     { id: 'grandlivre', label: '📖 Grand Livre', icon: '📖' },
@@ -729,6 +728,8 @@ export function ModuleComptabilite() {
     { id: 'cloture', label: '🔒 Clôture Exercice', icon: '🔒' },
     { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
   ];
+  
+  const [parametresSubTab, setParametresSubTab] = useState('journaux');
 
   if (loading) return <div style={{ padding: '20px' }}>Chargement...</div>;
 
@@ -771,34 +772,6 @@ export function ModuleComptabilite() {
           openModal={openModal} 
           api={api} 
         />
-      )}
-
-      {activeTab === 'journaux' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3>📚 Journaux Comptables</h3>
-            <Button onClick={() => openModal('journal')}>+ Nouveau Journal</Button>
-          </div>
-          <Table
-            columns={[
-              { key: 'code', label: 'Code' },
-              { key: 'nom', label: 'Nom du Journal' },
-              { key: 'type', label: 'Type', render: (val) => {
-                const types = {
-                  vente: '💰 Ventes',
-                  achat: '🛒 Achats',
-                  banque: '🏦 Banque',
-                  caisse: '💵 Caisse',
-                  od: '📝 Opérations Diverses'
-                };
-                return types[val] || val;
-              }}
-            ]}
-            data={data.journaux}
-            onEdit={(item) => openModal('journal', item)}
-            actions={true}
-          />
-        </div>
       )}
 
       {activeTab === 'ecritures' && (
@@ -1366,7 +1339,61 @@ export function ModuleComptabilite() {
         <div>
           <h3>⚙️ Paramètres Comptables</h3>
           
-          <div style={{ display: 'grid', gap: '20px', marginTop: '20px' }}>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #e1e8ed' }}>
+            {[
+              { id: 'journaux', label: '📚 Journaux' },
+              { id: 'numerotation', label: '📝 Numérotation' },
+              { id: 'validation', label: '✓ Validation' },
+              { id: 'exercice', label: '📅 Exercice' },
+              { id: 'affichage', label: '👁️ Affichage' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setParametresSubTab(tab.id)}
+                style={{
+                  padding: '10px 16px',
+                  background: parametresSubTab === tab.id ? '#3498db' : '#ecf0f1',
+                  color: parametresSubTab === tab.id ? '#fff' : '#34495e',
+                  border: 'none',
+                  borderRadius: '8px 8px 0 0',
+                  fontWeight: parametresSubTab === tab.id ? 'bold' : 'normal',
+                  cursor: 'pointer'
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {parametresSubTab === 'journaux' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h4 style={{ margin: 0 }}>📚 Journaux Comptables</h4>
+                <Button onClick={() => openModal('journal')}>+ Nouveau Journal</Button>
+              </div>
+              <Table
+                columns={[
+                  { key: 'code', label: 'Code' },
+                  { key: 'nom', label: 'Nom du Journal' },
+                  { key: 'type', label: 'Type', render: (val) => {
+                    const types = {
+                      vente: '💰 Ventes',
+                      achat: '🛒 Achats',
+                      banque: '🏦 Banque',
+                      caisse: '💵 Caisse',
+                      od: '📝 Opérations Diverses'
+                    };
+                    return types[val] || val;
+                  }}
+                ]}
+                data={data.journaux}
+                onEdit={(item) => openModal('journal', item)}
+                actions={true}
+              />
+            </div>
+          )}
+
+          {parametresSubTab === 'numerotation' && (
             <div style={{ padding: '20px', background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
               <h4 style={{ marginTop: 0, color: '#1976d2' }}>📝 Numérotation Automatique</h4>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
@@ -1398,7 +1425,9 @@ export function ModuleComptabilite() {
                 />
               </div>
             </div>
+          )}
 
+          {parametresSubTab === 'validation' && (
             <div style={{ padding: '20px', background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
               <h4 style={{ marginTop: 0, color: '#1976d2' }}>✓ Validation et Contrôle</h4>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -1440,7 +1469,9 @@ export function ModuleComptabilite() {
                 />
               </div>
             </div>
+          )}
 
+          {parametresSubTab === 'exercice' && (
             <div style={{ padding: '20px', background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
               <h4 style={{ marginTop: 0, color: '#1976d2' }}>📅 Exercice Comptable</h4>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -1464,7 +1495,9 @@ export function ModuleComptabilite() {
                 />
               </div>
             </div>
+          )}
 
+          {parametresSubTab === 'affichage' && (
             <div style={{ padding: '20px', background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
               <h4 style={{ marginTop: 0, color: '#1976d2' }}>👁️ Options d'Affichage</h4>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -1495,25 +1528,24 @@ export function ModuleComptabilite() {
                   </label>
                 </div>
               </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+                <Button 
+                  variant="success"
+                  onClick={async () => {
+                    try {
+                      await api.put('/ecritures-recurrentes/parametres/comptables', data.parametresComptables);
+                      alert('Paramètres comptables sauvegardés avec succès !');
+                      loadAllData();
+                    } catch (err) {
+                      alert('Erreur: ' + err.message);
+                    }
+                  }}
+                >
+                  💾 Enregistrer les Paramètres
+                </Button>
+              </div>
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-              <Button 
-                variant="success"
-                onClick={async () => {
-                  try {
-                    await api.put('/ecritures-recurrentes/parametres/comptables', data.parametresComptables);
-                    alert('Paramètres comptables sauvegardés avec succès !');
-                    loadAllData();
-                  } catch (err) {
-                    alert('Erreur: ' + err.message);
-                  }
-                }}
-              >
-                💾 Enregistrer les Paramètres
-              </Button>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
