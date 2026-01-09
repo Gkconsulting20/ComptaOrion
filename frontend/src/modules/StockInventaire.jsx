@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
+import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 
 function NonFactureTab({ fournisseurs, produits }) {
   const [subTab, setSubTab] = useState('stock');

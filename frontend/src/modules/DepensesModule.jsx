@@ -4,6 +4,7 @@ import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
+import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 
 export function DepensesModule() {
@@ -17,6 +18,10 @@ export function DepensesModule() {
   const [showDepenseDetails, setShowDepenseDetails] = useState(false);
   const [editingDepense, setEditingDepense] = useState(null);
   const [selectedDepense, setSelectedDepense] = useState(null);
+  
+  const fiscalDates = getPeriodeDates('fiscal_courant');
+  const [dateDebut, setDateDebut] = useState(fiscalDates.debut.toISOString().split('T')[0]);
+  const [dateFin, setDateFin] = useState(fiscalDates.fin.toISOString().split('T')[0]);
   const [formData, setFormData] = useState({
     employeId: '',
     categorieId: '',
@@ -37,8 +42,9 @@ export function DepensesModule() {
 
   const loadData = async () => {
     try {
+      const params = `?dateDebut=${dateDebut}&dateFin=${dateFin}`;
       const [depensesRes, categoriesRes, employesRes] = await Promise.all([
-        api.get('/depenses/list'),
+        api.get(`/depenses/list${params}`),
         api.get('/depenses/categories'),
         api.get('/employes/list')
       ]);
@@ -182,6 +188,16 @@ export function DepensesModule() {
           </Button>
         </div>
       </div>
+
+      <PeriodFilter
+        dateDebut={dateDebut}
+        dateFin={dateFin}
+        onDateDebutChange={setDateDebut}
+        onDateFinChange={setDateFin}
+        onApply={loadData}
+        loading={loading}
+        showFiscalPeriods={true}
+      />
 
       <Table 
         columns={columns} 
