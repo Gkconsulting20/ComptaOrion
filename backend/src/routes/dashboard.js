@@ -496,10 +496,19 @@ router.get('/detail/factures-retard', async (req, res) => {
 });
 
 // Détail stock faible
+// NOTE TECHNIQUE: Le stock faible est un état instantané (quantité actuelle vs seuil minimum).
+// Contrairement aux ventes/dépenses qui sont des flux historiques, le stock représente
+// toujours l'état ACTUEL de l'inventaire. Le filtrage par période n'a pas de sens sémantique
+// pour cette donnée - on veut toujours voir quels produits sont actuellement en rupture,
+// peu importe la période fiscale sélectionnée. Les paramètres dateDebut/dateFin sont
+// acceptés pour la cohérence API mais ne sont pas appliqués.
 router.get('/detail/stock-faible', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
+    
+    // Paramètres acceptés pour cohérence API (non utilisés - stock = état actuel)
+    const { dateDebut, dateFin } = req.query;
     
     const allProduits = await db.query.produits.findMany({
       where: eq(produits.entrepriseId, eId)
