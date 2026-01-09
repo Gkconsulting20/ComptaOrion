@@ -102,8 +102,8 @@ export function DashboardView() {
       const params = `?dateDebut=${dateDebut}&dateFin=${dateFin}`;
       const [kpisRes, ventesRes, depensesRes] = await Promise.all([
         api.get(`/dashboard/global${params}`),
-        api.get('/dashboard/ventes-mensuelles'),
-        api.get('/dashboard/depenses-categories')
+        api.get(`/dashboard/ventes-mensuelles${params}`),
+        api.get(`/dashboard/depenses-categories${params}`)
       ]);
       
       setKpis(kpisRes);
