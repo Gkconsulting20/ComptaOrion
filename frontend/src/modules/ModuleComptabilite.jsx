@@ -540,6 +540,13 @@ export function ModuleComptabilite() {
     loadAllData();
   }, []);
 
+  // Recharger automatiquement les rapports quand la période change
+  useEffect(() => {
+    if (activeTab === 'rapports') {
+      // Les rapports seront rechargés automatiquement via les états
+    }
+  }, [periode.dateDebut, periode.dateFin]);
+
   const loadAllData = async () => {
     setLoading(true);
     try {

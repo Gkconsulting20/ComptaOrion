@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 
 export function ImpotsModule() {
@@ -19,8 +20,8 @@ export function ImpotsModule() {
   const [periodeDeclaration, setPeriodeDeclaration] = useState(new Date().toISOString().slice(0, 7));
   const [tvaResume, setTvaResume] = useState({ tvaCollectee: 0, tvaDeductible: 0, tvaADecaisser: 0 });
   const [periodeTVA, setPeriodeTVA] = useState({
-    dateDebut: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
-    dateFin: new Date().toISOString().split('T')[0]
+    dateDebut: getPeriodeDates('annee').dateDebut,
+    dateFin: getPeriodeDates('annee').dateFin
   });
   const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], totaux: null, loading: false, compte: '' });
 

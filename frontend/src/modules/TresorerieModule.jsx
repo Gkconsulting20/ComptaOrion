@@ -53,6 +53,13 @@ export function TresorerieModule() {
     }
   }, [periodePrevision]);
 
+  // Recharger automatiquement les transactions quand les dates changent
+  useEffect(() => {
+    if (activeTab === 'transactions') {
+      loadTransactions();
+    }
+  }, [transactionDateDebut, transactionDateFin]);
+
   const loadData = async () => {
     setLoading(true);
     try {

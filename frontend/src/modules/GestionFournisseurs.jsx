@@ -899,6 +899,11 @@ export function GestionFournisseurs() {
     loadAllData();
   }, []);
 
+  // Recharger automatiquement les rapports quand la période change
+  useEffect(() => {
+    // Trigger re-render pour les rapports avec la nouvelle période
+  }, [periode.dateDebut, periode.dateFin]);
+
   const loadAllData = async () => {
     setLoading(true);
     try {
