@@ -53,6 +53,7 @@ export function ParametresModule() {
     { id: 'entreprise', label: '🏢 Entreprise', icon: '🏢' },
     { id: 'comptabilite', label: '📊 Système Comptable', icon: '📊' },
     { id: 'devises', label: '💱 Devises', icon: '💱' },
+    { id: 'tauxChange', label: '📈 Taux de Change', icon: '📈' },
     { id: 'pays', label: '🌍 Pays & Régions', icon: '🌍' },
     { id: 'taxes', label: '💰 Taxes (TVA)', icon: '💰' },
     { id: 'audit', label: '📋 Historique Audit', icon: '📋' }
@@ -161,6 +162,10 @@ export function ParametresModule() {
             actions={false}
           />
         </div>
+      )}
+
+      {activeTab === 'tauxChange' && (
+        <TauxChangeTab entreprise={data.entreprise} />
       )}
 
       {activeTab === 'pays' && (
@@ -782,6 +787,240 @@ function AuditLogTab() {
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+function TauxChangeTab({ entreprise }) {
+  const [tauxList, setTauxList] = useState([]);
+  const [devises, setDevises] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    deviseSource: 'EUR',
+    deviseCible: 'XOF',
+    taux: '',
+    dateEffet: new Date().toISOString().split('T')[0],
+    notes: ''
+  });
+  const [converteur, setConverteur] = useState({
+    montant: 1000,
+    deviseSource: 'EUR',
+    resultat: null
+  });
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [tauxRes, devisesRes] = await Promise.all([
+        api.get('/devises/taux').catch(() => ({ data: [] })),
+        api.get('/devises/devises').catch(() => ({ data: [] }))
+      ]);
+      setTauxList(tauxRes.data || []);
+      setDevises(devisesRes.data || []);
+    } catch (error) {
+      console.error('Erreur chargement taux:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/devises/taux', formData);
+      alert('Taux de change ajouté avec succès');
+      setShowForm(false);
+      setFormData({
+        deviseSource: 'EUR',
+        deviseCible: 'XOF',
+        taux: '',
+        dateEffet: new Date().toISOString().split('T')[0],
+        notes: ''
+      });
+      loadData();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Supprimer ce taux de change ?')) return;
+    try {
+      await api.delete(`/devises/taux/${id}`);
+      loadData();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleConversion = async () => {
+    try {
+      const response = await api.post('/devises/convertir', {
+        montant: converteur.montant,
+        deviseSource: converteur.deviseSource,
+        deviseCible: 'XOF'
+      });
+      setConverteur({ ...converteur, resultat: response.data });
+    } catch (error) {
+      alert('Erreur: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const formatMoney = (val, decimals = 0) => {
+    const num = parseFloat(val) || 0;
+    return num.toLocaleString('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  };
+
+  if (loading) return <p>Chargement...</p>;
+
+  const deviseMaison = entreprise?.devise || 'XOF';
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div>
+          <h3 style={{ margin: 0 }}>📈 Taux de Change</h3>
+          <p style={{ margin: '5px 0 0', color: '#666', fontSize: '14px' }}>
+            Devise de base: <strong>{deviseMaison}</strong>
+          </p>
+        </div>
+        <Button onClick={() => setShowForm(!showForm)}>
+          {showForm ? '✕ Fermer' : '+ Nouveau Taux'}
+        </Button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div style={{ padding: '20px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #ddd' }}>
+          <h4 style={{ margin: '0 0 15px 0' }}>🔄 Convertisseur Rapide</h4>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="number"
+              value={converteur.montant}
+              onChange={(e) => setConverteur({ ...converteur, montant: e.target.value, resultat: null })}
+              style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', width: '120px' }}
+            />
+            <select
+              value={converteur.deviseSource}
+              onChange={(e) => setConverteur({ ...converteur, deviseSource: e.target.value, resultat: null })}
+              style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px' }}
+            >
+              {devises.filter(d => d.code !== deviseMaison).map(d => (
+                <option key={d.code} value={d.code}>{d.code} - {d.nom}</option>
+              ))}
+            </select>
+            <span style={{ fontSize: '16px' }}>→</span>
+            <span style={{ fontWeight: 'bold' }}>{deviseMaison}</span>
+            <Button onClick={handleConversion}>Convertir</Button>
+          </div>
+          {converteur.resultat && (
+            <div style={{ marginTop: '15px', padding: '15px', background: '#d4edda', borderRadius: '4px' }}>
+              <p style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
+                {formatMoney(converteur.resultat.montantOriginal, 2)} {converteur.resultat.deviseSource} = {formatMoney(converteur.resultat.montantConverti)} {converteur.resultat.deviseCible}
+              </p>
+              <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#155724' }}>
+                Taux: 1 {converteur.resultat.deviseSource} = {formatMoney(converteur.resultat.tauxUtilise, 4)} {converteur.resultat.deviseCible} (au {converteur.resultat.dateEffet})
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '20px', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107' }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#856404' }}>💡 Taux Fixes (Zone FCFA)</h4>
+          <p style={{ margin: 0, fontSize: '14px', color: '#856404' }}>
+            <strong>1 EUR = 655,957 XOF</strong> (Taux fixe BCE/BCEAO)
+          </p>
+          <p style={{ margin: '10px 0 0', fontSize: '12px', color: '#856404' }}>
+            Les pays de la zone FCFA ont un taux de change fixe avec l'Euro, garanti par le Trésor français.
+          </p>
+        </div>
+      </div>
+
+      {showForm && (
+        <div style={{ padding: '20px', background: '#f8f9fa', borderRadius: '8px', marginBottom: '20px' }}>
+          <h4 style={{ margin: '0 0 15px 0' }}>Ajouter un taux de change</h4>
+          <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Devise source</label>
+              <select
+                value={formData.deviseSource}
+                onChange={(e) => setFormData({ ...formData, deviseSource: e.target.value })}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                required
+              >
+                {devises.filter(d => d.code !== deviseMaison).map(d => (
+                  <option key={d.code} value={d.code}>{d.code} - {d.nom}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Devise cible</label>
+              <input
+                type="text"
+                value={deviseMaison}
+                disabled
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', background: '#e9ecef' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Taux (1 {formData.deviseSource} = X {deviseMaison})</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={formData.taux}
+                onChange={(e) => setFormData({ ...formData, taux: e.target.value })}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                placeholder="Ex: 655.957"
+                required
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Date d'effet</label>
+              <input
+                type="date"
+                value={formData.dateEffet}
+                onChange={(e) => setFormData({ ...formData, dateEffet: e.target.value })}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                required
+              />
+            </div>
+            <div style={{ gridColumn: 'span 3' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Notes (optionnel)</label>
+              <input
+                type="text"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                placeholder="Ex: Taux BCE du jour"
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <Button type="submit">Enregistrer</Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <h4 style={{ margin: '20px 0 15px' }}>Historique des taux</h4>
+      {tauxList.length === 0 ? (
+        <p style={{ color: '#666', fontStyle: 'italic' }}>Aucun taux de change enregistré. Ajoutez-en un pour commencer.</p>
+      ) : (
+        <Table
+          columns={[
+            { key: 'deviseSource', label: 'Devise' },
+            { key: 'deviseCible', label: 'Vers' },
+            { key: 'taux', label: 'Taux', render: (row) => formatMoney(row.taux, 4) },
+            { key: 'dateEffet', label: 'Date d\'effet' },
+            { key: 'source', label: 'Source' },
+            { key: 'notes', label: 'Notes' }
+          ]}
+          data={tauxList}
+          onDelete={handleDelete}
+        />
       )}
     </div>
   );

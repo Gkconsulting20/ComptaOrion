@@ -1575,3 +1575,42 @@ export const produitPrix = pgTable('produit_prix', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+// ==========================================
+// MODULE: TAUX DE CHANGE (Multi-devises)
+// ==========================================
+
+export const tauxChange = pgTable('taux_change', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  
+  // Devises
+  deviseSource: varchar('devise_source', { length: 10 }).notNull(), // EUR, USD, GBP, etc.
+  deviseCible: varchar('devise_cible', { length: 10 }).notNull().default('XOF'), // Devise de base (FCFA)
+  
+  // Taux et date
+  taux: decimal('taux', { precision: 18, scale: 6 }).notNull(), // Ex: 1 EUR = 655.957 XOF
+  dateEffet: date('date_effet').notNull(), // Date à laquelle le taux s'applique
+  
+  // Source du taux
+  source: varchar('source', { length: 50 }).default('manuel'), // manuel, api_bceao, api_ecb, etc.
+  
+  // Métadonnées
+  notes: text('notes'),
+  createdBy: integer('created_by').references(() => users.id),
+  
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Liste des devises supportées
+export const devises = pgTable('devises', {
+  id: serial('id').primaryKey(),
+  code: varchar('code', { length: 10 }).notNull().unique(), // EUR, USD, XOF, etc.
+  nom: varchar('nom', { length: 100 }).notNull(), // Euro, Dollar US, Franc CFA, etc.
+  symbole: varchar('symbole', { length: 10 }).notNull(), // €, $, FCFA, etc.
+  decimales: integer('decimales').default(2),
+  actif: boolean('actif').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});

@@ -30,6 +30,7 @@ import commercialPortalRoutes from './routes/commercial-portal.js';
 import impotsRoutes from './routes/impots.js';
 import integrationsRoutes from './routes/integrations.js';
 import importRoutes from './routes/import.js';
+import devisesRoutes from './routes/devises.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 import { createTenantMiddleware } from './utils/rlsPolicies.js';
 import path from 'path';
@@ -150,6 +151,7 @@ app.use('/api/integrations', integrationsRoutes);
 
 // Module Import de données externes (QuickBooks, Sage, etc.)
 app.use('/api/import', importRoutes);
+app.use('/api/devises', devisesRoutes);
 
 // ===============================================
 // ROUTE INFO API
