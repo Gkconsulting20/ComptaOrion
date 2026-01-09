@@ -21,6 +21,59 @@ ComptaOrion targets 3 main markets:
    - Norme: PCG malgache (basé sur PCG français)
    - Paiements mobiles: MVola, Orange Money, Airtel Money
 
+## Development Strategy
+
+### Phase 1: Afrique Francophone (ACTUELLE)
+**Statut:** En cours de développement
+- **Cible:** Pays OHADA francophones (Togo, Bénin, Côte d'Ivoire, Sénégal, Cameroun, etc.)
+- **Norme comptable:** SYSCOHADA
+- **Devise:** FCFA (XOF/XAF)
+- **Langue:** Français uniquement
+- **Objectif:** Finaliser le produit, valider avec les premiers clients
+
+### Phase 2: Extension Madagascar
+**Statut:** Planifié (après validation Phase 1)
+- **Adaptations requises:**
+  - Ajouter devise Ariary (MGA)
+  - Configurer TVA malgache (20%)
+  - Ajouter pays Madagascar avec régions
+  - Intégrer paiements mobiles (MVola, Orange Money, Airtel Money)
+- **Norme comptable:** PCG malgache (compatible PCG français déjà supporté)
+
+### Phase 3: Afrique Anglophone (Bilingue)
+**Statut:** Planifié (après succès Phase 1-2)
+- **Pays cibles:**
+  - Nigeria (NGN) - Plus grande économie d'Afrique
+  - Ghana (GHS) - Hub tech émergent
+  - Kenya (KES) - Hub fintech (M-Pesa)
+  - Afrique du Sud (ZAR) - Économie développée
+  - Tanzanie, Ouganda, Rwanda, etc.
+- **Adaptations requises:**
+  - Système i18n (internationalisation FR/EN)
+  - Sélecteur de langue utilisateur
+  - Traduction complète de l'interface en anglais
+  - Nouvelles devises (NGN, GHS, KES, ZAR, TZS, UGX, RWF)
+  - TVA par pays (Nigeria 7.5%, Kenya 16%, Ghana 15%, etc.)
+- **Norme comptable:** IFRS (déjà supporté)
+
+### Phase 4: Marché Francophone Développé
+**Statut:** Vision long terme
+- **Pays cibles:** France, Belgique, Québec (Canada)
+- **Adaptations requises:**
+  - Devises EUR, CAD
+  - TVA européenne (France 20%, Belgique 21%)
+  - TPS/TVQ pour le Québec
+  - Intégrations bancaires Open Banking (PSD2)
+  - Facturation électronique (Factur-X, Peppol)
+  - Conformité RGPD renforcée
+- **Norme comptable:** PCG français, IFRS
+
+### Principes de Développement
+1. **Validation marché avant expansion** - Chaque phase doit être validée par les clients avant de passer à la suivante
+2. **Architecture extensible** - Le code actuel supporte déjà multi-devises et multi-normes (SYSCOHADA/IFRS/PCG)
+3. **Itération rapide** - Prioriser les retours clients pour améliorer le produit
+4. **Monétisation progressive** - SaaS avec abonnements adaptés à chaque marché
+
 It offers a modern, responsive platform for managing accounting, inventory, customer/supplier relations, and human resources. Key features include multi-country, multi-currency support, compliance with African accounting standards (SYSCOHADA), IFRS, and PCG. The project aims to be a production-ready solution with multi-tenancy, Role-Based Access Control (RBAC), a complete audit trail, and a robust REST API, addressing the demand for tailored ERP solutions in Africa.
 
 ## User Preferences
