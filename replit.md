@@ -1,7 +1,27 @@
-# ComptaOrion - ERP Léger pour l'Afrique
+# ComptaOrion - ERP Léger Multi-Marchés
 
 ## Overview
-ComptaOrion is a lightweight ERP solution designed for the African market, inspired by QuickBooks. It offers a modern, responsive platform for managing accounting, inventory, customer/supplier relations, and human resources. Key features include multi-country, multi-currency support, compliance with African accounting standards (SYSCOHADA), IFRS, and PCG. The project aims to be a production-ready solution with multi-tenancy, Role-Based Access Control (RBAC), a complete audit trail, and a robust REST API, addressing the demand for tailored ERP solutions in Africa.
+ComptaOrion is a lightweight ERP solution designed for multiple markets, inspired by QuickBooks.
+
+## Target Markets
+ComptaOrion targets 3 main markets:
+
+1. **Marché Francophone (Europe/Amérique)**
+   - France, Belgique, Québec
+   - Devises: EUR, CAD
+   - Normes: PCG français, IFRS
+
+2. **Marché Africain (SYSCOHADA)**
+   - 17 pays OHADA + autres pays africains francophones
+   - Devises: XOF, XAF, GNF, etc.
+   - Normes: SYSCOHADA, IFRS
+
+3. **Madagascar**
+   - Devise: Ariary (MGA)
+   - Norme: PCG malgache (basé sur PCG français)
+   - Paiements mobiles: MVola, Orange Money, Airtel Money
+
+It offers a modern, responsive platform for managing accounting, inventory, customer/supplier relations, and human resources. Key features include multi-country, multi-currency support, compliance with African accounting standards (SYSCOHADA), IFRS, and PCG. The project aims to be a production-ready solution with multi-tenancy, Role-Based Access Control (RBAC), a complete audit trail, and a robust REST API, addressing the demand for tailored ERP solutions in Africa.
 
 ## User Preferences
 - Approche directe et pragmatique
