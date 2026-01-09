@@ -56,11 +56,13 @@ router.get('/global', async (req, res) => {
     });
     const depensesMois = depensesData.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
 
-    // Factures en retard (statut = 'retard')
+    // Factures en retard (statut = 'retard') - dans la période sélectionnée
     const factulesRetard = await db.query.factures.findMany({
       where: and(
         eq(factures.entrepriseId, eId),
-        eq(factures.statut, 'retard')
+        eq(factures.statut, 'retard'),
+        gte(factures.createdAt, dateStart),
+        lte(factures.createdAt, dateEnd)
       )
     });
     const facturesRetardTotal = factulesRetard.length;
