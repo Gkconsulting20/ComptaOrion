@@ -15,6 +15,7 @@ import IntegrationsModule from './modules/IntegrationsModule';
 import { Login } from './pages/Login';
 import { Inscription } from './pages/Inscription';
 import { CommercialPortal } from './pages/CommercialPortal';
+import { DashboardView } from './Dashboard';
 import api from './api';
 
 const ALL_MODULES = [
@@ -32,119 +33,6 @@ const ALL_MODULES = [
   { id: 'parametres', label: 'Paramètres', icon: '⚙️', requiresSuperAdmin: false }
 ];
 
-function Dashboard() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get('/dashboard/global')
-      .then(d => setData(d || {}))
-      .catch(() => setData({}))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <p>Chargement...</p>;
-
-  return (
-    <div>
-      <h2>📊 Tableau de Bord</h2>
-      <div style={{
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
-        gap: '15px',
-        marginTop: '20px'
-      }}>
-        <div style={{
-          padding: '20px', 
-          backgroundColor: '#e3f2fd', 
-          borderRadius: '8px', 
-          border: '1px solid #90caf9',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <p style={{color: '#666', margin: '0 0 5px 0', fontSize: '12px', fontWeight: '600'}}>
-            VENTES DU MOIS
-          </p>
-          <h3 style={{margin: 0, fontSize: '24px', color: '#1976d2'}}>
-            {parseFloat(data?.ventesMois || 0).toLocaleString()} FCFA
-          </h3>
-        </div>
-        <div style={{
-          padding: '20px', 
-          backgroundColor: '#ffebee', 
-          borderRadius: '8px', 
-          border: '1px solid #ef5350',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <p style={{color: '#666', margin: '0 0 5px 0', fontSize: '12px', fontWeight: '600'}}>
-            DÉPENSES DU MOIS
-          </p>
-          <h3 style={{margin: 0, fontSize: '24px', color: '#d32f2f'}}>
-            {parseFloat(data?.depensesMois || 0).toLocaleString()} FCFA
-          </h3>
-        </div>
-        <div style={{
-          padding: '20px', 
-          backgroundColor: '#e8f5e9', 
-          borderRadius: '8px', 
-          border: '1px solid #81c784',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <p style={{color: '#666', margin: '0 0 5px 0', fontSize: '12px', fontWeight: '600'}}>
-            CASHFLOW
-          </p>
-          <h3 style={{margin: 0, fontSize: '24px', color: '#388e3c'}}>
-            {parseFloat(data?.cashflow || 0).toLocaleString()} FCFA
-          </h3>
-        </div>
-        <div style={{
-          padding: '20px', 
-          backgroundColor: '#fff3e0', 
-          borderRadius: '8px', 
-          border: '1px solid #ffb74d',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <p style={{color: '#666', margin: '0 0 5px 0', fontSize: '12px', fontWeight: '600'}}>
-            MARGE BRUTE
-          </p>
-          <h3 style={{margin: 0, fontSize: '24px', color: '#f57c00'}}>
-            {parseFloat(data?.margeBrute || 0).toFixed(1)}%
-          </h3>
-        </div>
-      </div>
-
-      <div style={{ marginTop: '30px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        <div style={{
-          padding: '20px',
-          backgroundColor: '#fff',
-          borderRadius: '8px',
-          border: '1px solid #e0e0e0'
-        }}>
-          <h4 style={{ margin: '0 0 15px 0', color: '#333' }}>Factures en Retard</h4>
-          <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#e74c3c', margin: 0 }}>
-            {data?.facturesEnRetard?.nombre || 0}
-          </p>
-          <p style={{ color: '#666', fontSize: '14px', margin: '5px 0 0 0' }}>
-            Montant: {parseFloat(data?.facturesEnRetard?.montant || 0).toLocaleString()} FCFA
-          </p>
-        </div>
-        <div style={{
-          padding: '20px',
-          backgroundColor: '#fff',
-          borderRadius: '8px',
-          border: '1px solid #e0e0e0'
-        }}>
-          <h4 style={{ margin: '0 0 15px 0', color: '#333' }}>Stock Faible</h4>
-          <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#f39c12', margin: 0 }}>
-            {data?.stockFaible?.nombre || 0}
-          </p>
-          <p style={{ color: '#666', fontSize: '14px', margin: '5px 0 0 0' }}>
-            Produits sous le seuil minimum
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -248,7 +136,7 @@ export default function App() {
 
   const renderView = () => {
     switch (currentView) {
-      case 'dashboard': return <Dashboard />;
+      case 'dashboard': return <DashboardView />;
       case 'saas-admin': return <SaaSAdminModule />;
       case 'clients': return <ClientsModule />;
       case 'fournisseurs': return <GestionFournisseurs />;
@@ -260,7 +148,7 @@ export default function App() {
       case 'ia-assistant': return <IAAssistantModule />;
       case 'authentication': return <AuthenticationModule />;
       case 'parametres': return <ParametresModule />;
-      default: return <Dashboard />;
+      default: return <DashboardView />;
     }
   };
 
