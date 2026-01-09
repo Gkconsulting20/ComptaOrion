@@ -219,35 +219,13 @@ export function ImpotsModule() {
       <div>
         <h3 style={{ marginBottom: '20px' }}>Gestion de la TVA</h3>
         
-        {/* Sélecteur de période */}
-        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', color: '#666' }}>Date Début</label>
-              <input 
-                type="date" 
-                value={periodeTVA.dateDebut}
-                onChange={(e) => setPeriodeTVA({...periodeTVA, dateDebut: e.target.value})}
-                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', color: '#666' }}>Date Fin</label>
-              <input 
-                type="date" 
-                value={periodeTVA.dateFin}
-                onChange={(e) => setPeriodeTVA({...periodeTVA, dateFin: e.target.value})}
-                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-            <button 
-              onClick={loadTVAResume}
-              style={{ padding: '8px 16px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginTop: '20px' }}
-            >
-              Générer
-            </button>
-          </div>
-        </div>
+        <PeriodFilter
+          dateDebut={periodeTVA.dateDebut}
+          dateFin={periodeTVA.dateFin}
+          onDateDebutChange={(val) => setPeriodeTVA({...periodeTVA, dateDebut: val})}
+          onDateFinChange={(val) => setPeriodeTVA({...periodeTVA, dateFin: val})}
+          onApply={loadTVAResume}
+        />
         
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '15px' }} className="no-print">
           <button 

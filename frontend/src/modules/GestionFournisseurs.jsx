@@ -1298,36 +1298,13 @@ export function GestionFournisseurs() {
           
           <div id="fournisseur-rapport-content">
 
-          <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 15px 0' }}>📅 Filtrer par Période</h4>
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'end', flexWrap: 'wrap' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Début</label>
-                <input
-                  type="date"
-                  value={periode.dateDebut}
-                  onChange={(e) => setPeriode({...periode, dateDebut: e.target.value})}
-                  style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Fin</label>
-                <input
-                  type="date"
-                  value={periode.dateFin}
-                  onChange={(e) => setPeriode({...periode, dateFin: e.target.value})}
-                  style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
-                />
-              </div>
-              <Button 
-                variant="success" 
-                onClick={loadAllData}
-                style={{ fontWeight: 'bold', padding: '10px 20px' }}
-              >
-                Générer
-              </Button>
-            </div>
-          </div>
+          <PeriodFilter
+            dateDebut={periode.dateDebut}
+            dateFin={periode.dateFin}
+            onDateDebutChange={(val) => setPeriode({...periode, dateDebut: val})}
+            onDateFinChange={(val) => setPeriode({...periode, dateFin: val})}
+            onApply={loadAllData}
+          />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
             <div 

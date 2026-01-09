@@ -1127,23 +1127,12 @@ export function ModuleComptabilite() {
         <div>
           <h3>📊 Rapports Financiers</h3>
           
-          <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 15px 0' }}>📅 Période</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Début</label>
-                <input type="date" value={periode.dateDebut}
-                  onChange={(e) => setPeriode({...periode, dateDebut: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Fin</label>
-                <input type="date" value={periode.dateFin}
-                  onChange={(e) => setPeriode({...periode, dateFin: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
-              </div>
-            </div>
-          </div>
+          <PeriodFilter
+            dateDebut={periode.dateDebut}
+            dateFin={periode.dateFin}
+            onDateDebutChange={(val) => setPeriode({...periode, dateDebut: val})}
+            onDateFinChange={(val) => setPeriode({...periode, dateFin: val})}
+          />
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '30px' }}>
             <div style={{ padding: '30px', background: '#e3f2fd', borderRadius: '8px', cursor: 'pointer' }}
