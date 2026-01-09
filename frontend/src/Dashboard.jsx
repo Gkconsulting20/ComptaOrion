@@ -119,7 +119,8 @@ export function DashboardView() {
   const openDrillDown = async (type, title) => {
     setDrillDown({ open: true, type, title, data: [], loading: true });
     try {
-      const data = await api.get(`/dashboard/detail/${type}`);
+      const params = `?dateDebut=${dateDebut}&dateFin=${dateFin}`;
+      const data = await api.get(`/dashboard/detail/${type}${params}`);
       setDrillDown(prev => ({ ...prev, data: data || [], loading: false }));
     } catch (error) {
       console.error('Erreur drill-down:', error);

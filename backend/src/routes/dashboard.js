@@ -24,7 +24,7 @@ function getMonthDates() {
 // Dashboard global - tous les KPIs
 router.get('/global', async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { dateDebut, dateFin, startDate, endDate } = req.query;
     const eId = req.entrepriseId;
     
     if (!eId) {
@@ -33,8 +33,8 @@ router.get('/global', async (req, res) => {
     
     // Par défaut: année fiscale entière pour avoir toutes les données
     const { debut, fin } = getFiscalYearDates();
-    const dateStart = startDate ? new Date(startDate) : debut;
-    const dateEnd = endDate ? new Date(endDate) : fin;
+    const dateStart = dateDebut ? new Date(dateDebut) : (startDate ? new Date(startDate) : debut);
+    const dateEnd = dateFin ? new Date(dateFin) : (endDate ? new Date(endDate) : fin);
 
     // Ventes du mois (factures payées/envoyées)
     const ventesData = await db.query.factures.findMany({
@@ -236,18 +236,27 @@ router.get('/global', async (req, res) => {
   }
 });
 
-// Ventes par mois (historique 12 mois)
+// Ventes par mois (dans la période sélectionnée)
 router.get('/ventes-mensuelles', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
+    
+    const { dateDebut, dateFin } = req.query;
+    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const periodStart = dateDebut ? new Date(dateDebut) : defaultDebut;
+    const periodEnd = dateFin ? new Date(dateFin) : defaultFin;
+    
     const data = [];
-
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - i);
-      const debut = new Date(date.getFullYear(), date.getMonth(), 1);
-      const fin = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const current = new Date(periodStart.getFullYear(), periodStart.getMonth(), 1);
+    
+    while (current <= periodEnd) {
+      const debut = new Date(current.getFullYear(), current.getMonth(), 1);
+      const fin = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+      
+      if (fin > periodEnd) {
+        fin.setTime(periodEnd.getTime());
+      }
 
       const ventes = await db.query.factures.findMany({
         where: and(
@@ -262,6 +271,8 @@ router.get('/ventes-mensuelles', async (req, res) => {
         mois: debut.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
         ventes: parseFloat(total).toFixed(2)
       });
+      
+      current.setMonth(current.getMonth() + 1);
     }
 
     res.json(data);
@@ -270,14 +281,23 @@ router.get('/ventes-mensuelles', async (req, res) => {
   }
 });
 
-// Répartition dépenses par catégorie
+// Répartition dépenses par catégorie (dans la période sélectionnée)
 router.get('/depenses-categories', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
+    
+    const { dateDebut, dateFin } = req.query;
+    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const periodStart = dateDebut ? new Date(dateDebut) : defaultDebut;
+    const periodEnd = dateFin ? new Date(dateFin) : defaultFin;
 
     const depenses = await db.query.facturesAchat.findMany({
-      where: eq(facturesAchat.entrepriseId, eId)
+      where: and(
+        eq(facturesAchat.entrepriseId, eId),
+        gte(facturesAchat.createdAt, periodStart),
+        lte(facturesAchat.createdAt, periodEnd)
+      )
     });
 
     // Grouper par fournisseur (comme catégorie)
@@ -359,13 +379,16 @@ router.get('/kpis', async (req, res) => {
 // DRILL-DOWN ENDPOINTS
 // =====================
 
-// Détail ventes du mois
+// Détail ventes de la période
 router.get('/detail/ventes', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
-    const { debut, fin } = getMonthDates();
+    const { dateDebut, dateFin } = req.query;
+    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
+    const fin = dateFin ? new Date(dateFin) : defaultFin;
     
     const ventesData = await db.query.factures.findMany({
       where: and(
@@ -392,13 +415,16 @@ router.get('/detail/ventes', async (req, res) => {
   }
 });
 
-// Détail dépenses du mois
+// Détail dépenses de la période
 router.get('/detail/depenses', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
-    const { debut, fin } = getMonthDates();
+    const { dateDebut, dateFin } = req.query;
+    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
+    const fin = dateFin ? new Date(dateFin) : defaultFin;
     
     const depensesData = await db.query.facturesAchat.findMany({
       where: and(
@@ -488,13 +514,16 @@ router.get('/detail/stock-faible', async (req, res) => {
   }
 });
 
-// Détail cashflow
+// Détail cashflow de la période
 router.get('/detail/cashflow', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
-    const { debut, fin } = getMonthDates();
+    const { dateDebut, dateFin } = req.query;
+    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
+    const fin = dateFin ? new Date(dateFin) : defaultFin;
     
     // Récupérer paiements clients (entrées)
     const paiementsClients = await db.query.paiements.findMany({
