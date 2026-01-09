@@ -134,9 +134,9 @@ export function DashboardView() {
   };
 
   useEffect(() => {
-    // Charger automatiquement au premier rendu
+    // Charger automatiquement quand les dates changent
     loadDashboard();
-  }, []);
+  }, [dateDebut, dateFin]);
 
   const loadDashboard = async () => {
     setLoading(true);
