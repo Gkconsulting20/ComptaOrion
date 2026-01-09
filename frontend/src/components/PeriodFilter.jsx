@@ -75,6 +75,10 @@ export default function PeriodFilter({
     onDateDebutChange(dates.dateDebut);
     onDateFinChange(dates.dateFin);
     setPeriodeActive(type);
+    // Appeler automatiquement onApply après un court délai pour que les états soient mis à jour
+    if (onApply) {
+      setTimeout(() => onApply(), 100);
+    }
   };
 
   const handleDateChange = (type, value) => {

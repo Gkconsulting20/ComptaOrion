@@ -540,12 +540,6 @@ export function ModuleComptabilite() {
     loadAllData();
   }, []);
 
-  // Recharger automatiquement les rapports quand la période change
-  useEffect(() => {
-    if (activeTab === 'rapports') {
-      // Les rapports seront rechargés automatiquement via les états
-    }
-  }, [periode.dateDebut, periode.dateFin]);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -973,23 +967,12 @@ export function ModuleComptabilite() {
         <div>
           <h3>⚖️ Balance Générale</h3>
           
-          <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 15px 0' }}>📅 Période</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Début</label>
-                <input type="date" value={periode.dateDebut}
-                  onChange={(e) => setPeriode({...periode, dateDebut: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Fin</label>
-                <input type="date" value={periode.dateFin}
-                  onChange={(e) => setPeriode({...periode, dateFin: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
-              </div>
-            </div>
-            <Button variant="success" style={{ marginTop: '15px', fontWeight: 'bold', padding: '10px 20px' }} onClick={async () => {
+          <PeriodFilter
+            dateDebut={periode.dateDebut}
+            dateFin={periode.dateFin}
+            onDateDebutChange={(val) => setPeriode({...periode, dateDebut: val})}
+            onDateFinChange={(val) => setPeriode({...periode, dateFin: val})}
+            onApply={async () => {
               try {
                 const response = await api.get('/comptabilite/balance', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
                 const balanceComptes = response.comptes || [];
@@ -1007,8 +990,8 @@ export function ModuleComptabilite() {
               } catch (err) {
                 alert('Erreur: ' + err.message);
               }
-            }}>Générer</Button>
-          </div>
+            }}
+          />
 
           {data.balanceData && data.balanceData.length > 0 ? (
             <>
