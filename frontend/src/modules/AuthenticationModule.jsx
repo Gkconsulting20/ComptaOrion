@@ -33,8 +33,8 @@ export function AuthenticationModule() {
   const loadSessions = async () => {
     setLoading(true);
     try {
-      const data = await api.get('/auth-security/sessions/active');
-      setSessions(data.sessions || []);
+      const data = await api.get('/auth-security/sessions');
+      setSessions(Array.isArray(data) ? data : (data.sessions || []));
     } catch (error) {
       console.error('Erreur chargement sessions:', error);
     } finally {
@@ -46,7 +46,7 @@ export function AuthenticationModule() {
     setLoading(true);
     try {
       const data = await api.get('/auth-security/permissions');
-      setPermissions(data.permissions || []);
+      setPermissions(Array.isArray(data) ? data : (data.permissions || []));
     } catch (error) {
       console.error('Erreur chargement permissions:', error);
     } finally {
@@ -63,8 +63,8 @@ export function AuthenticationModule() {
       if (filters.dateDebut) params.append('dateDebut', filters.dateDebut);
       if (filters.dateFin) params.append('dateFin', filters.dateFin);
       
-      const data = await api.get(`/auth-security/audit-connexions?${params}`);
-      setAuditLogs(data.logs || []);
+      const data = await api.get(`/auth-security/audit?${params}`);
+      setAuditLogs(Array.isArray(data) ? data : (data.logs || []));
     } catch (error) {
       console.error('Erreur chargement audit:', error);
     } finally {

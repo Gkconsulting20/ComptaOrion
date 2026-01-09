@@ -1,9 +1,9 @@
 import express from 'express';
 import { db } from '../db.js';
 import crypto from 'crypto';
-import { users, sessions, auditConnexions, passwordResetTokens } from '../schema.js';
+import { users, sessions, auditConnexions, passwordResetTokens, permissions } from '../schema.js';
 import { generateToken, generateRefreshToken, verifyRefreshToken, hashPassword, comparePassword, authMiddleware } from '../auth.js';
-import { eq, and, gt } from 'drizzle-orm';
+import { eq, and, gt, isNull } from 'drizzle-orm';
 
 const router = express.Router();
 
@@ -279,7 +279,7 @@ router.get('/sessions', authMiddleware, async (req, res) => {
     const userSessions = await db.query.sessions.findMany({
       where: and(
         eq(sessions.userId, req.user.id),
-        eq(sessions.logoutAt, null)
+        isNull(sessions.logoutAt)
       )
     });
 
@@ -302,6 +302,94 @@ router.delete('/sessions/:sessionId', authMiddleware, async (req, res) => {
     }).where(eq(sessions.id, parseInt(req.params.sessionId)));
 
     res.json({ message: 'Session fermée' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// PERMISSIONS RBAC
+// ==========================================
+
+router.get('/permissions', authMiddleware, async (req, res) => {
+  try {
+    const allPermissions = await db.query.permissions.findMany();
+    
+    // Transformer en format attendu par le frontend
+    const permissionsGrouped = {};
+    allPermissions.forEach(perm => {
+      const key = `${perm.role}_${perm.module}`;
+      if (!permissionsGrouped[key]) {
+        permissionsGrouped[key] = {
+          id: perm.id,
+          role: perm.role,
+          module: perm.module,
+          canRead: false,
+          canWrite: false,
+          canDelete: false,
+          canAdmin: false
+        };
+      }
+      if (perm.action === 'read' && perm.autorise) permissionsGrouped[key].canRead = true;
+      if (perm.action === 'create' && perm.autorise) permissionsGrouped[key].canWrite = true;
+      if (perm.action === 'update' && perm.autorise) permissionsGrouped[key].canWrite = true;
+      if (perm.action === 'delete' && perm.autorise) permissionsGrouped[key].canDelete = true;
+      if (perm.action === 'admin' && perm.autorise) permissionsGrouped[key].canAdmin = true;
+    });
+
+    res.json(Object.values(permissionsGrouped));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/permissions/:permissionId', authMiddleware, async (req, res) => {
+  try {
+    const { canRead, canWrite, canDelete, canAdmin } = req.body;
+    const permId = parseInt(req.params.permissionId);
+
+    // Récupérer la permission pour obtenir le rôle et module
+    const perm = await db.query.permissions.findFirst({
+      where: eq(permissions.id, permId)
+    });
+
+    if (!perm) {
+      return res.status(404).json({ error: 'Permission non trouvée' });
+    }
+
+    // Mettre à jour les permissions correspondantes
+    if (canRead !== undefined) {
+      await db.update(permissions).set({ autorise: canRead })
+        .where(and(
+          eq(permissions.role, perm.role),
+          eq(permissions.module, perm.module),
+          eq(permissions.action, 'read')
+        ));
+    }
+    if (canWrite !== undefined) {
+      await db.update(permissions).set({ autorise: canWrite })
+        .where(and(
+          eq(permissions.role, perm.role),
+          eq(permissions.module, perm.module),
+          eq(permissions.action, 'create')
+        ));
+      await db.update(permissions).set({ autorise: canWrite })
+        .where(and(
+          eq(permissions.role, perm.role),
+          eq(permissions.module, perm.module),
+          eq(permissions.action, 'update')
+        ));
+    }
+    if (canDelete !== undefined) {
+      await db.update(permissions).set({ autorise: canDelete })
+        .where(and(
+          eq(permissions.role, perm.role),
+          eq(permissions.module, perm.module),
+          eq(permissions.action, 'delete')
+        ));
+    }
+
+    res.json({ message: 'Permission mise à jour' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
