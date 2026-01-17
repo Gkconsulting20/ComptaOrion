@@ -7,6 +7,7 @@ import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
+import { formatPeriodeFR } from '../utils/dateUtils';
 
 function FacturationTab({ fournisseurs }) {
   const [subTab, setSubTab] = useState('stock');
@@ -2043,7 +2044,7 @@ function EtatsCompteFournisseurTab() {
       (selectedFournisseur.adresse ? '<p><strong>Adresse:</strong> ' + selectedFournisseur.adresse + '</p>' : '') +
       (selectedFournisseur.email ? '<p><strong>Email:</strong> ' + selectedFournisseur.email + '</p>' : '') +
       (selectedFournisseur.telephone ? '<p><strong>Téléphone:</strong> ' + selectedFournisseur.telephone + '</p>' : '') +
-      '<p class="periode"><strong>Période:</strong> ' + new Date(periode.dateDebut).toLocaleDateString('fr-FR') + ' au ' + new Date(periode.dateFin).toLocaleDateString('fr-FR') + '</p></div>' +
+      '<p class="periode"><strong>Période:</strong> ' + formatPeriodeFR(periode.dateDebut, periode.dateFin) + '</p></div>' +
       '<div class="summary"><div class="summary-box facture"><div class="label">Total Facturé</div><div class="value">' + Math.round(etatCompte.totalFacture || 0).toLocaleString('fr-FR') + ' FCFA</div></div>' +
       '<div class="summary-box paye"><div class="label">Total Payé</div><div class="value">' + Math.round(etatCompte.totalPaye || 0).toLocaleString('fr-FR') + ' FCFA</div></div>' +
       '<div class="summary-box solde"><div class="label">Solde Dû</div><div class="value">' + Math.round(etatCompte.solde || 0).toLocaleString('fr-FR') + ' FCFA</div></div></div>' +
@@ -2137,7 +2138,7 @@ function EtatsCompteFournisseurTab() {
             {selectedFournisseur?.email && <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Email:</strong> {selectedFournisseur.email}</p>}
             {selectedFournisseur?.telephone && <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Téléphone:</strong> {selectedFournisseur.telephone}</p>}
             <p style={{ margin: '10px 0 0 0', fontSize: '14px', fontStyle: 'italic', color: '#666' }}>
-              <strong>Période:</strong> {new Date(periode.dateDebut).toLocaleDateString('fr-FR')} au {new Date(periode.dateFin).toLocaleDateString('fr-FR')}
+              <strong>Période:</strong> {formatPeriodeFR(periode.dateDebut, periode.dateFin)}
             </p>
           </div>
 

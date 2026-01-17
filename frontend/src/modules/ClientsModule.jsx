@@ -7,6 +7,7 @@ import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
+import { formatPeriodeFR } from '../utils/dateUtils';
 
 export function ClientsModule() {
   const [activeTab, setActiveTab] = useState('devis');
@@ -2973,7 +2974,7 @@ function EtatsCompteTab() {
         <div class="header">
           <h1>ÉTAT DE COMPTE CLIENT</h1>
           <div class="client-name">${selectedClient.nom}</div>
-          <div class="periode">Période: ${new Date(periode.dateDebut).toLocaleDateString('fr-FR')} au ${new Date(periode.dateFin).toLocaleDateString('fr-FR')}</div>
+          <div class="periode">Période: ${formatPeriodeFR(periode.dateDebut, periode.dateFin)}</div>
         </div>
 
         <div class="summary">
@@ -3131,7 +3132,7 @@ function EtatsCompteTab() {
             <h2 style={{ color: '#3498db', margin: '0 0 10px 0' }}>ÉTAT DE COMPTE CLIENT</h2>
             <p style={{ margin: '5px 0', fontSize: '16px' }}><strong>{selectedClient?.nom}</strong></p>
             <p style={{ margin: '5px 0', color: '#666' }}>
-              Période: {new Date(periode.dateDebut).toLocaleDateString('fr-FR')} au {new Date(periode.dateFin).toLocaleDateString('fr-FR')}
+              Période: {formatPeriodeFR(periode.dateDebut, periode.dateFin)}
             </p>
           </div>
 
