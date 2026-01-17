@@ -20,8 +20,20 @@ export function getPeriodeDates(type, fiscalStart = null) {
   const now = new Date();
   let debut, fin;
   
+  // Par défaut: année fiscale = année calendaire (1er janvier)
   const fiscalMonth = fiscalStart ? new Date(fiscalStart).getMonth() : 0;
   const fiscalDay = fiscalStart ? new Date(fiscalStart).getDate() : 1;
+  
+  // Fonction helper pour calculer le dernier jour du mois précédent une date
+  const getLastDayBefore = (year, month, day) => {
+    if (day === 1) {
+      // Si le jour de début est le 1er, fin = dernier jour du mois précédent
+      return new Date(year, month, 0);
+    } else {
+      // Sinon, fin = jour précédent dans le même mois
+      return new Date(year, month, day - 1);
+    }
+  };
   
   switch(type) {
     case 'mois':
@@ -49,62 +61,82 @@ export function getPeriodeDates(type, fiscalStart = null) {
       fin = new Date(now.getFullYear(), 11, 31);
       break;
     case 'fiscal_courant':
-      const fiscalYearStart = now.getMonth() >= fiscalMonth || 
-        (now.getMonth() === fiscalMonth && now.getDate() >= fiscalDay) 
-          ? now.getFullYear() 
-          : now.getFullYear() - 1;
-      debut = new Date(fiscalYearStart, fiscalMonth, fiscalDay);
-      fin = new Date(fiscalYearStart + 1, fiscalMonth, fiscalDay - 1);
-      if (fiscalDay === 1) {
-        fin = new Date(fiscalYearStart + 1, fiscalMonth, 0);
+      // Déterminer l'année de début de l'exercice fiscal courant
+      let fiscalYearStart;
+      if (now.getMonth() > fiscalMonth || 
+          (now.getMonth() === fiscalMonth && now.getDate() >= fiscalDay)) {
+        fiscalYearStart = now.getFullYear();
+      } else {
+        fiscalYearStart = now.getFullYear() - 1;
       }
+      debut = new Date(fiscalYearStart, fiscalMonth, fiscalDay);
+      fin = getLastDayBefore(fiscalYearStart + 1, fiscalMonth, fiscalDay);
       break;
     case 'fiscal_precedent':
-      const prevFiscalYearStart = now.getMonth() >= fiscalMonth || 
-        (now.getMonth() === fiscalMonth && now.getDate() >= fiscalDay) 
-          ? now.getFullYear() - 1
-          : now.getFullYear() - 2;
-      debut = new Date(prevFiscalYearStart, fiscalMonth, fiscalDay);
-      fin = new Date(prevFiscalYearStart + 1, fiscalMonth, fiscalDay - 1);
-      if (fiscalDay === 1) {
-        fin = new Date(prevFiscalYearStart + 1, fiscalMonth, 0);
+      // Exercice fiscal précédent
+      let prevFiscalYearStart;
+      if (now.getMonth() > fiscalMonth || 
+          (now.getMonth() === fiscalMonth && now.getDate() >= fiscalDay)) {
+        prevFiscalYearStart = now.getFullYear() - 1;
+      } else {
+        prevFiscalYearStart = now.getFullYear() - 2;
       }
+      debut = new Date(prevFiscalYearStart, fiscalMonth, fiscalDay);
+      fin = getLastDayBefore(prevFiscalYearStart + 1, fiscalMonth, fiscalDay);
       break;
     case 'trimestre_fiscal':
-      const currentFiscalStart = now.getMonth() >= fiscalMonth || 
-        (now.getMonth() === fiscalMonth && now.getDate() >= fiscalDay) 
-          ? now.getFullYear() 
-          : now.getFullYear() - 1;
-      const fiscalStartDate = new Date(currentFiscalStart, fiscalMonth, fiscalDay);
-      const monthsSinceFiscalStart = (now.getFullYear() - fiscalStartDate.getFullYear()) * 12 + 
-        (now.getMonth() - fiscalStartDate.getMonth());
-      const currentFiscalQuarter = Math.floor(monthsSinceFiscalStart / 3);
-      debut = new Date(fiscalStartDate);
-      debut.setMonth(debut.getMonth() + currentFiscalQuarter * 3);
-      fin = new Date(debut);
-      fin.setMonth(fin.getMonth() + 3);
-      fin.setDate(fin.getDate() - 1);
+      // Trimestre fiscal courant
+      let currentFiscalYearStart;
+      if (now.getMonth() > fiscalMonth || 
+          (now.getMonth() === fiscalMonth && now.getDate() >= fiscalDay)) {
+        currentFiscalYearStart = now.getFullYear();
+      } else {
+        currentFiscalYearStart = now.getFullYear() - 1;
+      }
+      const fiscalStartDate = new Date(currentFiscalYearStart, fiscalMonth, fiscalDay);
+      
+      // Calculer les mois écoulés depuis le début de l'exercice
+      let monthsElapsed = (now.getFullYear() - currentFiscalYearStart) * 12 + 
+                          (now.getMonth() - fiscalMonth);
+      if (now.getDate() < fiscalDay) monthsElapsed--;
+      
+      const currentQuarter = Math.max(0, Math.floor(monthsElapsed / 3));
+      
+      // Début du trimestre courant
+      debut = new Date(currentFiscalYearStart, fiscalMonth + currentQuarter * 3, fiscalDay);
+      // Fin = 3 mois après, jour précédent
+      fin = new Date(currentFiscalYearStart, fiscalMonth + (currentQuarter + 1) * 3, fiscalDay - 1);
+      if (fiscalDay === 1) {
+        fin = new Date(currentFiscalYearStart, fiscalMonth + (currentQuarter + 1) * 3, 0);
+      }
       break;
     case 'trimestre_fiscal_precedent':
-      const prevCurrentFiscalStart = now.getMonth() >= fiscalMonth || 
-        (now.getMonth() === fiscalMonth && now.getDate() >= fiscalDay) 
-          ? now.getFullYear() 
-          : now.getFullYear() - 1;
-      const prevFiscalStartDate = new Date(prevCurrentFiscalStart, fiscalMonth, fiscalDay);
-      const prevMonthsSinceFiscalStart = (now.getFullYear() - prevFiscalStartDate.getFullYear()) * 12 + 
-        (now.getMonth() - prevFiscalStartDate.getMonth());
-      const prevFiscalQuarter = Math.floor(prevMonthsSinceFiscalStart / 3) - 1;
-      if (prevFiscalQuarter < 0) {
-        prevFiscalStartDate.setFullYear(prevFiscalStartDate.getFullYear() - 1);
-        debut = new Date(prevFiscalStartDate);
-        debut.setMonth(debut.getMonth() + 9);
+      // Trimestre fiscal précédent
+      let tfpFiscalYearStart;
+      if (now.getMonth() > fiscalMonth || 
+          (now.getMonth() === fiscalMonth && now.getDate() >= fiscalDay)) {
+        tfpFiscalYearStart = now.getFullYear();
       } else {
-        debut = new Date(prevFiscalStartDate);
-        debut.setMonth(debut.getMonth() + prevFiscalQuarter * 3);
+        tfpFiscalYearStart = now.getFullYear() - 1;
       }
-      fin = new Date(debut);
-      fin.setMonth(fin.getMonth() + 3);
-      fin.setDate(fin.getDate() - 1);
+      
+      let tfpMonthsElapsed = (now.getFullYear() - tfpFiscalYearStart) * 12 + 
+                             (now.getMonth() - fiscalMonth);
+      if (now.getDate() < fiscalDay) tfpMonthsElapsed--;
+      
+      let prevQuarter = Math.floor(tfpMonthsElapsed / 3) - 1;
+      
+      if (prevQuarter < 0) {
+        // Q4 de l'exercice précédent
+        tfpFiscalYearStart--;
+        prevQuarter = 3;
+      }
+      
+      debut = new Date(tfpFiscalYearStart, fiscalMonth + prevQuarter * 3, fiscalDay);
+      fin = new Date(tfpFiscalYearStart, fiscalMonth + (prevQuarter + 1) * 3, fiscalDay - 1);
+      if (fiscalDay === 1) {
+        fin = new Date(tfpFiscalYearStart, fiscalMonth + (prevQuarter + 1) * 3, 0);
+      }
       break;
     default:
       debut = new Date(now.getFullYear(), 0, 1);
