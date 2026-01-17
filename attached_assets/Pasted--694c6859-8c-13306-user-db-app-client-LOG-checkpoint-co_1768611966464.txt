@@ -1,0 +1,20 @@
+[694c6859.8c-13306] user=,db=,app=,client=,LOG:  checkpoint complete: wrote 0 buffers (0.0%), wrote 1 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.003 s, sync=0.002 s, total=0.016 s; sync files=1, longest=0.002 s, average=0.002 s; distance=1 kB, estimate=1 kB; lsn=0/234D268, redo lsn=0/234D210
+[696adf90.1fc5b8-1] user=[unknown],db=[unknown],app=[unknown],client=10.19.134.69,LOG:  connection received: host=10.19.134.69 port=48268
+[696adf90.1fc5b9-1] user=[unknown],db=[unknown],app=[unknown],client=10.19.134.69,LOG:  connection received: host=10.19.134.69 port=48278
+[696adf90.1fc5ba-1] user=[unknown],db=[unknown],app=[unknown],client=10.19.134.69,LOG:  connection received: host=10.19.134.69 port=48294
+[696adf90.1fc5ba-2] user=postgres,db=comptaorion,app=[unknown],client=10.19.134.69,LOG:  connection authenticated: identity="postgres" method=md5 (/pgdata/dpg-d566gcjuibrs739el8ig-a/pg_hba.conf:88)
+[696adf90.1fc5ba-3] user=postgres,db=comptaorion,app=[unknown],client=10.19.134.69,LOG:  connection authorized: user=postgres database=comptaorion SSL enabled (protocol=TLSv1.3, cipher=TLS_AES_256_GCM_SHA384, bits=256)
+[696adf90.1fc5ba-4] user=postgres,db=comptaorion,app=[unknown],client=10.19.134.69,LOG:  disconnection: session time: 0:00:03.090 user=postgres database=comptaorion host=10.19.134.69 port=48294
+[696adf97.1fc5bc-1] user=[unknown],db=[unknown],app=[unknown],client=10.19.134.69,LOG:  connection received: host=10.19.134.69 port=43346
+[696adf97.1fc5bd-1] user=[unknown],db=[unknown],app=[unknown],client=10.19.134.69,LOG:  connection received: host=10.19.134.69 port=43358
+[696adf97.1fc5be-1] user=[unknown],db=[unknown],app=[unknown],client=10.19.134.69,LOG:  connection received: host=10.19.134.69 port=43374
+[696adf97.1fc5be-2] user=postgres,db=comptaorion,app=[unknown],client=10.19.134.69,LOG:  connection authenticated: identity="postgres" method=md5 (/pgdata/dpg-d566gcjuibrs739el8ig-a/pg_hba.conf:88)
+[696adf97.1fc5be-3] user=postgres,db=comptaorion,app=[unknown],client=10.19.134.69,LOG:  connection authorized: user=postgres database=comptaorion SSL enabled (protocol=TLSv1.3, cipher=TLS_AES_256_GCM_SHA384, bits=256)
+[696adf97.1fc5be-4] user=postgres,db=comptaorion,app=[unknown],client=10.19.134.69,LOG:  disconnection: session time: 0:00:03.033 user=postgres database=comptaorion host=10.19.134.69 port=43374
+[696adfcc.1fc5f8-1] user=[unknown],db=[unknown],app=[unknown],client=10.19.134.69,LOG:  connection received: host=10.19.134.69 port=51364
+[696adfcc.1fc5f9-1] user=[unknown],db=[unknown],app=[unknown],client=10.19.134.69,LOG:  connection received: host=10.19.134.69 port=51370
+[696adfcc.1fc5fa-1] user=[unknown],db=[unknown],app=[unknown],client=10.19.134.69,LOG:  connection received: host=10.19.134.69 port=51376
+[696adfcc.1fc5fa-2] user=postgres,db=comptaorion,app=[unknown],client=10.19.134.69,LOG:  connection authenticated: identity="postgres" method=md5 (/pgdata/dpg-d566gcjuibrs739el8ig-a/pg_hba.conf:88)
+[696adfcc.1fc5fa-3] user=postgres,db=comptaorion,app=[unknown],client=10.19.134.69,LOG:  connection authorized: user=postgres database=comptaorion SSL enabled (protocol=TLSv1.3, cipher=TLS_AES_256_GCM_SHA384, bits=256)
+[696adfcc.1fc5fa-4] user=postgres,db=comptaorion,app=[unknown],client=10.19.134.69,LOG:  disconnection: session time: 0:00:03.013 user=postgres database=comptaorion host=10.19.134.69 port=51376
+[696adfd3.1fc5fc-1] user=[unknown],db=[unkn
