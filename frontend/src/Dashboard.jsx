@@ -84,13 +84,6 @@ export function DashboardView() {
     return getPeriodeLabel(dateDebut, dateFin);
   };
 
-  const formatPeriodeDisplayLocal = () => {
-    const d1 = new Date(dateDebut);
-    const d2 = new Date(dateFin);
-    const options = { day: 'numeric', month: 'short', year: 'numeric' };
-    return `${d1.toLocaleDateString('fr-FR', options)} - ${d2.toLocaleDateString('fr-FR', options)}`;
-  };
-
   useEffect(() => {
     // Charger automatiquement quand les dates changent
     loadDashboard();
@@ -299,14 +292,7 @@ export function DashboardView() {
   return (
     <div style={{ padding: '20px', backgroundColor: '#f5f5f5', minHeight: '100%' }}>
       <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px', marginBottom: '15px' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '24px', color: '#333' }}>Tableau de bord</h1>
-            <p style={{ margin: '5px 0 0', fontSize: '14px', color: '#666' }}>
-              Période: <strong>{formatPeriodeDisplayLocal()}</strong>
-            </p>
-          </div>
-        </div>
+        <h1 style={{ margin: '0 0 15px 0', fontSize: '24px', color: '#333' }}>Tableau de bord</h1>
         
         {/* Composant PeriodFilter avec toutes les périodes fiscales */}
         <PeriodFilter
