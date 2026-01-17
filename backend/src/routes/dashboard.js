@@ -1,16 +1,37 @@
 import express from 'express';
 import { db } from '../db.js';
-import { factures, paiements, facturesAchat, paiementsFournisseurs, stockParEntrepot, produits, mouvementsStock, factureItems } from '../schema.js';
+import { factures, paiements, facturesAchat, paiementsFournisseurs, stockParEntrepot, produits, mouvementsStock, factureItems, entreprises } from '../schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 
 const router = express.Router();
 
-// Fonction utilitaire pour obtenir dates de l'année fiscale (par défaut année en cours)
-function getFiscalYearDates() {
+// Fonction utilitaire pour obtenir dates de l'année fiscale par défaut (année civile)
+function getDefaultFiscalYearDates() {
   const now = new Date();
   const debut = new Date(now.getFullYear(), 0, 1); // 1er janvier
   const fin = new Date(now.getFullYear(), 11, 31); // 31 décembre
   return { debut, fin };
+}
+
+// Fonction pour obtenir l'année fiscale de l'entreprise
+async function getFiscalYearDatesForEntreprise(entrepriseId) {
+  try {
+    const entreprise = await db.query.entreprises.findFirst({
+      where: eq(entreprises.id, entrepriseId)
+    });
+    
+    if (entreprise && entreprise.debutAnneeFiscale && entreprise.finAnneeFiscale) {
+      return {
+        debut: new Date(entreprise.debutAnneeFiscale),
+        fin: new Date(entreprise.finAnneeFiscale)
+      };
+    }
+  } catch (error) {
+    console.error('Erreur récupération année fiscale:', error.message);
+  }
+  
+  // Fallback: année civile courante
+  return getDefaultFiscalYearDates();
 }
 
 // Fonction utilitaire pour obtenir dates du mois
@@ -31,8 +52,8 @@ router.get('/global', async (req, res) => {
       return res.status(401).json({ error: 'Authentification requise' });
     }
     
-    // Par défaut: année fiscale entière pour avoir toutes les données
-    const { debut, fin } = getFiscalYearDates();
+    // Par défaut: année fiscale de l'entreprise
+    const { debut, fin } = await getFiscalYearDatesForEntreprise(eId);
     const dateStart = dateDebut ? new Date(dateDebut) : (startDate ? new Date(startDate) : debut);
     const dateEnd = dateFin ? new Date(dateFin) : (endDate ? new Date(endDate) : fin);
 
@@ -245,7 +266,7 @@ router.get('/ventes-mensuelles', async (req, res) => {
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
     const periodStart = dateDebut ? new Date(dateDebut) : defaultDebut;
     const periodEnd = dateFin ? new Date(dateFin) : defaultFin;
     
@@ -290,7 +311,7 @@ router.get('/depenses-categories', async (req, res) => {
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
     const periodStart = dateDebut ? new Date(dateDebut) : defaultDebut;
     const periodEnd = dateFin ? new Date(dateFin) : defaultFin;
 
@@ -388,7 +409,7 @@ router.get('/detail/ventes', async (req, res) => {
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
     const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
     const fin = dateFin ? new Date(dateFin) : defaultFin;
     
@@ -424,7 +445,7 @@ router.get('/detail/depenses', async (req, res) => {
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
     const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
     const fin = dateFin ? new Date(dateFin) : defaultFin;
     
@@ -459,7 +480,7 @@ router.get('/detail/factures-retard', async (req, res) => {
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
     const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
     const fin = dateFin ? new Date(dateFin) : defaultFin;
     const now = new Date();
@@ -538,7 +559,7 @@ router.get('/detail/cashflow', async (req, res) => {
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     
     const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
     const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
     const fin = dateFin ? new Date(dateFin) : defaultFin;
     
@@ -715,7 +736,7 @@ router.get('/detail/depenses-categorie', async (req, res) => {
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     
-    const { debut: defaultDebut, fin: defaultFin } = getFiscalYearDates();
+    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
     const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
     const fin = dateFin ? new Date(dateFin) : defaultFin;
     
