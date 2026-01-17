@@ -20,9 +20,18 @@ export function getPeriodeDates(type, fiscalStart = null) {
   const now = new Date();
   let debut, fin;
   
-  // Par défaut: année fiscale = année calendaire (1er janvier)
-  const fiscalMonth = fiscalStart ? new Date(fiscalStart).getMonth() : 0;
-  const fiscalDay = fiscalStart ? new Date(fiscalStart).getDate() : 1;
+  // Parser la date fiscale sans problème de timezone
+  // fiscalStart est au format "YYYY-MM-DD"
+  let fiscalMonth = 0;
+  let fiscalDay = 1;
+  
+  if (fiscalStart) {
+    const parts = fiscalStart.split('-');
+    if (parts.length === 3) {
+      fiscalMonth = parseInt(parts[1], 10) - 1; // Mois 0-indexé
+      fiscalDay = parseInt(parts[2], 10);
+    }
+  }
   
   // Fonction helper pour calculer le dernier jour du mois précédent une date
   const getLastDayBefore = (year, month, day) => {
@@ -149,16 +158,26 @@ export function getPeriodeDates(type, fiscalStart = null) {
   };
 }
 
+// Helper pour parser une date YYYY-MM-DD sans problème de timezone
+function parseLocalDate(dateStr) {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  }
+  return new Date(dateStr);
+}
+
 export function formatPeriodeDisplay(dateDebut, dateFin) {
-  const d1 = new Date(dateDebut);
-  const d2 = new Date(dateFin);
+  const d1 = parseLocalDate(dateDebut);
+  const d2 = parseLocalDate(dateFin);
   const options = { day: 'numeric', month: 'short', year: 'numeric' };
   return `${d1.toLocaleDateString('fr-FR', options)} - ${d2.toLocaleDateString('fr-FR', options)}`;
 }
 
 export function getPeriodeLabel(dateDebut, dateFin) {
-  const d1 = new Date(dateDebut);
-  const d2 = new Date(dateFin);
+  const d1 = parseLocalDate(dateDebut);
+  const d2 = parseLocalDate(dateFin);
   const diffDays = Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24));
   
   if (diffDays <= 31) return 'du mois';
@@ -257,7 +276,14 @@ export default function PeriodFilter({
           </span>
           {fiscalStart && (
             <span style={{ fontSize: '12px', color: '#28a745', fontStyle: 'italic' }}>
-              📅 Année fiscale: {new Date(fiscalStart).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+              📅 Année fiscale: {(() => {
+                const parts = fiscalStart.split('-');
+                if (parts.length === 3) {
+                  const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                }
+                return fiscalStart;
+              })()}
             </span>
           )}
         </div>
