@@ -5,7 +5,7 @@ services:
     plan: free
     region: frankfurt
     rootDir: .
-    buildCommand: rm -rf node_modules backend/node_modules frontend/node_modules && npm run install:all && npm run build
+    buildCommand: rm -rf node_modules backend/node_modules frontend/node_modules && npm run install:all && npm run build && cd backend && npm run db:push
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
