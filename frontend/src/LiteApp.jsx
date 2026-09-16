@@ -45,7 +45,7 @@ function LiteShell({ user, onLogout }) {
     const items = await listQueue(scope);
     for (const item of items) {
       if (!['/factures/lite-sale', '/depenses/create'].includes(item.endpoint)) continue;
-      try { await api.post(item.endpoint, item.payload, { headers: { 'X-Idempotency-Key': item.opId } }); await removeQueue(item.opId); }
+      try { await api.post(item.endpoint, item.payload, { headers: { 'X-Idempotency-Key': item.opId } }); await removeQueue(scope, item.opId); }
       catch (error) { if (error?.status === 409) setToast(t('Synchronisation en cours côté serveur, nouvelle tentative plus tard.', 'Server is still processing this operation; it will be retried later.')); break; }
     }
     refreshQueue();

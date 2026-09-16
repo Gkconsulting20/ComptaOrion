@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, auditLogs, employes, liteIdempotency } from '../schema.js';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
 import { createEcritureDepense } from '../services/comptabiliteService.js';
+import { claimIdempotentOperation } from '../middleware/idempotency.js';
 
 const router = express.Router();
 
@@ -49,14 +50,24 @@ router.post('/create', async (req, res) => {
       return res.status(400).json({ error: 'Montant, date et description sont obligatoires et doivent être valides' });
     }
     const result = await db.transaction(async (tx) => {
-    if (req.idempotencyKey) {
-      const [claim] = await tx.insert(liteIdempotency).values({ entrepriseId: req.entrepriseId, idempotencyKey: req.idempotencyKey }).onConflictDoNothing().returning();
-      if (!claim) {
-        const [existing] = await tx.select().from(liteIdempotency).where(and(eq(liteIdempotency.entrepriseId, req.entrepriseId), eq(liteIdempotency.idempotencyKey, req.idempotencyKey))).limit(1);
-        if (existing?.status === 'completed') return { replay: true, status: existing.responseStatus, body: existing.responseBody };
-        throw Object.assign(new Error('Cette opération est déjà en cours'), { status: 409 });
-      }
-    }
+    const idempotency = await claimIdempotentOperation({
+      entrepriseId: req.entrepriseId,
+      idempotencyKey: req.idempotencyKey,
+      insertClaim: async () => {
+        const [claim] = await tx.insert(liteIdempotency).values({
+          entrepriseId: req.entrepriseId,
+          idempotencyKey: req.idempotencyKey,
+        }).onConflictDoNothing().returning();
+        return claim;
+      },
+      findByKey: async () => {
+        const [existing] = await tx.select().from(liteIdempotency)
+          .where(eq(liteIdempotency.idempotencyKey, req.idempotencyKey))
+          .limit(1);
+        return existing;
+      },
+    });
+    if (idempotency.replay) return idempotency;
     let categorie = null;
 
     if (categorieId) {

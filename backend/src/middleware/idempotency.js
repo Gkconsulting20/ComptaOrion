@@ -14,10 +14,48 @@ async function ensureTable() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (entreprise_id, idempotency_key)
-      )
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS lite_idempotency_key_unique
+        ON lite_idempotency (idempotency_key)
     `);
   }
   await tableReady;
+}
+
+export class IdempotencyConflictError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'IdempotencyConflictError';
+    this.status = 409;
+  }
+}
+
+export async function claimIdempotentOperation({
+  entrepriseId,
+  idempotencyKey,
+  insertClaim,
+  findByKey,
+}) {
+  if (!idempotencyKey) return { claimed: false };
+
+  const claim = await insertClaim();
+  if (claim) return { claimed: true };
+
+  const existing = await findByKey();
+  if (existing && Number(existing.entrepriseId) !== Number(entrepriseId)) {
+    throw new IdempotencyConflictError(
+      'Cette opération appartient à une autre entreprise',
+    );
+  }
+  if (existing?.status === 'completed') {
+    return {
+      claimed: false,
+      replay: true,
+      status: existing.responseStatus,
+      body: existing.responseBody,
+    };
+  }
+  throw new IdempotencyConflictError('Cette opération est déjà en cours');
 }
 
 export async function idempotencyMiddleware(req, res, next) {
@@ -48,11 +86,17 @@ export async function idempotencyMiddleware(req, res, next) {
     );
     if (claim.rowCount === 0) {
       const existing = await pool.query(
-        `SELECT status, response_status, response_body
-         FROM lite_idempotency WHERE entreprise_id = $1 AND idempotency_key = $2`,
-        [req.entrepriseId, rawKey]
+        `SELECT entreprise_id, status, response_status, response_body
+         FROM lite_idempotency WHERE idempotency_key = $1`,
+        [rawKey]
       );
       const row = existing.rows[0];
+      if (row && Number(row.entreprise_id) !== Number(req.entrepriseId)) {
+        return res.status(409).json({
+          success: false,
+          message: 'Cette opération appartient à une autre entreprise',
+        });
+      }
       if (row?.status === 'completed') {
         return res.status(row.response_status || 200).json(row.response_body);
       }

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, integer, decimal, boolean, timestamp, date, pgEnum, jsonb, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, integer, decimal, boolean, timestamp, date, pgEnum, jsonb, primaryKey, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ==========================================
@@ -71,6 +71,7 @@ export const liteIdempotency = pgTable('lite_idempotency', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   pk: primaryKey({ columns: [table.entrepriseId, table.idempotencyKey] }),
+  keyUnique: uniqueIndex('lite_idempotency_key_unique').on(table.idempotencyKey),
 }));
 
 export const users = pgTable('users', {

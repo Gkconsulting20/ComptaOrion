@@ -19,10 +19,27 @@ export async function queueWrite(scope, opId, endpoint, payload) {
   const item = { opId, scope, endpoint, payload, createdAt: Date.now() };
   return new Promise((resolve, reject) => {
     const tx = db.transaction('queue', 'readwrite');
-    tx.objectStore('queue').put(item);
+    const store = tx.objectStore('queue');
+    const existingRequest = store.get(opId);
+    existingRequest.onsuccess = () => {
+      try {
+        assertQueueOwnership(existingRequest.result, scope);
+        store.put(item);
+      } catch (error) {
+        tx.abort();
+        reject(error);
+      }
+    };
+    existingRequest.onerror = () => reject(existingRequest.error);
     tx.oncomplete = () => resolve(item);
     tx.onerror = () => reject(tx.error);
   });
+}
+
+export function assertQueueOwnership(item, scope) {
+  if (item && item.scope !== scope) {
+    throw new Error('Cette opération hors ligne appartient à une autre entreprise');
+  }
 }
 
 export async function listQueue(scope) {
@@ -34,11 +51,22 @@ export async function listQueue(scope) {
   });
 }
 
-export async function removeQueue(opId) {
+export async function removeQueue(scope, opId) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('queue', 'readwrite');
-    tx.objectStore('queue').delete(opId);
+    const store = tx.objectStore('queue');
+    const request = store.get(opId);
+    request.onsuccess = () => {
+      try {
+        assertQueueOwnership(request.result, scope);
+        if (request.result) store.delete(opId);
+      } catch (error) {
+        tx.abort();
+        reject(error);
+      }
+    };
+    request.onerror = () => reject(request.error);
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
