@@ -183,9 +183,10 @@ router.post('/lite-sale', async (req, res) => {
         if (!client) throw Object.assign(new Error('Client non trouvé'), { status: 404 });
       }
       const effectiveClientId = client.id;
-      const productIds = [...new Set(normalized.filter(i => i.produitId).map(i => i.produitId))];
+      const productIds = [...new Set(normalized.filter(i => i.produitId).map(i => i.produitId))].sort((a, b) => a - b);
       const productRows = [];
       for (const id of productIds) {
+        await tx.execute(sql`SELECT id FROM produits WHERE id = ${id} AND entreprise_id = ${req.entrepriseId} FOR UPDATE`);
         const [product] = await tx.select().from(produits).where(and(eq(produits.id, id), eq(produits.entrepriseId, req.entrepriseId))).limit(1);
         if (!product) throw Object.assign(new Error('Produit non trouvé ou non autorisé'), { status: 400 });
         productRows.push(product);
