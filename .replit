@@ -52,3 +52,7 @@ JWT_SECRET = "orion_production_jwt_secret_2025_ultra_securise_change_me"
 JWT_REFRESH_SECRET = "orion_production_refresh_secret_2025_ultra_securise_change_me"
 FEDAPAY_ENVIRONMENT = "sandbox"
 WEBHOOK_ENCRYPTION_KEY = "orion_webhook_secure_key_2025_32chars"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 180000
