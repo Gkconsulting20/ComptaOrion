@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables, mouvementsStock, entreprises } from '../schema.js';
+import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables, mouvementsStock, entreprises, liteIdempotency } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import emailService from '../services/emailService.js';
 import { createEcritureFactureVente, createEcriturePaiementClient } from '../services/comptabiliteService.js';
@@ -50,6 +50,7 @@ router.get('/', async (req, res) => {
           id: clients.id,
           nom: clients.nom,
           email: clients.email,
+          telephone: clients.telephone,
         }
       })
       .from(factures)
@@ -79,6 +80,175 @@ router.get('/', async (req, res) => {
       message: 'Erreur lors de la récupération des factures',
       error: error.message,
     });
+  }
+});
+
+// Totaux légers du jour, calculés côté serveur pour inclure les paiements
+// partiels reçus sur d'anciennes factures.
+router.get('/lite-day', async (req, res) => {
+  const date = String(req.query.date || new Date().toISOString().slice(0, 10));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ success: false, message: 'Date invalide' });
+  }
+
+  try {
+    const [company] = await db
+      .select({ tauxTva: entreprises.tauxTva })
+      .from(entreprises)
+      .where(eq(entreprises.id, req.entrepriseId))
+      .limit(1);
+    const [sales] = await db
+      .select({
+        total: sql`COALESCE(SUM(${factures.totalTTC}), 0)`,
+        count: sql`COUNT(*)::int`,
+      })
+      .from(factures)
+      .where(and(
+        eq(factures.entrepriseId, req.entrepriseId),
+        eq(factures.dateFacture, date),
+        sql`${factures.statut} <> 'annulee'`
+      ));
+
+    const [payments] = await db
+      .select({
+        total: sql`COALESCE(SUM(${paiements.montant}), 0)`,
+        count: sql`COUNT(*)::int`,
+      })
+      .from(paiements)
+      .where(and(
+        eq(paiements.entrepriseId, req.entrepriseId),
+        eq(paiements.datePaiement, date)
+      ));
+
+    return res.json({
+      success: true,
+      data: {
+        date,
+        ventes: Number(sales?.total || 0),
+        nombreVentes: Number(sales?.count || 0),
+        encaissements: Number(payments?.total || 0),
+        nombrePaiements: Number(payments?.count || 0),
+        tauxTva: Number(company?.tauxTva ?? 18),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Erreur lors du calcul des totaux du jour' });
+  }
+});
+
+// Vente rapide Lite: facture, paiement et sortie de stock dans une seule transaction.
+router.post('/lite-sale', async (req, res) => {
+  try {
+    const { clientId, newClient, dateFacture, dateEcheance, notes, items, paiement } = req.body;
+    const hasNewClient = newClient && typeof newClient === 'object';
+    if ((!Number.isInteger(Number(clientId)) && !hasNewClient) || (hasNewClient && (!String(newClient.nom || '').trim() || !String(newClient.telephone || '').trim())) || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Client et au moins un article sont obligatoires' });
+    }
+    const normalized = items.map((item) => ({
+      produitId: item.produitId ? Number(item.produitId) : null,
+      description: String(item.description || '').trim(),
+      quantite: Number(item.quantite),
+      prixUnitaire: Number(item.prixUnitaire),
+      remise: Number(item.remise || 0),
+    }));
+    if (normalized.some((i) => !i.description || !Number.isFinite(i.quantite) || i.quantite <= 0 || !Number.isFinite(i.prixUnitaire) || i.prixUnitaire < 0 || !Number.isFinite(i.remise) || i.remise < 0 || i.remise > 100)) {
+      return res.status(400).json({ success: false, message: 'Article, quantité et prix doivent être valides' });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      if (req.idempotencyKey) {
+        const [claim] = await tx.insert(liteIdempotency).values({ entrepriseId: req.entrepriseId, idempotencyKey: req.idempotencyKey }).onConflictDoNothing().returning();
+        if (!claim) {
+          const [existing] = await tx.select().from(liteIdempotency).where(and(eq(liteIdempotency.entrepriseId, req.entrepriseId), eq(liteIdempotency.idempotencyKey, req.idempotencyKey))).limit(1);
+          if (existing?.status === 'completed') return { replay: true, status: existing.responseStatus, body: existing.responseBody };
+          throw Object.assign(new Error('Cette opération est déjà en cours'), { status: 409 });
+        }
+      }
+      let client;
+      if (hasNewClient) {
+        [client] = await tx.insert(clients).values({ entrepriseId: req.entrepriseId, nom: String(newClient.nom).trim(), telephone: String(newClient.telephone).trim(), type: 'particulier' }).returning();
+      } else {
+        [client] = await tx.select().from(clients).where(and(eq(clients.id, Number(clientId)), eq(clients.entrepriseId, req.entrepriseId))).limit(1);
+        if (!client) throw Object.assign(new Error('Client non trouvé'), { status: 404 });
+      }
+      const effectiveClientId = client.id;
+      const productIds = [...new Set(normalized.filter(i => i.produitId).map(i => i.produitId))];
+      const productRows = [];
+      for (const id of productIds) {
+        const [product] = await tx.select().from(produits).where(and(eq(produits.id, id), eq(produits.entrepriseId, req.entrepriseId))).limit(1);
+        if (!product) throw Object.assign(new Error('Produit non trouvé ou non autorisé'), { status: 400 });
+        productRows.push(product);
+      }
+      const requested = new Map();
+      for (const item of normalized) if (item.produitId) requested.set(item.produitId, (requested.get(item.produitId) || 0) + item.quantite);
+      for (const product of productRows) {
+        if (Number(product.quantite || 0) < requested.get(product.id)) {
+          throw Object.assign(new Error(`Stock insuffisant pour ${product.nom}`), { status: 400 });
+        }
+      }
+      const [company] = await tx.select({ tauxTva: entreprises.tauxTva }).from(entreprises).where(eq(entreprises.id, req.entrepriseId)).limit(1);
+      await tx.execute(sql`SELECT id FROM entreprises WHERE id = ${req.entrepriseId} FOR UPDATE`);
+      const totalHT = normalized.reduce((sum, i) => sum + i.quantite * i.prixUnitaire * (1 - i.remise / 100), 0);
+      const totalTVA = totalHT * (Number(company?.tauxTva ?? 18) / 100);
+      const totalTTC = totalHT + totalTVA;
+      const [last] = await tx.select({ numeroFacture: factures.numeroFacture }).from(factures).where(eq(factures.entrepriseId, req.entrepriseId)).orderBy(desc(factures.createdAt)).limit(1);
+      const match = last?.numeroFacture?.match(/FACT-(\d{4})-(?:\d+-)?(\d+)$/);
+      const numeroFacture = `FACT-${new Date().getFullYear()}-${req.entrepriseId}-${String(match ? Number(match[2]) + 1 : 1).padStart(4, '0')}`;
+      const requestedPayment = Number(paiement?.montant || 0);
+      if (!Number.isFinite(requestedPayment) || requestedPayment < 0 || requestedPayment > totalTTC + 0.01) {
+        throw Object.assign(new Error('Le paiement initial est invalide'), { status: 400 });
+      }
+      const status = requestedPayment >= totalTTC - 0.01 ? 'payee' : 'envoyee';
+      const [invoice] = await tx.insert(factures).values({
+        entrepriseId: req.entrepriseId, numeroFacture, clientId: effectiveClientId, statut: status,
+        dateFacture: dateFacture || new Date().toISOString().slice(0, 10), dateEcheance: dateEcheance || null,
+        totalHT: totalHT.toFixed(2), totalTVA: totalTVA.toFixed(2), totalTTC: totalTTC.toFixed(2),
+        montantPaye: requestedPayment.toFixed(2), soldeRestant: Math.max(0, totalTTC - requestedPayment).toFixed(2),
+        notes: notes || null, userId: req.user.id,
+      }).returning();
+      const itemRows = normalized.map(i => ({ entrepriseId: req.entrepriseId, factureId: invoice.id, produitId: i.produitId, description: i.description, quantite: i.quantite.toString(), prixUnitaire: i.prixUnitaire.toFixed(2), remise: i.remise.toFixed(2), totalLigne: (i.quantite * i.prixUnitaire * (1 - i.remise / 100)).toFixed(2) }));
+      await tx.insert(factureItems).values(itemRows);
+      for (const [productId, quantity] of requested) {
+        const [updated] = await tx.update(produits).set({ quantite: sql`${produits.quantite} - ${quantity}`, updatedAt: new Date() }).where(and(eq(produits.id, productId), eq(produits.entrepriseId, req.entrepriseId), sql`${produits.quantite} >= ${quantity}`)).returning();
+        if (!updated) throw Object.assign(new Error('Le stock a changé, veuillez réessayer'), { status: 409 });
+        await tx.insert(mouvementsStock).values({ entrepriseId: req.entrepriseId, produitId: productId, type: 'sortie', quantite: quantity.toString(), prixUnitaire: String(productRows.find(p => p.id === productId)?.prixVente || 0), reference: numeroFacture, notes: 'Vente ComptaOrion Lite', userId: req.user.id });
+      }
+      let payment = null;
+      if (requestedPayment > 0) {
+        [payment] = await tx.insert(paiements).values({ entrepriseId: req.entrepriseId, factureId: invoice.id, clientId: effectiveClientId, montant: requestedPayment.toFixed(2), modePaiement: paiement?.modePaiement || 'especes', reference: paiement?.reference || null, datePaiement: paiement?.datePaiement || new Date().toISOString().slice(0, 10), notes: paiement?.notes || null, userId: req.user.id }).returning();
+      }
+      await createEcritureFactureVente({
+        entrepriseId: req.entrepriseId,
+        numeroFacture,
+        dateFacture: dateFacture || new Date().toISOString().slice(0, 10),
+        clientNom: client.nom || 'Client',
+        clientCompteId: client.compteComptableId,
+        totalHT,
+        totalTVA,
+        totalTTC,
+        executor: tx,
+      });
+      if (payment) {
+        await createEcriturePaiementClient({
+          entrepriseId: req.entrepriseId,
+          reference: payment.reference || `PAI-${payment.id}`,
+          datePaiement: payment.datePaiement,
+          clientNom: client.nom || 'Client',
+          clientCompteId: client.compteComptableId,
+          montant: requestedPayment,
+          modePaiement: payment.modePaiement === 'especes' ? 'especes' : 'banque',
+          compteBancaireId: paiement?.compteBancaireId ? Number(paiement.compteBancaireId) : null,
+          executor: tx,
+        });
+      }
+      const body = { success: true, message: 'Vente Lite enregistrée', data: { ...invoice, client, items: itemRows, paiement: payment } };
+      if (req.idempotencyKey) await tx.update(liteIdempotency).set({ status: 'completed', responseStatus: 201, responseBody: body, updatedAt: new Date() }).where(and(eq(liteIdempotency.entrepriseId, req.entrepriseId), eq(liteIdempotency.idempotencyKey, req.idempotencyKey)));
+      return { body, status: 201 };
+    });
+    if (result.replay) return res.status(result.status).json(result.body);
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    return res.status(error.status || 500).json({ success: false, message: error.status ? error.message : 'Erreur lors de l’enregistrement de la vente' });
   }
 });
 
@@ -161,6 +331,21 @@ router.post('/', async (req, res) => {
         message: 'Client et au moins un article sont obligatoires',
       });
     }
+    const [ownedClient] = await db.select({ id: clients.id }).from(clients)
+      .where(and(eq(clients.id, parseInt(clientId)), eq(clients.entrepriseId, req.entrepriseId))).limit(1);
+    if (!ownedClient) return res.status(400).json({ success: false, message: 'Client non trouvé ou non autorisé' });
+    const productIds = [...new Set(items.filter(item => item.produitId).map(item => parseInt(item.produitId)))];
+    if (productIds.some(id => !Number.isInteger(id) || id <= 0)) {
+      return res.status(400).json({ success: false, message: 'Produit invalide' });
+    }
+    for (const productId of productIds) {
+      const [ownedProduct] = await db.select({ id: produits.id }).from(produits)
+        .where(and(eq(produits.id, productId), eq(produits.entrepriseId, req.entrepriseId))).limit(1);
+      if (!ownedProduct) return res.status(400).json({ success: false, message: 'Produit non trouvé ou non autorisé' });
+    }
+    if (items.some(item => !Number.isFinite(Number(item.quantite)) || Number(item.quantite) <= 0 || !Number.isFinite(Number(item.prixUnitaire)) || Number(item.prixUnitaire) < 0)) {
+      return res.status(400).json({ success: false, message: 'Quantité et prix doivent être valides' });
+    }
 
     // Calculer les totaux
     let totalHT = 0;
@@ -227,7 +412,7 @@ router.post('/', async (req, res) => {
     // Impact automatique sur COMPTABILITÉ - Journal des Ventes
     // Débit: Client (411) - Crédit: Ventes (701) + TVA (443)
     try {
-      const clientData = await db.select().from(clients).where(eq(clients.id, parseInt(clientId))).limit(1);
+      const clientData = await db.select().from(clients).where(and(eq(clients.id, parseInt(clientId)), eq(clients.entrepriseId, req.entrepriseId))).limit(1);
       const clientInfo = clientData[0] || {};
       
       await createEcritureFactureVente({
@@ -472,6 +657,12 @@ router.put('/:id', async (req, res) => {
 
     // Si les items sont fournis, recalculer les totaux
     if (items && items.length > 0) {
+      const itemProductIds = [...new Set(items.filter(item => item.produitId).map(item => parseInt(item.produitId)))];
+      for (const productId of itemProductIds) {
+        const [ownedProduct] = await db.select({ id: produits.id }).from(produits)
+          .where(and(eq(produits.id, productId), eq(produits.entrepriseId, req.entrepriseId))).limit(1);
+        if (!ownedProduct) return res.status(400).json({ success: false, message: 'Produit non trouvé ou non autorisé' });
+      }
       // Supprimer les anciennes lignes
       await db
         .delete(factureItems)
@@ -560,7 +751,7 @@ router.put('/:id', async (req, res) => {
             const [produit] = await db
               .select()
               .from(produits)
-              .where(eq(produits.id, item.produitId))
+              .where(and(eq(produits.id, item.produitId), eq(produits.entrepriseId, req.entrepriseId)))
               .limit(1);
 
             if (produit) {
@@ -571,7 +762,7 @@ router.put('/:id', async (req, res) => {
                   quantite: nouvelleQuantite,
                   updatedAt: new Date()
                 })
-                .where(eq(produits.id, item.produitId));
+                .where(and(eq(produits.id, item.produitId), eq(produits.entrepriseId, req.entrepriseId)));
             }
           } catch (error) {
             console.error(`Erreur création mouvement SORTIE pour produit ${item.produitId}:`, error);

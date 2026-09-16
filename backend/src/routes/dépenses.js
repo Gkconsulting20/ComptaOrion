@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, auditLogs, employes } from '../schema.js';
+import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, auditLogs, employes, liteIdempotency } from '../schema.js';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
 import { createEcritureDepense } from '../services/comptabiliteService.js';
 
@@ -12,9 +12,8 @@ const router = express.Router();
 
 router.get('/categories', async (req, res) => {
   try {
-    const { entrepriseId } = req.query;
     const categories = await db.query.categoriesDepenses.findMany({
-      where: eq(categoriesDepenses.entrepriseId, parseInt(entrepriseId))
+      where: eq(categoriesDepenses.entrepriseId, req.entrepriseId)
     });
     res.json(categories);
   } catch (error) {
@@ -24,9 +23,9 @@ router.get('/categories', async (req, res) => {
 
 router.post('/categories', async (req, res) => {
   try {
-    const { entrepriseId, nom, description, limiteApproval } = req.body;
+    const { nom, description, limiteApproval } = req.body;
     const result = await db.insert(categoriesDepenses).values({
-      entrepriseId: parseInt(entrepriseId),
+      entrepriseId: req.entrepriseId,
       nom,
       description,
       limiteApproval: parseFloat(limiteApproval) || 0
@@ -43,15 +42,46 @@ router.post('/categories', async (req, res) => {
 
 router.post('/create', async (req, res) => {
   try {
-    const { entrepriseId, employeId, categorieId, montant, dateDepense, description, justificatifUrl, récurrente, fréquenceRécurrence, userId, ipAddress } = req.body;
+    const { categorieId, montant, dateDepense, description, justificatifUrl, récurrente, fréquenceRécurrence, ipAddress } = req.body;
+    const numericAmount = Number(montant);
+    const parsedDate = dateDepense ? new Date(dateDepense) : new Date();
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0 || Number.isNaN(parsedDate.getTime()) || !String(description || '').trim()) {
+      return res.status(400).json({ error: 'Montant, date et description sont obligatoires et doivent être valides' });
+    }
+    const result = await db.transaction(async (tx) => {
+    if (req.idempotencyKey) {
+      const [claim] = await tx.insert(liteIdempotency).values({ entrepriseId: req.entrepriseId, idempotencyKey: req.idempotencyKey }).onConflictDoNothing().returning();
+      if (!claim) {
+        const [existing] = await tx.select().from(liteIdempotency).where(and(eq(liteIdempotency.entrepriseId, req.entrepriseId), eq(liteIdempotency.idempotencyKey, req.idempotencyKey))).limit(1);
+        if (existing?.status === 'completed') return { replay: true, status: existing.responseStatus, body: existing.responseBody };
+        throw Object.assign(new Error('Cette opération est déjà en cours'), { status: 409 });
+      }
+    }
+    let categorie = null;
+
+    if (categorieId) {
+      [categorie] = await tx.select().from(categoriesDepenses).where(and(eq(categoriesDepenses.id, parseInt(categorieId)), eq(categoriesDepenses.entrepriseId, req.entrepriseId))).limit(1);
+    }
+
+    if (!categorie) {
+      [categorie] = await tx.select().from(categoriesDepenses).where(eq(categoriesDepenses.entrepriseId, req.entrepriseId)).limit(1);
+    }
+
+    if (!categorie) {
+      [categorie] = await tx.insert(categoriesDepenses).values({
+        entrepriseId: req.entrepriseId,
+        nom: 'Divers',
+        description: 'Dépenses courantes enregistrées depuis ComptaOrion Lite'
+      }).returning();
+    }
     
-    const depense = await db.insert(depenses).values({
-      entrepriseId: parseInt(entrepriseId),
-      employeId: parseInt(employeId),
-      categorieId: parseInt(categorieId),
-      montant: parseFloat(montant),
-      dateDepense: new Date(dateDepense),
-      description,
+    const depense = await tx.insert(depenses).values({
+      entrepriseId: req.entrepriseId,
+      employeId: req.user.id,
+      categorieId: categorie.id,
+      montant: numericAmount,
+      dateDepense: parsedDate,
+      description: String(description).trim(),
       justificatifUrl,
       récurrente: récurrente || false,
       fréquenceRécurrence,
@@ -60,17 +90,17 @@ router.post('/create', async (req, res) => {
     }).returning();
 
     // Créer demande d'approbation initiale
-    await db.insert(approvalsDepenses).values({
-      entrepriseId: parseInt(entrepriseId),
+    await tx.insert(approvalsDepenses).values({
+      entrepriseId: req.entrepriseId,
       depenseId: depense[0].id,
       etape: 'manager',
       statut: 'en_attente'
     });
 
     // Audit
-    await db.insert(auditLogs).values({
-      entrepriseId: parseInt(entrepriseId),
-      userId,
+    await tx.insert(auditLogs).values({
+      entrepriseId: req.entrepriseId,
+      userId: req.user.id,
       action: 'CREATE',
       table: 'depenses',
       recordId: depense[0].id,
@@ -78,16 +108,20 @@ router.post('/create', async (req, res) => {
       ipAddress
     });
 
-    res.json(depense[0]);
+    const body = depense[0];
+    if (req.idempotencyKey) await tx.update(liteIdempotency).set({ status: 'completed', responseStatus: 200, responseBody: body, updatedAt: new Date() }).where(and(eq(liteIdempotency.entrepriseId, req.entrepriseId), eq(liteIdempotency.idempotencyKey, req.idempotencyKey)));
+    return { replay: false, status: 200, body };
+    });
+    return res.status(result.status).json(result.body);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 router.get('/list', async (req, res) => {
   try {
-    const { entrepriseId, employeId } = req.query;
-    const where = [eq(depenses.entrepriseId, parseInt(entrepriseId))];
+    const { employeId } = req.query;
+    const where = [eq(depenses.entrepriseId, req.entrepriseId)];
     if (employeId) where.push(eq(depenses.employeId, parseInt(employeId)));
 
     const depensesList = await db.query.depenses.findMany({

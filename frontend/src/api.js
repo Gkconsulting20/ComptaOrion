@@ -48,11 +48,11 @@ class ApiClient {
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     const config = {
+      ...options,
       headers: {
         ...this.getHeaders(),
         ...options.headers,
       },
-      ...options,
     };
 
     if (options.body && typeof options.body === 'object') {
@@ -76,7 +76,9 @@ class ApiClient {
           const retryData = await retryResponse.json();
           
           if (!retryResponse.ok) {
-            throw new Error(retryData.message || retryData.error || 'Erreur API');
+            const error = new Error(retryData.message || retryData.error || 'Erreur API');
+            error.status = retryResponse.status;
+            throw error;
           }
           
           return retryData;
@@ -87,7 +89,9 @@ class ApiClient {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.message || data.error || 'Erreur API');
+        const error = new Error(data.message || data.error || 'Erreur API');
+        error.status = response.status;
+        throw error;
       }
       
       return data;
@@ -103,10 +107,11 @@ class ApiClient {
     return this.request(queryString ? `${endpoint}?${queryString}` : endpoint, { method: 'GET' });
   }
 
-  async post(endpoint, data = {}) {
+  async post(endpoint, data = {}, options = {}) {
     return this.request(endpoint, {
       method: 'POST',
       body: data,
+      ...options,
     });
   }
 

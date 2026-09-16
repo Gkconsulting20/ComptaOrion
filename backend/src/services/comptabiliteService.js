@@ -31,13 +31,13 @@ const COMPTES_SYSCOHADA = {
   ECARTS_PRIX: '603'
 };
 
-export async function getOrCreateJournal(entrepriseId, code, nom, type) {
-  let journal = await db.select().from(journaux)
+export async function getOrCreateJournal(entrepriseId, code, nom, type, executor = db) {
+  let journal = await executor.select().from(journaux)
     .where(and(eq(journaux.entrepriseId, entrepriseId), eq(journaux.code, code)))
     .limit(1);
   
   if (journal.length === 0) {
-    const [newJournal] = await db.insert(journaux).values({
+    const [newJournal] = await executor.insert(journaux).values({
       entrepriseId,
       code,
       nom,
@@ -49,8 +49,8 @@ export async function getOrCreateJournal(entrepriseId, code, nom, type) {
   return journal[0];
 }
 
-export async function getCompteByNumero(entrepriseId, numero) {
-  const comptes = await db.select().from(comptesComptables)
+export async function getCompteByNumero(entrepriseId, numero, executor = db) {
+  const comptes = await executor.select().from(comptesComptables)
     .where(and(
       eq(comptesComptables.entrepriseId, entrepriseId),
       sql`${comptesComptables.numero} LIKE ${numero + '%'}`
@@ -59,21 +59,21 @@ export async function getCompteByNumero(entrepriseId, numero) {
   return comptes[0] || null;
 }
 
-export async function getCompteById(compteId) {
-  const [compte] = await db.select().from(comptesComptables)
+export async function getCompteById(compteId, executor = db) {
+  const [compte] = await executor.select().from(comptesComptables)
     .where(eq(comptesComptables.id, compteId));
   return compte;
 }
 
-export async function generateNumeroEcriture(entrepriseId, journalCode) {
-  const params = await db.select().from(parametresComptables)
+export async function generateNumeroEcriture(entrepriseId, journalCode, executor = db) {
+  const params = await executor.select().from(parametresComptables)
     .where(eq(parametresComptables.entrepriseId, entrepriseId))
     .limit(1);
   
   const prefix = params[0]?.prefixeEcritures || 'EC';
   const year = new Date().getFullYear();
   
-  const count = await db.select({ count: sql`COUNT(*)` })
+  const count = await executor.select({ count: sql`COUNT(*)` })
     .from(ecritures)
     .where(and(
       eq(ecritures.entrepriseId, entrepriseId),
@@ -96,11 +96,12 @@ export async function createEcritureComptable(params) {
     lignes,
     valide = false,
     sourceType = null,
-    sourceId = null
+    sourceId = null,
+    executor = db
   } = params;
 
-  const journal = await getOrCreateJournal(entrepriseId, journalCode, journalNom, journalType);
-  const numeroEcriture = await generateNumeroEcriture(entrepriseId, journalCode);
+  const journal = await getOrCreateJournal(entrepriseId, journalCode, journalNom, journalType, executor);
+  const numeroEcriture = await generateNumeroEcriture(entrepriseId, journalCode, executor);
 
   const totalDebit = lignes.reduce((sum, l) => sum + parseFloat(l.debit || 0), 0);
   const totalCredit = lignes.reduce((sum, l) => sum + parseFloat(l.credit || 0), 0);
@@ -109,7 +110,7 @@ export async function createEcritureComptable(params) {
     throw new Error(`Écriture non équilibrée: Débit=${totalDebit}, Crédit=${totalCredit}`);
   }
 
-  const [ecriture] = await db.insert(ecritures).values({
+  const [ecriture] = await executor.insert(ecritures).values({
     entrepriseId,
     journalId: journal.id,
     numeroEcriture,
@@ -125,7 +126,7 @@ export async function createEcritureComptable(params) {
     let compteId = ligne.compteComptableId;
     
     if (!compteId && ligne.numeroCompte) {
-      const compte = await getCompteByNumero(entrepriseId, ligne.numeroCompte);
+      const compte = await getCompteByNumero(entrepriseId, ligne.numeroCompte, executor);
       if (!compte) {
         console.warn(`Compte ${ligne.numeroCompte} non trouvé pour entreprise ${entrepriseId}`);
         continue;
@@ -134,7 +135,7 @@ export async function createEcritureComptable(params) {
     }
 
     if (compteId) {
-      await db.insert(lignesEcritures).values({
+      await executor.insert(lignesEcritures).values({
         ecritureId: ecriture.id,
         compteComptableId: compteId,
         debit: (parseFloat(ligne.debit) || 0).toFixed(2),
@@ -296,12 +297,13 @@ export async function createEcritureFactureVente(params) {
     clientCompteId,
     totalHT,
     totalTVA = 0,
-    totalTTC
+    totalTTC,
+    executor = db
   } = params;
 
-  const compte411 = clientCompteId ? await getCompteById(clientCompteId) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS);
-  const compteVentes = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.VENTES_MARCHANDISES);
-  const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE);
+  const compte411 = clientCompteId ? await getCompteById(clientCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
+  const compteVentes = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.VENTES_MARCHANDISES, executor);
+  const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor);
 
   const ecrituresLignes = [];
 
@@ -346,7 +348,8 @@ export async function createEcritureFactureVente(params) {
     libelle: `Facture ${numeroFacture} - ${clientNom}`,
     numeroPiece: numeroFacture,
     lignes: ecrituresLignes,
-    valide: false
+    valide: false,
+    executor
   });
 }
 
@@ -417,16 +420,17 @@ export async function createEcriturePaiementClient(params) {
     clientCompteId,
     montant,
     modePaiement,
-    compteBancaireId
+    compteBancaireId,
+    executor = db
   } = params;
 
   const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
   const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
 
-  const compte411 = clientCompteId ? await getCompteById(clientCompteId) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS);
+  const compte411 = clientCompteId ? await getCompteById(clientCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
   const compteTresorerie = modePaiement === 'especes' 
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE);
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE, executor)
+    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE, executor);
 
   const ecrituresLignes = [];
 
@@ -462,7 +466,8 @@ export async function createEcriturePaiementClient(params) {
     libelle: `Encaissement ${clientNom} - ${reference}`,
     numeroPiece: reference,
     lignes: ecrituresLignes,
-    valide: false
+    valide: false,
+    executor
   });
 }
 

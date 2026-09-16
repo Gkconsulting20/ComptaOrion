@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, integer, decimal, boolean, timestamp, date, pgEnum, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, integer, decimal, boolean, timestamp, date, pgEnum, jsonb, primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ==========================================
@@ -60,6 +60,18 @@ export const entreprises = pgTable('entreprises', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+export const liteIdempotency = pgTable('lite_idempotency', {
+  entrepriseId: integer('entreprise_id').notNull(),
+  idempotencyKey: varchar('idempotency_key', { length: 128 }).notNull(),
+  status: varchar('status', { length: 16 }).notNull().default('processing'),
+  responseStatus: integer('response_status'),
+  responseBody: jsonb('response_body'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.entrepriseId, table.idempotencyKey] }),
+}));
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -253,6 +265,7 @@ export const produits = pgTable('produits', {
   description: text('description'),
   categoriId: integer('categorie_id').references(() => categoriesStock.id),
   uniteMesure: varchar('unite_mesure', { length: 50 }).default('pièce'),
+  quantite: decimal('quantite', { precision: 15, scale: 3 }).default('0'),
   stockMinimum: decimal('stock_minimum', { precision: 15, scale: 3 }).default('0'),
   prixAchat: decimal('prix_achat', { precision: 15, scale: 2 }).default('0'),
   prixVente: decimal('prix_vente', { precision: 15, scale: 2 }).default('0'),

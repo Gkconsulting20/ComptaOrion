@@ -1,0 +1,1 @@
+- [Intégrité hors ligne de Lite](lite-offline-integrity.md) — ne mettre en file que les écritures dont l’idempotence est transactionnelle côté serveur.

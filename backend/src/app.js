@@ -33,6 +33,7 @@ import importRoutes from './routes/import.js';
 import devisesRoutes from './routes/devises.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 import { createTenantMiddleware } from './utils/rlsPolicies.js';
+import { idempotencyMiddleware } from './middleware/idempotency.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -84,7 +85,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/saas-admin', authMiddleware, saasAdminOnly, saasAdminRoutes);
 
 // ✅ AUTHENTIFICATION ACTIVÉE - TOUTES LES ROUTES PROTÉGÉES
-app.use('/api', authMiddleware, entrepriseIsolation, createTenantMiddleware());
+app.use('/api', authMiddleware, entrepriseIsolation, createTenantMiddleware(), idempotencyMiddleware);
 
 // ===============================================
 // ROUTES CRUD DES MODULES
