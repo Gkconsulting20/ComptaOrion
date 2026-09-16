@@ -3,18 +3,28 @@ import OpenAI from 'openai';
 
 const router = Router();
 
+const AI_ENABLED = process.env.AI_ENABLED === 'true';
 let openai = null;
 const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
 
-if (apiKey) {
+if (AI_ENABLED && apiKey) {
   openai = new OpenAI({
     apiKey: apiKey,
     baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
   });
   console.log('✅ OpenAI configuré avec succès');
-} else {
+} else if (AI_ENABLED) {
   console.log('⚠️  OPENAI_API_KEY non configurée - L\'assistant IA sera désactivé');
+} else {
+  console.log('ℹ️  Assistant IA désactivé');
 }
+
+router.use((req, res, next) => {
+  if (!AI_ENABLED) {
+    return res.status(404).json({ error: 'Fonctionnalité non disponible' });
+  }
+  next();
+});
 
 router.post('/chat', async (req, res) => {
   try {

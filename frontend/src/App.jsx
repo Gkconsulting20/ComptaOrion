@@ -18,6 +18,10 @@ import { CommercialPortal } from './pages/CommercialPortal';
 import { DashboardView } from './Dashboard';
 import api from './api';
 
+// L'assistant reste dans le code pour une activation future, mais il est
+// désactivé par défaut afin qu'aucun appel IA payant ne puisse être déclenché.
+const AI_ENABLED = import.meta.env.VITE_AI_ENABLED === 'true';
+
 const ALL_MODULES = [
   { id: 'dashboard', label: 'Tableau de Bord', icon: '📊', requiresSuperAdmin: false },
   { id: 'saas-admin', label: 'Admin SaaS', icon: '🎯', requiresSuperAdmin: true },
@@ -28,7 +32,9 @@ const ALL_MODULES = [
   { id: 'comptabilite', label: 'Comptabilité', icon: '📖', requiresSuperAdmin: false },
   { id: 'impots', label: 'Impôts', icon: '🏛️', requiresSuperAdmin: false },
   { id: 'integrations', label: 'Intégrations', icon: '🔗', requiresSuperAdmin: false },
-  { id: 'ia-assistant', label: 'Assistant IA', icon: '🤖', requiresSuperAdmin: false },
+  ...(AI_ENABLED
+    ? [{ id: 'ia-assistant', label: 'Assistant IA', icon: '🤖', requiresSuperAdmin: false }]
+    : []),
   { id: 'authentication', label: 'Authentification', icon: '🔐', requiresSuperAdmin: false },
   { id: 'parametres', label: 'Paramètres', icon: '⚙️', requiresSuperAdmin: false }
 ];
@@ -145,7 +151,7 @@ export default function App() {
       case 'comptabilite': return <ModuleComptabilite />;
       case 'impots': return <ImpotsModule />;
       case 'integrations': return <IntegrationsModule />;
-      case 'ia-assistant': return <IAAssistantModule />;
+      case 'ia-assistant': return AI_ENABLED ? <IAAssistantModule /> : <DashboardView />;
       case 'authentication': return <AuthenticationModule />;
       case 'parametres': return <ParametresModule />;
       default: return <DashboardView />;

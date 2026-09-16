@@ -41,6 +41,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
+const AI_ENABLED = process.env.AI_ENABLED === 'true';
 
 app.use(cors());
 
@@ -169,7 +170,7 @@ app.get('/api', (req, res) => {
       'Gestion de trésorerie',
       'Gestion de stock',
       'Comptabilité complète',
-      'Assistant IA'
+      ...(AI_ENABLED ? ['Assistant IA'] : [])
     ]
   });
 });
@@ -250,6 +251,9 @@ app.post('/api/comptabilite/charte-comptes', (req, res) => {
 });
 
 app.get('/api/ia/chat', (req, res) => {
+  if (!AI_ENABLED) {
+    return res.status(404).json({ error: 'Fonctionnalité non disponible' });
+  }
   res.json({ 
     message: 'Assistant IA disponible',
     status: 'ready'
@@ -257,6 +261,9 @@ app.get('/api/ia/chat', (req, res) => {
 });
 
 app.post('/api/ia/chat', (req, res) => {
+  if (!AI_ENABLED) {
+    return res.status(404).json({ error: 'Fonctionnalité non disponible' });
+  }
   res.json({ 
     message: 'Message reçu',
     response: 'Assistant IA - à implémenter avec OpenAI'

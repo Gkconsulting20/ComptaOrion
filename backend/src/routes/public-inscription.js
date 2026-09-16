@@ -122,7 +122,6 @@ async function envoyerEmailBienvenue(email, nomEntreprise, motDePasse, planId, e
   
   if (!apiKey) {
     console.warn('⚠️ SendGrid non configuré - Email de bienvenue NON ENVOYÉ');
-    console.warn(`📧 Destinataire: ${email}`);
     console.warn(`🏢 Entreprise ID: ${entrepriseId}`);
     console.warn(`⚠️ IMPORTANT: Le client ne recevra PAS ses identifiants par email !`);
     // SÉCURITÉ: Ne jamais logger le mot de passe en clair
@@ -143,7 +142,7 @@ async function envoyerEmailBienvenue(email, nomEntreprise, motDePasse, planId, e
   };
 
   await sgMail.send(msg);
-  console.log(`✅ Email de bienvenue envoyé à ${email}`);
+  console.log('✅ Email de bienvenue envoyé');
 }
 
 // ===========================================
@@ -455,7 +454,7 @@ router.post('/webhook/fedapay', async (req, res) => {
 
       if (typeInscription === 'renouvellement') {
         // C'est un renouvellement
-        console.log(`Traitement renouvellement pour ${inscriptionEnAttente.email}`);
+        console.log('Traitement renouvellement en cours');
         
         // Vérifier que l'entrepriseId est présent
         if (!inscriptionEnAttente.entrepriseIdPourRenouvellement) {
@@ -511,12 +510,12 @@ router.post('/webhook/fedapay', async (req, res) => {
           .set({ traitee: true })
           .where(eq(inscriptionsEnAttente.id, inscriptionEnAttente.id));
 
-        console.log(`✅ Renouvellement complété pour ${inscriptionEnAttente.email}`);
+        console.log('✅ Renouvellement complété');
         return res.json({ success: true, message: 'Renouvellement complété avec succès' });
       }
 
       // Nouveau client - Créer l'entreprise
-      console.log(`Traitement nouveau client pour ${inscriptionEnAttente.email}`);
+      console.log('Traitement nouveau client en cours');
       
       const [newEntreprise] = await db.insert(entreprises).values({
         nom: inscriptionEnAttente.nomEntreprise,
@@ -608,7 +607,7 @@ router.post('/webhook/fedapay', async (req, res) => {
         .set({ traitee: true })
         .where(eq(inscriptionsEnAttente.id, inscriptionEnAttente.id));
 
-      console.log(`✅ Inscription complétée pour ${inscriptionEnAttente.email}`);
+      console.log('✅ Inscription complétée');
 
       // Envoyer email de bienvenue avec identifiants
       try {
@@ -619,7 +618,7 @@ router.post('/webhook/fedapay', async (req, res) => {
           inscriptionEnAttente.planId,
           newEntreprise.id // Ajouter l'ID de l'entreprise créée
         );
-        console.log(`✅ Email de bienvenue envoyé avec succès à ${inscriptionEnAttente.email}`);
+        console.log('✅ Email de bienvenue envoyé avec succès');
       } catch (emailError) {
         console.error('❌ ERREUR CRITIQUE: Impossible d\'envoyer l\'email de bienvenue:', emailError.message);
         console.error(`⚠️ Le client (ID ${newEntreprise.id}) n'a PAS reçu ses identifiants !`);

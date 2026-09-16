@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import XLSX from 'xlsx';
+import readXlsxFile from 'read-excel-file/node';
 import { db } from '../db.js';
 import { 
   importBatches, importRecords, importMappingTemplates,
@@ -75,11 +75,8 @@ function parseCSV(buffer, delimiter = ',') {
   return { headers, rows };
 }
 
-function parseExcel(buffer) {
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+async function parseExcel(buffer) {
+  const jsonData = await readXlsxFile(buffer);
   
   if (jsonData.length === 0) return { headers: [], rows: [] };
   
@@ -158,7 +155,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       const delimiter = req.body.delimiter || (sourceLogiciel === 'sage100' ? ';' : ',');
       parsed = parseCSV(req.file.buffer, delimiter);
     } else if (ext === 'xlsx' || ext === 'xls') {
-      parsed = parseExcel(req.file.buffer);
+      parsed = await parseExcel(req.file.buffer);
     } else if (ext === 'iif') {
       parsed = parseIIF(req.file.buffer);
     } else {
