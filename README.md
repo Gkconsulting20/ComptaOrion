@@ -1,4 +1,16 @@
-# ComptaOrion - ERP Léger pour l'Afrique
+# ComptaOrion ERP
+
+> **Périmètre actuel : ERP uniquement.** ComptaOrion Lite fonctionne dans un
+> projet indépendant et a été retiré de cette copie. L'IA reste désactivée par
+> défaut. Les sections historiques ci-dessous ne constituent pas une certification
+> de toutes les intégrations.
+>
+> - [État des fonctionnalités et parcours de test](docs/ETAT_ERP_ET_RECETTE.md)
+> - [Préparation de l'hébergement Cloudflare](docs/HEBERGEMENT_CLOUDFLARE.md)
+>
+> Installation : `npm run install:all` ; tests : `npm test` ;
+> compilation : `npm run build`. Configurer les secrets et PostgreSQL avant de
+> lancer le backend. Ne jamais utiliser la base de production pour la recette.
 
 ![ComptaOrion](https://img.shields.io/badge/ERP-L%C3%A9ger-blue) ![Made for Africa](https://img.shields.io/badge/Made%20for-Africa-green) ![Mobile First](https://img.shields.io/badge/Mobile-First-orange)
 

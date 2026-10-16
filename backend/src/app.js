@@ -177,105 +177,13 @@ app.get('/api', (req, res) => {
 });
 
 // ===============================================
-// ROUTES STUBS (À IMPLÉMENTER)
-// ===============================================
-
-app.get('/api/stock', (req, res) => {
-  res.json({ 
-    message: 'Module stock & inventaire',
-    data: []
-  });
-});
-
-app.post('/api/stock', (req, res) => {
-  res.json({ 
-    message: 'Article créé avec succès',
-    data: req.body
-  });
-});
-
-app.get('/api/comptabilite/etats-financiers', (req, res) => {
-  res.json({ 
-    message: 'États financiers',
-    bilan: { actif: 0, passif: 0 },
-    resultat: { revenus: 0, charges: 0 },
-    tresorerie: { entrees: 0, sorties: 0 }
-  });
-});
-
-app.get('/api/comptabilite/grand-livre', (req, res) => {
-  res.json({ 
-    message: 'Grand livre',
-    data: []
-  });
-});
-
-app.get('/api/comptabilite/journal', (req, res) => {
-  res.json({ 
-    message: 'Écriture de journal',
-    data: []
-  });
-});
-
-app.post('/api/comptabilite/journal', (req, res) => {
-  res.json({ 
-    message: 'Écriture comptable enregistrée',
-    data: req.body
-  });
-});
-
-app.get('/api/comptabilite/reconciliation', (req, res) => {
-  res.json({ 
-    message: 'Réconciliation bancaire',
-    data: []
-  });
-});
-
-app.get('/api/comptabilite/charte-comptes', (req, res) => {
-  res.json({ 
-    message: 'Charte de comptes',
-    comptes: [
-      { numero: '1', nom: 'Actifs', type: 'Actif' },
-      { numero: '2', nom: 'Passifs', type: 'Passif' },
-      { numero: '3', nom: 'Capitaux propres', type: 'Capitaux' },
-      { numero: '4', nom: 'Produits', type: 'Produits' },
-      { numero: '5', nom: 'Charges', type: 'Charges' }
-    ]
-  });
-});
-
-app.post('/api/comptabilite/charte-comptes', (req, res) => {
-  res.json({ 
-    message: 'Compte créé avec succès',
-    data: req.body
-  });
-});
-
-app.get('/api/ia/chat', (req, res) => {
-  if (!AI_ENABLED) {
-    return res.status(404).json({ error: 'Fonctionnalité non disponible' });
-  }
-  res.json({ 
-    message: 'Assistant IA disponible',
-    status: 'ready'
-  });
-});
-
-app.post('/api/ia/chat', (req, res) => {
-  if (!AI_ENABLED) {
-    return res.status(404).json({ error: 'Fonctionnalité non disponible' });
-  }
-  res.json({ 
-    message: 'Message reçu',
-    response: 'Assistant IA - à implémenter avec OpenAI'
-  });
-});
-
-// ===============================================
 // SPA FALLBACK POUR PRODUCTION
 // ===============================================
 // Servir les fichiers statiques du frontend buildé
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
+app.use('/lite', (_req, res) => {
+  res.status(410).type('text').send('ComptaOrion Lite a été transféré dans un projet indépendant.');
+});
 app.use(express.static(frontendDistPath));
 
 // Fallback SPA : toutes les routes non-API retournent index.html

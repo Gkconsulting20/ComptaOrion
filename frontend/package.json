@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5000",
     "build": "vite build",
-    "test": "node --test src/liteDb.test.js",
+    "test": "node --test test",
     "preview": "vite preview"
   },
   "dependencies": {
