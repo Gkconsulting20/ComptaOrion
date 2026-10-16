@@ -32,3 +32,12 @@ sécurisée directe mais échouaient dans le Worker qui ne demandait pas TLS.
 
 **How to apply:** Vérifier aussi une lecture SQL chiffrée contre la base cible
 et ne pas conclure au bon fonctionnement PostgreSQL sur le seul endpoint de santé.
+
+Un échec TLS Render dans Miniflare peut être un faux négatif pour le Worker réel.
+
+**Why:** Après activation de TLS et mise à jour du pilote, Miniflare fermait
+encore la connexion Render, tandis que le Worker déployé exécutait correctement
+la recherche SQL d’un compte. Hyperdrive n’était donc pas indispensable.
+
+**How to apply:** Confronter ce type d’échec à une requête SQL inoffensive sur
+le Worker déployé avant d’imposer Hyperdrive ou un changement d’architecture.
