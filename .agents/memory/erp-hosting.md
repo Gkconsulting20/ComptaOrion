@@ -9,8 +9,8 @@ L’utilisateur souhaite pousser l’ERP vers GitHub et utiliser Cloudflare pour
 
 **How to apply:** Ne pas proposer une publication Replit comme résultat de cette migration. Distinguer interface statique et serveur métier lors de la préparation Cloudflare.
 
-L’utilisateur précise qu’il dispose déjà d’un backend fonctionnel sur Render.
+L’utilisateur confirme qu’il dispose uniquement d’une base PostgreSQL sur Render, sans service Web Render.
 
-**Why:** Il a refusé la proposition de migration D1 en indiquant que le backend Render est déjà fonctionnel. Le nom donné précédemment comme « base Cloudflare » désignait le stockage de fichiers R2.
+**Why:** Il a clarifié explicitement cette distinction après avoir employé le mot « backend » pour désigner sa base. Le nom donné précédemment comme « base Cloudflare » désignait le stockage de fichiers R2.
 
-**How to apply:** Réutiliser le backend Render et vérifier son raccordement à l’interface Cloudflare avant de créer le compte de test. Ne pas créer de base D1 ni supposer le moteur ou le contenu de la base existante. Ne pas supprimer les données existantes.
+**How to apply:** Garder le frontend et le backend dans le Worker Cloudflare et raccorder celui-ci à la base PostgreSQL Render existante. Vérifier la base cible et les comptes existants avant de créer un administrateur de test. Ne pas créer de base D1 ni de service Web Render. Ne pas supprimer les données existantes.
