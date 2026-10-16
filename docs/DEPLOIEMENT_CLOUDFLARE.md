@@ -95,8 +95,6 @@ Les fichiers de verrouillage et `.npmrc` utilisent le registre public npm.
 
 ```sh
 npm ci
-npm ci --prefix frontend
-npm ci --prefix backend
 npm test
 npm run test:functional
 npm run cloudflare:check
@@ -122,9 +120,17 @@ la préparation.
 
 - Dépôt : `Gkconsulting20/ComptaOrion`, branche `main`.
 - Répertoire racine : racine du dépôt.
-- Build : `npm ci && npm ci --prefix frontend && npm ci --prefix backend && npm run build`.
+- Build : `npm run build`.
 - Déploiement : `npx wrangler deploy`.
+- Version Node.js : 22, déclarée dans `.nvmrc`.
 - Secrets : dans le Worker, pas dans les assets React.
+
+L’installation automatique `npm ci` à la racine lance maintenant le
+`postinstall`, qui installe aussi les dépendances frontend et backend. Cela
+évite `vite: not found` sur un environnement vierge. Ne pas activer
+`--ignore-scripts` pour cette installation Cloudflare ; si les scripts
+d’installation sont désactivés, utiliser explicitement
+`npm run install:all && npm run build` comme commande de build.
 
 La configuration Wrangler fait autorité pour le nom et les bindings. Vérifier
 que le premier projet connecté correspond au Worker de préproduction, pas à

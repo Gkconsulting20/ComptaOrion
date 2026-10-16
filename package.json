@@ -10,7 +10,8 @@
   "scripts": {
     "start": "cd backend && node src/main.js",
     "build": "npm run build --prefix frontend",
-    "install:all": "npm ci --prefix frontend && npm ci --prefix backend",
+    "install:all": "npm ci --include=dev --prefix frontend && npm ci --include=dev --prefix backend",
+    "postinstall": "npm run install:all",
     "test": "npm test --prefix frontend && npm test --prefix backend",
     "dev": "bash start.sh",
     "test:functional": "ERP_FUNCTIONAL_TEST=1 node --test backend/test/functional.test.js",
