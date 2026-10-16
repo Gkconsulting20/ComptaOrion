@@ -1,5 +1,5 @@
 - [Intégrité hors ligne de Lite](lite-offline-integrity.md) — exiger idempotence transactionnelle et ordre déterministe pour les verrous par lot.
 - [Séparation de Lite](lite-separation.md) — partir de l’ancien code pour créer un projet Lite indépendant, pas une interface de l’ERP.
-- [Hébergement ERP](erp-hosting.md) — destination souhaitée : Cloudflare, pas Replit ; conserver PostgreSQL existant.
+- [Hébergement ERP](erp-hosting.md) — hébergement et base cible souhaités sur Cloudflare ; identifier la base exacte avant toute écriture.
 - [Authentification GitHub](github-auth.md) — l’état OAuth d’intégration ne prouve pas que les opérations Git sont autorisées.
 - [Runtime Cloudflare](cloudflare-runtime.md) — vérifier le runtime, SQL et R2, pas seulement le bundle ; migrer explicitement chaque base cible.
