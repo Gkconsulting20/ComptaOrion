@@ -1,4 +1,33 @@
-# Vérification fonctionnelle de l’ERP dans l’environnement de développement
+# Vérification fonctionnelle de l’ERP — local et Cloudflare
+
+## Vérification Cloudflare et Render — 16 octobre 2026
+
+- La nouvelle base PostgreSQL Render est initialisée : 84 tables.
+- Un administrateur actif a été créé via le Worker Cloudflare dans l’entreprise
+  de test « ComptaOrion — Tests ». Aucun identifiant de connexion n’est consigné
+  dans ce document.
+- La présence du compte et son mot de passe haché ont été vérifiés directement
+  dans la base cible ; son rôle est `admin`.
+- Le plan SYSCOHADA contient 263 comptes et 8 journaux pour cette entreprise.
+- Connexion par `/api/auth-security/login` : HTTP 200, comme pour l’écran
+  de connexion. Déconnexion avec l’identifiant de session : HTTP 200.
+- Profil, tableau de bord global, indicateurs, clients, produits, factures,
+  réceptions et alertes de stock, dépenses et catégories, immobilisations,
+  catégories et registre : consultations authentifiées HTTP 200 sur le Worker.
+- Les sessions utilisées par ces contrôles ont été fermées.
+- L’API IA reste désactivée (HTTP 404).
+- Aucun client, produit, facture, paiement ou dépense de démonstration n’a été
+  créé dans cette base pendant ces contrôles.
+- La connexion directe chiffrée Cloudflare–Render fonctionne après correction
+  TLS et mise à jour du pilote. Hyperdrive n’a pas été créé et n’est pas requis
+  pour les contrôles ci-dessus.
+
+Ces contrôles sont des tests HTTP et SQL. Ils ne constituent pas une
+vérification visuelle des écrans connectés ni une recette complète des
+factures/paiements sur Render. Les résultats locaux historiques ci-dessous
+ne remplacent pas ces validations avant ouverture commerciale.
+
+## Historique des vérifications locales
 
 > Mise à jour après corrections : une mise à niveau additive de la base et les
 > corrections de routes ont été réalisées. Une recette isolée couvre désormais
