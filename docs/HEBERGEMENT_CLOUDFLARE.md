@@ -1,3 +1,9 @@
+# Mise à jour
+
+L’architecture Worker + assets + R2 est désormais implémentée.
+Consulter [le guide de déploiement actuel](DEPLOIEMENT_CLOUDFLARE.md).
+Les options décrites ci-dessous constituent l’étude préalable, pas l’état actuel.
+
 # Hébergement de l'ERP sur Cloudflare
 
 ## Situation actuelle

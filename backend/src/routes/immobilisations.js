@@ -75,7 +75,7 @@ router.post('/create', async (req, res) => {
       entrepriseId: parseInt(entrepriseId),
       userId,
       action: 'CREATE',
-      table: 'immobilisations',
+      tableName: 'immobilisations',
       recordId: immo[0].id,
       nouvelleValeur: JSON.stringify(immo[0]),
       description: `Création immobilisation ${reference}`,
@@ -215,7 +215,7 @@ router.post('/cession', async (req, res) => {
       entrepriseId: parseInt(entrepriseId),
       userId,
       action: 'UPDATE',
-      table: 'immobilisations',
+      tableName: 'immobilisations',
       recordId: parseInt(immobilisationId),
       description: `Cession immobilisation - Gain/Perte: ${gainPerte}`,
       ipAddress

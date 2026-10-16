@@ -489,7 +489,7 @@ router.get('/receptions', async (req, res) => {
   try {
     const result = await db.execute(sql`
       SELECT br.*, 
-             f.nom as fournisseur_nom,
+             f.raison_sociale as fournisseur_nom,
              e.nom as entrepot_nom,
              (SELECT COUNT(*) FROM lignes_reception WHERE bon_reception_id = br.id) as nb_lignes
       FROM bons_reception br
@@ -500,6 +500,7 @@ router.get('/receptions', async (req, res) => {
     `);
     res.json(result.rows || result);
   } catch (error) {
+    console.error('Lecture réceptions :', error.cause?.message || error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -509,7 +510,7 @@ router.get('/receptions/:id', async (req, res) => {
   try {
     const bonResult = await db.execute(sql`
       SELECT br.*, 
-             f.nom as fournisseur_nom,
+             f.raison_sociale as fournisseur_nom,
              e.nom as entrepot_nom
       FROM bons_reception br
       LEFT JOIN fournisseurs f ON br.fournisseur_id = f.id
@@ -820,7 +821,7 @@ router.delete('/receptions/:id', async (req, res) => {
 router.get('/receptions/en-attente-facturation', async (req, res) => {
   try {
     const result = await db.execute(sql`
-      SELECT br.*, f.nom as fournisseur_nom
+      SELECT br.*, f.raison_sociale as fournisseur_nom
       FROM bons_reception br
       LEFT JOIN fournisseurs f ON br.fournisseur_id = f.id
       WHERE br.entreprise_id = ${req.entrepriseId} 

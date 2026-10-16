@@ -129,6 +129,13 @@ export function entrepriseIsolation(req, res, next) {
   // Ajouter l'entrepriseId et userId aux données pour toutes les requêtes
   req.entrepriseId = req.user.entrepriseId;
   req.userId = req.user.id;
+  // Legacy handlers still read these fields. The tenant always comes from the
+  // signed session, never from a client-supplied query/body.
+  if (req.query) req.query.entrepriseId = req.entrepriseId;
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+    req.body.entrepriseId = req.entrepriseId;
+    req.body.userId = req.userId;
+  }
   next();
 }
 

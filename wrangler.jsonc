@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "comptaorion-erp-staging",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2026-02-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "assets": {
+    "directory": "./frontend/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api", "/api/*", "/uploads/*", "/lite", "/lite/*"]
+  },
+  "r2_buckets": [{
+    "binding": "UPLOADS",
+    "bucket_name": "comptaorion-uploads-staging"
+  }],
+  "vars": {
+    "NODE_ENV": "production",
+    "RUNTIME_CLOUDFLARE": "true",
+    "AI_ENABLED": "false",
+    "FEDAPAY_ENVIRONMENT": "sandbox"
+  },
+  "observability": { "enabled": true }
+}

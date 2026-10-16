@@ -3,12 +3,10 @@ import { db } from '../db.js';
 import { entreprises, users, plansAbonnement, abonnements, saasClients, saasVentes, saasCommerciaux, inscriptionsEnAttente } from '../schema.js';
 import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import { createRequire } from 'module';
+import fedapayModule from 'fedapay';
 import crypto from 'crypto';
 import emailService from '../services/emailService.js';
 
-const require = createRequire(import.meta.url);
-const fedapayModule = require('fedapay');
 const FedaPay = fedapayModule.FedaPay;
 const Transaction = fedapayModule.Transaction;
 

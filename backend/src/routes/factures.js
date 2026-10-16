@@ -11,9 +11,9 @@ const router = express.Router();
 /**
  * Génère le prochain numéro de facture
  */
-async function genererNumeroFacture(entrepriseId) {
+async function genererNumeroFacture(entrepriseId, executor = db) {
   const annee = new Date().getFullYear();
-  const [lastFacture] = await db
+  const [lastFacture] = await executor
     .select({ numeroFacture: factures.numeroFacture })
     .from(factures)
     .where(and(
@@ -25,13 +25,13 @@ async function genererNumeroFacture(entrepriseId) {
 
   let numero = 1;
   if (lastFacture?.numeroFacture) {
-    const match = lastFacture.numeroFacture.match(/FACT-(\d{4})-(\d+)/);
+    const match = lastFacture.numeroFacture.match(/FACT-(\d{4})-(?:\d+-)?(\d+)$/);
     if (match) {
       numero = parseInt(match[2]) + 1;
     }
   }
 
-  return `FACT-${annee}-${numero.toString().padStart(4, '0')}`;
+  return `FACT-${annee}-${entrepriseId}-${numero.toString().padStart(4, '0')}`;
 }
 
 /**
@@ -337,7 +337,7 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     // Validation
-    if (!clientId || !items || items.length === 0) {
+    if (!clientId || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Client et au moins un article sont obligatoires',
@@ -350,13 +350,18 @@ router.post('/', async (req, res) => {
     if (productIds.some(id => !Number.isInteger(id) || id <= 0)) {
       return res.status(400).json({ success: false, message: 'Produit invalide' });
     }
+    const productNames = new Map();
     for (const productId of productIds) {
-      const [ownedProduct] = await db.select({ id: produits.id }).from(produits)
+      const [ownedProduct] = await db.select({ id: produits.id, nom: produits.nom }).from(produits)
         .where(and(eq(produits.id, productId), eq(produits.entrepriseId, req.entrepriseId))).limit(1);
       if (!ownedProduct) return res.status(400).json({ success: false, message: 'Produit non trouvé ou non autorisé' });
+      productNames.set(productId, ownedProduct.nom);
     }
     if (items.some(item => !Number.isFinite(Number(item.quantite)) || Number(item.quantite) <= 0 || !Number.isFinite(Number(item.prixUnitaire)) || Number(item.prixUnitaire) < 0)) {
       return res.status(400).json({ success: false, message: 'Quantité et prix doivent être valides' });
+    }
+    if (items.some(item => !Number.isFinite(Number(item.remise || 0)) || Number(item.remise || 0) < 0 || Number(item.remise || 0) > 100)) {
+      return res.status(400).json({ success: false, message: 'La remise doit être comprise entre 0 et 100' });
     }
 
     // Calculer les totaux
@@ -374,15 +379,17 @@ router.post('/', async (req, res) => {
       .from(sql`entreprises`)
       .where(sql`id = ${req.entrepriseId}`);
 
-    const tauxTva = parseFloat(entreprise?.tauxTva || 18);
+    const tauxTva = parseFloat(entreprise?.tauxTva ?? 18);
     const totalTVA = totalHT * (tauxTva / 100);
     const totalTTC = totalHT + totalTVA;
 
-    // Générer le numéro de facture
-    const numeroFacture = await genererNumeroFacture(req.entrepriseId);
+    const newFacture = await db.transaction(async tx => {
+    // Serialize numbering for this company; header, lines and accounting commit together.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${req.entrepriseId}::integer, 42)`);
+    const numeroFacture = await genererNumeroFacture(req.entrepriseId, tx);
 
     // Créer la facture
-    const [newFacture] = await db
+    const [newFacture] = await tx
       .insert(factures)
       .values({
         entrepriseId: req.entrepriseId,
@@ -411,7 +418,7 @@ router.post('/', async (req, res) => {
         entrepriseId: req.entrepriseId,
         factureId: newFacture.id,
         produitId: item.produitId || null,
-        description: item.description,
+        description: item.description || productNames.get(Number(item.produitId)) || 'Article',
         quantite: item.quantite,
         prixUnitaire: item.prixUnitaire,
         remise: item.remise || '0',
@@ -419,15 +426,14 @@ router.post('/', async (req, res) => {
       };
     });
 
-    await db.insert(factureItems).values(factureItemsData);
+    await tx.insert(factureItems).values(factureItemsData);
 
     // Impact automatique sur COMPTABILITÉ - Journal des Ventes
     // Débit: Client (411) - Crédit: Ventes (701) + TVA (443)
-    try {
-      const clientData = await db.select().from(clients).where(and(eq(clients.id, parseInt(clientId)), eq(clients.entrepriseId, req.entrepriseId))).limit(1);
+      const clientData = await tx.select().from(clients).where(and(eq(clients.id, parseInt(clientId)), eq(clients.entrepriseId, req.entrepriseId))).limit(1);
       const clientInfo = clientData[0] || {};
       
-      await createEcritureFactureVente({
+      const ecriture = await createEcritureFactureVente({
         entrepriseId: req.entrepriseId,
         numeroFacture,
         dateFacture: dateFacture || new Date().toISOString().split('T')[0],
@@ -435,11 +441,12 @@ router.post('/', async (req, res) => {
         clientCompteId: clientInfo.compteComptableId,
         totalHT,
         totalTVA,
-        totalTTC
+        totalTTC,
+        executor: tx
       });
-    } catch (comptaError) {
-      console.warn('Avertissement: Écriture comptable facture vente non générée:', comptaError.message);
-    }
+      if (!ecriture) throw new Error('Configurez les comptes clients, ventes et TVA avant de facturer');
+      return newFacture;
+    });
 
     res.status(201).json({
       success: true,
@@ -474,7 +481,7 @@ router.post('/:id/paiement', async (req, res) => {
     } = req.body;
 
     // Validation
-    if (!montant || montant <= 0) {
+    if (!Number.isFinite(Number(montant)) || Number(montant) <= 0) {
       return res.status(400).json({
         success: false,
         message: 'Le montant du paiement doit être positif',
@@ -488,35 +495,38 @@ router.post('/:id/paiement', async (req, res) => {
       });
     }
 
-    // Récupérer la facture
-    const [factureData] = await db
+    const result = await db.transaction(async tx => {
+    // Lock before checking the balance, so concurrent payments cannot overpay.
+    const [factureData] = await tx
       .select()
       .from(factures)
       .where(and(
         eq(factures.id, parseInt(id)),
         eq(factures.entrepriseId, req.entrepriseId)
       ))
-      .limit(1);
+      .limit(1).for('update');
 
     if (!factureData) {
-      return res.status(404).json({
-        success: false,
-        message: 'Facture non trouvée',
-      });
+      throw Object.assign(new Error('Facture non trouvée'), { status: 404 });
     }
 
     const montantPaiement = parseFloat(montant);
     const soldeRestant = parseFloat(factureData.soldeRestant);
 
     if (montantPaiement > soldeRestant) {
-      return res.status(400).json({
-        success: false,
-        message: `Le montant du paiement ne peut pas dépasser le solde restant (${soldeRestant} FCFA)`,
-      });
+      throw Object.assign(new Error('Le paiement dépasse le solde restant'), { status: 400 });
+    }
+    if (factureData.statut === 'annulee') throw Object.assign(new Error('Facture annulée'), { status:400 });
+    let compte;
+    if (compteBancaireId) {
+      [compte] = await tx.select().from(comptesBancaires)
+        .where(and(eq(comptesBancaires.id, Number(compteBancaireId)), eq(comptesBancaires.entrepriseId, req.entrepriseId)))
+        .limit(1).for('update');
+      if (!compte) throw Object.assign(new Error('Compte bancaire non trouvé ou non autorisé'), { status:400 });
     }
 
     // Enregistrer le paiement
-    const [newPaiement] = await db
+    const [newPaiement] = await tx
       .insert(paiements)
       .values({
         entrepriseId: req.entrepriseId,
@@ -536,7 +546,7 @@ router.post('/:id/paiement', async (req, res) => {
     const nouveauSoldeRestant = parseFloat(factureData.totalTTC) - nouveauMontantPaye;
     const nouveauStatut = nouveauSoldeRestant <= 0.01 ? 'payee' : 'envoyee';
 
-    await db
+    await tx
       .update(factures)
       .set({
         montantPaye: nouveauMontantPaye.toFixed(2),
@@ -552,7 +562,7 @@ router.post('/:id/paiement', async (req, res) => {
     // Impact automatique sur TRÉSORERIE
     if (compteBancaireId) {
       // Enregistrer la transaction de trésorerie
-      await db.insert(transactionsTresorerie).values({
+      await tx.insert(transactionsTresorerie).values({
         entrepriseId: req.entrepriseId,
         compteBancaireId: parseInt(compteBancaireId),
         type: 'encaissement',
@@ -566,15 +576,9 @@ router.post('/:id/paiement', async (req, res) => {
       });
 
       // Mettre à jour le solde du compte bancaire
-      const [compte] = await db
-        .select()
-        .from(comptesBancaires)
-        .where(eq(comptesBancaires.id, parseInt(compteBancaireId)))
-        .limit(1);
-
       if (compte) {
         const nouveauSolde = parseFloat(compte.soldeActuel) + montantPaiement;
-        await db
+        await tx
           .update(comptesBancaires)
           .set({
             soldeActuel: nouveauSolde.toFixed(2),
@@ -586,11 +590,10 @@ router.post('/:id/paiement', async (req, res) => {
 
     // Impact automatique sur COMPTABILITÉ
     // Débit: Banque/Caisse - Crédit: Client (411)
-    try {
-      const clientData = await db.select().from(clients).where(eq(clients.id, factureData.clientId)).limit(1);
+      const clientData = await tx.select().from(clients).where(and(eq(clients.id, factureData.clientId),eq(clients.entrepriseId,req.entrepriseId))).limit(1);
       const clientInfo = clientData[0] || {};
       
-      await createEcriturePaiementClient({
+      const ecriture = await createEcriturePaiementClient({
         entrepriseId: req.entrepriseId,
         reference: reference || `PAI-${newPaiement.id}`,
         datePaiement: datePaiement || new Date().toISOString().split('T')[0],
@@ -598,27 +601,28 @@ router.post('/:id/paiement', async (req, res) => {
         clientCompteId: clientInfo.compteComptableId,
         montant: montantPaiement,
         modePaiement: modePaiement === 'especes' ? 'especes' : 'banque',
-        compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null
+        compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null,
+        executor: tx
       });
-    } catch (comptaError) {
-      console.warn('Avertissement: Écriture comptable paiement client non générée:', comptaError.message);
-    }
+      if (!ecriture) throw new Error('Configurez les comptes de trésorerie et clients avant de payer');
 
-    res.status(201).json({
-      success: true,
-      message: 'Paiement enregistré avec succès',
-      data: {
+      return {
         paiement: newPaiement,
         facture: {
           montantPaye: nouveauMontantPaye.toFixed(2),
           soldeRestant: Math.max(0, nouveauSoldeRestant).toFixed(2),
           statut: nouveauStatut,
         },
-      },
+      };
+    });
+    res.status(201).json({
+      success: true,
+      message: 'Paiement enregistré avec succès',
+      data: result,
     });
   } catch (error) {
     console.error('Erreur POST /api/factures/:id/paiement:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: 'Erreur lors de l\'enregistrement du paiement',
       error: error.message,

@@ -5,14 +5,19 @@
   "main": "backend/src/main.js",
   "type": "module",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "scripts": {
     "start": "cd backend && node src/main.js",
     "build": "npm run build --prefix frontend",
     "install:all": "npm ci --prefix frontend && npm ci --prefix backend",
     "test": "npm test --prefix frontend && npm test --prefix backend",
-    "dev": "bash start.sh"
+    "dev": "bash start.sh",
+    "test:functional": "ERP_FUNCTIONAL_TEST=1 node --test backend/test/functional.test.js",
+    "test:worker": "ERP_TEST_WORKER=1 npm run test:functional",
+    "test:cloudflare": "node cloudflare/smoke-test.mjs",
+    "cloudflare:check": "npm run build && wrangler deploy --dry-run --outdir generated-artifacts/worker",
+    "cloudflare:deploy": "npm run build && wrangler deploy"
   },
   "keywords": [
     "erp",
@@ -24,5 +29,8 @@
   "license": "ISC",
   "dependencies": {
     "recharts": "^3.6.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.1"
   }
 }

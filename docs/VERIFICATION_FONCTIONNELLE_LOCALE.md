@@ -1,5 +1,40 @@
 # Vérification fonctionnelle de l’ERP dans l’environnement de développement
 
+> Mise à jour après corrections : une mise à niveau additive de la base et les
+> corrections de routes ont été réalisées. Une recette isolée couvre désormais
+> connexion, facture, paiement, comptabilité, dépenses et immobilisations.
+> Le diagnostic ci-dessous est conservé comme état initial, pas comme liste
+> des défauts actuels. Voir aussi `DEPLOIEMENT_CLOUDFLARE.md`.
+
+## Résultat après corrections
+
+- Les huit consultations en erreur dans le diagnostic initial répondent
+  maintenant HTTP 200 sur le serveur local avec la base existante.
+- Sauvegarde PostgreSQL effectuée avant la mise à niveau ; les anciennes
+  immobilisations ont été conservées, avec reprise des catégories et valeurs.
+- 12 tests unitaires/contrats réussis, plus une recette fonctionnelle séparée
+  sur schéma jetable. La recette est aussi réussie dans le runtime Workers local.
+- Parcours testé : inscription, connexion avec mot de passe, consultations,
+  client, produit, facture, paiement, écritures équilibrées, immobilisation,
+  dépense, upload/lecture/suppression de logo, déconnexion.
+- Deux paiements concurrents pour le même solde : un paiement accepté,
+  l’autre refusé ; factures numérotées sans collision entre deux entreprises.
+- Contrôles ciblés de séparation : facture d’une autre entreprise inaccessible
+  et paramètre entreprise falsifié ignoré. Ce n’est pas un audit exhaustif des droits.
+- Compilation frontend, bundle Wrangler et tests R2/HTTP du Worker réussis.
+- Audits npm : aucune vulnérabilité à la racine et dans le frontend ;
+  quatre alertes modérées restent dans la chaîne d’outillage Drizzle/esbuild
+  du backend. Aucune correction forcée avec rétrogradation de Drizzle appliquée.
+- Page publique vérifiée visuellement ; écrans après connexion non vérifiés
+  visuellement. Les tests de connexion et métier ci-dessus passent par HTTP.
+- Pas de publication distante, de migration de Neon ni de modification
+  d’un Worker Cloudflare existant.
+
+Les limites restantes comprennent les services externes simulés, la fiscalité,
+les autres rôles et parcours non couverts, les restaurations et la validation
+visuelle des écrans connectés. La préproduction doit encore être configurée
+et validée avant toute ouverture commerciale.
+
 Date : 16 octobre 2026.
 
 ## Conclusion

@@ -1,5 +1,9 @@
 # ComptaOrion ERP
 
+Déploiement Cloudflare : [guide actuel](docs/DEPLOIEMENT_CLOUDFLARE.md).
+Recette et limites : [résultats de vérification](docs/VERIFICATION_FONCTIONNELLE_LOCALE.md).
+Environnement : Node.js 22.
+
 > **Périmètre actuel : ERP uniquement.** ComptaOrion Lite fonctionne dans un
 > projet indépendant et a été retiré de cette copie. L'IA reste désactivée par
 > défaut. Les sections historiques ci-dessous ne constituent pas une certification

@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import readXlsxFile from 'read-excel-file/node';
+import readXlsxFile from 'read-excel-file/web-worker';
 import { db } from '../db.js';
 import { 
   importBatches, importRecords, importMappingTemplates,
@@ -76,7 +76,7 @@ function parseCSV(buffer, delimiter = ',') {
 }
 
 async function parseExcel(buffer) {
-  const jsonData = await readXlsxFile(buffer);
+  const jsonData = await readXlsxFile(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
   
   if (jsonData.length === 0) return { headers: [], rows: [] };
   

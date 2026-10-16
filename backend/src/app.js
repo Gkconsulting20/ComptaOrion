@@ -38,7 +38,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
+const __filename = process.env.RUNTIME_CLOUDFLARE === 'true'
+  ? '/bundle/backend/src/app.js' : fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
@@ -54,7 +55,9 @@ app.use(express.json({
   }
 }));
 
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+if (process.env.RUNTIME_CLOUDFLARE !== 'true') {
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+}
 
 // Routes d'authentification (publiques - pas de middleware)
 app.use('/api/auth', authRoutes);
@@ -184,10 +187,15 @@ const frontendDistPath = path.join(__dirname, '../../frontend/dist');
 app.use('/lite', (_req, res) => {
   res.status(410).type('text').send('ComptaOrion Lite a été transféré dans un projet indépendant.');
 });
-app.use(express.static(frontendDistPath));
+if (process.env.RUNTIME_CLOUDFLARE !== 'true') {
+  app.use(express.static(frontendDistPath));
+}
 
 // Fallback SPA : toutes les routes non-API retournent index.html
 app.get('*', (req, res) => {
+  if (process.env.RUNTIME_CLOUDFLARE === 'true') {
+    return res.status(404).json({ error: 'Route introuvable' });
+  }
   // Ne pas intercepter les routes API
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'Route non trouvée' });

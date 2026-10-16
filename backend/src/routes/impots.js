@@ -9,10 +9,13 @@ const router = express.Router();
 
 import { lignesEcritures, ecritures } from '../schema.js';
 
-const ENCRYPTION_KEY = process.env.FISCAL_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+const ENCRYPTION_KEY = process.env.FISCAL_ENCRYPTION_KEY;
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
-const getEncryptionKey = () => crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
+const getEncryptionKey = () => {
+  if (!ENCRYPTION_KEY) throw new Error('FISCAL_ENCRYPTION_KEY doit être configurée pour enregistrer des identifiants fiscaux');
+  return crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
+};
 
 function encrypt(text) {
   const iv = crypto.randomBytes(IV_LENGTH);

@@ -113,7 +113,7 @@ router.post('/create', async (req, res) => {
       entrepriseId: req.entrepriseId,
       userId: req.user.id,
       action: 'CREATE',
-      table: 'depenses',
+      tableName: 'depenses',
       recordId: depense[0].id,
       description: `Dépense créée: ${description} (${montant} FCFA)`,
       ipAddress
