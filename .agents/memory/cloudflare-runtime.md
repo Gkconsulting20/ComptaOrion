@@ -23,3 +23,12 @@ automatiquement la base PostgreSQL externe destinée à Cloudflare.
 
 **How to apply:** Sauvegarder et contrôler explicitement la base cible avant la
 bascule. Ajouter et reprendre les anciens champs sans effacer les données historiques.
+
+Les tests d’une base locale sans TLS ne valident pas une connexion PostgreSQL
+de production sur Render.
+
+**Why:** Render impose TLS ; les mêmes requêtes fonctionnaient en connexion
+sécurisée directe mais échouaient dans le Worker qui ne demandait pas TLS.
+
+**How to apply:** Vérifier aussi une lecture SQL chiffrée contre la base cible
+et ne pas conclure au bon fonctionnement PostgreSQL sur le seul endpoint de santé.

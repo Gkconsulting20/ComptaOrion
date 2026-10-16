@@ -9,7 +9,7 @@ L’utilisateur souhaite pousser l’ERP vers GitHub et utiliser Cloudflare pour
 
 **How to apply:** Ne pas proposer une publication Replit comme résultat de cette migration. Distinguer interface statique et serveur métier lors de la préparation Cloudflare.
 
-L’utilisateur confirme qu’il dispose uniquement d’une base PostgreSQL sur Render, sans service Web Render, et qu’il l’a créée à partir d’un Blueprint.
+L’utilisateur confirme qu’il dispose uniquement d’une base PostgreSQL sur Render, sans service Web Render.
 
 **Why:** Il a clarifié explicitement cette distinction après avoir employé le mot « backend » pour désigner sa base. Le nom donné précédemment comme « base Cloudflare » désignait le stockage de fichiers R2.
 

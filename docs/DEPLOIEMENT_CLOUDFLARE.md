@@ -1,5 +1,21 @@
 # Préparation et déploiement Cloudflare de l’ERP
 
+## Cible utilisée pour les tests actuels
+
+Le Worker déployé est **`comptaorion`** et le serveur PostgreSQL est hébergé
+sur **Render**, sans service Web Render. R2 reste dédié aux fichiers. Ne pas
+créer D1 ni un second backend pour raccorder cette base.
+
+Utiliser l’**External Database URL** Render comme secret `DATABASE_URL`,
+avec `JWT_SECRET` et `JWT_REFRESH_SECRET` également de type Secret.
+Les connexions PostgreSQL vers les hôtes publics Render activent TLS avec
+vérification du certificat, même si l’URL fournie ne précise pas `sslmode`.
+L’accès réseau externe Render doit autoriser le Worker.
+
+`keep_vars` conserve les variables ajoutées depuis le tableau de bord lors des
+déploiements Wrangler ; cela ne remplace pas le chiffrement des valeurs
+sensibles, qui doivent être enregistrées comme Secrets.
+
 ## Architecture préparée
 
 - **Un Worker** : `comptaorion-erp-staging`, avec compatibilité Node.js.

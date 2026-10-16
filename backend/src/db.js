@@ -5,6 +5,7 @@ import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import ws from 'ws';
 import * as schema from './schema.js';
 import { runtimeContext } from './runtime-context.js';
+import { normalizePostgresConnectionString } from './services/postgresConnection.js';
 
 if (!process.env.DATABASE_URL && process.env.RUNTIME_CLOUDFLARE !== 'true') {
   throw new Error(
@@ -55,7 +56,7 @@ if (process.env.RUNTIME_CLOUDFLARE === 'true') {
   console.log('✅ Base de données Neon connectée');
 } else {
   defaultPool = new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: normalizePostgresConnectionString(process.env.DATABASE_URL),
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
@@ -73,7 +74,11 @@ export function createRequestDatabase(connectionString) {
     const pool = new NeonPool({ connectionString, max: 3, connectionTimeoutMillis: 15000 });
     return { pool, db: drizzleNeon({ client: pool, schema }) };
   }
-  const pool = new pg.Pool({ connectionString, max: 3, connectionTimeoutMillis: 15000 });
+  const pool = new pg.Pool({
+    connectionString: normalizePostgresConnectionString(connectionString),
+    max: 3,
+    connectionTimeoutMillis: 15000,
+  });
   return { pool, db: drizzlePg({ client: pool, schema }) };
 }
 
