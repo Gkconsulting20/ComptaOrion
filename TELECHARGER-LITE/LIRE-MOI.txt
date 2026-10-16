@@ -1,0 +1,8 @@
+COMPTAORION LITE — ARCHIVE DU PROJET INDEPENDANT
+
+Telechargez uniquement le fichier comptaorion-lite-source.zip de ce dossier.
+Importez ensuite ce ZIP sur https://replit.com/import en choisissant ZIP.
+
+Il n'est pas necessaire de telecharger tout l'ancien projet ERP.
+Le ZIP contient le frontend, le backend et les instructions README.md.
+Configurez une nouvelle base et de nouveaux secrets dans le nouveau projet.
