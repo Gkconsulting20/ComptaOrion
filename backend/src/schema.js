@@ -61,6 +61,27 @@ export const entreprises = pgTable('entreprises', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Suivi des projets et des financements d'associations, isolés par entreprise.
+export const projetsAssociatifs = pgTable('projets_associatifs', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  code: varchar('code', { length: 30 }).notNull(),
+  nom: varchar('nom', { length: 255 }).notNull(),
+  description: text('description'),
+  bailleur: varchar('bailleur', { length: 255 }),
+  referenceConvention: varchar('reference_convention', { length: 120 }),
+  dateDebut: date('date_debut').notNull(),
+  dateFin: date('date_fin'),
+  budgetTotal: decimal('budget_total', { precision: 15, scale: 2 }).notNull(),
+  devise: varchar('devise', { length: 10 }).notNull().default('FCFA'),
+  statut: varchar('statut', { length: 20 }).notNull().default('actif'),
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  codeEntrepriseIdx: uniqueIndex('projets_associatifs_entreprise_code_idx').on(table.entrepriseId, table.code),
+}));
+
 export const liteIdempotency = pgTable('lite_idempotency', {
   entrepriseId: integer('entreprise_id').notNull(),
   idempotencyKey: varchar('idempotency_key', { length: 128 }).notNull(),
@@ -688,6 +709,7 @@ export const categoriesDepenses = pgTable('categories_depenses', {
 export const depenses = pgTable('depenses', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  projetId: integer('projet_id').references(() => projetsAssociatifs.id),
   employeId: integer('employe_id').references(() => users.id).notNull(),
   categorieId: integer('categorie_id').references(() => categoriesDepenses.id).notNull(),
   montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
@@ -1129,6 +1151,42 @@ export const lignesEcritures = pgTable('lignes_ecriture', {
   credit: decimal('credit', { precision: 15, scale: 2 }).default('0'),
   libelle: text('libelle'),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id),
+});
+
+export const budgetsProjetsAssociatifs = pgTable('budgets_projets_associatifs', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  projetId: integer('projet_id').references(() => projetsAssociatifs.id).notNull(),
+  poste: varchar('poste', { length: 160 }).notNull(),
+  compteComptableId: integer('compte_comptable_id').references(() => comptesComptables.id),
+  montantAlloue: decimal('montant_alloue', { precision: 15, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  posteProjetIdx: uniqueIndex('budgets_projets_associatifs_poste_idx').on(table.projetId, table.poste),
+}));
+
+export const financementsProjetsAssociatifs = pgTable('financements_projets_associatifs', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  projetId: integer('projet_id').references(() => projetsAssociatifs.id).notNull(),
+  bailleur: varchar('bailleur', { length: 255 }).notNull(),
+  referenceConvention: varchar('reference_convention', { length: 120 }),
+  montantEngage: decimal('montant_engage', { precision: 15, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const versementsFinancementsProjets = pgTable('versements_financements_projets', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  financementId: integer('financement_id').references(() => financementsProjetsAssociatifs.id).notNull(),
+  montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
+  dateVersement: date('date_versement').notNull(),
+  numeroPiece: varchar('numero_piece', { length: 120 }),
+  compteTresorerieId: integer('compte_tresorerie_id').references(() => comptesComptables.id).notNull(),
+  compteProduitId: integer('compte_produit_id').references(() => comptesComptables.id).notNull(),
+  ecritureId: integer('ecriture_id').references(() => ecritures.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 // Soldes comptables (cache)

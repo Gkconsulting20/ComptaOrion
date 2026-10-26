@@ -16,6 +16,7 @@ import { Login } from './pages/Login';
 import { Inscription } from './pages/Inscription';
 import { CommercialPortal } from './pages/CommercialPortal';
 import { DashboardView } from './Dashboard';
+import { AssociationAccountingModule } from './modules/AssociationAccountingModule';
 import api from './api';
 
 // L'assistant reste dans le code pour une activation future, mais il est
@@ -30,6 +31,7 @@ const ALL_MODULES = [
   { id: 'tresorerie', label: 'Trésorerie', icon: '💰', requiresSuperAdmin: false },
   { id: 'stock', label: 'Stock', icon: '📦', requiresSuperAdmin: false },
   { id: 'comptabilite', label: 'Comptabilité', icon: '📖', requiresSuperAdmin: false },
+  { id: 'associations', label: 'Comptabilité associations', icon: '🤝', requiresAssociationAccess: true },
   { id: 'impots', label: 'Impôts', icon: '🏛️', requiresSuperAdmin: false },
   { id: 'integrations', label: 'Intégrations', icon: '🔗', requiresSuperAdmin: false },
   ...(AI_ENABLED
@@ -81,7 +83,11 @@ export default function App() {
   // Filtrer les modules selon les permissions
   // Super Admin = entrepriseId === 1 (ComptaOrion lui-même)
   const isSuperAdmin = user?.entrepriseId === 1;
-  const MODULES = ALL_MODULES.filter(m => !m.requiresSuperAdmin || isSuperAdmin);
+  const associationAccess = ['admin', 'accountant', 'manager'].includes(user?.role);
+  const MODULES = ALL_MODULES.filter(m =>
+    (!m.requiresSuperAdmin || isSuperAdmin) &&
+    (!m.requiresAssociationAccess || associationAccess)
+  );
 
   const handleLogout = async () => {
     const token = localStorage.getItem('token');
@@ -149,6 +155,7 @@ export default function App() {
       case 'tresorerie': return <TresorerieModule />;
       case 'stock': return <StockInventaire />;
       case 'comptabilite': return <ModuleComptabilite />;
+      case 'associations': return <AssociationAccountingModule />;
       case 'impots': return <ImpotsModule />;
       case 'integrations': return <IntegrationsModule />;
       case 'ia-assistant': return AI_ENABLED ? <IAAssistantModule /> : <DashboardView />;

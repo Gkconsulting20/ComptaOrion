@@ -16,7 +16,7 @@ test('contrat HTTP ERP sans session et retrait de Lite', async t => {
   const health = await fetch(`${origin}/api/health`);
   assert.equal(health.status, 200);
   assert.equal((await health.json()).status, 'ok');
-  for (const path of ['/api/clients', '/api/factures', '/api/comptabilite/comptes', '/api/ia/chat']) {
+  for (const path of ['/api/clients', '/api/factures', '/api/comptabilite/comptes', '/api/associations/projects', '/api/ia/chat']) {
     const response = await fetch(`${origin}${path}`);
     assert.equal(response.status, 401, `API privée : ${path}`);
   }

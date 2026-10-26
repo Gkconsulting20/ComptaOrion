@@ -31,6 +31,7 @@ import impotsRoutes from './routes/impots.js';
 import integrationsRoutes from './routes/integrations.js';
 import importRoutes from './routes/import.js';
 import devisesRoutes from './routes/devises.js';
+import associationAccountingRoutes from './routes/association-accounting.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
 import { createTenantMiddleware } from './utils/rlsPolicies.js';
 import { idempotencyMiddleware } from './middleware/idempotency.js';
@@ -89,6 +90,7 @@ app.use('/api/saas-admin', authMiddleware, saasAdminOnly, saasAdminRoutes);
 
 // ✅ AUTHENTIFICATION ACTIVÉE - TOUTES LES ROUTES PROTÉGÉES
 app.use('/api', authMiddleware, entrepriseIsolation, createTenantMiddleware(), idempotencyMiddleware);
+app.use('/api/associations', associationAccountingRoutes);
 
 // ===============================================
 // ROUTES CRUD DES MODULES

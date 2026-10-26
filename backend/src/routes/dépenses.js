@@ -1,11 +1,27 @@
 import express from 'express';
 import { db } from '../db.js';
-import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, auditLogs, employes, liteIdempotency } from '../schema.js';
+import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, auditLogs, employes, liteIdempotency, projetsAssociatifs } from '../schema.js';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
 import { createEcritureDepense } from '../services/comptabiliteService.js';
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
 
 const router = express.Router();
+
+router.get('/projects-options', async (req, res) => {
+  try {
+    const projects = await db.select({
+      id: projetsAssociatifs.id,
+      code: projetsAssociatifs.code,
+      nom: projetsAssociatifs.nom,
+      devise: projetsAssociatifs.devise,
+    }).from(projetsAssociatifs)
+      .where(and(eq(projetsAssociatifs.entrepriseId, req.entrepriseId), eq(projetsAssociatifs.statut, 'actif')));
+    res.json(projects);
+  } catch (error) {
+    console.error('Erreur options projets dépenses:', error.message);
+    res.status(500).json({ error: 'Impossible de charger les projets actifs.' });
+  }
+});
 
 // ==========================================
 // CRUD CATÉGORIES DÉPENSES
@@ -44,6 +60,22 @@ router.post('/categories', async (req, res) => {
 router.post('/create', async (req, res) => {
   try {
     const { categorieId, montant, dateDepense, description, justificatifUrl, récurrente, fréquenceRécurrence, ipAddress } = req.body;
+    const rawProjectId = req.body.projetId;
+    const projetId = rawProjectId ? Number(rawProjectId) : null;
+    if (rawProjectId && (!Number.isSafeInteger(projetId) || projetId <= 0)) {
+      return res.status(400).json({ error: 'Projet associatif invalide' });
+    }
+    if (projetId) {
+      const [project] = await db.select({ id: projetsAssociatifs.id })
+        .from(projetsAssociatifs)
+        .where(and(eq(projetsAssociatifs.id, projetId), eq(projetsAssociatifs.entrepriseId, req.entrepriseId)))
+        .limit(1);
+      if (!project) return res.status(404).json({ error: 'Projet associatif introuvable ou inactif' });
+      const [activeProject] = await db.select({ id: projetsAssociatifs.id }).from(projetsAssociatifs)
+        .where(and(eq(projetsAssociatifs.id, projetId), eq(projetsAssociatifs.entrepriseId, req.entrepriseId), eq(projetsAssociatifs.statut, 'actif')))
+        .limit(1);
+      if (!activeProject) return res.status(409).json({ error: 'Ce projet n’accepte plus de nouvelles dépenses.' });
+    }
     const numericAmount = Number(montant);
     const parsedDate = dateDepense ? new Date(dateDepense) : new Date();
     if (!Number.isFinite(numericAmount) || numericAmount <= 0 || Number.isNaN(parsedDate.getTime()) || !String(description || '').trim()) {
@@ -88,6 +120,7 @@ router.post('/create', async (req, res) => {
     
     const depense = await tx.insert(depenses).values({
       entrepriseId: req.entrepriseId,
+      projetId,
       employeId: req.user.id,
       categorieId: categorie.id,
       montant: numericAmount,

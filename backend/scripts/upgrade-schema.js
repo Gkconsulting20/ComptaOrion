@@ -113,6 +113,22 @@ try {
         (!added.has(fk[1]) && !added.has(`${fk[1]}.${fk[3]}`))) continue;
     if (apply) await client.query(statement);
   }
+  // Only add indexes introduced by the association module. Rebuilding every
+  // historical ERP index could fail on old duplicate data and is not required
+  // to install this additive feature.
+  const associationIndexes = new Set([
+    'projets_associatifs_entreprise_code_idx',
+    'budgets_projets_associatifs_poste_idx',
+  ]);
+  const existingIndexes = new Set((await client.query(
+    "SELECT indexname FROM pg_indexes WHERE schemaname='public'",
+  )).rows.map((row) => row.indexname));
+  for (const statement of source.split(/;\s*(?:--> statement-breakpoint)?\s*/)) {
+    const index = statement.match(/^CREATE UNIQUE INDEX "([^"]+)"/);
+    if (!index || !associationIndexes.has(index[1]) || existingIndexes.has(index[1])) continue;
+    console.log(`INDEX ${index[1]} (${apply ? 'application' : 'simulation'})`);
+    if (apply) await client.query(statement);
+  }
   await client.query(apply ? 'COMMIT' : 'ROLLBACK');
   console.log(apply ? 'Mise à niveau additive terminée.' : 'Aucune modification. Utiliser --apply après sauvegarde pour appliquer.');
 } catch (error) {

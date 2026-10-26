@@ -51,7 +51,11 @@ const MULTI_TENANT_TABLES = [
   'amortissements',
   'audit_log',
   'ecritures_recurrentes',
-  'parametres_comptables'
+  'parametres_comptables',
+  'projets_associatifs',
+  'budgets_projets_associatifs',
+  'financements_projets_associatifs',
+  'versements_financements_projets'
 ];
 
 export async function enableRLS() {

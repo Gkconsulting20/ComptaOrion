@@ -11,6 +11,7 @@ export function DepensesModule() {
   const [depenses, setDepenses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [employes, setEmployes] = useState([]);
+  const [projetsAssociatifs, setProjetsAssociatifs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -25,6 +26,7 @@ export function DepensesModule() {
   const [formData, setFormData] = useState({
     employeId: '',
     categorieId: '',
+    projetId: '',
     montant: 0,
     dateDepense: new Date().toISOString().split('T')[0],
     description: '',
@@ -43,14 +45,16 @@ export function DepensesModule() {
   const loadData = async () => {
     try {
       const params = `?dateDebut=${dateDebut}&dateFin=${dateFin}`;
-      const [depensesRes, categoriesRes, employesRes] = await Promise.all([
+      const [depensesRes, categoriesRes, employesRes, projectsRes] = await Promise.all([
         api.get(`/depenses/list${params}`),
         api.get('/depenses/categories'),
-        api.get('/employes/list')
+        api.get('/employes/list'),
+        api.get('/depenses/projects-options')
       ]);
       setDepenses(depensesRes || []);
       setCategories(categoriesRes || []);
       setEmployes(employesRes || []);
+      setProjetsAssociatifs(projectsRes || []);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -89,7 +93,7 @@ export function DepensesModule() {
 
   const handleEdit = (depense) => {
     setEditingDepense(depense);
-    setFormData({ ...depense });
+    setFormData({ ...depense, projetId: depense.projetId || '' });
     setShowModal(true);
   };
 
@@ -139,6 +143,7 @@ export function DepensesModule() {
     setFormData({
       employeId: '',
       categorieId: '',
+      projetId: '',
       montant: 0,
       dateDepense: new Date().toISOString().split('T')[0],
       description: '',
@@ -232,6 +237,17 @@ export function DepensesModule() {
             onChange={(e) => setFormData({ ...formData, categorieId: e.target.value })}
             options={categories.map(cat => ({ value: cat.id, label: cat.nom }))}
             required
+          />
+          <FormField
+            label="Projet associatif (facultatif)"
+            name="projetId"
+            type="select"
+            value={formData.projetId || ''}
+            onChange={(e) => setFormData({ ...formData, projetId: e.target.value })}
+            options={[{ value: '', label: 'Aucun projet' }, ...projetsAssociatifs.map(project => ({
+              value: project.id,
+              label: `${project.code} — ${project.nom}`,
+            }))]}
           />
           <FormField
             label="Montant (FCFA)"
