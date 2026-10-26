@@ -42,3 +42,9 @@ donc pas indispensable.
 
 **How to apply:** Confronter ce type d’échec à une requête SQL inoffensive sur
 le Worker déployé avant d’imposer Hyperdrive ou un changement d’architecture.
+
+Le push de `main` sur GitHub déclenche automatiquement le déploiement de production Cloudflare.
+
+**Why:** Le Worker de l’ERP est relié à Workers Builds; son déclencheur exécute `npm run build` puis `npx wrangler deploy`. Un push avant la mise à niveau du schéma Render peut donc publier du code qui attend des tables absentes.
+
+**How to apply:** Simuler la migration avec l’URL Render, appliquer la migration additive sur la base confirmée, vérifier qu’une simulation suivante ne prévoit plus de changements, puis pousser `main` et contrôler le résultat du build correspondant au commit.
