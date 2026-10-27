@@ -119,6 +119,8 @@ try {
   const associationIndexes = new Set([
     'projets_associatifs_entreprise_code_idx',
     'budgets_projets_associatifs_poste_idx',
+    'paiements_depenses_projets_piece_unique',
+    'paiements_depenses_projets_ecriture_unique',
   ]);
   const existingIndexes = new Set((await client.query(
     "SELECT indexname FROM pg_indexes WHERE schemaname='public'",

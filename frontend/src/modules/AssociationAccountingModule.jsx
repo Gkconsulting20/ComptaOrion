@@ -16,6 +16,7 @@ const emptyProject = () => ({
   dateDebut: today(), dateFin: '', budgetTotal: '', devise: 'FCFA',
 });
 const cash = (value, currency = 'FCFA') => `${amount(value)} ${currency}`;
+const newPaymentRequestKey = () => `asso-payment-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
 const statusLabel = { actif: 'En cours', suspendu: 'Suspendu', termine: 'Terminé', archive: 'Archivé' };
 const statusColor = { actif: '#13734d', suspendu: '#a4530d', termine: '#526170', archive: '#657584' };
 
@@ -31,8 +32,16 @@ function downloadProjectReport(report) {
     ['Poste budgetaire', 'Budget alloue'],
     ...report.budgets.map((line) => [line.poste, line.montantAlloue, line.compteNumero || '']),
     [],
-    ['Depenses', 'Date', 'Categorie', 'Description', 'Montant', 'Statut'],
-    ...report.expenses.map((item) => [item.id, item.dateDepense, item.categorie, item.description, item.montant, item.statut]),
+    ['Depenses', 'Date', 'Categorie', 'Description', 'Montant total', 'Montant paye', 'Solde a payer', 'Statut de paiement', 'Etat approbation', 'Details des paiements'],
+    ...report.expenses.map((item) => [
+      item.id, item.dateDepense, item.categorie, item.description, item.montant,
+      item.montantPaye ?? 0, item.soldeAPayer ?? item.montant,
+      item.statutPaiement || 'non_payee', item.statut,
+      (item.paiements || []).map((payment) => [
+        payment.datePaiement, payment.montant, payment.numeroPiece,
+        payment.ecritureNumero, payment.compteTresorerieNumero, payment.compteChargeNumero,
+      ].filter(Boolean).join(' / ')).join(' | '),
+    ]),
     [],
     ['Financements', 'Bailleur', 'Reference', 'Montant engage'],
     ...report.financings.map((item) => [item.id, item.bailleur, item.referenceConvention, item.montantEngage]),
@@ -62,7 +71,7 @@ export function AssociationAccountingModule() {
   const [selectedId, setSelectedId] = useState(null);
   const [report, setReport] = useState(null);
   const [unlinkedExpenses, setUnlinkedExpenses] = useState([]);
-  const [accounts, setAccounts] = useState({ treasury: [], grants: [] });
+  const [accounts, setAccounts] = useState({ treasury: [], grants: [], expenseAccounts: [] });
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,6 +82,11 @@ export function AssociationAccountingModule() {
   const [pledge, setPledge] = useState({ bailleur: '', referenceConvention: '', montantEngage: '' });
   const [receipt, setReceipt] = useState({ financementId: '', montant: '', dateVersement: today(), numeroPiece: '', compteTresorerieId: '', compteProduitId: '' });
   const [expenseId, setExpenseId] = useState('');
+  const [paymentExpenseId, setPaymentExpenseId] = useState(null);
+  const [paymentRequestKey, setPaymentRequestKey] = useState('');
+  const [paymentForm, setPaymentForm] = useState({
+    montant: '', datePaiement: today(), numeroPiece: '', compteTresorerieId: '', compteChargeId: '',
+  });
   const [projectForm, setProjectForm] = useState(emptyProject);
 
   const selected = useMemo(() => projects.find((project) => project.id === selectedId) || null, [projects, selectedId]);
@@ -102,7 +116,7 @@ export function AssociationAccountingModule() {
         api.get('/associations/accounts'),
         api.get('/depenses/list'),
       ]);
-      setAccounts(options || { treasury: [], grants: [] });
+       setAccounts(options || { treasury: [], grants: [], expenseAccounts: [] });
       setUnlinkedExpenses((expenses || []).filter((expense) => !expense.projetId));
     } catch (err) {
       setError(err.message || 'Impossible de charger les données associatives.');
@@ -197,6 +211,30 @@ export function AssociationAccountingModule() {
       'Dépense rattachée au projet.', () => setExpenseId(''));
   };
 
+  const recordExpensePayment = (event, item) => {
+    event.preventDefault();
+    if (!selectedId || !item) return;
+    const remaining = Number(item.soldeAPayer ?? (Number(item.montant) - Number(item.montantPaye || 0)));
+    const paidAmount = Number(paymentForm.montant);
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0 || paidAmount > remaining) {
+      setError(`Le montant doit être supérieur à 0 et ne pas dépasser le solde de ${cash(remaining, selected.devise)}.`);
+      return;
+    }
+    const requestKey = paymentRequestKey || newPaymentRequestKey();
+    setPaymentRequestKey(requestKey);
+    runAction(() => api.post(`/associations/projects/${selectedId}/expenses/${item.id}/payments`, {
+      montant: paidAmount,
+      datePaiement: paymentForm.datePaiement,
+      numeroPiece: paymentForm.numeroPiece.trim(),
+      compteTresorerieId: Number(paymentForm.compteTresorerieId),
+      compteChargeId: Number(paymentForm.compteChargeId),
+    }, { headers: { 'X-Idempotency-Key': requestKey } }), 'Paiement enregistré et écriture comptable équilibrée créée.', () => {
+      setPaymentExpenseId(null);
+      setPaymentRequestKey('');
+      setPaymentForm({ montant: '', datePaiement: today(), numeroPiece: '', compteTresorerieId: '', compteChargeId: '' });
+    });
+  };
+
   const archiveProject = () => {
     if (!selectedId || !window.confirm('Archiver ce projet ? Ses écritures, dépenses et financements seront conservés.')) return;
     runAction(() => api.put(`/associations/projects/${selectedId}`, { statut: 'archive' }), 'Projet archivé.');
@@ -228,7 +266,6 @@ export function AssociationAccountingModule() {
 
       {!projects.length && !newProject ? (
         <section style={{ ...styles.panel, textAlign: 'center', padding: '54px 24px' }}>
-          <div style={{ fontSize: 36 }}>🧾</div>
           <h2>Aucun projet associatif</h2>
           <p style={{ color: '#64737c' }}>Créez un projet pour suivre son budget, ses bailleurs, ses versements et les dépenses liées aux fonctions existantes de l’ERP.</p>
           <button type="button" style={styles.button} onClick={() => setNewProject(true)}>Créer le premier projet</button>
@@ -275,7 +312,9 @@ export function AssociationAccountingModule() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12 }}>
                     {[
                       ['Budget autorisé', cash(selected.budgetTotal, selected.devise)],
-                      ['Dépenses rattachées', cash(report.totals.spent, selected.devise)],
+                      ['Dépenses payées', cash(report.totals.spent, selected.devise)],
+                      ['Engagements de dépenses', cash(report.totals.committed ?? 0, selected.devise)],
+                      ['Solde à payer', cash(report.totals.unpaid ?? 0, selected.devise)],
                       ['Financements reçus', cash(report.totals.received, selected.devise)],
                       ['Reste à financer', cash(Math.max(Number(selected.budgetTotal) - report.totals.received, 0), selected.devise)],
                     ].map(([title, value]) => <div key={title} style={{ ...styles.panel, padding: 17 }}><div style={{ fontSize: 12, color: '#60707c' }}>{title}</div><strong style={{ display: 'block', fontSize: 20, marginTop: 6 }}>{value}</strong></div>)}
@@ -359,6 +398,20 @@ export function AssociationAccountingModule() {
 
               {tab === 'expenses' && report && (
                 <section style={{ display: 'grid', gap: 15 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(165px,1fr))', gap: 10 }}>
+                    {[
+                      ['Dépenses engagées', cash(report.totals.committed ?? 0, selected.devise), 'Engagements actifs'],
+                      ['Réellement payé', cash(report.totals.spent ?? 0, selected.devise), 'Décaissements comptabilisés'],
+                      ['Solde à payer', cash(report.totals.unpaid ?? 0, selected.devise), 'Reste dû sur les dépenses'],
+                      ['En attente d’approbation', cash(report.totals.pendingApproval ?? 0, selected.devise), 'Montant des dossiers à valider'],
+                    ].map(([label, value, caption]) => (
+                      <div key={label} style={{ ...styles.panel, padding: 15 }}>
+                        <div style={{ color: '#60707c', fontSize: 12 }}>{label}</div>
+                        <strong style={{ display: 'block', fontSize: 18, marginTop: 5 }}>{value}</strong>
+                        <div style={{ color: '#829098', fontSize: 11, marginTop: 3 }}>{caption}</div>
+                      </div>
+                    ))}
+                  </div>
                   <form onSubmit={linkExpense} style={{ ...styles.panel, display: 'grid', gridTemplateColumns: 'minmax(160px,1fr) auto', gap: 11, alignItems: 'end' }}>
                     <Field label="Rattacher une dépense existante">
                       <select style={styles.input} value={expenseId} onChange={(event) => setExpenseId(event.target.value)} required>
@@ -372,9 +425,59 @@ export function AssociationAccountingModule() {
                     <h3 style={{ marginTop: 0 }}>Dépenses du module existant</h3>
                     {report.expenses.length === 0 ? <Empty>Choisissez une dépense existante ci-dessus ou sélectionnez ce projet lors de la création d’une dépense.</Empty> :
                       <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                        <thead><tr>{['Date', 'Description', 'Catégorie', 'Montant', 'État', ''].map((label) => <th key={label} style={{ textAlign: 'left', padding: 9, borderBottom: '1px solid #e5e9f0', color: '#60707c' }}>{label}</th>)}</tr></thead>
-                        <tbody>{report.expenses.map((item) => <tr key={item.id}><td style={{ padding: 10, borderBottom: '1px solid #edf0f2' }}>{String(item.dateDepense).slice(0, 10)}</td><td style={{ padding: 10, borderBottom: '1px solid #edf0f2' }}>{item.description}</td><td style={{ padding: 10, borderBottom: '1px solid #edf0f2' }}>{item.categorie || '—'}</td><td style={{ padding: 10, borderBottom: '1px solid #edf0f2' }}>{cash(item.montant, selected.devise)}</td><td style={{ padding: 10, borderBottom: '1px solid #edf0f2' }}>{item.statut}</td><td style={{ padding: 10 }}><button type="button" style={{ ...styles.secondary, color: '#a33b35' }} disabled={saving} onClick={() => runAction(() => api.delete(`/associations/projects/${selected.id}/expenses/${item.id}`), 'Dépense détachée.')}>Détacher</button></td></tr>)}</tbody>
+                        <thead><tr>{['Date', 'Description / catégorie', 'Total', 'Payé', 'Solde dû', 'Approbation', 'Paiement', 'Action'].map((label) => <th key={label} style={{ textAlign: 'left', padding: 9, borderBottom: '1px solid #e5e9f0', color: '#60707c', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
+                        <tbody>{report.expenses.map((item) => {
+                          const paid = Number(item.montantPaye ?? 0);
+                          const due = Math.max(0, Number(item.soldeAPayer ?? (Number(item.montant) - paid)));
+                          const paymentState = {
+                            non_payee: ['Non payée', '#9b4d35', '#fff1eb'],
+                            partiellement_payee: ['Partiellement payée', '#8a5b14', '#fff7e6'],
+                            payee: ['Payée', '#176b54', '#eaf7ef'],
+                          }[item.statutPaiement] || [item.statutPaiement || 'Non payée', '#53636e', '#f0f3f3'];
+                          return <React.Fragment key={item.id}>
+                            <tr>
+                              <td style={{ padding: 10, borderBottom: '1px solid #edf0f2', whiteSpace: 'nowrap' }}>{String(item.dateDepense || '').slice(0, 10)}</td>
+                              <td style={{ padding: 10, borderBottom: '1px solid #edf0f2', minWidth: 170 }}><strong>{item.description || 'Dépense'}</strong><div style={{ color: '#687680', fontSize: 12, marginTop: 3 }}>{item.categorie || 'Sans catégorie'}</div></td>
+                              <td style={{ padding: 10, borderBottom: '1px solid #edf0f2', whiteSpace: 'nowrap' }}>{cash(item.montant, selected.devise)}</td>
+                              <td style={{ padding: 10, borderBottom: '1px solid #edf0f2', whiteSpace: 'nowrap', color: '#176b54', fontWeight: 700 }}>{cash(paid, selected.devise)}</td>
+                              <td style={{ padding: 10, borderBottom: '1px solid #edf0f2', whiteSpace: 'nowrap', color: due > 0 ? '#9b4d35' : '#53636e', fontWeight: 700 }}>{cash(due, selected.devise)}</td>
+                              <td style={{ padding: 10, borderBottom: '1px solid #edf0f2', whiteSpace: 'nowrap' }}>{item.statut || '—'}</td>
+                              <td style={{ padding: 10, borderBottom: '1px solid #edf0f2' }}><span style={{ display: 'inline-block', borderRadius: 99, padding: '4px 8px', color: paymentState[1], background: paymentState[2], fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{paymentState[0]}</span></td>
+                              <td style={{ padding: 10, borderBottom: '1px solid #edf0f2', whiteSpace: 'nowrap' }}>
+                                {due > 0 && <button type="button" style={styles.button} disabled={saving} onClick={() => {
+                                  setPaymentExpenseId(paymentExpenseId === item.id ? null : item.id);
+                                  setPaymentRequestKey('');
+                                  setPaymentForm({ montant: '', datePaiement: today(), numeroPiece: '', compteTresorerieId: '', compteChargeId: '' });
+                                  setError('');
+                                }}>{paymentExpenseId === item.id ? 'Fermer' : 'Enregistrer un paiement'}</button>}
+                                <button type="button" style={{ ...styles.secondary, color: '#a33b35', marginLeft: 7 }} disabled={saving} onClick={() => runAction(() => api.delete(`/associations/projects/${selected.id}/expenses/${item.id}`), 'Dépense détachée.')}>Détacher</button>
+                              </td>
+                            </tr>
+                            {(item.paiements?.length > 0 || paymentExpenseId === item.id) && <tr>
+                              <td colSpan="8" style={{ padding: '10px 14px 14px', background: '#f8faf9', borderBottom: '1px solid #edf0f2' }}>
+                                {item.paiements?.length > 0 && <div style={{ display: 'grid', gap: 7, marginBottom: paymentExpenseId === item.id ? 14 : 0 }}>
+                                  <strong style={{ color: '#52636d', fontSize: 12 }}>Historique des paiements</strong>
+                                  {item.paiements.map((payment) => <div key={payment.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', color: '#596a73', fontSize: 12, padding: '7px 0', borderTop: '1px solid #e8eeeb' }}>
+                                    <span>{String(payment.datePaiement || '').slice(0, 10)} · Pièce {payment.numeroPiece || '—'} · Écriture {payment.ecritureNumero || '—'}</span>
+                                    <span>{payment.compteTresorerieNumero || 'Trésorerie —'} → {payment.compteChargeNumero || 'Charge —'}</span>
+                                    <strong>{cash(payment.montant, selected.devise)}</strong>
+                                  </div>)}
+                                </div>}
+                                {paymentExpenseId === item.id && <form onSubmit={(event) => recordExpensePayment(event, item)} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, alignItems: 'end', paddingTop: 11, borderTop: item.paiements?.length ? '1px solid #e1e9e5' : 0 }}>
+                                  <div style={{ gridColumn: '1/-1', color: '#53636e', fontSize: 12 }}>Solde restant : <strong>{cash(due, selected.devise)}</strong>. Un paiement partiel est possible.</div>
+                                  <Field label={`Montant payé (${selected.devise})`}><input style={styles.input} type="number" min="0.01" max={due} step="0.01" value={paymentForm.montant} onChange={(event) => setPaymentForm({ ...paymentForm, montant: event.target.value })} required /></Field>
+                                  <Field label="Date du paiement"><input style={styles.input} type="date" value={paymentForm.datePaiement} onChange={(event) => setPaymentForm({ ...paymentForm, datePaiement: event.target.value })} required /></Field>
+                                  <Field label="Numéro de pièce"><input style={styles.input} value={paymentForm.numeroPiece} maxLength={120} onChange={(event) => setPaymentForm({ ...paymentForm, numeroPiece: event.target.value })} /></Field>
+                                  <Field label="Compte banque / caisse"><select style={styles.input} value={paymentForm.compteTresorerieId} onChange={(event) => setPaymentForm({ ...paymentForm, compteTresorerieId: event.target.value })} required><option value="">Choisir un compte</option>{accounts.treasury.map((account) => <option key={account.id} value={account.id}>{account.numero} · {account.nom}</option>)}</select></Field>
+                                  <Field label="Compte de charge / actif"><select style={styles.input} value={paymentForm.compteChargeId} onChange={(event) => setPaymentForm({ ...paymentForm, compteChargeId: event.target.value })} required><option value="">Choisir un compte</option>{(accounts.expenseAccounts || []).map((account) => <option key={account.id} value={account.id}>{account.numero} · {account.nom}</option>)}</select></Field>
+                                  <button type="submit" style={styles.button} disabled={saving || !accounts.treasury.length || !accounts.expenseAccounts?.length}>{saving ? 'Enregistrement…' : 'Valider le paiement'}</button>
+                                </form>}
+                              </td>
+                            </tr>}
+                          </React.Fragment>;
+                        })}</tbody>
                       </table></div>}
+                    {(!accounts.treasury.length || !accounts.expenseAccounts?.length) && <div role="note" style={{ marginTop: 12, padding: 11, borderRadius: 8, background: '#fff7e6', color: '#805612', fontSize: 12 }}>Le paiement nécessite au moins un compte de trésorerie et un compte de classe 2 ou 6 dans le plan comptable.</div>}
                     <div style={{ fontSize: 12, color: '#687680', marginTop: 10 }}>Les dépenses restent dans leur module et leur workflow d’approbation. Les rattacher ne crée pas de seconde dépense.</div>
                   </section>
                 </section>
@@ -390,7 +493,10 @@ export function AssociationAccountingModule() {
                     <tbody>{[
                       ['Budget total approuvé', cash(selected.budgetTotal, selected.devise)],
                       ['Budget réparti', cash(report.totals.budgetLines, selected.devise)],
-                      ['Dépenses liées', cash(report.totals.spent, selected.devise)],
+                      ['Dépenses réellement payées', cash(report.totals.spent, selected.devise)],
+                      ['Engagements actifs', cash(report.totals.committed ?? 0, selected.devise)],
+                      ['Solde des dépenses à payer', cash(report.totals.unpaid ?? 0, selected.devise)],
+                      ['Dépenses en attente d’approbation', cash(report.totals.pendingApproval ?? 0, selected.devise)],
                       ['Financements engagés', cash(report.totals.pledged, selected.devise)],
                       ['Financements reçus et comptabilisés', cash(report.totals.received, selected.devise)],
                       ['Dépenses restant sous le budget total', cash(report.totals.budgetRemaining, selected.devise)],

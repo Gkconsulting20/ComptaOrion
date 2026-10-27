@@ -49,9 +49,9 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     }
     const origin=server ? `http://127.0.0.1:${server.address().port}` : 'https://test.local';
     let token;
-    async function api(path, method='GET', body, expected=200) {
+    async function api(path, method='GET', body, expected=200, extraHeaders={}) {
       const init = {
-        method, headers: { 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) },
+        method, headers: { 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) , ...extraHeaders },
         ...(body ? {body:JSON.stringify(body)} : {}),
       };
       const res=worker ? await worker.dispatchFetch(origin+'/api'+path,init) : await fetch(origin+'/api'+path,init);
@@ -120,6 +120,8 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const associationAccounts=await api('/associations/accounts');
     assert.ok(associationAccounts.treasury.length,'Comptes banque/caisse SYSCOHADA exposés');
     assert.ok(associationAccounts.grants.length,'Comptes de financement SYSCOHADA exposés');
+    assert.ok(associationAccounts.expenseAccounts.some(account=>/^6/.test(account.numero)),
+      'Comptes de charges proposés pour les paiements');
     const receipt=await api(`/associations/projects/${associationProject.id}/financings/${financing.id}/receipts`,'POST',{
       montant:2000,dateVersement:'2026-10-16',numeroPiece:'RECU-ASSO-01',
       compteTresorerieId:associationAccounts.treasury[0].id,
@@ -142,10 +144,42 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     });
     assert.equal(associatedExpense.projetId,associationProject.id,'La dépense ERP conserve son lien projet');
     const associationReport=await api(`/associations/projects/${associationProject.id}/report`);
-    assert.equal(Number(associationReport.totals.spent),1000);
+    assert.equal(Number(associationReport.totals.spent),0,'Une dépense en attente ne compte pas comme payée');
+    assert.equal(Number(associationReport.totals.committed),1000,'La dépense reste visible comme engagement');
+    assert.equal(Number(associationReport.totals.unpaid),1000,'Le solde dû est distinct des paiements');
     assert.equal(Number(associationReport.totals.received),2000);
     assert.equal(associationReport.expenses.length,1);
     assert.equal(associationReport.receipts.length,1);
+    const paymentPath=`/associations/projects/${associationProject.id}/expenses/${associatedExpense.id}/payments`;
+    const paymentBody={
+      montant:600,datePaiement:'2026-10-17',numeroPiece:'PAY-ASSO-01',
+      compteTresorerieId:associationAccounts.treasury[0].id,
+      compteChargeId:associationAccounts.expenseAccounts.find(account=>/^6/.test(account.numero)).id,
+    };
+    const paymentKey=`functional-payment-${randomUUID()}`;
+    const payment=await api(paymentPath,'POST',paymentBody,201,{'X-Idempotency-Key':paymentKey});
+    assert.equal(Number(payment.montantPaye),600);
+    assert.equal(Number(payment.soldeAPayer),400);
+    const { rows:[paymentBalance] }=await pool.query(
+      'SELECT COALESCE(SUM(debit),0) AS debit,COALESCE(SUM(credit),0) AS credit FROM lignes_ecriture WHERE ecriture_id=$1',
+      [payment.accountingEntry.id],
+    );
+    assert.equal(Number(paymentBalance.debit),600,'Le paiement débite le compte de charge');
+    assert.equal(Number(paymentBalance.credit),600,'Le paiement crédite la trésorerie');
+    await new Promise(resolve=>setTimeout(resolve,30));
+    const replay=await api(paymentPath,'POST',paymentBody,201,{'X-Idempotency-Key':paymentKey});
+    assert.equal(replay.payment.id,payment.payment.id,'La répétition idempotente ne crée pas un second paiement');
+    const partialReport=await api(`/associations/projects/${associationProject.id}/report`);
+    assert.equal(Number(partialReport.totals.spent),600);
+    assert.equal(Number(partialReport.totals.unpaid),400);
+    assert.equal(partialReport.expenses[0].statutPaiement,'partiellement_payee');
+    assert.equal(partialReport.expenses[0].paiements.length,1);
+    await api(paymentPath,'POST',{...paymentBody,montant:500,numeroPiece:'PAY-ASSO-OVER'},400);
+    await api(paymentPath,'POST',{...paymentBody,montant:400,datePaiement:'2026-10-18',numeroPiece:'PAY-ASSO-02'},201);
+    const settledReport=await api(`/associations/projects/${associationProject.id}/report`);
+    assert.equal(Number(settledReport.totals.spent),1000);
+    assert.equal(Number(settledReport.totals.unpaid),0);
+    assert.equal(settledReport.expenses[0].statutPaiement,'payee');
     const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5N0AAAAASUVORK5CYII=','base64');
     const form=new FormData();
     form.append('logo',new Blob([png],{type:'image/png'}),'recette.png');

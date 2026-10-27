@@ -1,5 +1,5 @@
 import express from 'express';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db.js';
 import {
   budgetsProjetsAssociatifs,
@@ -8,6 +8,7 @@ import {
   depenses,
   ecritures,
   financementsProjetsAssociatifs,
+  paiementsDepensesProjets,
   projetsAssociatifs,
   versementsFinancementsProjets,
 } from '../schema.js';
@@ -48,6 +49,20 @@ async function getProjectTotals(project, entrepriseId) {
       eq(depenses.entrepriseId, entrepriseId),
       sql`COALESCE(${depenses.statut}, '') NOT IN ('rejetée', 'rejetee', 'annulee', 'annulée')`,
     ));
+  const [payments] = await db.select({ total: sql`COALESCE(SUM(${paiementsDepensesProjets.montant}), 0)` })
+    .from(paiementsDepensesProjets)
+    .innerJoin(depenses, eq(paiementsDepensesProjets.depenseId, depenses.id))
+    .where(and(
+      eq(depenses.projetId, project.id),
+      eq(depenses.entrepriseId, entrepriseId),
+    ));
+  const [pendingExpenses] = await db.select({ total: sql`COALESCE(SUM(${depenses.montant}), 0)` })
+    .from(depenses)
+    .where(and(
+      eq(depenses.projetId, project.id),
+      eq(depenses.entrepriseId, entrepriseId),
+      sql`COALESCE(${depenses.statut}, '') IN ('en_attente', 'soumise')`,
+    ));
   const [pledges] = await db.select({ total: sql`COALESCE(SUM(${financementsProjetsAssociatifs.montantEngage}), 0)` })
     .from(financementsProjetsAssociatifs)
     .where(and(eq(financementsProjetsAssociatifs.projetId, project.id), eq(financementsProjetsAssociatifs.entrepriseId, entrepriseId)));
@@ -56,13 +71,17 @@ async function getProjectTotals(project, entrepriseId) {
     .innerJoin(financementsProjetsAssociatifs, eq(versementsFinancementsProjets.financementId, financementsProjetsAssociatifs.id))
     .where(and(eq(financementsProjetsAssociatifs.projetId, project.id), eq(financementsProjetsAssociatifs.entrepriseId, entrepriseId)));
   const budgetLines = Number(budgets.total);
-  const spent = Number(expenses.total);
+  const committed = Number(expenses.total);
+  const spent = Number(payments.total);
   return {
     budgetLines,
     spent,
+    committed,
+    unpaid: Math.max(0, committed - spent),
+    pendingApproval: Number(pendingExpenses.total),
     pledged: Number(pledges.total),
     received: Number(receivedForProject[0]?.total || 0),
-    budgetRemaining: Number(project.budgetTotal) - spent,
+    budgetRemaining: Number(project.budgetTotal) - committed,
     budgetAllocatedRemaining: Number(project.budgetTotal) - budgetLines,
   };
 }
@@ -161,6 +180,7 @@ router.get('/accounts', async (req, res) => {
     res.json({
       treasury: accounts.filter((account) => /^(51|52|53|54|55|57)/.test(account.numero)),
       grants: accounts.filter((account) => /^(13|14|71|74)/.test(account.numero)),
+      expenseAccounts: accounts.filter((account) => /^(2|6)/.test(account.numero)),
     });
   } catch (error) {
     console.error('Erreur comptes associatifs:', error.message);
@@ -209,8 +229,65 @@ router.get('/projects/:id/report', async (req, res) => {
         .where(and(eq(versementsFinancementsProjets.entrepriseId, req.entrepriseId), eq(financementsProjetsAssociatifs.projetId, project.id)))
         .orderBy(desc(versementsFinancementsProjets.dateVersement)),
     ]);
+    const expenseIds = expenses.map((expense) => expense.id);
+    const paymentRows = expenseIds.length
+      ? await db.select().from(paiementsDepensesProjets)
+        .where(and(
+          eq(paiementsDepensesProjets.entrepriseId, req.entrepriseId),
+          inArray(paiementsDepensesProjets.depenseId, expenseIds),
+        ))
+        .orderBy(desc(paiementsDepensesProjets.datePaiement))
+      : [];
+    const entryIds = [...new Set(paymentRows.map((payment) => payment.ecritureId))];
+    const accountIds = [...new Set(paymentRows.flatMap((payment) => [
+      payment.compteTresorerieId,
+      payment.compteChargeId,
+    ]))];
+    const [paymentEntries, paymentAccounts] = await Promise.all([
+      entryIds.length
+        ? db.select({ id: ecritures.id, numeroEcriture: ecritures.numeroEcriture })
+          .from(ecritures)
+          .where(and(eq(ecritures.entrepriseId, req.entrepriseId), inArray(ecritures.id, entryIds)))
+        : [],
+      accountIds.length
+        ? db.select({
+          id: comptesComptables.id,
+          numero: comptesComptables.numero,
+          nom: comptesComptables.nom,
+        }).from(comptesComptables)
+          .where(and(
+            eq(comptesComptables.entrepriseId, req.entrepriseId),
+            inArray(comptesComptables.id, accountIds),
+          ))
+        : [],
+    ]);
+    const entryNumbers = new Map(paymentEntries.map((entry) => [entry.id, entry.numeroEcriture]));
+    const accountNumbers = new Map(paymentAccounts.map((account) => [account.id, account.numero]));
+    const paymentsByExpense = new Map();
+    for (const payment of paymentRows) {
+      if (!paymentsByExpense.has(payment.depenseId)) paymentsByExpense.set(payment.depenseId, []);
+      paymentsByExpense.get(payment.depenseId).push({
+        id: payment.id,
+        montant: payment.montant,
+        datePaiement: payment.datePaiement,
+        numeroPiece: payment.numeroPiece,
+        ecritureNumero: entryNumbers.get(payment.ecritureId) || null,
+        compteTresorerieNumero: accountNumbers.get(payment.compteTresorerieId) || null,
+        compteChargeNumero: accountNumbers.get(payment.compteChargeId) || null,
+      });
+    }
+    const expensesWithPayments = expenses.map((expense) => {
+      const paiements = paymentsByExpense.get(expense.id) || [];
+      const montantPaye = paiements.reduce((total, payment) => total + Number(payment.montant), 0);
+      const rejected = ['rejetée', 'rejetee', 'annulee', 'annulée'].includes(String(expense.statut || '').toLowerCase());
+      const soldeAPayer = rejected ? 0 : Math.max(0, Number(expense.montant) - montantPaye);
+      const statutPaiement = rejected
+        ? 'annulee'
+        : soldeAPayer <= 0.005 ? 'payee' : montantPaye > 0 ? 'partiellement_payee' : 'non_payee';
+      return { ...expense, montantPaye, soldeAPayer, statutPaiement, paiements };
+    });
     const totals = await getProjectTotals(project, req.entrepriseId);
-    res.json({ project, totals, budgets, expenses, financings, receipts });
+    res.json({ project, totals, budgets, expenses: expensesWithPayments, financings, receipts });
   } catch (error) {
     console.error('Erreur rapport associatif:', error.message);
     res.status(500).json({ error: 'Impossible de charger le suivi du projet.' });
@@ -383,6 +460,135 @@ router.post('/projects/:id/expenses', async (req, res) => {
   } catch (error) {
     console.error('Erreur liaison dépense-projet:', error.message);
     res.status(500).json({ error: 'Impossible de rattacher cette dépense.' });
+  }
+});
+
+router.post('/projects/:id/expenses/:expenseId/payments', async (req, res) => {
+  const {
+    montant,
+    datePaiement,
+    numeroPiece,
+    compteTresorerieId,
+    compteChargeId,
+  } = req.body;
+  if (!safeId(req.params.id) || !safeId(req.params.expenseId) ||
+      !positiveAmount(montant) || !isoDate(datePaiement) ||
+      (numeroPiece && String(numeroPiece).length > 120) ||
+      !safeId(compteTresorerieId) || !safeId(compteChargeId)) {
+    return res.status(400).json({ error: 'Montant, date, pièce ou comptes du paiement invalides.' });
+  }
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [project] = await tx.select().from(projetsAssociatifs)
+        .where(and(
+          eq(projetsAssociatifs.id, Number(req.params.id)),
+          eq(projetsAssociatifs.entrepriseId, req.entrepriseId),
+        ))
+        .for('update')
+        .limit(1);
+      if (!project) return { status: 404, body: { error: 'Projet introuvable.' } };
+
+      const [expense] = await tx.select().from(depenses)
+        .where(and(
+          eq(depenses.id, Number(req.params.expenseId)),
+          eq(depenses.projetId, project.id),
+          eq(depenses.entrepriseId, req.entrepriseId),
+        ))
+        .for('update')
+        .limit(1);
+      if (!expense) return { status: 404, body: { error: 'Dépense introuvable dans ce projet.' } };
+      if (['rejetée', 'rejetee', 'annulee', 'annulée'].includes(String(expense.statut || '').toLowerCase())) {
+        return { status: 409, body: { error: 'Une dépense rejetée ou annulée ne peut pas être payée.' } };
+      }
+
+      const [alreadyPaid] = await tx.select({
+        total: sql`COALESCE(SUM(${paiementsDepensesProjets.montant}), 0)`,
+      }).from(paiementsDepensesProjets)
+        .where(and(
+          eq(paiementsDepensesProjets.depenseId, expense.id),
+          eq(paiementsDepensesProjets.entrepriseId, req.entrepriseId),
+        ));
+      const remaining = Number(expense.montant) - Number(alreadyPaid.total);
+      if (Number(montant) > remaining + 0.005) {
+        return {
+          status: 400,
+          body: { error: 'Le paiement dépasse le solde restant de la dépense.', montantRestant: Math.max(0, remaining) },
+        };
+      }
+
+      const [bank] = await tx.select().from(comptesComptables)
+        .where(and(
+          eq(comptesComptables.id, Number(compteTresorerieId)),
+          eq(comptesComptables.entrepriseId, req.entrepriseId),
+        ))
+        .limit(1);
+      const [charge] = await tx.select().from(comptesComptables)
+        .where(and(
+          eq(comptesComptables.id, Number(compteChargeId)),
+          eq(comptesComptables.entrepriseId, req.entrepriseId),
+        ))
+        .limit(1);
+      if (!bank || !/^(51|52|53|54|55|57)/.test(bank.numero) ||
+          !charge || !/^(2|6)/.test(charge.numero)) {
+        return { status: 400, body: { error: 'Choisissez un compte de trésorerie (51–57) et un compte de charge ou d’immobilisation (2 ou 6).' } };
+      }
+
+      const amount = Number(montant).toFixed(2);
+      const piece = String(numeroPiece || `${project.code}-D${expense.id}-PAY-${Date.now()}`).trim();
+      const journalCode = bank.numero.startsWith('57') ? 'CA' : 'BQ';
+      const entry = await createEcritureComptable({
+        entrepriseId: req.entrepriseId,
+        journalCode,
+        journalNom: bank.numero.startsWith('57') ? 'Journal de caisse - dépenses de projet' : 'Journal de banque - dépenses de projet',
+        journalType: bank.numero.startsWith('57') ? 'caisse' : 'banque',
+        dateEcriture: datePaiement,
+        libelle: `Paiement ${expense.description || 'dépense'} - ${project.code}`,
+        numeroPiece: piece,
+        lignes: [
+          {
+            compteComptableId: charge.id,
+            debit: amount,
+            credit: '0.00',
+            libelle: `Dépense ${project.code} - ${expense.description || ''}`,
+          },
+          {
+            compteComptableId: bank.id,
+            debit: '0.00',
+            credit: amount,
+            libelle: `Règlement ${project.code} - ${expense.description || ''}`,
+          },
+        ],
+        valide: true,
+        executor: tx,
+      });
+      await tx.update(ecritures).set({ userId: req.user.id }).where(eq(ecritures.id, entry.id));
+
+      const [payment] = await tx.insert(paiementsDepensesProjets).values({
+        entrepriseId: req.entrepriseId,
+        depenseId: expense.id,
+        montant: amount,
+        datePaiement,
+        numeroPiece: piece,
+        compteTresorerieId: bank.id,
+        compteChargeId: charge.id,
+        ecritureId: entry.id,
+        userId: req.user.id,
+      }).returning();
+      return {
+        status: 201,
+        body: {
+          payment,
+          accountingEntry: entry,
+          montantPaye: Number(alreadyPaid.total) + Number(amount),
+          soldeAPayer: Math.max(0, remaining - Number(amount)),
+        },
+      };
+    });
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'Cette pièce de paiement existe déjà.' });
+    console.error('Erreur paiement dépense associative:', error.message);
+    res.status(500).json({ error: 'Le paiement et son écriture comptable ont été annulés.' });
   }
 });
 

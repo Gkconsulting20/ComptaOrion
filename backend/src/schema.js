@@ -1189,6 +1189,23 @@ export const versementsFinancementsProjets = pgTable('versements_financements_pr
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+export const paiementsDepensesProjets = pgTable('paiements_depenses_projets', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  depenseId: integer('depense_id').references(() => depenses.id).notNull(),
+  montant: decimal('montant', { precision: 15, scale: 2 }).notNull(),
+  datePaiement: date('date_paiement').notNull(),
+  numeroPiece: varchar('numero_piece', { length: 120 }).notNull(),
+  compteTresorerieId: integer('compte_tresorerie_id').references(() => comptesComptables.id).notNull(),
+  compteChargeId: integer('compte_charge_id').references(() => comptesComptables.id).notNull(),
+  ecritureId: integer('ecriture_id').references(() => ecritures.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  numeroPieceUnique: uniqueIndex('paiements_depenses_projets_piece_unique').on(table.entrepriseId, table.numeroPiece),
+  ecritureUnique: uniqueIndex('paiements_depenses_projets_ecriture_unique').on(table.ecritureId),
+}));
+
 // Soldes comptables (cache)
 export const soldesComptes = pgTable('soldes_comptes', {
   id: serial('id').primaryKey(),

@@ -3,3 +3,4 @@
 - [Hébergement ERP](erp-hosting.md) — frontend et backend sur Cloudflare, PostgreSQL seul sur Render ; ni D1 ni service Web Render à créer.
 - [Authentification GitHub](github-auth.md) — l’état OAuth d’intégration ne prouve pas que les opérations Git sont autorisées.
 - [Runtime Cloudflare](cloudflare-runtime.md) — vérifier le runtime, SQL et R2, pas seulement le bundle ; migrer explicitement chaque base cible.
+- [Paiements associatifs](association-payments.md) — séparer dépenses engagées, paiements réels et approbation ; chaque paiement réel a son écriture équilibrée.
