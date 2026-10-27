@@ -17,7 +17,9 @@ export function ImpotsModule() {
     apiIdentifiant: '',
     apiCleSecrete: ''
   });
-  const [tvaResume, setTvaResume] = useState({ tvaCollectee: 0, tvaDeductible: 0, tvaADecaisser: 0 });
+  const [tvaResume, setTvaResume] = useState({ tvaCollectee: 0, tvaDeductible: 0, tvaADecaisser: 0, creditTVA: 0 });
+  const [resultatIS, setResultatIS] = useState({ produits: 0, charges: 0, resultatComptable: 0 });
+  const [taxFeedback, setTaxFeedback] = useState({ type: '', message: '' });
   const [periodeTVA, setPeriodeTVA] = useState({
     dateDebut: getPeriodeDates('annee').dateDebut,
     dateFin: getPeriodeDates('annee').dateFin
@@ -71,8 +73,10 @@ export function ImpotsModule() {
   useEffect(() => {
     if (activeTab === 'tva') {
       loadTVAResume();
+    } else if (activeTab === 'is') {
+      loadISResume();
     }
-  }, [activeTab, periodeTVA]);
+  }, [activeTab, periodeTVA.dateDebut, periodeTVA.dateFin]);
 
   const loadTVAResume = async () => {
     try {
@@ -83,10 +87,69 @@ export function ImpotsModule() {
       setTvaResume({
         tvaCollectee: res.tvaCollectee || 0,
         tvaDeductible: res.tvaDeductible || 0,
-        tvaADecaisser: res.tvaADecaisser || 0
+        tvaADecaisser: res.tvaADecaisser || 0,
+        creditTVA: res.creditTVA || 0
       });
     } catch (error) {
       console.error('Erreur chargement TVA:', error);
+    }
+  };
+
+  const loadISResume = async () => {
+    try {
+      const res = await api.get('/impots/is/resultat', {
+        dateDebut: periodeTVA.dateDebut,
+        dateFin: periodeTVA.dateFin
+      });
+      setResultatIS({
+        produits: res.produits || 0,
+        charges: res.charges || 0,
+        resultatComptable: res.resultatComptable || 0
+      });
+    } catch (error) {
+      console.error('Erreur chargement résultat comptable:', error);
+      setTaxFeedback({ type: 'error', message: error.message || 'Impossible de calculer le résultat comptable.' });
+    }
+  };
+
+  const preparerDeclarationTVA = async () => {
+    setTaxFeedback({ type: '', message: '' });
+    setLoading(true);
+    try {
+      const response = await api.post('/impots/declarations/tva', {
+        dateDebut: periodeTVA.dateDebut,
+        dateFin: periodeTVA.dateFin
+      });
+      setTaxFeedback({ type: 'success', message: response.message || 'Brouillon TVA enregistré.' });
+      const declarationsRes = await api.get('/impots/declarations');
+      setDeclarations(declarationsRes.data || []);
+    } catch (error) {
+      setTaxFeedback({ type: 'error', message: error.message || 'Impossible de préparer le brouillon TVA.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const enregistrerDepotManuel = async (declaration) => {
+    const numeroDeclaration = window.prompt('Référence de dépôt fournie par l’OTR :');
+    if (!numeroDeclaration?.trim()) return;
+    const dateDeclaration = window.prompt('Date réelle du dépôt (AAAA-MM-JJ) :', new Date().toISOString().slice(0, 10));
+    if (!dateDeclaration) return;
+
+    setTaxFeedback({ type: '', message: '' });
+    setLoading(true);
+    try {
+      const response = await api.post(`/impots/declarations/${declaration.id}/depot-manuel`, {
+        numeroDeclaration,
+        dateDeclaration
+      });
+      setTaxFeedback({ type: 'success', message: response.message || 'Dépôt manuel enregistré.' });
+      const declarationsRes = await api.get('/impots/declarations');
+      setDeclarations(declarationsRes.data || []);
+    } catch (error) {
+      setTaxFeedback({ type: 'error', message: error.message || 'Impossible d’enregistrer le dépôt manuel.' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -164,24 +227,41 @@ export function ImpotsModule() {
             <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Montant</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Statut</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Référence</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Enregistrée le</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Action</th>
           </tr>
         </thead>
         <tbody>
           {declarations.length === 0 ? (
             <tr>
-              <td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: '#7f8c8d' }}>
+              <td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#7f8c8d' }}>
                 Aucune déclaration enregistrée
               </td>
             </tr>
           ) : declarations.map(declaration => (
             <tr key={declaration.id}>
-              <td style={{ padding: '12px' }}>{declaration.periode || '—'}</td>
+              <td style={{ padding: '12px' }}>
+                {String(declaration.periode || '—').replace('..', ' au ')}
+              </td>
               <td style={{ padding: '12px' }}>{String(declaration.type || '—').toUpperCase()}</td>
-              <td style={{ padding: '12px' }}>{Number(declaration.montant || 0).toLocaleString('fr-FR')} XOF</td>
+              <td style={{ padding: '12px' }}>
+                {Number(declaration.montant || 0) < 0
+                  ? `Crédit ${Math.abs(Number(declaration.montant)).toLocaleString('fr-FR')} XOF`
+                  : `${Number(declaration.montant || 0).toLocaleString('fr-FR')} XOF`}
+              </td>
               <td style={{ padding: '12px' }}>{declaration.statut || '—'}</td>
+              <td style={{ padding: '12px' }}>{declaration.numeroDeclaration || '—'}</td>
               <td style={{ padding: '12px' }}>
                 {declaration.createdAt ? new Date(declaration.createdAt).toLocaleDateString('fr-FR') : '—'}
+              </td>
+              <td style={{ padding: '12px' }}>
+                {declaration.type === 'tva' && declaration.statut === 'brouillon' && (
+                  <button type="button" onClick={() => enregistrerDepotManuel(declaration)} disabled={loading}
+                    style={{ padding: '7px 10px', border: 0, borderRadius: 5, background: '#1976d2', color: '#fff', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                    Confirmer dépôt OTR
+                  </button>
+                )}
               </td>
             </tr>
           ))}
@@ -204,6 +284,14 @@ export function ImpotsModule() {
         />
         
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '15px' }} className="no-print">
+          <button
+            type="button"
+            onClick={preparerDeclarationTVA}
+            disabled={loading}
+            style={{ padding: '8px 16px', backgroundColor: loading ? '#95a5a6' : '#6c5ce7', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer' }}
+          >
+            {loading ? 'Préparation…' : 'Créer un brouillon TVA'}
+          </button>
           <button 
             onClick={() => {
               const printWindow = window.open('', '_blank');
@@ -306,9 +394,14 @@ export function ImpotsModule() {
         </div>
 
         <div role="status" style={{ backgroundColor: '#fff3cd', padding: '20px', borderRadius: '8px', marginTop: '20px', color: '#735515' }}>
-          <h4 style={{ marginTop: 0 }}>Déclaration officielle indisponible</h4>
+          <h4 style={{ marginTop: 0 }}>Préparation disponible — dépôt manuel uniquement</h4>
           <p style={{ marginBottom: 0 }}>
-            Le résumé ci-dessus est indicatif. ComptaOrion ne transmet pas encore de déclaration à une administration fiscale.
+            Le brouillon reprend les écritures des comptes 4431* et 4452* pour la période choisie. Vérifiez le régime, les pièces et les comptes avec votre comptable avant de le déposer vous-même sur le portail de l’OTR.
+          </p>
+          <p style={{ margin: '10px 0 0' }}>
+            <a href="https://www.otr.tg/index.php/fr/impots/reglementations-fiscales/code-general-des-impots/628-cahier-fiscal-2026.html" target="_blank" rel="noreferrer">
+              Consulter le Cahier fiscal 2026 de l’OTR
+            </a>
           </p>
         </div>
       </div>
@@ -317,10 +410,42 @@ export function ImpotsModule() {
 
   const renderIS = () => (
     <div>
-      <h3 style={{ marginBottom: '20px' }}>Impôt sur les Sociétés</h3>
-      <div role="status" style={{ padding: '20px', backgroundColor: '#fff3cd', borderRadius: '8px', color: '#735515' }}>
-        Le calcul de l’Impôt sur les Sociétés n’est pas disponible. Aucun taux ou montant affiché ici ne doit être utilisé pour une déclaration.
+      <h3 style={{ marginBottom: '8px' }}>Préparation des données pour l’Impôt sur les Sociétés</h3>
+      <p style={{ marginTop: 0, color: '#52606d' }}>
+        Ce relevé présente le résultat comptable de la période. Il ne calcule pas le bénéfice imposable ni l’impôt dû.
+      </p>
+      <PeriodFilter
+        dateDebut={periodeTVA.dateDebut}
+        dateFin={periodeTVA.dateFin}
+        onDateDebutChange={(val) => setPeriodeTVA({...periodeTVA, dateDebut: val})}
+        onDateFinChange={(val) => setPeriodeTVA({...periodeTVA, dateFin: val})}
+        onApply={loadISResume}
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, margin: '20px 0' }}>
+        {[
+          { title: 'Produits comptabilisés', value: resultatIS.produits, color: '#3498db' },
+          { title: 'Charges comptabilisées', value: resultatIS.charges, color: '#e67e22' },
+          { title: 'Résultat comptable avant retraitements', value: resultatIS.resultatComptable, color: resultatIS.resultatComptable >= 0 ? '#27ae60' : '#c0392b' }
+        ].map(card => (
+          <div key={card.title} style={{ padding: 18, borderRadius: 8, color: '#fff', background: card.color }}>
+            <div style={{ fontSize: 13 }}>{card.title}</div>
+            <strong style={{ display: 'block', marginTop: 8, fontSize: 22 }}>
+              {Number(card.value || 0).toLocaleString('fr-FR')} XOF
+            </strong>
+          </div>
+        ))}
       </div>
+      <div role="status" style={{ padding: 18, backgroundColor: '#fff3cd', borderRadius: 8, color: '#735515' }}>
+        <strong>Pas de calcul d’impôt automatique.</strong>
+        <p style={{ marginBottom: 0 }}>
+          Le résultat doit être retraité selon la forme juridique, le régime fiscal et les règles en vigueur. Aucun taux n’est présumé et aucun montant n’est à déposer tel quel. Faites valider la liasse par un professionnel fiscal avant tout dépôt.
+        </p>
+      </div>
+      <p style={{ marginTop: 12 }}>
+        <a href="https://www.otr.tg/index.php/fr/impots/reglementations-fiscales/code-general-des-impots/628-cahier-fiscal-2026.html" target="_blank" rel="noreferrer">
+          Référence officielle OTR — Cahier fiscal 2026
+        </a>
+      </p>
     </div>
   );
 
@@ -456,11 +581,25 @@ export function ImpotsModule() {
       </div>
 
       <div role="alert" style={{ backgroundColor: '#fff3cd', border: '1px solid #f0d58a', padding: '16px', borderRadius: '8px', marginBottom: '20px', color: '#735515' }}>
-        <strong>Module en préparation — les télédéclarations ne sont pas opérationnelles.</strong>
+        <strong>Préparation de brouillons disponible — aucune télédéclaration ni aucun paiement automatique.</strong>
         <p style={{ margin: '6px 0 0' }}>
-          Le résumé de TVA est indicatif. Aucune déclaration n’est transmise à une administration ; les anciennes déclarations peuvent provenir d’une simulation.
+          Les calculs utilisent les écritures comptables et doivent être vérifiés avant dépôt. Les anciennes déclarations peuvent provenir d’une simulation.
         </p>
       </div>
+      {taxFeedback.message && (
+        <div
+          role={taxFeedback.type === 'error' ? 'alert' : 'status'}
+          style={{
+            padding: '12px 16px',
+            borderRadius: 6,
+            marginBottom: 20,
+            color: taxFeedback.type === 'error' ? '#842029' : '#0f5132',
+            background: taxFeedback.type === 'error' ? '#f8d7da' : '#d1e7dd'
+          }}
+        >
+          {taxFeedback.message}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', borderBottom: '2px solid #ecf0f1', flexWrap: 'wrap' }}>
         {TABS.map(tab => (

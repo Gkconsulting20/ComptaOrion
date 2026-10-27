@@ -8,6 +8,7 @@ import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 import { formatPeriodeFR } from '../utils/dateUtils';
+import SupplierInvoiceOcr from './SupplierInvoiceOcr';
 
 function FacturationTab({ fournisseurs }) {
   const [subTab, setSubTab] = useState('stock');
@@ -25,6 +26,7 @@ function FacturationTab({ fournisseurs }) {
     numeroFactureFournisseur: '',
     dateFacture: new Date().toISOString().split('T')[0],
     dateEcheance: '',
+    montantTVA: '',
     lignes: [],
     coutsLogistiques: [],
     notes: ''
@@ -70,6 +72,7 @@ function FacturationTab({ fournisseurs }) {
       numeroFactureFournisseur: '',
       dateFacture: new Date().toISOString().split('T')[0],
       dateEcheance: '',
+      montantTVA: '',
       lignes: [],
       coutsLogistiques: [],
       notes: ''
@@ -158,6 +161,11 @@ function FacturationTab({ fournisseurs }) {
   };
 
   const submitFacture = async () => {
+    const totalTVA = Number(factureForm.montantTVA);
+    if (factureForm.montantTVA === '' || !Number.isFinite(totalTVA) || totalTVA < 0) {
+      alert('Saisissez la TVA indiquée sur la facture, ou 0 si elle est exonérée.');
+      return;
+    }
     setSubmitting(true);
     try {
       const payload = {
@@ -165,6 +173,7 @@ function FacturationTab({ fournisseurs }) {
         numeroFactureFournisseur: factureForm.numeroFactureFournisseur,
         dateFacture: factureForm.dateFacture,
         dateEcheance: factureForm.dateEcheance || null,
+        totalTVA,
         receptionsIds: selectedReceptions,
         lignes: factureForm.lignes.map(l => ({
           produitId: l.produitId,
@@ -192,6 +201,7 @@ function FacturationTab({ fournisseurs }) {
   };
 
   const totals = calculateTotals();
+  const totalTTC = totals.totalHT + (Number(factureForm.montantTVA) || 0);
 
   return (
     <div>
@@ -463,6 +473,12 @@ function FacturationTab({ fournisseurs }) {
                 </>
               )}
 
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '5px' }}>TVA figurant sur la facture (XOF) — 0 si exonérée *</label>
+                <input type="number" min="0" step="0.01" value={factureForm.montantTVA}
+                  onChange={(e) => setFactureForm(prev => ({ ...prev, montantTVA: e.target.value }))}
+                  style={{ width: '100%', maxWidth: 320, padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
+              </div>
               <div style={{ background: '#e8f5e9', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                   <span>Total Articles:</span>
@@ -475,6 +491,14 @@ function FacturationTab({ fournisseurs }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #4caf50', paddingTop: '10px' }}>
                   <span style={{ fontSize: '18px' }}>Total HT:</span>
                   <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{totals.totalHT.toLocaleString('fr-FR')} FCFA</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
+                  <span>TVA facturée:</span>
+                  <strong>{(Number(factureForm.montantTVA) || 0).toLocaleString('fr-FR')} FCFA</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                  <span style={{ fontSize: '18px' }}>Total TTC:</span>
+                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{totalTTC.toLocaleString('fr-FR')} FCFA</strong>
                 </div>
               </div>
 
@@ -907,7 +931,7 @@ export function GestionFournisseurs() {
       const [fournisseursRes, commandesRes, facturesRes] = await Promise.all([
         api.get('/fournisseurs'),
         api.get('/commandes-achat'),
-        api.get('/factures-fournisseurs').catch(() => ({ data: [] }))
+        api.get('/achats/factures').catch(() => ({ data: [] }))
       ]);
       setData({
         fournisseurs: fournisseursRes.data || [],
@@ -948,8 +972,9 @@ export function GestionFournisseurs() {
       setForm(item || { commandeId: '', dateReception: new Date().toISOString().split('T')[0], notes: '' });
     } else if (type === 'facture') {
       setForm(item || {
-        fournisseurId: '', numeroFacture: '', dateFacture: new Date().toISOString().split('T')[0],
-        dateEcheance: '', montantHT: 0, tva: 0, notes: ''
+        fournisseurId: '', numeroFactureFournisseur: '', dateFacture: new Date().toISOString().split('T')[0],
+        dateEcheance: '', description: 'Facture fournisseur (à détailler)', montantHT: '',
+        montantTVA: '', montantTTC: '', notes: ''
       });
     } else if (type === 'paiement') {
       setForm(item || {
@@ -983,7 +1008,27 @@ export function GestionFournisseurs() {
       } else if (type === 'reception') {
         await api.post('/receptions', form);
       } else if (type === 'facture') {
-        await api.post('/factures-fournisseurs', form);
+        const montantHT = Number(form.montantHT);
+        const montantTVA = Number(form.montantTVA || 0);
+        const montantTTC = form.montantTTC === '' || form.montantTTC === undefined
+          ? montantHT + montantTVA
+          : Number(form.montantTTC);
+        await api.post('/achats/factures', {
+          fournisseurId: Number(form.fournisseurId),
+          numeroFactureFournisseur: String(form.numeroFactureFournisseur || '').trim(),
+          dateFacture: form.dateFacture,
+          dateEcheance: form.dateEcheance || null,
+          totalHT: montantHT,
+          totalTVA: montantTVA,
+          totalTTC: montantTTC,
+          items: [{
+            description: String(form.description || 'Facture fournisseur').trim(),
+            quantite: 1,
+            prixUnitaire: montantHT,
+            remise: 0
+          }],
+          notes: form.notes || null
+        });
       } else if (type === 'paiement') {
         await api.post('/paiements-fournisseurs', form);
       } else if (type === 'taxe' || type === 'codeComptable') {
@@ -1000,17 +1045,27 @@ export function GestionFournisseurs() {
     if (!confirm('Convertir cette commande en facture ?')) return;
     try {
       const fournisseur = commande.fournisseur;
+      const totalHT = Number(commande.commande?.totalHT || 0);
+      const totalTVA = Number(commande.commande?.montantTVA || 0);
+      const totalTTC = Number(commande.commande?.totalTTC || (totalHT + totalTVA));
       const factureData = {
         fournisseurId: fournisseur?.id,
-        numeroFacture: `F-${commande.commande?.numeroCommande}`,
+        numeroFactureFournisseur: `F-${commande.commande?.numeroCommande}`,
         dateFacture: new Date().toISOString().split('T')[0],
         dateEcheance: new Date(Date.now() + (fournisseur?.delaiPaiement || 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        montantHT: commande.commande?.totalHT || 0,
-        tva: 18,
-        notes: `Facture générée depuis commande ${commande.commande?.numeroCommande}`
+        totalHT,
+        totalTVA,
+        totalTTC,
+        items: [{
+          description: `Commande ${commande.commande?.numeroCommande || ''}`,
+          quantite: 1,
+          prixUnitaire: totalHT,
+          remise: 0
+        }],
+        notes: `Brouillon créé depuis la commande ${commande.commande?.numeroCommande || ''}; vérifier la facture fournisseur.`
       };
-      await api.post('/factures-fournisseurs', factureData);
-      alert('Commande convertie en facture avec succès!');
+      await api.post('/achats/factures', factureData);
+      alert('Brouillon de facture créé depuis la commande. Vérifiez les montants avant validation.');
       loadAllData();
     } catch (error) {
       alert('Erreur: ' + error.message);
@@ -1189,9 +1244,29 @@ export function GestionFournisseurs() {
             <h3>🧾 Factures Fournisseurs</h3>
             <Button onClick={() => openModal('facture')}>+ Nouvelle Facture</Button>
           </div>
-          <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
-            <p style={{ color: '#7f8c8d', margin: 0 }}>Aucune facture enregistrée</p>
-          </div>
+          {data.factures.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px', color: '#52606d' }}>
+              Aucune facture fournisseur enregistrée.
+            </div>
+          ) : (
+            <Table
+              columns={[
+                { key: 'numeroFacture', label: 'N° Compta' },
+                { key: 'numeroFactureFournisseur', label: 'N° fournisseur' },
+                { key: 'fournisseur', label: 'Fournisseur', render: value => value?.nom || '—' },
+                { key: 'dateFacture', label: 'Date' },
+                { key: 'totalHT', label: 'HT', render: value => `${Number(value || 0).toLocaleString('fr-FR')} XOF` },
+                { key: 'totalTVA', label: 'TVA', render: value => `${Number(value || 0).toLocaleString('fr-FR')} XOF` },
+                { key: 'totalTTC', label: 'TTC', render: value => `${Number(value || 0).toLocaleString('fr-FR')} XOF` },
+                { key: 'statut', label: 'Statut', render: value => value === 'brouillon' ? 'Brouillon — à vérifier' : value }
+              ]}
+              data={data.factures}
+              actions={false}
+            />
+          )}
+          <p style={{ marginTop: 12, color: '#52606d', fontSize: 13 }}>
+            Les factures importées sont enregistrées en brouillon. Elles ne créent pas d’écriture comptable ni de mouvement de stock à ce stade.
+          </p>
         </div>
       )}
 
@@ -1376,7 +1451,7 @@ export function GestionFournisseurs() {
           modal.type === 'taxe' ? (modal.item ? 'Modifier Taxe' : 'Nouvelle Taxe') :
           modal.type === 'codeComptable' ? (modal.item ? 'Modifier Code' : 'Nouveau Code Comptable') : ''
         }
-        size={modal.type === 'commande' ? 'xlarge' : 'large'}
+        size={modal.type === 'commande' || modal.type === 'facture' ? 'xlarge' : 'large'}
       >
         <form onSubmit={handleSubmit}>
           {modal.type === 'fournisseur' && (
@@ -1478,26 +1553,69 @@ export function GestionFournisseurs() {
 
           {modal.type === 'facture' && (
             <>
+              {!modal.item && (
+                <SupplierInvoiceOcr
+                  onExtract={(extracted) => setForm(current => {
+                    const montantHT = extracted.montantHT == null ? current.montantHT : String(extracted.montantHT);
+                    const montantTVA = extracted.montantTVA == null ? current.montantTVA : String(extracted.montantTVA);
+                    return {
+                      ...current,
+                      numeroFactureFournisseur: extracted.numeroFactureFournisseur || current.numeroFactureFournisseur,
+                      dateFacture: extracted.dateFacture || current.dateFacture,
+                      montantHT,
+                      montantTVA,
+                      montantTTC: extracted.montantTTC == null
+                        ? (montantHT !== '' && montantTVA !== '' ? String(Number(montantHT) + Number(montantTVA)) : current.montantTTC)
+                        : String(extracted.montantTTC)
+                    };
+                  })}
+                />
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <FormField label="Fournisseur" name="fournisseurId" type="select" value={form.fournisseurId}
                   onChange={(e) => setForm({...form, fournisseurId: e.target.value})}
                   options={data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))} required />
-                <FormField label="N° Facture" name="numeroFacture" value={form.numeroFacture}
-                  onChange={(e) => setForm({...form, numeroFacture: e.target.value})} required />
+                <FormField label="N° facture fournisseur" name="numeroFactureFournisseur" value={form.numeroFactureFournisseur}
+                  onChange={(e) => setForm({...form, numeroFactureFournisseur: e.target.value})} required />
                 <FormField label="Date Facture" name="dateFacture" type="date" value={form.dateFacture}
                   onChange={(e) => setForm({...form, dateFacture: e.target.value})} required />
                 <FormField label="Date Échéance" name="dateEcheance" type="date" value={form.dateEcheance}
                   onChange={(e) => setForm({...form, dateEcheance: e.target.value})} />
-                <FormField label="Montant HT" name="montantHT" type="number" value={form.montantHT}
-                  onChange={(e) => setForm({...form, montantHT: parseFloat(e.target.value)})} required />
-                <FormField label="TVA (%)" name="tva" type="number" value={form.tva}
-                  onChange={(e) => setForm({...form, tva: parseFloat(e.target.value)})} />
+                <FormField label="Montant HT (XOF)" name="montantHT" type="number" value={form.montantHT}
+                  onChange={(e) => {
+                    const montantHT = e.target.value;
+                    setForm(current => ({
+                      ...current,
+                      montantHT,
+                      montantTTC: montantHT !== '' && current.montantTVA !== ''
+                        ? String(Number(montantHT) + Number(current.montantTVA))
+                        : current.montantTTC
+                    }));
+                  }} required />
+                <FormField label="Montant TVA (XOF)" name="montantTVA" type="number" value={form.montantTVA}
+                  onChange={(e) => {
+                    const montantTVA = e.target.value;
+                    setForm(current => ({
+                      ...current,
+                      montantTVA,
+                      montantTTC: montantTVA !== '' && current.montantHT !== ''
+                        ? String(Number(current.montantHT) + Number(montantTVA))
+                        : current.montantTTC
+                    }));
+                  }} />
+                <FormField label="Montant TTC (XOF)" name="montantTTC" type="number" value={form.montantTTC}
+                  onChange={(e) => setForm({...form, montantTTC: e.target.value})} required />
               </div>
+              <FormField label="Libellé résumé de la facture" name="description" value={form.description}
+                onChange={(e) => setForm({...form, description: e.target.value})} required />
               <FormField label="Notes" name="notes" value={form.notes}
                 onChange={(e) => setForm({...form, notes: e.target.value})} />
+              <p style={{ color: '#52606d', fontSize: 13 }}>
+                Vérifiez les montants extraits. La facture sera enregistrée comme brouillon, sans envoi de la photo ni écriture automatique.
+              </p>
               <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-                <Button type="submit" variant="success">Enregistrer</Button>
+                <Button type="submit" variant="success">Enregistrer le brouillon</Button>
               </div>
             </>
           )}

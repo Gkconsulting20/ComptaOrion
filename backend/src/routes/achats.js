@@ -168,6 +168,9 @@ router.post('/factures', async (req, res) => {
       dateFacture,
       dateEcheance,
       items,
+      totalHT: totalHTDeclare,
+      totalTVA: totalTVADeclare,
+      totalTTC: totalTTCDeclare,
       notes
     } = req.body;
 
@@ -179,11 +182,43 @@ router.post('/factures', async (req, res) => {
       });
     }
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Au moins un article est obligatoire'
       });
+    }
+
+    const lignesNormalisees = [];
+    for (const item of items) {
+      const quantite = Number(item.quantite);
+      const prixUnitaire = Number(item.prixUnitaire);
+      const remise = Number(item.remise || 0);
+      const description = String(item.description || '').trim();
+      if (!description || !Number.isFinite(quantite) || quantite <= 0 ||
+          !Number.isFinite(prixUnitaire) || prixUnitaire < 0 ||
+          !Number.isFinite(remise) || remise < 0 || remise > 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Chaque ligne doit avoir une description, une quantité positive, un prix valide et une remise entre 0 et 100 %.'
+        });
+      }
+
+      const produitId = item.produitId ? Number(item.produitId) : null;
+      if (produitId !== null) {
+        if (!Number.isSafeInteger(produitId) || produitId <= 0) {
+          return res.status(400).json({ success: false, message: 'Produit invalide.' });
+        }
+        const [produit] = await db
+          .select({ id: produits.id })
+          .from(produits)
+          .where(and(eq(produits.id, produitId), eq(produits.entrepriseId, req.entrepriseId)))
+          .limit(1);
+        if (!produit) {
+          return res.status(400).json({ success: false, message: 'Un produit de la facture n’appartient pas à cette entreprise.' });
+        }
+      }
+      lignesNormalisees.push({ ...item, produitId, description, quantite, prixUnitaire, remise });
     }
 
     // Vérifier que le fournisseur existe
@@ -205,21 +240,46 @@ router.post('/factures', async (req, res) => {
       });
     }
 
+    const numeroExterne = String(numeroFactureFournisseur || '').trim();
+    if (numeroExterne) {
+      const [duplicate] = await db
+        .select({ id: facturesAchat.id })
+        .from(facturesAchat)
+        .where(and(
+          eq(facturesAchat.entrepriseId, req.entrepriseId),
+          eq(facturesAchat.fournisseurId, Number(fournisseurId)),
+          eq(facturesAchat.numeroFactureFournisseur, numeroExterne)
+        ))
+        .limit(1);
+      if (duplicate) {
+        return res.status(409).json({
+          success: false,
+          message: 'Cette facture fournisseur est déjà enregistrée pour ce fournisseur.'
+        });
+      }
+    }
+
     // Générer numéro de facture
     const numeroFacture = await genererNumeroFactureAchat(req.entrepriseId);
 
     // Calculer les totaux
-    let totalHT = 0;
-    for (const item of items) {
-      const quantite = parseFloat(item.quantite);
-      const prixUnitaire = parseFloat(item.prixUnitaire);
-      const remise = parseFloat(item.remise || 0);
-      const totalLigne = quantite * prixUnitaire * (1 - remise / 100);
-      totalHT += totalLigne;
+    const totalHTCalcule = lignesNormalisees.reduce(
+      (sum, item) => sum + item.quantite * item.prixUnitaire * (1 - item.remise / 100),
+      0
+    );
+    const totalHT = totalHTDeclare === undefined ? totalHTCalcule : Number(totalHTDeclare);
+    const totalTVA = totalTVADeclare === undefined ? 0 : Number(totalTVADeclare);
+    const totalTTC = totalTTCDeclare === undefined ? totalHT + totalTVA : Number(totalTTCDeclare);
+    if (!Number.isFinite(totalHT) || totalHT <= 0 ||
+        !Number.isFinite(totalTVA) || totalTVA < 0 ||
+        !Number.isFinite(totalTTC) || totalTTC <= 0 ||
+        Math.abs(totalHT - totalHTCalcule) > 1 ||
+        Math.abs(totalTTC - (totalHT + totalTVA)) > 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Les montants HT, TVA et TTC doivent être positifs et cohérents. Vérifiez les lignes et les totaux de la facture.'
+      });
     }
-
-    const totalTVA = totalHT * 0.18;
-    const totalTTC = totalHT + totalTVA;
 
     // Créer la facture
     const [newFacture] = await db
@@ -227,7 +287,7 @@ router.post('/factures', async (req, res) => {
       .values({
         entrepriseId: req.entrepriseId,
         numeroFacture,
-        numeroFactureFournisseur: numeroFactureFournisseur || null,
+        numeroFactureFournisseur: numeroExterne || null,
         fournisseurId: parseInt(fournisseurId),
         commandeId: commandeId ? parseInt(commandeId) : null,
         statut: 'brouillon',
@@ -244,16 +304,16 @@ router.post('/factures', async (req, res) => {
       .returning();
 
     // Créer les lignes de facture
-    const itemsToInsert = items.map(item => {
-      const quantite = parseFloat(item.quantite);
-      const prixUnitaire = parseFloat(item.prixUnitaire);
-      const remise = parseFloat(item.remise || 0);
+    const itemsToInsert = lignesNormalisees.map(item => {
+      const quantite = item.quantite;
+      const prixUnitaire = item.prixUnitaire;
+      const remise = item.remise;
       const totalLigne = quantite * prixUnitaire * (1 - remise / 100);
 
       return {
         entrepriseId: req.entrepriseId,
         factureId: newFacture.id,
-        produitId: item.produitId ? parseInt(item.produitId) : null,
+        produitId: item.produitId,
         description: item.description,
         quantite: quantite.toString(),
         prixUnitaire: prixUnitaire.toFixed(2),
@@ -673,6 +733,7 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       receptionsIds, // Array des IDs de bons de réception à rapprocher
       lignes, // Lignes avec coûts réels: { produitId, quantite, prixUnitaireReel, description }
       coutsLogistiques, // Coûts logistiques réels: { type, montantReel, description }
+      totalTVA: totalTVADeclare,
       notes
     } = req.body;
 
@@ -682,6 +743,13 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     }
     if (!receptionsIds || receptionsIds.length === 0) {
       return res.status(400).json({ success: false, message: 'Au moins une réception à rapprocher est obligatoire' });
+    }
+    if (totalTVADeclare === undefined || totalTVADeclare === null || String(totalTVADeclare).trim() === '') {
+      return res.status(400).json({ success: false, message: 'Saisissez la TVA figurant sur la facture; saisissez 0 si elle est exonérée.' });
+    }
+    const totalTVA = Number(totalTVADeclare);
+    if (!Number.isFinite(totalTVA) || totalTVA < 0) {
+      return res.status(400).json({ success: false, message: 'Le montant de TVA doit être un nombre positif ou nul.' });
     }
 
     // Vérifier que le fournisseur existe
@@ -730,7 +798,6 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     });
 
     const totalHT = totalArticlesHT + totalLogistique;
-    const totalTVA = totalHT * 0.18;
     const totalTTC = totalHT + totalTVA;
 
     // Créer la facture

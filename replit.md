@@ -90,7 +90,7 @@ It offers a modern, responsive platform for managing accounting, inventory, cust
 -   **Frontend:** React 18 + Vite 5
 -   **Database:** PostgreSQL + Drizzle ORM
 -   **Authentication:** JWT + Refresh Tokens
--   **AI:** OpenAI Integration
+-   **AI:** Integration retained but disabled (`AI_ENABLED=false`); keep AI features hidden until the user considers the project tested and profitable.
 
 ### Design Principles
 -   **UI/UX:** QuickBooks-inspired design (fixed Sidebar/Topbar, icons, 100% French localization), mobile-first, adaptive layouts. Interactive tables for detailed views.

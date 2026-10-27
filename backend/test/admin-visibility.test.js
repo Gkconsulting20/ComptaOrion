@@ -20,15 +20,18 @@ test('les modules avancés et les APIs globales sont réservés à l’administr
   assert.match(securityRoutes, /router\.put\('\/permissions\/:permissionId', authMiddleware, saasAdminOnly/);
 });
 
-test('les actions fiscales simulées ne peuvent pas créer de fausses déclarations', async () => {
+test('le module fiscal crée des brouillons sans prétendre déposer ou payer', async () => {
   const routes = await read('../src/routes/impots.js');
   const frontend = await read('../../frontend/src/modules/ImpotsModule.jsx');
 
   assert.match(routes, /router\.post\('\/parametres\/tester-connexion', \(_req, res\) => res\.status\(501\)/);
-  assert.match(routes, /router\.post\('\/declarations\/tva', \(_req, res\) => res\.status\(501\)/);
   assert.match(routes, /router\.post\('\/declarations\/:id\/payer', \(_req, res\) => res\.status\(501\)/);
-  assert.match(frontend, /Module en préparation — les télédéclarations ne sont pas opérationnelles/);
-  assert.match(frontend, /Le calcul de l’Impôt sur les Sociétés n’est pas disponible/);
+  assert.match(routes, /router\.post\('\/declarations\/tva', async \(req, res\) =>/);
+  assert.match(routes, /statut: 'brouillon'/);
+  assert.match(routes, /Aucun dépôt ni paiement n’a été effectué/);
+  assert.match(routes, /router\.post\('\/declarations\/:id\/depot-manuel', async \(req, res\) =>/);
+  assert.match(frontend, /Préparation de brouillons disponible — aucune télédéclaration ni aucun paiement automatique/);
+  assert.match(frontend, /ne calcule pas le bénéfice imposable ni l’impôt dû/);
   assert.doesNotMatch(frontend, /testerConnexion|declarerTVA/);
 });
 
