@@ -5,6 +5,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import emailService from '../services/emailService.js';
 import { createEcritureFactureVente, createEcriturePaiementClient } from '../services/comptabiliteService.js';
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -445,6 +446,16 @@ router.post('/', async (req, res) => {
         executor: tx
       });
       if (!ecriture) throw new Error('Configurez les comptes clients, ventes et TVA avant de facturer');
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'factures',
+        recordId: newFacture.id,
+        nouvelleValeur: { facture: newFacture, items: factureItemsData, ecritureId: ecriture.id },
+        description: `Facture créée: ${numeroFacture}`,
+        executor: tx,
+        required: true
+      });
       return newFacture;
     });
 
@@ -605,6 +616,35 @@ router.post('/:id/paiement', async (req, res) => {
         executor: tx
       });
       if (!ecriture) throw new Error('Configurez les comptes de trésorerie et clients avant de payer');
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'paiements',
+        recordId: newPaiement.id,
+        nouvelleValeur: { paiement: newPaiement, factureId: factureData.id, ecritureId: ecriture.id },
+        description: `Paiement ${montantPaiement.toFixed(2)} enregistré pour la facture ${factureData.numeroFacture}`,
+        executor: tx,
+        required: true
+      });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'factures',
+        recordId: factureData.id,
+        ancienneValeur: {
+          montantPaye: factureData.montantPaye,
+          soldeRestant: factureData.soldeRestant,
+          statut: factureData.statut
+        },
+        nouvelleValeur: {
+          montantPaye: nouveauMontantPaye.toFixed(2),
+          soldeRestant: Math.max(0, nouveauSoldeRestant).toFixed(2),
+          statut: nouveauStatut
+        },
+        description: `Paiement reçu pour la facture ${factureData.numeroFacture}`,
+        executor: tx,
+        required: true
+      });
 
       return {
         paiement: newPaiement,
@@ -661,6 +701,11 @@ router.put('/:id', async (req, res) => {
         message: 'Facture non trouvée',
       });
     }
+    const existingItems = await db.select().from(factureItems)
+      .where(and(
+        eq(factureItems.factureId, parseInt(id)),
+        eq(factureItems.entrepriseId, req.entrepriseId)
+      ));
 
     let updateData = {
       updatedAt: new Date(),
@@ -787,6 +832,22 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    const updatedItems = await db.select().from(factureItems)
+      .where(and(
+        eq(factureItems.factureId, parseInt(id)),
+        eq(factureItems.entrepriseId, req.entrepriseId)
+      ));
+    await logAudit({
+      ...extractAuditInfo(req),
+      action: 'UPDATE',
+      table: 'factures',
+      recordId: parseInt(id),
+      ancienneValeur: { facture: existingFacture, items: existingItems },
+      nouvelleValeur: { facture: updatedFacture, items: updatedItems },
+      description: `Facture modifiée: ${updatedFacture.numeroFacture}`,
+      required: false
+    });
+
     res.json({
       success: true,
       message: 'Facture mise à jour avec succès',
@@ -809,50 +870,44 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Vérifier que la facture existe
-    const [existingFacture] = await db
-      .select()
-      .from(factures)
-      .where(and(
+    await db.transaction(async (tx) => {
+      const [existingFacture] = await tx.select().from(factures).where(and(
         eq(factures.id, parseInt(id)),
         eq(factures.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+      )).limit(1);
+      if (!existingFacture) {
+        throw Object.assign(new Error('Facture non trouvée'), { status: 404 });
+      }
 
-    if (!existingFacture) {
-      return res.status(404).json({
-        success: false,
-        message: 'Facture non trouvée',
+      const [paiement] = await tx.select().from(paiements).where(and(
+        eq(paiements.factureId, parseInt(id)),
+        eq(paiements.entrepriseId, req.entrepriseId)
+      )).limit(1);
+      if (paiement) {
+        throw Object.assign(new Error('Impossible de supprimer une facture qui a des paiements enregistrés'), { status: 400 });
+      }
+
+      const items = await tx.select().from(factureItems).where(and(
+        eq(factureItems.factureId, parseInt(id)),
+        eq(factureItems.entrepriseId, req.entrepriseId)
+      ));
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'DELETE',
+        table: 'factures',
+        recordId: parseInt(id),
+        ancienneValeur: { facture: existingFacture, items },
+        description: `Facture supprimée: ${existingFacture.numeroFacture}`,
+        executor: tx,
+        required: true
       });
-    }
 
-    // Vérifier qu'il n'y a pas de paiements
-    const [paiement] = await db
-      .select()
-      .from(paiements)
-      .where(eq(paiements.factureId, parseInt(id)))
-      .limit(1);
-
-    if (paiement) {
-      return res.status(400).json({
-        success: false,
-        message: 'Impossible de supprimer une facture qui a des paiements enregistrés',
-      });
-    }
-
-    // Supprimer les lignes de facture
-    await db
-      .delete(factureItems)
-      .where(eq(factureItems.factureId, parseInt(id)));
-
-    // Supprimer la facture
-    await db
-      .delete(factures)
-      .where(and(
+      await tx.delete(factureItems).where(eq(factureItems.factureId, parseInt(id)));
+      await tx.delete(factures).where(and(
         eq(factures.id, parseInt(id)),
         eq(factures.entrepriseId, req.entrepriseId)
       ));
+    });
 
     res.json({
       success: true,
@@ -860,7 +915,7 @@ router.delete('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur DELETE /api/factures/:id:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: 'Erreur lors de la suppression de la facture',
       error: error.message,

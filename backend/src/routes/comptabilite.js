@@ -2,9 +2,10 @@ import express from 'express';
 import { db } from '../db.js';
 import { 
   plansComptables, comptes, comptesComptables, journaux, ecritures, lignesEcritures, 
-  soldesComptes, auditLogs, entreprises 
+  soldesComptes, entreprises
 } from '../schema.js';
 import { eq, and, desc, gte, lte, sum, sql } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -1488,30 +1489,36 @@ router.post('/plans', async (req, res) => {
 
 router.post('/comptes', async (req, res) => {
   try {
-    const { entrepriseId, numero, nom, categorie, sousCategorie, devise, userId, ipAddress } = req.body;
+    const entrepriseId = req.entrepriseId;
+    const { numero, nom, categorie, sousCategorie, devise } = req.body;
+    if (!entrepriseId) return res.status(400).json({ error: 'Entreprise non identifiée' });
 
-    const compte = await db.insert(comptes).values({
-      entrepriseId: parseInt(entrepriseId),
-      numero,
-      nom,
-      categorie, // Actif, Passif, Capitaux propres, Charges, Produits
-      sousCategorie,
-      devise: devise || 'XOF',
-      solde: 0,
-      actif: true
-    }).returning();
+    const compte = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(comptes).values({
+        entrepriseId: Number(entrepriseId),
+        numero,
+        nom,
+        categorie,
+        sousCategorie,
+        devise: devise || 'XOF',
+        solde: 0,
+        actif: true
+      }).returning();
 
-    await db.insert(auditLogs).values({
-      entrepriseId: parseInt(entrepriseId),
-      userId,
-      action: 'CREATE',
-      table: 'comptes',
-      recordId: compte[0].id,
-      description: `Compte créé: ${numero} - ${nom}`,
-      ipAddress
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'comptes',
+        recordId: created.id,
+        nouvelleValeur: created,
+        description: `Compte créé: ${numero} - ${nom}`,
+        executor: tx,
+        required: true
+      });
+      return created;
     });
 
-    res.json(compte[0]);
+    res.json(compte);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1644,7 +1651,7 @@ router.get('/journaux', async (req, res) => {
 
 router.post('/ecritures', async (req, res) => {
   try {
-    const entrepriseId = req.entrepriseId || parseInt(req.body.entrepriseId);
+    const entrepriseId = req.entrepriseId;
     const { journalId, dateEcriture, reference, description, lignes } = req.body;
 
     if (!entrepriseId) {
@@ -1655,12 +1662,10 @@ router.post('/ecritures', async (req, res) => {
     }
 
     // Valider que le journal appartient à l'entreprise
-    const journal = await db.query.journaux.findFirst({
-      where: and(
-        eq(journaux.id, parseInt(journalId)),
-        eq(journaux.entrepriseId, entrepriseId)
-      )
-    });
+    const [journal] = await db.select().from(journaux).where(and(
+      eq(journaux.id, parseInt(journalId)),
+      eq(journaux.entrepriseId, entrepriseId)
+    )).limit(1);
     if (!journal) {
       return res.status(400).json({ error: 'Journal non trouvé ou n\'appartient pas à l\'entreprise' });
     }
@@ -1682,47 +1687,47 @@ router.post('/ecritures', async (req, res) => {
       }
     }
 
-    const [ecriture] = await db.insert(ecritures).values({
-      entrepriseId,
-      journalId: parseInt(journalId),
-      dateEcriture: new Date(dateEcriture),
-      reference,
-      description,
-      valide: false,
-      totalDebit: '0',
-      totalCredit: '0'
-    }).returning();
+    const ecriture = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(ecritures).values({
+        entrepriseId: Number(entrepriseId),
+        journalId: parseInt(journalId),
+        dateEcriture: new Date(dateEcriture),
+        numeroPiece: reference || null,
+        libelle: description || null,
+        userId: req.user?.id || req.userId || null,
+        valide: false
+      }).returning();
 
-    // Si des lignes sont fournies, les créer
-    if (lignes && lignes.length > 0) {
-      for (const l of lignes) {
-        await db.insert(lignesEcritures).values({
-          entrepriseId,
-          ecritureId: ecriture.id,
-          compteComptableId: parseInt(l.compteComptableId),
-          debit: l.debit || '0',
-          credit: l.credit || '0',
-          libelle: l.libelle || description
-        });
-      }
+      const lignesCreees = lignes?.length
+        ? await tx.insert(lignesEcritures).values(lignes.map((ligne) => ({
+            entrepriseId: Number(entrepriseId),
+            ecritureId: created.id,
+            compteComptableId: parseInt(ligne.compteComptableId),
+            debit: ligne.debit || '0',
+            credit: ligne.credit || '0',
+            libelle: ligne.libelle || description || null
+          }))).returning()
+        : [];
+      const totalDebit = lignesCreees.reduce((sum, ligne) => sum + Number(ligne.debit || 0), 0);
+      const totalCredit = lignesCreees.reduce((sum, ligne) => sum + Number(ligne.credit || 0), 0);
 
-      // Mettre à jour les totaux
-      const totalDebit = lignes.reduce((acc, l) => acc + parseFloat(l.debit || 0), 0);
-      const totalCredit = lignes.reduce((acc, l) => acc + parseFloat(l.credit || 0), 0);
-      await db.update(ecritures)
-        .set({ totalDebit: String(totalDebit), totalCredit: String(totalCredit) })
-        .where(eq(ecritures.id, ecriture.id));
-      ecriture.totalDebit = String(totalDebit);
-      ecriture.totalCredit = String(totalCredit);
-    }
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'ecritures',
+        recordId: created.id,
+        nouvelleValeur: {
+          ecriture: created,
+          lignes: lignesCreees,
+          totalDebit,
+          totalCredit
+        },
+        description: `Écriture créée: ${reference || created.numeroPiece || created.id} - Journal: ${journal.code}`,
+        executor: tx,
+        required: true
+      });
 
-    await db.insert(auditLogs).values({
-      entrepriseId,
-      userId: req.userId,
-      action: 'CREATE',
-      table: 'ecritures',
-      recordId: ecriture.id,
-      description: `Écriture créée: ${reference} - Journal: ${journal.code}`
+      return { ...created, totalDebit, totalCredit };
     });
 
     res.status(201).json(ecriture);
@@ -1782,91 +1787,86 @@ router.get('/ecritures', async (req, res) => {
 // Valider une écriture (passer de brouillon à validée)
 router.post('/ecritures/:id/valider', async (req, res) => {
   try {
-    const entrepriseId = req.entrepriseId || parseInt(req.body.entrepriseId);
+    const entrepriseId = req.entrepriseId;
     const { id } = req.params;
 
     if (!entrepriseId) {
       return res.status(400).json({ error: 'entrepriseId requis' });
     }
 
-    // Vérifier que l'écriture existe et appartient à l'entreprise
-    const ecriture = await db.query.ecritures.findFirst({
-      where: and(
+    const validation = await db.transaction(async (tx) => {
+      const [ecriture] = await tx.select().from(ecritures).where(and(
         eq(ecritures.id, parseInt(id)),
-        eq(ecritures.entrepriseId, entrepriseId)
-      )
-    });
+        eq(ecritures.entrepriseId, Number(entrepriseId))
+      )).limit(1);
+      if (!ecriture) throw Object.assign(new Error('Écriture non trouvée'), { status: 404 });
+      if (ecriture.valide) throw Object.assign(new Error('L\'écriture est déjà validée'), { status: 400 });
 
-    if (!ecriture) {
-      return res.status(404).json({ error: 'Écriture non trouvée' });
-    }
+      const lignes = await tx.select().from(lignesEcritures).where(and(
+        eq(lignesEcritures.ecritureId, parseInt(id)),
+        eq(lignesEcritures.entrepriseId, Number(entrepriseId))
+      ));
+      const totalDebit = lignes.reduce((sum, ligne) => sum + Number(ligne.debit || 0), 0);
+      const totalCredit = lignes.reduce((sum, ligne) => sum + Number(ligne.credit || 0), 0);
+      if (Math.abs(totalDebit - totalCredit) > 0.01) {
+        throw Object.assign(new Error('L\'écriture n\'est pas équilibrée et ne peut pas être validée'), {
+          status: 400,
+          totalDebit,
+          totalCredit,
+          difference: totalDebit - totalCredit
+        });
+      }
 
-    if (ecriture.valide) {
-      return res.status(400).json({ error: 'L\'écriture est déjà validée' });
-    }
-
-    // Vérifier l'équilibre
-    const lignes = await db.query.lignesEcritures.findMany({
-      where: eq(lignesEcritures.ecritureId, parseInt(id))
-    });
-
-    let totalDebit = 0, totalCredit = 0;
-    lignes.forEach(l => {
-      totalDebit += parseFloat(l.debit || 0);
-      totalCredit += parseFloat(l.credit || 0);
-    });
-
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      return res.status(400).json({ 
-        error: 'L\'écriture n\'est pas équilibrée et ne peut pas être validée',
-        totalDebit,
-        totalCredit,
-        difference: totalDebit - totalCredit
-      });
-    }
-
-    // Générer le numéro d'écriture
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const journal = await db.query.journaux.findFirst({
-      where: eq(journaux.id, ecriture.journalId)
-    });
-    
-    const countResult = await db.execute(sql`
-      SELECT COUNT(*) as count FROM ecritures 
-      WHERE entreprise_id = ${entrepriseId} 
-      AND valide = true 
-      AND EXTRACT(YEAR FROM date_ecriture) = ${year}
-    `);
-    const count = parseInt(countResult.rows[0]?.count || 0) + 1;
-    const numeroEcriture = `${journal?.code || 'EC'}-${year}${month}-${String(count).padStart(5, '0')}`;
-
-    // Valider l'écriture
-    const [updated] = await db.update(ecritures)
-      .set({ 
-        valide: true, 
+      const [journal] = await tx.select().from(journaux).where(and(
+        eq(journaux.id, ecriture.journalId),
+        eq(journaux.entrepriseId, Number(entrepriseId))
+      )).limit(1);
+      const year = new Date().getFullYear();
+      const month = String(new Date().getMonth() + 1).padStart(2, '0');
+      const countResult = await tx.execute(sql`
+        SELECT COUNT(*) as count FROM ecritures
+        WHERE entreprise_id = ${entrepriseId}
+          AND valide = true
+          AND EXTRACT(YEAR FROM date_ecriture) = ${year}
+      `);
+      const count = parseInt(countResult.rows[0]?.count || 0) + 1;
+      const numeroEcriture = `${journal?.code || 'EC'}-${year}${month}-${String(count).padStart(5, '0')}`;
+      const [updated] = await tx.update(ecritures).set({
+        valide: true,
         numeroEcriture,
-        totalDebit: String(totalDebit),
-        totalCredit: String(totalCredit)
-      })
-      .where(eq(ecritures.id, parseInt(id)))
-      .returning();
+        updatedAt: new Date()
+      }).where(and(
+        eq(ecritures.id, parseInt(id)),
+        eq(ecritures.entrepriseId, Number(entrepriseId))
+      )).returning();
 
-    await db.insert(auditLogs).values({
-      entrepriseId,
-      userId: req.userId,
-      action: 'UPDATE',
-      table: 'ecritures',
-      recordId: parseInt(id),
-      description: `Écriture validée: ${numeroEcriture}`
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'ecritures',
+        recordId: parseInt(id),
+        ancienneValeur: { ecriture, lignes },
+        nouvelleValeur: { ecriture: updated, lignes, totalDebit, totalCredit },
+        description: `Écriture validée: ${numeroEcriture}`,
+        executor: tx,
+        required: true
+      });
+      return { ecriture: updated, totalDebit, totalCredit };
     });
 
     res.json({ 
       message: 'Écriture validée avec succès',
-      ecriture: updated
+      ecriture: validation.ecriture,
+      totalDebit: validation.totalDebit,
+      totalCredit: validation.totalCredit
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({
+      error: error.message,
+      totalDebit: error.totalDebit,
+      totalCredit: error.totalCredit,
+      difference: error.difference
+    });
   }
 });
 
@@ -1876,7 +1876,7 @@ router.post('/ecritures/:id/valider', async (req, res) => {
 
 router.post('/lignes', async (req, res) => {
   try {
-    const entrepriseId = req.entrepriseId || parseInt(req.body.entrepriseId);
+    const entrepriseId = req.entrepriseId;
     const { ecritureId, compteComptableId, debit, credit, libelle } = req.body;
 
     if (!entrepriseId) {
@@ -1897,73 +1897,69 @@ router.post('/lignes', async (req, res) => {
       return res.status(400).json({ error: 'Une ligne doit avoir soit un débit soit un crédit (pas les deux)' });
     }
 
-    // Vérifier que l'écriture existe et appartient à l'entreprise
-    const ecriture = await db.query.ecritures.findFirst({
-      where: and(
+    const result = await db.transaction(async (tx) => {
+      const [ecriture] = await tx.select().from(ecritures).where(and(
         eq(ecritures.id, parseInt(ecritureId)),
-        eq(ecritures.entrepriseId, entrepriseId)
-      )
-    });
-    if (!ecriture) {
-      return res.status(404).json({ error: 'Écriture non trouvée' });
-    }
-    if (ecriture.valide) {
-      return res.status(400).json({ error: 'Impossible d\'ajouter une ligne à une écriture validée' });
-    }
+        eq(ecritures.entrepriseId, Number(entrepriseId))
+      )).limit(1);
+      if (!ecriture) throw Object.assign(new Error('Écriture non trouvée'), { status: 404 });
+      if (ecriture.valide) {
+        throw Object.assign(new Error('Impossible d\'ajouter une ligne à une écriture validée'), { status: 400 });
+      }
 
-    // Vérifier que le compte appartient à l'entreprise
-    const compte = await db.query.comptesComptables.findFirst({
-      where: and(
+      const [compte] = await tx.select().from(comptesComptables).where(and(
         eq(comptesComptables.id, parseInt(compteComptableId)),
-        eq(comptesComptables.entrepriseId, entrepriseId)
-      )
+        eq(comptesComptables.entrepriseId, Number(entrepriseId))
+      )).limit(1);
+      if (!compte) throw Object.assign(new Error('Compte comptable non trouvé'), { status: 400 });
+
+      const [ligne] = await tx.insert(lignesEcritures).values({
+        entrepriseId: Number(entrepriseId),
+        ecritureId: parseInt(ecritureId),
+        compteComptableId: parseInt(compteComptableId),
+        debit: debit || '0',
+        credit: credit || '0',
+        libelle: libelle || ''
+      }).returning();
+
+      const allLignes = await tx.select().from(lignesEcritures).where(and(
+        eq(lignesEcritures.ecritureId, parseInt(ecritureId)),
+        eq(lignesEcritures.entrepriseId, Number(entrepriseId))
+      ));
+      const totalDebit = allLignes.reduce((sum, line) => sum + Number(line.debit || 0), 0);
+      const totalCredit = allLignes.reduce((sum, line) => sum + Number(line.credit || 0), 0);
+      await tx.update(ecritures).set({ updatedAt: new Date() }).where(and(
+        eq(ecritures.id, parseInt(ecritureId)),
+        eq(ecritures.entrepriseId, Number(entrepriseId))
+      ));
+
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'lignes_ecriture',
+        recordId: ligne.id,
+        nouvelleValeur: { ligne, ecritureId: parseInt(ecritureId), totalDebit, totalCredit },
+        description: `Ligne ajoutée à l’écriture ${ecriture.numeroPiece || ecriture.numeroEcriture || ecriture.id}`,
+        executor: tx,
+        required: true
+      });
+
+      const equilibre = Math.abs(totalDebit - totalCredit) < 0.01;
+      return { ligne, totalDebit, totalCredit, equilibre };
     });
-    if (!compte) {
-      return res.status(400).json({ error: 'Compte comptable non trouvé' });
-    }
-
-    const [ligne] = await db.insert(lignesEcritures).values({
-      entrepriseId,
-      ecritureId: parseInt(ecritureId),
-      compteComptableId: parseInt(compteComptableId),
-      debit: debit || '0',
-      credit: credit || '0',
-      libelle: libelle || ''
-    }).returning();
-
-    // Mettre à jour totaux de l'écriture
-    const allLignes = await db.query.lignesEcritures.findMany({
-      where: eq(lignesEcritures.ecritureId, parseInt(ecritureId))
-    });
-
-    let totalDebit = 0, totalCredit = 0;
-    allLignes.forEach(l => {
-      totalDebit += parseFloat(l.debit || 0);
-      totalCredit += parseFloat(l.credit || 0);
-    });
-
-    // Stocker les totaux comme décimaux (le schéma utilise decimal)
-    await db.update(ecritures).set({
-      totalDebit: String(totalDebit),
-      totalCredit: String(totalCredit)
-    }).where(eq(ecritures.id, parseInt(ecritureId)));
-
-    const equilibre = Math.abs(totalDebit - totalCredit) < 0.01;
-
-    // Retourner la ligne avec les totaux numériques et status d'équilibre
     res.status(201).json({
-      ...ligne,
-      debit: parseFloat(ligne.debit || 0),
-      credit: parseFloat(ligne.credit || 0),
-      ecritureTotaux: { 
-        totalDebit, 
-        totalCredit, 
-        equilibre,
-        message: equilibre ? 'Écriture équilibrée' : `Écart de ${Math.abs(totalDebit - totalCredit).toFixed(2)}`
+      ...result.ligne,
+      debit: Number(result.ligne.debit || 0),
+      credit: Number(result.ligne.credit || 0),
+      ecritureTotaux: {
+        totalDebit: result.totalDebit,
+        totalCredit: result.totalCredit,
+        equilibre: result.equilibre,
+        message: result.equilibre ? 'Écriture équilibrée' : `Écart de ${Math.abs(result.totalDebit - result.totalCredit).toFixed(2)}`
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -2011,61 +2007,85 @@ router.get('/lignes/:ecritureId', async (req, res) => {
 // VALIDATION & MODIFICATION
 // ==========================================
 
-router.post('/ecritures/:id/valider', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const ecriture = await db.query.ecritures.findFirst({
-      where: eq(ecritures.id, parseInt(id))
-    });
-
-    if (!ecriture) return res.status(404).json({ error: 'Écriture non trouvée' });
-
-    // Vérifier l'équilibre (débit = crédit)
-    if (parseFloat(ecriture.totalDebit) !== parseFloat(ecriture.totalCredit)) {
-      return res.status(400).json({ error: 'Écriture non équilibrée', debit: ecriture.totalDebit, credit: ecriture.totalCredit });
-    }
-
-    const updated = await db.update(ecritures).set({
-      statut: 'validée'
-    }).where(eq(ecritures.id, parseInt(id))).returning();
-
-    res.json(updated[0]);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 router.put('/ecritures/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { dateEcriture, reference, description, userId } = req.body;
+    const { dateEcriture, reference, description } = req.body;
+    const entrepriseId = req.entrepriseId;
+    if (!entrepriseId) return res.status(400).json({ error: 'Entreprise non identifiée' });
 
-    const updated = await db.update(ecritures).set({
-      dateEcriture: dateEcriture ? new Date(dateEcriture) : undefined,
-      reference,
-      description
-    }).where(eq(ecritures.id, parseInt(id))).returning();
+    const updated = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(ecritures).where(and(
+        eq(ecritures.id, parseInt(id)),
+        eq(ecritures.entrepriseId, Number(entrepriseId))
+      )).limit(1);
+      if (!existing) throw Object.assign(new Error('Écriture non trouvée'), { status: 404 });
 
-    res.json(updated[0]);
+      const [result] = await tx.update(ecritures).set({
+        dateEcriture: dateEcriture ? new Date(dateEcriture) : undefined,
+        numeroPiece: reference,
+        libelle: description,
+        updatedAt: new Date()
+      }).where(and(
+        eq(ecritures.id, parseInt(id)),
+        eq(ecritures.entrepriseId, Number(entrepriseId))
+      )).returning();
+
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'ecritures',
+        recordId: parseInt(id),
+        ancienneValeur: existing,
+        nouvelleValeur: result,
+        description: `Écriture modifiée: ${result.numeroPiece || result.numeroEcriture || id}`,
+        executor: tx,
+        required: true
+      });
+      return result;
+    });
+
+    res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 router.delete('/ecritures/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId, ipAddress } = req.body;
+    const entrepriseId = req.entrepriseId;
+    if (!entrepriseId) return res.status(400).json({ error: 'Entreprise non identifiée' });
 
-    // Supprimer les lignes d'abord
-    await db.delete(lignesEcritures).where(eq(lignesEcritures.ecritureId, parseInt(id)));
+    await db.transaction(async (tx) => {
+      const [ecriture] = await tx.select().from(ecritures).where(and(
+        eq(ecritures.id, parseInt(id)),
+        eq(ecritures.entrepriseId, Number(entrepriseId))
+      )).limit(1);
+      if (!ecriture) throw Object.assign(new Error('Écriture non trouvée'), { status: 404 });
 
-    // Puis l'écriture
-    await db.delete(ecritures).where(eq(ecritures.id, parseInt(id)));
+      const lignes = await tx.select().from(lignesEcritures)
+        .where(eq(lignesEcritures.ecritureId, parseInt(id)));
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'DELETE',
+        table: 'ecritures',
+        recordId: parseInt(id),
+        ancienneValeur: { ecriture, lignes },
+        description: `Écriture supprimée: ${ecriture.numeroPiece || ecriture.numeroEcriture || id}`,
+        executor: tx,
+        required: true
+      });
 
+      await tx.delete(lignesEcritures).where(eq(lignesEcritures.ecritureId, parseInt(id)));
+      await tx.delete(ecritures).where(and(
+        eq(ecritures.id, parseInt(id)),
+        eq(ecritures.entrepriseId, Number(entrepriseId))
+      ));
+    });
     res.json({ message: 'Écriture supprimée' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -3070,20 +3090,20 @@ router.post('/cloture-exercice', async (req, res) => {
     }
 
     // Enregistrer dans l'audit log
-    await db.insert(auditLogs).values({
-      entrepriseId,
-      userId: req.userId,
+    await logAudit({
+      ...extractAuditInfo(req),
       action: 'CLOTURE_EXERCICE',
-      entite: 'exercice',
-      entiteId: annee.toString(),
-      details: JSON.stringify({
+      table: 'ecritures',
+      nouvelleValeur: {
         annee,
         resultatNet,
         typeResultat: estBenefice ? 'benefice' : 'perte',
         compteResultat: compteResultatNumero,
         ecritureCloture: numeroEcritureCloture,
         ecritureOuverture: numeroEcritureOuverture
-      })
+      },
+      description: `Clôture de l'exercice ${annee}`,
+      required: false
     });
 
     res.json({

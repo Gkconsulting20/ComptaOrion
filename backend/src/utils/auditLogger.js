@@ -17,31 +17,46 @@ import { auditLogs } from '../schema.js';
  */
 export async function logAudit({
   entrepriseId,
-  userId = 1, // ID par défaut si pas d'auth
+  userId = null,
   action,
   table,
   recordId,
   ancienneValeur = null,
   nouvelleValeur = null,
+  oldValues = null,
+  newValues = null,
   description,
   ipAddress = null,
-  userAgent = null
+  userAgent = null,
+  executor = db,
+  required = false
 }) {
   try {
-    await db.insert(auditLogs).values({
-      entrepriseId: parseInt(entrepriseId),
-      userId: userId ? parseInt(userId) : 1,
+    const tenantId = Number(entrepriseId);
+    if (!Number.isSafeInteger(tenantId) || tenantId <= 0) {
+      throw new Error('Entreprise manquante pour écrire la piste d’audit.');
+    }
+
+    const actorId = userId ? Number(userId) : null;
+    const previousValue = ancienneValeur ?? oldValues;
+    const nextValue = nouvelleValeur ?? newValues;
+    const [entry] = await executor.insert(auditLogs).values({
+      entrepriseId: tenantId,
+      userId: Number.isSafeInteger(actorId) && actorId > 0 ? actorId : null,
       action,
       tableName: table,
-      recordId: recordId ? parseInt(recordId) : null,
-      ancienneValeur: ancienneValeur ? JSON.stringify(ancienneValeur) : null,
-      nouvelleValeur: nouvelleValeur ? JSON.stringify(nouvelleValeur) : null,
+      recordId: recordId ? Number(recordId) : null,
+      ancienneValeur: previousValue == null ? null : JSON.stringify(previousValue),
+      nouvelleValeur: nextValue == null ? null : JSON.stringify(nextValue),
       description,
       ipAddress,
       userAgent
-    });
+    }).returning();
+    return entry;
   } catch (error) {
     console.error('Erreur lors de l\'enregistrement de l\'audit:', error);
+    if (required) throw error;
+    return null;
   }
 }
 
@@ -52,8 +67,8 @@ export async function logAudit({
  */
 export function extractAuditInfo(req) {
   return {
-    entrepriseId: req.entrepriseId || req.query.entrepriseId || req.body.entrepriseId || 1,
-    userId: req.user?.id || req.body.userId || 1,
+    entrepriseId: req.entrepriseId,
+    userId: req.user?.id || req.userId || null,
     ipAddress: req.ip || req.connection?.remoteAddress || null,
     userAgent: req.headers['user-agent'] || null
   };

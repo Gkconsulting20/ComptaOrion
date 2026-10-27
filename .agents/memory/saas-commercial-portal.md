@@ -8,3 +8,9 @@ L’Espace commercial sert à gérer la commercialisation du logiciel ComptaOrio
 **Why:** l’utilisateur a précisé que le portail sert à commercialiser le logiciel lui-même.
 
 **How to apply:** traiter le portail commercial comme un espace de gestion des ventes de ComptaOrion et conserver son authentification séparée de celle de l’ERP.
+
+Trois utilisateurs est une capacité fréquente à considérer pour un forfait, mais l’offre commerciale complète reste à revoir.
+
+**Why:** l’utilisateur a indiqué que le nombre d’utilisateurs est souvent de trois et qu’il souhaite revenir sur l’offre commerciale plus tard.
+
+**How to apply:** considérer trois utilisateurs comme une référence provisoire pour les nouveaux forfaits, sans modifier les offres existantes ni figer la tarification avant la revue commerciale.

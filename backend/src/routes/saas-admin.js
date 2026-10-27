@@ -248,9 +248,17 @@ router.get('/plans', async (req, res) => {
 router.post('/plans', async (req, res) => {
   try {
     const data = req.body;
+    const rawUserLimit = data.limiteUtilisateurs;
+    const limiteUtilisateurs = rawUserLimit === undefined || rawUserLimit === null || rawUserLimit === ''
+      ? 3
+      : Number(rawUserLimit);
+    if (!Number.isSafeInteger(limiteUtilisateurs) || limiteUtilisateurs < 1) {
+      return res.status(400).json({ error: 'La limite utilisateurs doit être un entier supérieur à zéro.' });
+    }
 
     const [plan] = await db.insert(plansAbonnement).values({
       ...data,
+      limiteUtilisateurs,
       actif: true
     }).returning();
 

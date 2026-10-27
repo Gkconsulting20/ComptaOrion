@@ -1291,7 +1291,7 @@ export const plansAbonnement = pgTable('plans_abonnement', {
   prix: decimal('prix', { precision: 10, scale: 2 }).notNull(),
   devise: varchar('devise', { length: 10 }).default('EUR'),
   periode: varchar('periode', { length: 50 }).default('mensuel'), // mensuel, annuel
-  limiteUtilisateurs: integer('limite_utilisateurs').default(5),
+  limiteUtilisateurs: integer('limite_utilisateurs').default(3),
   limiteEntreprises: integer('limite_entreprises').default(1),
   stockageGb: integer('stockage_gb').default(10),
   supportEmail: boolean('support_email').default(true),

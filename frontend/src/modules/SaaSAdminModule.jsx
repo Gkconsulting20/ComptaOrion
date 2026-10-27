@@ -71,7 +71,9 @@ export function SaaSAdminModule() {
 
   const openModal = async (type, data = {}) => {
     setModalType(type);
-    setFormData(data);
+    setFormData(type === 'plans' && !data.id
+      ? { limiteUtilisateurs: 3, ...data }
+      : data);
     setShowModal(true);
     
     if (type === 'abonnements') {
@@ -753,6 +755,8 @@ export function SaaSAdminModule() {
                   placeholder="Limite utilisateurs"
                   value={formData.limiteUtilisateurs || ''}
                   onChange={(e) => setFormData({ ...formData, limiteUtilisateurs: e.target.value })}
+                  min="1"
+                  step="1"
                   style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
                 />
                 <input
