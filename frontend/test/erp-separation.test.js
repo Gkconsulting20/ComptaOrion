@@ -28,6 +28,22 @@ test('l’IA reste cachée sans activation explicite', async () => {
   assert.match(source, /case 'ia-assistant': return AI_ENABLED \?/);
 });
 
+test('les fonctions comptables centrales restent dans la navigation', async () => {
+  const source = await read('../src/App.jsx');
+  for (const moduleId of ['clients', 'fournisseurs', 'tresorerie', 'stock', 'comptabilite', 'associations']) {
+    assert.match(source, new RegExp(`id: '${moduleId}'`));
+  }
+  assert.doesNotMatch(source, /id: 'paie'/);
+});
+
+test('les fonctions avancées sont filtrées selon les rôles', async () => {
+  const source = await read('../src/App.jsx');
+  assert.match(source, /requiresSuperAdmin: true, requiresAdmin: true/);
+  assert.match(source, /id: 'integrations'.*requiresAdmin: true/);
+  assert.match(source, /id: 'authentication'.*requiresSuperAdmin: true, requiresAdmin: true/);
+  assert.match(source, /const isAdmin = user\?\.role === 'admin'/);
+});
+
 test('l’inscription publique utilise l’API du même domaine et bloque sans forfait actif', async () => {
   const source = await read('../src/pages/Inscription.jsx');
   assert.doesNotMatch(source, /localhost:3000|VITE_API_URL/);

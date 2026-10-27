@@ -147,9 +147,10 @@ export function saasAdminOnly(req, res, next) {
     return res.status(401).json({ error: 'Non authentifié' });
   }
   
-  // Vérifier que l'utilisateur a le rôle admin
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Accès refusé. Rôle administrateur requis.' });
+  // Les données SaaS sont globales : seul l'administrateur de la plateforme
+  // (entreprise ComptaOrion) peut les consulter ou les modifier.
+  if (req.user.role !== 'admin' || Number(req.user.entrepriseId) !== 1) {
+    return res.status(403).json({ error: 'Accès réservé à l’administrateur principal de ComptaOrion.' });
   }
   
   next();

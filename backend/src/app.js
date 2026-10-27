@@ -32,7 +32,7 @@ import integrationsRoutes from './routes/integrations.js';
 import importRoutes from './routes/import.js';
 import devisesRoutes from './routes/devises.js';
 import associationAccountingRoutes from './routes/association-accounting.js';
-import { authMiddleware, entrepriseIsolation, saasAdminOnly } from './auth.js';
+import { authMiddleware, entrepriseIsolation, saasAdminOnly, requireRole } from './auth.js';
 import { createTenantMiddleware } from './utils/rlsPolicies.js';
 import { idempotencyMiddleware } from './middleware/idempotency.js';
 import path from 'path';
@@ -154,7 +154,7 @@ app.use('/api/ia', iaAssistantRoutes);
 app.use('/api/impots', impotsRoutes);
 
 // Module Intégrations & Sauvegardes
-app.use('/api/integrations', integrationsRoutes);
+app.use('/api/integrations', requireRole('admin'), integrationsRoutes);
 
 // Module Import de données externes (QuickBooks, Sage, etc.)
 app.use('/api/import', importRoutes);

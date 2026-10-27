@@ -25,19 +25,19 @@ const AI_ENABLED = import.meta.env.VITE_AI_ENABLED === 'true';
 
 const ALL_MODULES = [
   { id: 'dashboard', label: 'Tableau de Bord', icon: '📊', requiresSuperAdmin: false },
-  { id: 'saas-admin', label: 'Admin SaaS', icon: '🎯', requiresSuperAdmin: true },
+  { id: 'saas-admin', label: 'Admin SaaS', icon: '🎯', requiresSuperAdmin: true, requiresAdmin: true },
   { id: 'clients', label: 'Clients', icon: '👥', requiresSuperAdmin: false },
   { id: 'fournisseurs', label: 'Fournisseurs', icon: '🏭', requiresSuperAdmin: false },
   { id: 'tresorerie', label: 'Trésorerie', icon: '💰', requiresSuperAdmin: false },
   { id: 'stock', label: 'Stock', icon: '📦', requiresSuperAdmin: false },
   { id: 'comptabilite', label: 'Comptabilité', icon: '📖', requiresSuperAdmin: false },
   { id: 'associations', label: 'Comptabilité associations', icon: '🤝', requiresAssociationAccess: true },
-  { id: 'impots', label: 'Impôts', icon: '🏛️', requiresSuperAdmin: false },
-  { id: 'integrations', label: 'Intégrations', icon: '🔗', requiresSuperAdmin: false },
+  { id: 'impots', label: 'Impôts (en préparation)', icon: '🏛️', requiresSuperAdmin: false },
+  { id: 'integrations', label: 'Intégrations', icon: '🔗', requiresSuperAdmin: false, requiresAdmin: true },
   ...(AI_ENABLED
     ? [{ id: 'ia-assistant', label: 'Assistant IA', icon: '🤖', requiresSuperAdmin: false }]
     : []),
-  { id: 'authentication', label: 'Authentification', icon: '🔐', requiresSuperAdmin: false },
+  { id: 'authentication', label: 'Authentification & sécurité', icon: '🔐', requiresSuperAdmin: true, requiresAdmin: true },
   { id: 'parametres', label: 'Paramètres', icon: '⚙️', requiresSuperAdmin: false }
 ];
 
@@ -82,10 +82,12 @@ export default function App() {
 
   // Filtrer les modules selon les permissions
   // Super Admin = entrepriseId === 1 (ComptaOrion lui-même)
-  const isSuperAdmin = user?.entrepriseId === 1;
+  const isAdmin = user?.role === 'admin';
+  const isSuperAdmin = isAdmin && Number(user?.entrepriseId) === 1;
   const associationAccess = ['admin', 'accountant', 'manager'].includes(user?.role);
   const MODULES = ALL_MODULES.filter(m =>
     (!m.requiresSuperAdmin || isSuperAdmin) &&
+    (!m.requiresAdmin || isAdmin) &&
     (!m.requiresAssociationAccess || associationAccess)
   );
 

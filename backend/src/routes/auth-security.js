@@ -2,7 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import crypto from 'crypto';
 import { users, sessions, auditConnexions, passwordResetTokens, permissions } from '../schema.js';
-import { generateToken, generateRefreshToken, verifyRefreshToken, hashPassword, comparePassword, authMiddleware } from '../auth.js';
+import { generateToken, generateRefreshToken, verifyRefreshToken, hashPassword, comparePassword, authMiddleware, saasAdminOnly } from '../auth.js';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 
 const router = express.Router();
@@ -311,7 +311,7 @@ router.delete('/sessions/:sessionId', authMiddleware, async (req, res) => {
 // PERMISSIONS RBAC
 // ==========================================
 
-router.get('/permissions', authMiddleware, async (req, res) => {
+router.get('/permissions', authMiddleware, saasAdminOnly, async (req, res) => {
   try {
     const allPermissions = await db.query.permissions.findMany();
     
@@ -343,7 +343,7 @@ router.get('/permissions', authMiddleware, async (req, res) => {
   }
 });
 
-router.put('/permissions/:permissionId', authMiddleware, async (req, res) => {
+router.put('/permissions/:permissionId', authMiddleware, saasAdminOnly, async (req, res) => {
   try {
     const { canRead, canWrite, canDelete, canAdmin } = req.body;
     const permId = parseInt(req.params.permissionId);
