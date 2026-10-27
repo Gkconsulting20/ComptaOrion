@@ -4,3 +4,4 @@
 - [Authentification GitHub](github-auth.md) — l’état OAuth d’intégration ne prouve pas que les opérations Git sont autorisées.
 - [Runtime Cloudflare](cloudflare-runtime.md) — vérifier le runtime, SQL et R2, pas seulement le bundle ; migrer explicitement chaque base cible.
 - [Paiements associatifs](association-payments.md) — séparer dépenses engagées, paiements réels et approbation ; chaque paiement réel a son écriture équilibrée.
+- [Pause du module Paie & RH](payroll-paused.md) — garder Paie & RH masqué pendant la préparation du lancement initial de l’application.
