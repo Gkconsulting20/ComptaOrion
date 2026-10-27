@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
 export function Inscription() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,8 +22,11 @@ export function Inscription() {
     const refId = urlParams.get('ref');
     if (refId) {
       setFormData(prev => ({ ...prev, commercialId: parseInt(refId) }));
-      fetch(`${API_BASE}/api/public/commercial/${refId}`)
-        .then(res => res.json())
+      fetch(`/api/public/commercial/${refId}`)
+        .then(res => {
+          if (!res.ok) throw new Error('Lien de parrainage indisponible');
+          return res.json();
+        })
         .then(data => {
           if (data.nom) {
             setCommercialInfo(data);
@@ -42,9 +43,13 @@ export function Inscription() {
   ];
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/public/plans`)
-      .then(res => res.json())
+    fetch('/api/public/plans')
+      .then(res => {
+        if (!res.ok) throw new Error('Erreur lors du chargement des forfaits');
+        return res.json();
+      })
       .then(data => {
+        if (!Array.isArray(data)) throw new Error('Réponse des forfaits invalide');
         setPlans(data);
         if (data.length > 0) {
           setFormData(prev => ({ ...prev, planId: data[0].id }));
@@ -65,10 +70,14 @@ export function Inscription() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (!selectedPlan) {
+      setError('Aucun forfait actif n’est disponible pour le moment.');
+      return;
+    }
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/public/inscription`, {
+      const response = await fetch('/api/public/inscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -283,6 +292,17 @@ export function Inscription() {
                   Plan Tarifaire *
                 </label>
                 <div style={{ display: 'grid', gap: '10px' }}>
+                  {plans.length === 0 && (
+                    <div role="status" style={{
+                      padding: '14px',
+                      borderRadius: '8px',
+                      border: '1px solid #f0d58a',
+                      backgroundColor: '#fff8e7',
+                      color: '#735515'
+                    }}>
+                      Aucun forfait actif n’est disponible. L’inscription en ligne est momentanément indisponible ; veuillez contacter l’administrateur.
+                    </div>
+                  )}
                   {plans.map(plan => (
                     <label
                       key={plan.id}
@@ -343,9 +363,9 @@ export function Inscription() {
                   }}
                 >
                   <option value="1">1 mois</option>
-                  <option value="3">3 mois (-5%)</option>
-                  <option value="6">6 mois (-10%)</option>
-                  <option value="12">12 mois (-15%)</option>
+                  <option value="3">3 mois</option>
+                  <option value="6">6 mois</option>
+                  <option value="12">12 mois</option>
                 </select>
               </div>
 
@@ -464,17 +484,17 @@ export function Inscription() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !selectedPlan}
               style={{
                 width: '100%',
                 padding: '16px',
-                backgroundColor: submitting ? '#ccc' : '#667eea',
+                backgroundColor: submitting || !selectedPlan ? '#ccc' : '#667eea',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
                 fontSize: '18px',
                 fontWeight: 'bold',
-                cursor: submitting ? 'not-allowed' : 'pointer',
+                cursor: submitting || !selectedPlan ? 'not-allowed' : 'pointer',
                 transition: 'background-color 0.2s'
               }}
             >

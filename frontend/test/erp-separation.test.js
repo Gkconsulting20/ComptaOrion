@@ -27,3 +27,19 @@ test('l’IA reste cachée sans activation explicite', async () => {
   assert.match(source, /VITE_AI_ENABLED === 'true'/);
   assert.match(source, /case 'ia-assistant': return AI_ENABLED \?/);
 });
+
+test('l’inscription publique utilise l’API du même domaine et bloque sans forfait actif', async () => {
+  const source = await read('../src/pages/Inscription.jsx');
+  assert.doesNotMatch(source, /localhost:3000|VITE_API_URL/);
+  assert.match(source, /fetch\('\/api\/public\/plans'\)/);
+  assert.match(source, /disabled=\{submitting \|\| !selectedPlan\}/);
+  assert.match(source, /Aucun forfait actif n’est disponible/);
+});
+
+test('l’ancien écran Factures autonome est retiré, les factures restent dans Clients', async () => {
+  const app = await read('../src/App.jsx');
+  const clients = await read('../src/modules/ClientsModule.jsx');
+  assert.doesNotMatch(app, /FacturesModule/);
+  assert.match(clients, /FacturesClientTab/);
+  await assert.rejects(access(new URL('../src/modules/FacturesModule.jsx', import.meta.url)));
+});
