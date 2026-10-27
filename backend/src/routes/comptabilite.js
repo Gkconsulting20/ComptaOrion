@@ -8,6 +8,12 @@ import { eq, and, desc, gte, lte, sum, sql } from 'drizzle-orm';
 
 const router = express.Router();
 
+function isISODate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 // Plan comptable SYSCOHADA complet
 const PLAN_SYSCOHADA = [
   // Classe 1 - Comptes de ressources durables
@@ -249,8 +255,11 @@ router.get('/rapports/bilan', async (req, res) => {
              SUM(COALESCE(le.credit, 0)) as total_credit
       FROM lignes_ecriture le
       JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON cc.id = le.compte_comptable_id
       WHERE e.entreprise_id = ${eId}
-      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+        AND e.valide = true
+        AND le.entreprise_id = ${eId}
+        AND cc.entreprise_id = ${eId}
       ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
       GROUP BY le.compte_comptable_id
     `);
@@ -263,12 +272,36 @@ router.get('/rapports/bilan', async (req, res) => {
         credit: parseFloat(row.total_credit || 0)
       };
     });
+
+    const resultatPeriodeData = await db.execute(sql`
+      SELECT le.compte_comptable_id,
+             SUM(COALESCE(le.debit, 0)) as total_debit,
+             SUM(COALESCE(le.credit, 0)) as total_credit
+      FROM lignes_ecriture le
+      JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON cc.id = le.compte_comptable_id
+      WHERE e.entreprise_id = ${eId}
+        AND e.valide = true
+        AND le.entreprise_id = ${eId}
+        AND cc.entreprise_id = ${eId}
+        AND (cc.numero LIKE '6%' OR cc.numero LIKE '7%')
+        ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+        ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      GROUP BY le.compte_comptable_id
+    `);
+    const soldesResultatPeriodeMap = {};
+    (resultatPeriodeData.rows || resultatPeriodeData || []).forEach(row => {
+      soldesResultatPeriodeMap[row.compte_comptable_id] = {
+        debit: parseFloat(row.total_debit || 0),
+        credit: parseFloat(row.total_credit || 0)
+      };
+    });
     
     // Calculer le résultat net (Produits classe 7 - Charges classe 6)
     let totalCharges = 0;
     let totalProduits = 0;
     allComptes.forEach(compte => {
-      const solde = soldesMap[compte.id] || { debit: 0, credit: 0 };
+      const solde = soldesResultatPeriodeMap[compte.id] || { debit: 0, credit: 0 };
       if (compte.numero.startsWith('6')) {
         totalCharges += solde.debit - solde.credit;
       } else if (compte.numero.startsWith('7')) {
@@ -461,9 +494,13 @@ router.get('/rapports/bilan', async (req, res) => {
       },
       actif,
       passif,
+      resultatComptes: allComptes
+        .filter(compte => compte.numero.startsWith('6') || compte.numero.startsWith('7'))
+        .map(({ id, numero, nom }) => ({ id, numero, nom })),
       resultatNet,
       totalCharges,
       totalProduits,
+      dateFin,
       equilibre: Math.abs(actif.total - passif.total) < 1
     });
   } catch (error) {
@@ -488,7 +525,11 @@ router.get('/rapports/resultat', async (req, res) => {
              SUM(COALESCE(le.credit, 0)) as total_credit
       FROM lignes_ecriture le
       JOIN ecritures e ON le.ecriture_id = e.id
+      JOIN comptes_comptables cc ON cc.id = le.compte_comptable_id
       WHERE e.entreprise_id = ${eId}
+        AND e.valide = true
+        AND le.entreprise_id = ${eId}
+        AND cc.entreprise_id = ${eId}
       ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
       ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
       GROUP BY le.compte_comptable_id
@@ -517,7 +558,7 @@ router.get('/rapports/resultat', async (req, res) => {
       };
       
       if (compte.numero.startsWith('6')) {
-        compteData.montant = solde.debit;
+        compteData.montant = solde.debit - solde.credit;
         if (compteData.montant === 0) return;
         if (compte.numero.startsWith('66') || compte.numero.startsWith('67')) {
           charges.financieres.push(compteData);
@@ -526,7 +567,7 @@ router.get('/rapports/resultat', async (req, res) => {
         }
         charges.total += compteData.montant;
       } else if (compte.numero.startsWith('7')) {
-        compteData.montant = solde.credit;
+        compteData.montant = solde.credit - solde.debit;
         if (compteData.montant === 0) return;
         if (compte.numero.startsWith('76') || compte.numero.startsWith('77')) {
           produits.financiers.push(compteData);
@@ -562,6 +603,144 @@ router.get('/rapports/resultat', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Détail paginé des écritures validées qui composent un ou plusieurs montants de rapport
+router.get('/rapports/drill-down', async (req, res) => {
+  try {
+    const entrepriseId = req.entrepriseId;
+    if (!entrepriseId) {
+      return res.status(401).json({ error: 'Authentification requise' });
+    }
+
+    const rawAccountIds = typeof req.query.accountIds === 'string' ? req.query.accountIds : '';
+    const accountIdTokens = rawAccountIds.split(',');
+    const parsedAccountIds = accountIdTokens.map(value => Number(value));
+    if (
+      !rawAccountIds ||
+      accountIdTokens.length > 300 ||
+      accountIdTokens.some(value => !/^\d+$/.test(value)) ||
+      parsedAccountIds.some(id => !Number.isInteger(id) || id <= 0)
+    ) {
+      return res.status(400).json({ error: 'Sélection de comptes invalide' });
+    }
+    const accountIds = [...new Set(parsedAccountIds)];
+
+    const { dateDebut, dateFin } = req.query;
+    if (
+      (dateDebut && !isISODate(dateDebut)) ||
+      (dateFin && !isISODate(dateFin)) ||
+      (dateDebut && dateFin && dateDebut > dateFin)
+    ) {
+      return res.status(400).json({ error: 'Période invalide' });
+    }
+
+    const requestedPage = Number.parseInt(req.query.page, 10);
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 200)
+      : 100;
+    const offset = (page - 1) * limit;
+    const accountIdsSql = sql.join(accountIds.map(id => sql`${id}`), sql`, `);
+    const dateDebutFilter = dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``;
+    const dateFinFilter = dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``;
+
+    const mouvementsResult = await db.execute(sql`
+      SELECT
+        le.id,
+        e.id AS ecriture_id,
+        e.date_ecriture AS date,
+        COALESCE(j.code, '') AS journal,
+        COALESCE(e.numero_piece, '') AS reference,
+        COALESCE(le.libelle, e.libelle, '') AS libelle,
+        cc.numero AS compte_numero,
+        cc.nom AS compte_nom,
+        COALESCE(le.debit, 0) AS debit,
+        COALESCE(le.credit, 0) AS credit,
+        SUM(COALESCE(le.debit, 0) - COALESCE(le.credit, 0))
+          OVER (ORDER BY e.date_ecriture, e.id, le.id) AS solde_cumule
+      FROM lignes_ecriture le
+      JOIN ecritures e ON e.id = le.ecriture_id
+      JOIN comptes_comptables cc ON cc.id = le.compte_comptable_id
+      LEFT JOIN journaux j ON j.id = e.journal_id
+      WHERE e.entreprise_id = ${entrepriseId}
+        AND e.valide = true
+        AND le.entreprise_id = ${entrepriseId}
+        AND cc.entreprise_id = ${entrepriseId}
+        AND le.compte_comptable_id IN (${accountIdsSql})
+        ${dateDebutFilter}
+        ${dateFinFilter}
+      ORDER BY e.date_ecriture, e.id, le.id
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+
+    const countResult = await db.execute(sql`
+      SELECT COUNT(*) AS total
+      FROM lignes_ecriture le
+      JOIN ecritures e ON e.id = le.ecriture_id
+      JOIN comptes_comptables cc ON cc.id = le.compte_comptable_id
+      WHERE e.entreprise_id = ${entrepriseId}
+        AND e.valide = true
+        AND le.entreprise_id = ${entrepriseId}
+        AND cc.entreprise_id = ${entrepriseId}
+        AND le.compte_comptable_id IN (${accountIdsSql})
+        ${dateDebutFilter}
+        ${dateFinFilter}
+    `);
+    const totalsResult = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(le.debit), 0) AS total_debit,
+        COALESCE(SUM(le.credit), 0) AS total_credit
+      FROM lignes_ecriture le
+      JOIN ecritures e ON e.id = le.ecriture_id
+      JOIN comptes_comptables cc ON cc.id = le.compte_comptable_id
+      WHERE e.entreprise_id = ${entrepriseId}
+        AND e.valide = true
+        AND le.entreprise_id = ${entrepriseId}
+        AND cc.entreprise_id = ${entrepriseId}
+        AND le.compte_comptable_id IN (${accountIdsSql})
+        ${dateDebutFilter}
+        ${dateFinFilter}
+    `);
+
+    const rows = mouvementsResult.rows || mouvementsResult || [];
+    const countRows = countResult.rows || countResult || [];
+    const totalRows = totalsResult.rows || totalsResult || [];
+    const total = Number(countRows[0]?.total || 0);
+    const totalDebit = Number(totalRows[0]?.total_debit || 0);
+    const totalCredit = Number(totalRows[0]?.total_credit || 0);
+
+    res.json({
+      mouvements: rows.map(row => ({
+        id: row.id,
+        ecritureId: row.ecriture_id,
+        date: row.date,
+        journal: row.journal,
+        reference: row.reference,
+        libelle: row.libelle,
+        compteNumero: row.compte_numero,
+        compteNom: row.compte_nom,
+        debit: Number(row.debit || 0),
+        credit: Number(row.credit || 0),
+        soldeCumule: Number(row.solde_cumule || 0)
+      })),
+      totaux: {
+        totalDebit,
+        totalCredit,
+        solde: totalDebit - totalCredit
+      },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Erreur drill-down rapports financiers:', error);
+    res.status(500).json({ error: 'Impossible de charger les transactions de ce montant' });
   }
 });
 
@@ -1987,9 +2166,17 @@ router.get('/grand-livre', async (req, res) => {
 router.get('/balance', async (req, res) => {
   try {
     const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const { dateDebut, dateFin } = req.query;
     
     if (!entrepriseId) {
       return res.status(400).json({ error: 'entrepriseId requis' });
+    }
+    if (
+      (dateDebut && !isISODate(dateDebut)) ||
+      (dateFin && !isISODate(dateFin)) ||
+      (dateDebut && dateFin && dateDebut > dateFin)
+    ) {
+      return res.status(400).json({ error: 'Période invalide' });
     }
 
     // Récupérer les lignes d'écriture avec les comptes comptables
@@ -2005,12 +2192,12 @@ router.get('/balance', async (req, res) => {
       .from(lignesEcritures)
       .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
       .innerJoin(comptesComptables, eq(lignesEcritures.compteComptableId, comptesComptables.id))
-      .where(
-        and(
-          eq(lignesEcritures.entrepriseId, entrepriseId),
-          eq(ecritures.valide, true)
-        )
-      );
+      .where(and(
+        eq(lignesEcritures.entrepriseId, entrepriseId),
+        eq(ecritures.valide, true),
+        ...(dateDebut ? [gte(ecritures.dateEcriture, new Date(dateDebut))] : []),
+        ...(dateFin ? [lte(ecritures.dateEcriture, new Date(dateFin))] : [])
+      ));
 
     // Agréger par compte
     const balance = {};

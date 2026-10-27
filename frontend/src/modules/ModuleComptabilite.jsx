@@ -534,7 +534,16 @@ export function ModuleComptabilite() {
     dateFin: getPeriodeDates('annee').dateFin
   });
   const [rapportModal, setRapportModal] = useState({ open: false, type: null, data: null, loading: false });
-  const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], loading: false });
+  const [drillModal, setDrillModal] = useState({
+    open: false,
+    title: '',
+    data: [],
+    totaux: null,
+    loading: false,
+    error: '',
+    pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
+    query: { accountIds: [], dateDebut: null, dateFin: null, signFactor: 1, reportAmount: null, metricLabel: '' }
+  });
 
   useEffect(() => {
     loadAllData();
@@ -567,6 +576,99 @@ export function ModuleComptabilite() {
       setLoading(false);
     }
   };
+
+  const requestReportDrillDown = async (query, title, page = 1) => {
+    setDrillModal({
+      open: true,
+      title,
+      data: [],
+      totaux: null,
+      loading: true,
+      error: '',
+      pagination: { page, limit: 100, total: 0, totalPages: 0 },
+      query
+    });
+
+    try {
+      const params = {
+        accountIds: query.accountIds.join(','),
+        page,
+        limit: 100
+      };
+      if (query.dateDebut) params.dateDebut = query.dateDebut;
+      if (query.dateFin) params.dateFin = query.dateFin;
+      const response = await api.get('/comptabilite/rapports/drill-down', params);
+      setDrillModal({
+        open: true,
+        title,
+        data: response.mouvements || [],
+        totaux: response.totaux || null,
+        loading: false,
+        error: '',
+        pagination: response.pagination || { page, limit: 100, total: 0, totalPages: 0 },
+        query
+      });
+    } catch (error) {
+      setDrillModal(current => ({
+        ...current,
+        loading: false,
+        error: error.message || 'Impossible de charger les transactions.'
+      }));
+    }
+  };
+
+  const openReportDrillDown = (accounts, title, options = {}) => {
+    const accountIds = [...new Set((accounts || [])
+      .map(account => Number(account.id))
+      .filter(id => Number.isInteger(id) && id > 0))];
+
+    if (!accountIds.length) {
+      setDrillModal({
+        open: true,
+        title,
+        data: [],
+        totaux: null,
+        loading: false,
+        error: 'Aucun compte comptable associé à ce montant.',
+        pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
+        query: { accountIds: [], dateDebut: null, dateFin: null, signFactor: 1, reportAmount: null, metricLabel: '' }
+      });
+      return;
+    }
+
+    const query = {
+      accountIds,
+      dateDebut: options.dateDebut || null,
+      dateFin: options.dateFin || null,
+      signFactor: options.signFactor === -1 ? -1 : 1,
+      reportAmount: Number.isFinite(Number(options.reportAmount)) ? Number(options.reportAmount) : null,
+      metricLabel: options.metricLabel || ''
+    };
+    requestReportDrillDown(query, title, 1);
+  };
+
+  const renderDrillableAmount = (amount, accounts, title, options = {}) => (
+    <button
+      type="button"
+      onClick={() => openReportDrillDown(accounts, title, { ...options, reportAmount: amount })}
+      aria-label={`Afficher les transactions composant ${title}: ${Math.round(Number(amount) || 0).toLocaleString('fr-FR')} FCFA`}
+      title="Cliquer pour afficher les transactions"
+      style={{
+        padding: 0,
+        border: 0,
+        background: 'transparent',
+        color: options.linkColor || '#1769aa',
+        font: 'inherit',
+        fontWeight: 'bold',
+        textDecoration: 'underline',
+        textDecorationStyle: 'dotted',
+        textUnderlineOffset: '3px',
+        cursor: 'pointer'
+      }}
+    >
+      {Math.round(Number(amount) || 0).toLocaleString('fr-FR')} FCFA
+    </button>
+  );
 
   const openModal = (type, item = null) => {
     setModal({ open: true, type, item });
@@ -874,7 +976,9 @@ export function ModuleComptabilite() {
                           <h2>${entrepriseInfo?.nom || ''}</h2>
                           <p>${entrepriseInfo?.adresse || ''} | ${entrepriseInfo?.telephone || ''}</p>
                           <h3>Grand Livre</h3>
-                          <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
+                          <p>${rapportModal.type === 'bilan'
+                            ? `Situation au ${rapportModal.data?.dateFin || periode.dateFin}`
+                            : `Période: ${periode.dateDebut} au ${periode.dateFin}`}</p>
                           ${printContent.innerHTML}
                           <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
                             Document généré par ComptaOrion le ${new Date().toLocaleDateString('fr-FR')}
@@ -1064,10 +1168,10 @@ export function ModuleComptabilite() {
                 columns={[
                   { key: 'numero', label: 'N° Compte' },
                   { key: 'nom', label: 'Libellé' },
-                  { key: 'totalDebit', label: 'Mouv. Débit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
-                  { key: 'totalCredit', label: 'Mouv. Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
-                  { key: 'soldeDebit', label: 'Solde Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' },
-                  { key: 'soldeCredit', label: 'Solde Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' }
+                  { key: 'totalDebit', label: 'Mouv. Débit', render: (val, row) => renderDrillableAmount(val, [row], `${row.numero} - ${row.nom} · Mouv. Débit`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin, metricLabel: 'Mouvements débit' }) },
+                  { key: 'totalCredit', label: 'Mouv. Crédit', render: (val, row) => renderDrillableAmount(val, [row], `${row.numero} - ${row.nom} · Mouv. Crédit`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin, metricLabel: 'Mouvements crédit' }) },
+                  { key: 'soldeDebit', label: 'Solde Débit', render: (val, row) => val > 0 ? renderDrillableAmount(val, [row], `${row.numero} - ${row.nom} · Solde débit`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin, signFactor: 1, metricLabel: 'Solde débiteur' }) : '-' },
+                  { key: 'soldeCredit', label: 'Solde Crédit', render: (val, row) => val > 0 ? renderDrillableAmount(val, [row], `${row.numero} - ${row.nom} · Solde crédit`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin, signFactor: -1, metricLabel: 'Solde créditeur' }) : '-' }
                 ]}
                 data={data.balanceData}
                 actions={false}
@@ -1968,7 +2072,9 @@ export function ModuleComptabilite() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontSize: '12px', color: '#888', background: '#f5f5f5', padding: '4px 10px', borderRadius: '4px' }}>
-                  {periode.dateDebut} au {periode.dateFin}
+                  {rapportModal.type === 'bilan'
+                    ? `Situation au ${rapportModal.data?.dateFin || periode.dateFin}`
+                    : `${periode.dateDebut} au ${periode.dateFin}`}
                 </span>
                 <button onClick={() => setRapportModal({ open: false, type: null, data: null, loading: false })} style={{
                   background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666'
@@ -1991,7 +2097,11 @@ export function ModuleComptabilite() {
                           {(rapportModal.data.actif?.immobilise || []).map((c, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px' }}>
                               <span style={{ color: '#333' }}>{c.numero} - {c.nom}</span>
-                              <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                              {renderDrillableAmount(c.solde, [c], `${c.numero} - ${c.nom}`, {
+                                dateFin: rapportModal.data?.dateFin || periode.dateFin,
+                                signFactor: 1,
+                                metricLabel: 'Solde au'
+                              })}
                             </div>
                           ))}
                           {(rapportModal.data.actif?.amortissements || []).length > 0 && (
@@ -2000,7 +2110,11 @@ export function ModuleComptabilite() {
                               {(rapportModal.data.actif?.amortissements || []).map((c, i) => (
                                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px', backgroundColor: '#fff3e0' }}>
                                   <span style={{ color: '#666' }}>{c.numero} - {c.nom}</span>
-                                  <span style={{ fontWeight: 'bold', color: '#e65100' }}>-{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                                  {renderDrillableAmount(-c.solde, [c], `${c.numero} - ${c.nom}`, {
+                                    dateFin: rapportModal.data?.dateFin || periode.dateFin,
+                                    signFactor: -1,
+                                    metricLabel: 'Amortissement au'
+                                  })}
                                 </div>
                               ))}
                             </>
@@ -2016,7 +2130,11 @@ export function ModuleComptabilite() {
                           {(rapportModal.data.actif?.circulant || []).map((c, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px' }}>
                               <span style={{ color: '#333' }}>{c.numero} - {c.nom}</span>
-                              <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                              {renderDrillableAmount(c.solde, [c], `${c.numero} - ${c.nom}`, {
+                                dateFin: rapportModal.data?.dateFin || periode.dateFin,
+                                signFactor: 1,
+                                metricLabel: 'Solde au'
+                              })}
                             </div>
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
@@ -2030,7 +2148,11 @@ export function ModuleComptabilite() {
                           {(rapportModal.data.actif?.tresorerie || []).map((c, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px' }}>
                               <span style={{ color: '#333' }}>{c.numero} - {c.nom}</span>
-                              <span style={{ fontWeight: 'bold', color: '#1976d2' }}>{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                              {renderDrillableAmount(c.solde, [c], `${c.numero} - ${c.nom}`, {
+                                dateFin: rapportModal.data?.dateFin || periode.dateFin,
+                                signFactor: 1,
+                                metricLabel: 'Solde au'
+                              })}
                             </div>
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
@@ -2062,9 +2184,14 @@ export function ModuleComptabilite() {
                               <span style={{ color: c.isResultat ? (c.isPerte ? '#c62828' : '#2e7d32') : '#333', fontWeight: c.isResultat ? 'bold' : 'normal' }}>
                                 {c.numero} - {c.nom}
                               </span>
-                              <span style={{ fontWeight: 'bold', color: c.isResultat ? (c.isPerte ? '#c62828' : '#2e7d32') : '#7b1fa2' }}>
-                                {c.isPerte ? '-' : ''}{Math.round(c.solde).toLocaleString('fr-FR')} FCFA
-                              </span>
+                              {renderDrillableAmount(
+                                c.isPerte ? -c.solde : c.solde,
+                                c.isResultat ? (rapportModal.data.resultatComptes || []) : [c],
+                                `${c.numero} - ${c.nom}`,
+                                c.isResultat
+                                  ? { dateDebut: periode.dateDebut, dateFin: periode.dateFin, signFactor: -1, metricLabel: 'Résultat de l’exercice' }
+                                  : { dateFin: rapportModal.data?.dateFin || periode.dateFin, signFactor: -1, metricLabel: 'Solde au' }
+                              )}
                             </div>
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
@@ -2078,7 +2205,11 @@ export function ModuleComptabilite() {
                           {(rapportModal.data.passif?.dettes || []).map((c, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f5f5f5', fontSize: '13px' }}>
                               <span style={{ color: '#333' }}>{c.numero} - {c.nom}</span>
-                              <span style={{ fontWeight: 'bold', color: '#7b1fa2' }}>{Math.round(c.solde).toLocaleString('fr-FR')} FCFA</span>
+                              {renderDrillableAmount(c.solde, [c], `${c.numero} - ${c.nom}`, {
+                                dateFin: rapportModal.data?.dateFin || periode.dateFin,
+                                signFactor: -1,
+                                metricLabel: 'Dette au'
+                              })}
                             </div>
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
@@ -2137,20 +2268,18 @@ export function ModuleComptabilite() {
                       <div style={{ marginBottom: '20px' }}>
                         <h5 style={{ color: '#666', marginBottom: '10px' }}>Exploitation</h5>
                         {(rapportModal.data.produits?.exploitation || []).map((c, i) => (
-                          <div key={i} onClick={async () => {
-                            setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
-                            try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                              setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
-                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
-                          }} style={{ 
+                          <div key={i} style={{
                             display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
-                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                            borderBottom: '1px solid #eee'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e8f5e9'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                          >
                             <span>{c.compte}</span>
-                            <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{parseFloat(c.montant).toLocaleString('fr-FR')} FCFA</span>
+                            {renderDrillableAmount(c.montant, [c], `${c.compte} - ${c.nom}`, {
+                              dateDebut: periode.dateDebut,
+                              dateFin: periode.dateFin,
+                              signFactor: -1,
+                              metricLabel: 'Produit'
+                            })}
                           </div>
                         ))}
                       </div>
@@ -2158,27 +2287,34 @@ export function ModuleComptabilite() {
                       <div style={{ marginBottom: '20px' }}>
                         <h5 style={{ color: '#666', marginBottom: '10px' }}>Financiers</h5>
                         {(rapportModal.data.produits?.financiers || []).map((c, i) => (
-                          <div key={i} onClick={async () => {
-                            setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
-                            try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                              setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
-                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
-                          }} style={{ 
+                          <div key={i} style={{
                             display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
-                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                            borderBottom: '1px solid #eee'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e8f5e9'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                          >
                             <span>{c.compte}</span>
-                            <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{parseFloat(c.montant).toLocaleString('fr-FR')} FCFA</span>
+                            {renderDrillableAmount(c.montant, [c], `${c.compte} - ${c.nom}`, {
+                              dateDebut: periode.dateDebut,
+                              dateFin: periode.dateFin,
+                              signFactor: -1,
+                              metricLabel: 'Produit financier'
+                            })}
                           </div>
                         ))}
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#2e7d32', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
                         <span>TOTAL PRODUITS</span>
-                        <span>{parseFloat(rapportModal.data.produits?.total || 0).toLocaleString('fr-FR')} FCFA</span>
+                        {renderDrillableAmount(
+                          rapportModal.data.produits?.total || 0,
+                          [
+                            ...(rapportModal.data.produits?.exploitation || []),
+                            ...(rapportModal.data.produits?.financiers || []),
+                            ...(rapportModal.data.produits?.exceptionnels || [])
+                          ],
+                          'Total produits',
+                          { dateDebut: periode.dateDebut, dateFin: periode.dateFin, signFactor: -1, metricLabel: 'Total produits', linkColor: '#fff' }
+                        )}
                       </div>
                     </div>
 
@@ -2189,20 +2325,18 @@ export function ModuleComptabilite() {
                       <div style={{ marginBottom: '20px' }}>
                         <h5 style={{ color: '#666', marginBottom: '10px' }}>Exploitation</h5>
                         {(rapportModal.data.charges?.exploitation || []).map((c, i) => (
-                          <div key={i} onClick={async () => {
-                            setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
-                            try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                              setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
-                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
-                          }} style={{ 
+                          <div key={i} style={{
                             display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
-                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                            borderBottom: '1px solid #eee'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffebee'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                          >
                             <span>{c.compte}</span>
-                            <span style={{ fontWeight: 'bold', color: '#c62828' }}>{parseFloat(c.montant).toLocaleString('fr-FR')} FCFA</span>
+                            {renderDrillableAmount(c.montant, [c], `${c.compte} - ${c.nom}`, {
+                              dateDebut: periode.dateDebut,
+                              dateFin: periode.dateFin,
+                              signFactor: 1,
+                              metricLabel: 'Charge'
+                            })}
                           </div>
                         ))}
                       </div>
@@ -2210,27 +2344,34 @@ export function ModuleComptabilite() {
                       <div style={{ marginBottom: '20px' }}>
                         <h5 style={{ color: '#666', marginBottom: '10px' }}>Financières</h5>
                         {(rapportModal.data.charges?.financieres || []).map((c, i) => (
-                          <div key={i} onClick={async () => {
-                            setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: [], loading: true });
-                            try {
-                              const ecritures = await api.get(`/comptabilite/compte/${c.id}/ecritures`, { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                              setDrillModal({ open: true, title: `Détail: ${c.compte}`, data: ecritures || [], loading: false });
-                            } catch (e) { setDrillModal(prev => ({ ...prev, loading: false })); }
-                          }} style={{ 
+                          <div key={i} style={{
                             display: 'flex', justifyContent: 'space-between', padding: '8px 12px', 
-                            borderBottom: '1px solid #eee', cursor: 'pointer'
+                            borderBottom: '1px solid #eee'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffebee'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                          >
                             <span>{c.compte}</span>
-                            <span style={{ fontWeight: 'bold', color: '#c62828' }}>{parseFloat(c.montant).toLocaleString('fr-FR')} FCFA</span>
+                            {renderDrillableAmount(c.montant, [c], `${c.compte} - ${c.nom}`, {
+                              dateDebut: periode.dateDebut,
+                              dateFin: periode.dateFin,
+                              signFactor: 1,
+                              metricLabel: 'Charge financière'
+                            })}
                           </div>
                         ))}
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', backgroundColor: '#c62828', color: 'white', fontWeight: 'bold', borderRadius: '4px' }}>
                         <span>TOTAL CHARGES</span>
-                        <span>{parseFloat(rapportModal.data.charges?.total || 0).toLocaleString('fr-FR')} FCFA</span>
+                        {renderDrillableAmount(
+                          rapportModal.data.charges?.total || 0,
+                          [
+                            ...(rapportModal.data.charges?.exploitation || []),
+                            ...(rapportModal.data.charges?.financieres || []),
+                            ...(rapportModal.data.charges?.exceptionnelles || [])
+                          ],
+                          'Total charges',
+                          { dateDebut: periode.dateDebut, dateFin: periode.dateFin, signFactor: 1, metricLabel: 'Total charges', linkColor: '#fff' }
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2240,20 +2381,42 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                       <div style={{ textAlign: 'center', padding: '15px', backgroundColor: 'white', borderRadius: '8px' }}>
                         <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat Exploitation</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.resultatExploitation >= 0 ? '#2e7d32' : '#c62828' }}>
-                          {parseFloat(rapportModal.data.resultatExploitation || 0).toLocaleString('fr-FR')} FCFA
+                        <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                          {renderDrillableAmount(
+                            rapportModal.data.resultatExploitation || 0,
+                            [...(rapportModal.data.produits?.exploitation || []), ...(rapportModal.data.charges?.exploitation || [])],
+                            'Résultat exploitation',
+                            { dateDebut: periode.dateDebut, dateFin: periode.dateFin, signFactor: -1, metricLabel: 'Résultat exploitation' }
+                          )}
                         </div>
                       </div>
                       <div style={{ textAlign: 'center', padding: '15px', backgroundColor: 'white', borderRadius: '8px' }}>
                         <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat Financier</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.resultatFinancier >= 0 ? '#2e7d32' : '#c62828' }}>
-                          {parseFloat(rapportModal.data.resultatFinancier || 0).toLocaleString('fr-FR')} FCFA
+                        <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                          {renderDrillableAmount(
+                            rapportModal.data.resultatFinancier || 0,
+                            [...(rapportModal.data.produits?.financiers || []), ...(rapportModal.data.charges?.financieres || [])],
+                            'Résultat financier',
+                            { dateDebut: periode.dateDebut, dateFin: periode.dateFin, signFactor: -1, metricLabel: 'Résultat financier' }
+                          )}
                         </div>
                       </div>
                       <div style={{ textAlign: 'center', padding: '15px', backgroundColor: rapportModal.data.benefice ? '#e8f5e9' : '#ffebee', borderRadius: '8px' }}>
                         <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat Net</div>
-                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: rapportModal.data.benefice ? '#2e7d32' : '#c62828' }}>
-                          {parseFloat(rapportModal.data.resultatNet || 0).toLocaleString('fr-FR')} FCFA
+                        <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                          {renderDrillableAmount(
+                            rapportModal.data.resultatNet || 0,
+                            [
+                              ...(rapportModal.data.produits?.exploitation || []),
+                              ...(rapportModal.data.produits?.financiers || []),
+                              ...(rapportModal.data.produits?.exceptionnels || []),
+                              ...(rapportModal.data.charges?.exploitation || []),
+                              ...(rapportModal.data.charges?.financieres || []),
+                              ...(rapportModal.data.charges?.exceptionnelles || [])
+                            ],
+                            'Résultat net',
+                            { dateDebut: periode.dateDebut, dateFin: periode.dateFin, signFactor: -1, metricLabel: 'Résultat net' }
+                          )}
                         </div>
                         <div style={{ fontSize: '12px', marginTop: '5px' }}>
                           {rapportModal.data.benefice ? '✅ Bénéfice' : '❌ Perte'}
@@ -2664,14 +2827,23 @@ export function ModuleComptabilite() {
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               backgroundColor: '#f5f5f5'
             }}>
-              <h3 style={{ margin: 0, fontSize: '16px' }}>{drillModal.title}</h3>
-              <button onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false })} style={{
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px' }}>{drillModal.title}</h3>
+                {drillModal.query?.reportAmount !== null && drillModal.query?.reportAmount !== undefined && (
+                  <div style={{ marginTop: 4, fontSize: 12, color: '#5f6b76' }}>
+                    {drillModal.query.metricLabel || 'Montant du rapport'} : {Math.round(drillModal.query.reportAmount).toLocaleString('fr-FR')} FCFA
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setDrillModal(current => ({ ...current, open: false }))} style={{
                 background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666'
               }}>&times;</button>
             </div>
             <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
               {drillModal.loading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Chargement...</div>
+              ) : drillModal.error ? (
+                <div role="alert" style={{ textAlign: 'center', padding: '40px', color: '#b42318' }}>{drillModal.error}</div>
               ) : drillModal.data.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>Aucune écriture trouvée pour cette période</div>
               ) : (
@@ -2681,6 +2853,7 @@ export function ModuleComptabilite() {
                       <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
                       <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Journal</th>
                       <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Réf.</th>
+                      <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Compte</th>
                       <th style={{ padding: '8px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Libellé</th>
                       <th style={{ padding: '8px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Débit</th>
                       <th style={{ padding: '8px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Crédit</th>
@@ -2690,9 +2863,10 @@ export function ModuleComptabilite() {
                   <tbody>
                     {drillModal.data.map((e, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '8px' }}>{e.date || '-'}</td>
+                        <td style={{ padding: '8px' }}>{e.date ? new Date(`${String(e.date).slice(0, 10)}T00:00:00`).toLocaleDateString('fr-FR') : '-'}</td>
                         <td style={{ padding: '8px' }}>{e.journal || '-'}</td>
                         <td style={{ padding: '8px', fontSize: '12px', color: '#666' }}>{e.reference || '-'}</td>
+                        <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{e.compteNumero ? `${e.compteNumero} - ${e.compteNom || ''}` : '-'}</td>
                         <td style={{ padding: '8px' }}>{e.libelle || e.description || '-'}</td>
                         <td style={{ padding: '8px', textAlign: 'right', color: '#1976d2', fontWeight: e.debit > 0 ? 'bold' : 'normal' }}>
                           {e.debit > 0 ? Math.round(e.debit).toLocaleString('fr-FR') + ' FCFA' : '-'}
@@ -2700,23 +2874,23 @@ export function ModuleComptabilite() {
                         <td style={{ padding: '8px', textAlign: 'right', color: '#7b1fa2', fontWeight: e.credit > 0 ? 'bold' : 'normal' }}>
                           {e.credit > 0 ? Math.round(e.credit).toLocaleString('fr-FR') + ' FCFA' : '-'}
                         </td>
-                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: (e.soldeCumule || e.soldeCumul || 0) >= 0 ? '#388e3c' : '#d32f2f' }}>
-                          {Math.round(e.soldeCumule || e.soldeCumul || 0).toLocaleString('fr-FR')} FCFA
+                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 'bold', color: ((Number(e.soldeCumule) || 0) * (drillModal.query?.signFactor || 1)) >= 0 ? '#388e3c' : '#d32f2f' }}>
+                          {Math.round((Number(e.soldeCumule) || 0) * (drillModal.query?.signFactor || 1)).toLocaleString('fr-FR')} FCFA
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr style={{ backgroundColor: '#e3f2fd', fontWeight: 'bold' }}>
-                      <td colSpan="4" style={{ padding: '10px' }}>TOTAL</td>
+                      <td colSpan="5" style={{ padding: '10px' }}>TOTAL DES TRANSACTIONS FILTRÉES</td>
                       <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2' }}>
                         {Math.round(drillModal.totaux?.totalDebit || drillModal.data.reduce((s, e) => s + parseFloat(e.debit || 0), 0)).toLocaleString('fr-FR')} FCFA
                       </td>
                       <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2' }}>
                         {Math.round(drillModal.totaux?.totalCredit || drillModal.data.reduce((s, e) => s + parseFloat(e.credit || 0), 0)).toLocaleString('fr-FR')} FCFA
                       </td>
-                      <td style={{ padding: '10px', textAlign: 'right', color: (drillModal.totaux?.solde || 0) >= 0 ? '#388e3c' : '#d32f2f' }}>
-                        {Math.round(drillModal.totaux?.solde || 0).toLocaleString('fr-FR')} FCFA
+                      <td style={{ padding: '10px', textAlign: 'right', color: ((drillModal.totaux?.solde || 0) * (drillModal.query?.signFactor || 1)) >= 0 ? '#388e3c' : '#d32f2f' }}>
+                        {Math.round((drillModal.totaux?.solde || 0) * (drillModal.query?.signFactor || 1)).toLocaleString('fr-FR')} FCFA
                       </td>
                     </tr>
                   </tfoot>
@@ -2724,34 +2898,53 @@ export function ModuleComptabilite() {
               )}
             </div>
             <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#666', fontSize: '13px' }}>{drillModal.data.length} mouvement(s)</span>
+              <span style={{ color: '#666', fontSize: '13px' }}>
+                {drillModal.pagination.total} transaction(s) · page {drillModal.pagination.page} / {Math.max(1, drillModal.pagination.totalPages)}
+              </span>
               <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  disabled={drillModal.loading || drillModal.pagination.page <= 1}
+                  onClick={() => requestReportDrillDown(drillModal.query, drillModal.title, drillModal.pagination.page - 1)}
+                  style={{ padding: '8px 12px', border: '1px solid #ccd3da', borderRadius: 4, cursor: drillModal.pagination.page <= 1 ? 'not-allowed' : 'pointer', background: '#fff' }}
+                >
+                  Précédent
+                </button>
+                <button
+                  type="button"
+                  disabled={drillModal.loading || drillModal.pagination.page >= drillModal.pagination.totalPages}
+                  onClick={() => requestReportDrillDown(drillModal.query, drillModal.title, drillModal.pagination.page + 1)}
+                  style={{ padding: '8px 12px', border: '1px solid #ccd3da', borderRadius: 4, cursor: drillModal.pagination.page >= drillModal.pagination.totalPages ? 'not-allowed' : 'pointer', background: '#fff' }}
+                >
+                  Suivant
+                </button>
                 <button 
                   onClick={() => {
-                    const headers = ['Date', 'Journal', 'Référence', 'Libellé', 'Débit', 'Crédit', 'Solde Cumulé'];
+                    const headers = ['Date', 'Journal', 'Référence', 'Compte', 'Libellé', 'Débit', 'Crédit', 'Solde Cumulé'];
                     const rows = drillModal.data.map(e => [
                       e.date || '',
                       e.journal || '',
                       e.reference || '',
+                      `${e.compteNumero || ''} ${e.compteNom || ''}`.trim(),
                       (e.libelle || '').replace(/"/g, '""'),
                       e.debit || 0,
                       e.credit || 0,
-                      e.soldeCumule || e.soldeCumul || 0
+                      (Number(e.soldeCumule) || 0) * (drillModal.query?.signFactor || 1)
                     ]);
                     const csv = [headers.join(';'), ...rows.map(r => r.map(c => `"${c}"`).join(';'))].join('\n');
                     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `Mouvements_${drillModal.compte || 'compte'}_${new Date().toISOString().split('T')[0]}.csv`;
+                    a.download = `Transactions_page_${drillModal.pagination.page}_${new Date().toISOString().split('T')[0]}.csv`;
                     a.click();
                     URL.revokeObjectURL(url);
                   }}
                   style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                 >
-                  ⬇️ Export CSV
+                  ⬇️ Exporter la page
                 </button>
-                <Button variant="secondary" onClick={() => setDrillModal({ open: false, title: '', data: [], loading: false })}>
+                <Button variant="secondary" onClick={() => setDrillModal(current => ({ ...current, open: false }))}>
                   Fermer
                 </Button>
               </div>
