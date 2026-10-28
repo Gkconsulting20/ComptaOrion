@@ -143,7 +143,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const category=await api('/immobilisations/categories','POST',{nom:'Matériel',dureeVie:5,methodeAmortissement:'lineaire'});
     await api('/immobilisations/create','POST',{reference:'IMMO-TEST',description:'Matériel recette',
       categorieId:category.id,dateAcquisition:'2026-10-16',valeurAcquisition:100000});
-    const expenseCategory=await api('/depenses/categories','POST',{nom:'Transport'});
+    const expenseCategory=await api('/depenses/categories','POST',{nom:'Transport'},201);
     const associationProject=await api('/associations/projects','POST',{
       code:'ASSO-RECETTE',nom:'Projet associatif de recette',dateDebut:'2026-10-16',
       dateFin:'2026-12-31',budgetTotal:5000,devise:'FCFA',

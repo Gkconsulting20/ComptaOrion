@@ -1,6 +1,7 @@
 - [Intégrité hors ligne de Lite](lite-offline-integrity.md) — exiger idempotence transactionnelle et ordre déterministe pour les verrous par lot.
 - [Séparation de Lite](lite-separation.md) — partir de l’ancien code pour créer un projet Lite indépendant, pas une interface de l’ERP.
 - [Hébergement ERP](erp-hosting.md) — frontend et backend sur Cloudflare, PostgreSQL seul sur Render ; ni D1 ni service Web Render à créer.
+- [Rotation des jetons](jwt-refresh-rotation.md) — ajouter un identifiant aléatoire à chaque refresh JWT pour garantir une rotation effective.
 - [Authentification GitHub](github-auth.md) — l’état OAuth d’intégration ne prouve pas que les opérations Git sont autorisées.
 - [Runtime Cloudflare](cloudflare-runtime.md) — vérifier le runtime, SQL et R2, pas seulement le bundle ; migrer explicitement chaque base cible.
 - [Paiements associatifs](association-payments.md) — séparer dépenses engagées, paiements réels et approbation ; chaque paiement réel a son écriture équilibrée.
