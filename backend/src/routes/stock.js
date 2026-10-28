@@ -1,11 +1,13 @@
 import express from 'express';
 import { db } from '../db.js';
 import { produits, categoriesStock, entrepots, stockParEntrepot, mouvementsStock, alertesStock, inventairesTournants, bonsReception, lignesReception, fournisseurs, ecritures, lignesEcritures, comptesComptables, journaux } from '../schema.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import {
   allocateLogisticsByWeight,
   consumeStockValuation,
+  convertQuantityToBase,
+  convertUnitPriceToBase,
   createStockValuationLayer,
   ensureOpeningValuationLayer,
 } from '../services/stockValuation.js';
@@ -557,10 +559,49 @@ router.post('/receptions', async (req, res) => {
       return res.status(400).json({ error: 'Un entrepôt est obligatoire pour réceptionner du stock. Créez-en un dans Paramètres → Entrepôts.' });
     }
 
+    const productIds = [...new Set(lignes.map((line) => Number(line.produitId)).filter(Number.isSafeInteger))];
+    const productRows = productIds.length
+      ? await db.select({
+        id: produits.id,
+        uniteMesure: produits.uniteMesure,
+      }).from(produits).where(and(
+        eq(produits.entrepriseId, req.entrepriseId),
+        inArray(produits.id, productIds)
+      ))
+      : [];
+    if (productRows.length !== productIds.length ||
+        lignes.some((line) => !Number.isSafeInteger(Number(line.produitId)))) {
+      return res.status(400).json({ error: 'Un ou plusieurs produits sont invalides ou n’appartiennent pas à cette entreprise.' });
+    }
+    const productsById = new Map(productRows.map((product) => [product.id, product]));
+    const lignesNormalisees = [];
+    for (const ligne of lignes) {
+      const product = productsById.get(Number(ligne.produitId));
+      const quantityInput = Number(ligne.quantiteRecue);
+      const unitPriceInput = Number(ligne.prixUnitaireEstime);
+      const inputUnit = String(ligne.uniteSaisie || product.uniteMesure || 'pièce');
+      if (!Number.isFinite(quantityInput) || quantityInput <= 0 ||
+          !Number.isFinite(unitPriceInput) || unitPriceInput < 0) {
+        return res.status(400).json({ error: 'Quantité ou prix estimé invalide.' });
+      }
+      try {
+        lignesNormalisees.push({
+          ...ligne,
+          quantiteSaisie: quantityInput,
+          uniteSaisie: inputUnit,
+          prixUnitaireSaisi: unitPriceInput,
+          quantiteRecue: convertQuantityToBase(quantityInput, inputUnit, product.uniteMesure || 'pièce'),
+          prixUnitaireEstime: convertUnitPriceToBase(unitPriceInput, inputUnit, product.uniteMesure || 'pièce'),
+        });
+      } catch (error) {
+        return res.status(400).json({ error: error.message, produitId: product.id });
+      }
+    }
+
     const numero = await generateReceptionNumber(req.entrepriseId);
     
     // Calculer total HT
-    const totalHT = lignes.reduce((sum, l) => sum + (parseFloat(l.quantiteRecue) * parseFloat(l.prixUnitaireEstime)), 0);
+    const totalHT = lignesNormalisees.reduce((sum, l) => sum + (l.quantiteRecue * l.prixUnitaireEstime), 0);
 
     // Créer l'en-tête
     const bonResult = await db.execute(sql`
@@ -572,10 +613,10 @@ router.post('/receptions', async (req, res) => {
     const bonId = bonResult.rows[0].id;
 
     // Créer les lignes
-    for (const ligne of lignes) {
+    for (const ligne of lignesNormalisees) {
       await db.execute(sql`
-        INSERT INTO lignes_reception (entreprise_id, bon_reception_id, produit_id, quantite_commandee, quantite_recue, prix_unitaire_estime)
-        VALUES (${req.entrepriseId}, ${bonId}, ${ligne.produitId}, ${ligne.quantiteCommandee || 0}, ${ligne.quantiteRecue}, ${ligne.prixUnitaireEstime})
+        INSERT INTO lignes_reception (entreprise_id, bon_reception_id, produit_id, quantite_commandee, quantite_recue, quantite_saisie, unite_saisie, prix_unitaire_estime, prix_unitaire_saisi)
+        VALUES (${req.entrepriseId}, ${bonId}, ${ligne.produitId}, ${ligne.quantiteCommandee || 0}, ${ligne.quantiteRecue}, ${ligne.quantiteSaisie}, ${ligne.uniteSaisie}, ${ligne.prixUnitaireEstime}, ${ligne.prixUnitaireSaisi})
       `);
     }
 
@@ -620,6 +661,7 @@ router.post('/receptions/:id/valider', async (req, res) => {
       SELECT lr.*, p.nom as produit_nom, p.prix_achat,
              p.poids_par_unite as product_poids_par_unite,
              p.unite_poids as product_unite_poids,
+             p.unite_mesure as product_unite_mesure,
              p.quantite as product_quantite, p.cout_moyen as product_cout_moyen,
              p.valorisation_method as product_valorisation_method
       FROM lignes_reception lr

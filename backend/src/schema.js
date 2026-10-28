@@ -229,7 +229,10 @@ export const factureAchatItems = pgTable('facture_achat_items', {
   produitId: integer('produit_id').references(() => produits.id),
   description: text('description').notNull(),
   quantite: decimal('quantite', { precision: 15, scale: 3 }).notNull(),
+  quantiteSaisie: decimal('quantite_saisie', { precision: 15, scale: 3 }),
+  uniteSaisie: varchar('unite_saisie', { length: 20 }),
   prixUnitaire: decimal('prix_unitaire', { precision: 15, scale: 2 }).notNull(),
+  prixUnitaireSaisi: decimal('prix_unitaire_saisi', { precision: 15, scale: 2 }),
   remise: decimal('remise', { precision: 5, scale: 2 }).default('0'),
   totalLigne: decimal('total_ligne', { precision: 15, scale: 2 }).notNull(),
 });
@@ -411,9 +414,12 @@ export const lignesReception = pgTable('lignes_reception', {
   
   quantiteCommandee: decimal('quantite_commandee', { precision: 15, scale: 3 }).default('0'),
   quantiteRecue: decimal('quantite_recue', { precision: 15, scale: 3 }).notNull(),
+  quantiteSaisie: decimal('quantite_saisie', { precision: 15, scale: 3 }),
+  uniteSaisie: varchar('unite_saisie', { length: 20 }),
   quantiteFacturee: decimal('quantite_facturee', { precision: 15, scale: 3 }).default('0'),
   
   prixUnitaireEstime: decimal('prix_unitaire_estime', { precision: 15, scale: 2 }).notNull(),
+  prixUnitaireSaisi: decimal('prix_unitaire_saisi', { precision: 15, scale: 2 }),
   prixUnitaireFacture: decimal('prix_unitaire_facture', { precision: 15, scale: 2 }),
   
   ecartPrix: decimal('ecart_prix', { precision: 15, scale: 2 }).default('0'),

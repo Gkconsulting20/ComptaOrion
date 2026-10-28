@@ -8,6 +8,7 @@ import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 import { formatPeriodeFR } from '../utils/dateUtils';
+import { getMeasurementUnitOptions } from '../utils/measurementUnits';
 import SupplierInvoiceOcr from './SupplierInvoiceOcr';
 
 function FacturationTab({ fournisseurs }) {
@@ -109,13 +110,16 @@ function FacturationTab({ fournisseurs }) {
     for (const rec of selectedRecs) {
       const recLignes = rec.lignes || [];
       for (const l of recLignes) {
+        const product = produits.find(p => p.id === l.produit_id);
         lignes.push({
           produitId: l.produit_id,
-          produitNom: produits.find(p => p.id === l.produit_id)?.nom || `Produit ${l.produit_id}`,
-          quantite: parseFloat(l.quantite_recue),
-          prixEstime: parseFloat(l.prix_unitaire_estime || 0),
-          prixUnitaireReel: parseFloat(l.prix_unitaire_estime || 0),
-          description: produits.find(p => p.id === l.produit_id)?.nom || `Article réception ${rec.numero}`
+          produitNom: product?.nom || `Produit ${l.produit_id}`,
+          uniteStock: product?.uniteMesure || 'pièce',
+          quantite: parseFloat(l.quantite_saisie ?? l.quantite_recue),
+          uniteSaisie: l.unite_saisie || product?.uniteMesure || 'pièce',
+          prixEstime: parseFloat(l.prix_unitaire_saisi ?? l.prix_unitaire_estime ?? 0),
+          prixUnitaireReel: parseFloat(l.prix_unitaire_saisi ?? l.prix_unitaire_estime ?? 0),
+          description: product?.nom || `Article réception ${rec.numero}`
         });
       }
     }
@@ -178,6 +182,7 @@ function FacturationTab({ fournisseurs }) {
         lignes: factureForm.lignes.map(l => ({
           produitId: l.produitId,
           quantite: l.quantite,
+          uniteSaisie: l.uniteSaisie,
           prixUnitaireReel: l.prixUnitaireReel,
           description: l.description
         })),
@@ -416,7 +421,7 @@ function FacturationTab({ fournisseurs }) {
                   <thead>
                     <tr style={{ background: '#f5f5f5' }}>
                       <th style={{ padding: '10px', textAlign: 'left', border: '1px solid #ddd' }}>Produit</th>
-                      <th style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd', width: '100px' }}>Quantité</th>
+                        <th style={{ padding: '10px', textAlign: 'center', border: '1px solid #ddd', width: '165px' }}>Quantité / unité</th>
                       <th style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', width: '120px' }}>Prix Estimé</th>
                       <th style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', width: '150px' }}>Prix Réel *</th>
                       <th style={{ padding: '10px', textAlign: 'right', border: '1px solid #ddd', width: '120px' }}>Total</th>
@@ -426,7 +431,27 @@ function FacturationTab({ fournisseurs }) {
                     {factureForm.lignes.map((ligne, idx) => (
                       <tr key={idx}>
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>{ligne.produitNom || ligne.description}</td>
-                        <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>{ligne.quantite}</td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                          <div style={{ display: 'flex', gap: '5px' }}>
+                            <input
+                              type="number"
+                              min="0.001"
+                              step="0.001"
+                              value={ligne.quantite}
+                              onChange={(e) => updateLigne(idx, 'quantite', parseFloat(e.target.value) || 0)}
+                              style={{ width: '75px', padding: '5px', border: '1px solid #ddd', borderRadius: '4px' }}
+                            />
+                            <select
+                              value={ligne.uniteSaisie || ligne.uniteStock}
+                              onChange={(e) => updateLigne(idx, 'uniteSaisie', e.target.value)}
+                              style={{ minWidth: '70px', padding: '5px', border: '1px solid #ddd', borderRadius: '4px' }}
+                            >
+                              {getMeasurementUnitOptions(ligne.uniteStock).map((unit) => (
+                                <option key={unit.value} value={unit.value}>{unit.value}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </td>
                         <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: '#999' }}>{ligne.prixEstime.toLocaleString('fr-FR')}</td>
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>
                           <input type="number" value={ligne.prixUnitaireReel}

@@ -77,6 +77,40 @@ export function getWeightUnitFactorKg(unit) {
   return WEIGHT_UNIT_FACTORS_KG[normalizeWeightUnit(unit)] ?? null;
 }
 
+export function convertQuantityToBase(quantity, inputUnit, stockUnit) {
+  const amount = Number(quantity);
+  const input = normalizeWeightUnit(inputUnit);
+  const base = normalizeWeightUnit(stockUnit);
+  if (!Number.isFinite(amount) || amount < 0 || !input || !base) {
+    throw new Error('Quantité ou unité de mesure invalide.');
+  }
+  if (input === base) return amount;
+
+  const inputFactorKg = getWeightUnitFactorKg(input);
+  const baseFactorKg = getWeightUnitFactorKg(base);
+  if (inputFactorKg === null || baseFactorKg === null) {
+    throw new Error(`Conversion impossible de « ${inputUnit} » vers l’unité principale « ${stockUnit} ».`);
+  }
+  return amount * inputFactorKg / baseFactorKg;
+}
+
+export function convertUnitPriceToBase(price, inputUnit, stockUnit) {
+  const amount = Number(price);
+  const input = normalizeWeightUnit(inputUnit);
+  const base = normalizeWeightUnit(stockUnit);
+  if (!Number.isFinite(amount) || amount < 0 || !input || !base) {
+    throw new Error('Prix ou unité de mesure invalide.');
+  }
+  if (input === base) return amount;
+
+  const inputFactorKg = getWeightUnitFactorKg(input);
+  const baseFactorKg = getWeightUnitFactorKg(base);
+  if (inputFactorKg === null || baseFactorKg === null) {
+    throw new Error(`Conversion impossible de « ${inputUnit} » vers l’unité principale « ${stockUnit} ».`);
+  }
+  return amount * baseFactorKg / inputFactorKg;
+}
+
 export function convertWeightToKg(value, unit) {
   const amount = Number(value);
   const factor = getWeightUnitFactorKg(unit);
@@ -105,13 +139,21 @@ export function allocateLogisticsByWeight(lines, logisticsTotal) {
         line.product_poids_par_unite ?? line.poidsParUniteStock;
       const weightUnit = line.unitePoids ?? line.unite_poids ??
         line.product_unite_poids ?? line.unitePoidsParUnite;
+      const stockUnit = line.uniteMesure ?? line.unite_mesure ?? line.product_unite_mesure;
       const lineWeightKg = explicitTotalKg !== undefined && explicitTotalKg !== null
         ? Number(explicitTotalKg)
-        : convertWeightToKg(weightPerUnit, weightUnit) * quantity;
-      if (!Number.isFinite(lineWeightKg) || lineWeightKg <= 0) {
+        : (weightPerUnit !== undefined && weightPerUnit !== null && weightPerUnit !== ''
+          ? convertWeightToKg(weightPerUnit, weightUnit || 'kg')
+          : convertWeightToKg(1, stockUnit) * quantity);
+      const normalizedLineWeightKg = explicitTotalKg !== undefined && explicitTotalKg !== null
+        ? lineWeightKg
+        : (weightPerUnit !== undefined && weightPerUnit !== null && weightPerUnit !== ''
+          ? lineWeightKg * quantity
+          : lineWeightKg);
+      if (!Number.isFinite(normalizedLineWeightKg) || normalizedLineWeightKg <= 0) {
         throw new Error('Poids total nul ou invalide.');
       }
-      weightsKg.push(lineWeightKg);
+      weightsKg.push(normalizedLineWeightKg);
     } catch {
       missingWeightIndexes.push(index);
       weightsKg.push(0);

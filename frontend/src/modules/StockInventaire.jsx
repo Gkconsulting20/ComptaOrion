@@ -6,6 +6,7 @@ import { Modal } from '../components/Modal';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
+import { convertPriceFromBase, getMeasurementUnitOptions } from '../utils/measurementUnits';
 
 function NonFactureTab({ fournisseurs, produits }) {
   const [subTab, setSubTab] = useState('stock');
@@ -279,7 +280,7 @@ export function StockInventaire() {
         dateReception: new Date().toISOString().split('T')[0],
         entrepotId: '', 
         notes: '', 
-        lignes: [{ produitId: '', quantiteRecue: 1, prixUnitaireEstime: 0 }] 
+        lignes: [{ produitId: '', quantiteRecue: 1, uniteSaisie: '', prixUnitaireEstime: 0 }] 
       });
     } else if (type === 'commande') {
       setForm(item || {
@@ -358,6 +359,7 @@ export function StockInventaire() {
           lignes: lignesValides.map(l => ({
             produitId: parseInt(l.produitId),
             quantiteRecue: parseFloat(l.quantiteRecue),
+            uniteSaisie: l.uniteSaisie || undefined,
             prixUnitaireEstime: parseFloat(l.prixUnitaireEstime)
           }))
         });
@@ -992,14 +994,14 @@ export function StockInventaire() {
                   <h4 style={{ margin: 0 }}>Lignes de Réception</h4>
                   <button type="button" onClick={() => setForm({
                     ...form, 
-                    lignes: [...(form.lignes || []), { produitId: '', quantiteRecue: 1, prixUnitaireEstime: 0 }]
+                    lignes: [...(form.lignes || []), { produitId: '', quantiteRecue: 1, uniteSaisie: '', prixUnitaireEstime: 0 }]
                   })} style={{ padding: '5px 10px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                     + Ajouter Ligne
                   </button>
                 </div>
                 
                 {(form.lignes || []).map((ligne, index) => (
-                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', padding: '10px', background: '#f8f9fa', borderRadius: '4px' }}>
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', padding: '10px', background: '#f8f9fa', borderRadius: '4px' }}>
                     <div>
                       <label style={{ fontSize: '12px', color: '#666' }}>Produit</label>
                       <select 
@@ -1010,6 +1012,7 @@ export function StockInventaire() {
                           newLignes[index] = { 
                             ...newLignes[index], 
                             produitId: e.target.value,
+                            uniteSaisie: produit?.uniteMesure || '',
                             prixUnitaireEstime: produit ? produit.prixAchat || 0 : 0
                           };
                           setForm({...form, lignes: newLignes});
@@ -1020,6 +1023,32 @@ export function StockInventaire() {
                         {data.produits.map(p => (
                           <option key={p.id} value={p.id}>{p.reference} - {p.nom}</option>
                         ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Unité saisie</label>
+                      <select
+                        value={ligne.uniteSaisie || data.produits.find(p => p.id === parseInt(ligne.produitId))?.uniteMesure || 'pièce'}
+                        onChange={(e) => {
+                          const newLignes = [...form.lignes];
+                          const produit = data.produits.find(p => p.id === parseInt(ligne.produitId));
+                          const prixParUnite = convertPriceFromBase(
+                            produit?.prixAchat || 0,
+                            e.target.value,
+                            produit?.uniteMesure || e.target.value
+                          );
+                          newLignes[index] = {
+                            ...newLignes[index],
+                            uniteSaisie: e.target.value,
+                            prixUnitaireEstime: Number.isFinite(prixParUnite) ? prixParUnite : 0,
+                          };
+                          setForm({ ...form, lignes: newLignes });
+                        }}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      >
+                        {getMeasurementUnitOptions(
+                          data.produits.find(p => p.id === parseInt(ligne.produitId))?.uniteMesure
+                        ).map((unit) => <option key={unit.value} value={unit.value}>{unit.label}</option>)}
                       </select>
                     </div>
                     <div>
@@ -1051,7 +1080,7 @@ export function StockInventaire() {
                     <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                       <button type="button" onClick={() => {
                         const newLignes = form.lignes.filter((_, i) => i !== index);
-                        setForm({...form, lignes: newLignes.length > 0 ? newLignes : [{ produitId: '', quantiteRecue: 1, prixUnitaireEstime: 0 }]});
+                        setForm({...form, lignes: newLignes.length > 0 ? newLignes : [{ produitId: '', quantiteRecue: 1, uniteSaisie: '', prixUnitaireEstime: 0 }]});
                       }} style={{ padding: '8px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                         X
                       </button>
