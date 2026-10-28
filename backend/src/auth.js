@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
 
 // Clés secrètes OBLIGATOIRES - Pas de fallback pour sécurité maximale
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -72,6 +73,7 @@ export function generateRefreshToken(user) {
   const payload = {
     id: user.id,
     entrepriseId: user.entrepriseId,
+    jti: randomUUID(),
   };
   
   return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES_IN });

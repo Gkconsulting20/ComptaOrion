@@ -48,13 +48,44 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       await once(server,'listening');
     }
     const origin=server ? `http://127.0.0.1:${server.address().port}` : 'https://test.local';
-    let token;
+    let cookieJar = new Map();
+    function storeResponseCookies(response) {
+      let setCookies = response.headers.getSetCookie?.() || [];
+      if (!setCookies.length) {
+        const combined = response.headers.get('set-cookie');
+        if (combined) setCookies = combined.split(/,(?=\s*[^;,=\s]+=)/);
+      }
+      for (const setCookie of setCookies) {
+        const [pair, ...attributes] = setCookie.split(';');
+        const separator = pair.indexOf('=');
+        if (separator < 1) continue;
+        const name = pair.slice(0, separator).trim();
+        const value = pair.slice(separator + 1).trim();
+        const pathAttribute = attributes.find(attribute => /^\s*path=/i.test(attribute));
+        const cookiePath = pathAttribute ? pathAttribute.split('=')[1].trim() : '/';
+        const key = `${name}:${cookiePath}`;
+        if (attributes.some(attribute => /^\s*max-age=0\s*$/i.test(attribute))) {
+          cookieJar.delete(key);
+        } else {
+          cookieJar.set(key, { name, value, path: cookiePath });
+        }
+      }
+    }
+    function requestCookieHeader(apiPath) {
+      const requestPath = `/api${apiPath}`;
+      return [...cookieJar.values()]
+        .filter(cookie => cookie.path === '/' || requestPath.startsWith(cookie.path))
+        .map(cookie => `${cookie.name}=${cookie.value}`)
+        .join('; ');
+    }
     async function api(path, method='GET', body, expected=200, extraHeaders={}) {
+      const cookie = requestCookieHeader(path);
       const init = {
-        method, headers: { 'Content-Type':'application/json', ...(token?{Authorization:`Bearer ${token}`}:{}) , ...extraHeaders },
+        method, headers: { 'Content-Type':'application/json', ...(cookie ? { Cookie: cookie } : {}), ...extraHeaders },
         ...(body ? {body:JSON.stringify(body)} : {}),
       };
       const res=worker ? await worker.dispatchFetch(origin+'/api'+path,init) : await fetch(origin+'/api'+path,init);
+      storeResponseCookies(res);
       const json=await res.json();
       assert.equal(res.status,expected,`${method} ${path}: ${JSON.stringify(json).slice(0,400)}`);
       return json;
@@ -64,8 +95,16 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       username:'recette',email:'recette@example.invalid',password,entrepriseNom:'Entreprise de recette isolée',
     },201);
     const login=await api('/auth-security/login','POST',{email:'recette@example.invalid',password});
-    assert.ok(login.token);
-    token=login.token;
+    assert.ok(login.session?.id);
+    assert.equal(Object.hasOwn(login, 'token'), false, 'Le jeton ne doit pas être retourné au navigateur');
+    const refreshBeforeRotation = requestCookieHeader('/auth-security/refresh')
+      .match(/(?:^|;\s*)comptaorion_refresh=([^;]+)/)?.[1];
+    await api('/auth-security/refresh','POST',null);
+    const refreshAfterRotation = requestCookieHeader('/auth-security/refresh')
+      .match(/(?:^|;\s*)comptaorion_refresh=([^;]+)/)?.[1];
+    assert.ok(refreshBeforeRotation && refreshAfterRotation && refreshBeforeRotation !== refreshAfterRotation,
+      'Le refresh token doit tourner sans être exposé dans le JSON');
+    await api('/auth-security/session');
     for(const path of ['/auth/me','/dashboard/global','/stock/receptions','/stock/alertes',
       '/stock/produits','/stock/rapports/valorisation','/depenses/list','/depenses/categories',
       '/immobilisations/list','/immobilisations/categories','/immobilisations/registre',
@@ -90,7 +129,8 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const another=await api('/factures','POST',{
       clientId,items:[{produitId:productId,quantite:1,prixUnitaire:1000}],
     },201);
-    const paymentRequest={method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+    const paymentCookie = requestCookieHeader(`/factures/${another.data.id}/paiement`);
+    const paymentRequest={method:'POST',headers:{'Content-Type':'application/json',Cookie:paymentCookie},
       body:JSON.stringify({montant:1180,modePaiement:'especes'})};
     const paymentUrl=origin+`/api/factures/${another.data.id}/paiement`;
     const results=await Promise.all([0,1].map(()=>worker ?
@@ -184,7 +224,8 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const form=new FormData();
     form.append('logo',new Blob([png],{type:'image/png'}),'recette.png');
     const encoded=new Request(origin+'/api/upload/logo',{method:'POST',body:form});
-    const logoRequest={method:'POST',headers:{Authorization:`Bearer ${token}`,
+    const logoCookie=requestCookieHeader('/upload/logo');
+    const logoRequest={method:'POST',headers:{...(logoCookie ? {Cookie:logoCookie} : {}),
       'Content-Type':encoded.headers.get('Content-Type')},body:await encoded.arrayBuffer()};
     const uploaded=worker ? await worker.dispatchFetch(origin+'/api/upload/logo',logoRequest) :
       await fetch(origin+'/api/upload/logo',logoRequest);
@@ -195,10 +236,11 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.equal(logo.status,200);
     assert.deepEqual(Buffer.from(await logo.arrayBuffer()),png);
     await api('/upload/logo','DELETE');
-    const firstToken=token;
-    const second=await api('/auth/register','POST',{username:'second',email:'second@example.invalid',
+    const firstCookieJar = new Map(cookieJar);
+    await api('/auth/register','POST',{username:'second',email:'second@example.invalid',
       password,entrepriseNom:'Autre entreprise isolée'},201);
-    token=second.token;
+    const secondLogin=await api('/auth-security/login','POST',{email:'second@example.invalid',password});
+    assert.ok(secondLogin.session?.id);
     const secondClient=await api('/clients','POST',{nom:'Autre client'},201);
     await api('/factures','POST',{clientId:secondClient.data.id,items:[{description:'Service',quantite:1,prixUnitaire:500}]},201);
     const isolatedAssociationProjects=await api('/associations/projects');
@@ -207,9 +249,10 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     await api(`/factures/${f.id}`,'GET',null,404);
     const forged=await api(`/stock/produits?entrepriseId=${signup.user.entrepriseId}`);
     assert.equal(forged.length,0,'Le paramètre entreprise ne doit pas donner accès aux produits tiers');
-    token=firstToken;
+    cookieJar = firstCookieJar;
     await api('/ia/chat','POST',{message:'ne pas envoyer'},404);
     await api('/auth-security/logout','POST',{sessionId:login.session.id});
+    await api('/auth-security/session','GET',null,401);
     console.log('Recette : connexion, facture/paiement, écritures équilibrées, dépenses, projets associatifs, budgets, reçus de subvention, isolation tenant et déconnexion vérifiés.');
   } finally {
     if(server) await new Promise(r=>server.close(r));
