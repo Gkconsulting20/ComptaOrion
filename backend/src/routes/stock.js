@@ -12,57 +12,6 @@ import {
 
 const router = express.Router();
 
-async function calculerCoutMoyenPondere(produitId, nouvelleQuantite, nouveauPrixUnitaire, entrepriseId) {
-  try {
-    const produitData = await db.execute(sql`
-      SELECT quantite, cout_moyen, prix_achat FROM produits 
-      WHERE id = ${produitId} AND entreprise_id = ${entrepriseId}
-    `);
-    
-    if (!produitData.rows || produitData.rows.length === 0) {
-      return nouveauPrixUnitaire;
-    }
-    
-    const produit = produitData.rows[0];
-    const quantiteActuelle = parseFloat(produit.quantite || 0);
-    const coutMoyenActuel = parseFloat(produit.cout_moyen || produit.prix_achat || 0);
-    const qteEntree = parseFloat(nouvelleQuantite);
-    const prixEntree = parseFloat(nouveauPrixUnitaire);
-    
-    if (quantiteActuelle <= 0) {
-      return prixEntree;
-    }
-    
-    const valeurStockActuel = quantiteActuelle * coutMoyenActuel;
-    const valeurEntree = qteEntree * prixEntree;
-    const nouvelleQuantiteTotale = quantiteActuelle + qteEntree;
-    
-    if (nouvelleQuantiteTotale <= 0) {
-      return coutMoyenActuel;
-    }
-    
-    const nouveauCMP = (valeurStockActuel + valeurEntree) / nouvelleQuantiteTotale;
-    return Math.round(nouveauCMP * 100) / 100;
-  } catch (error) {
-    console.error('Erreur calcul CMP:', error);
-    return nouveauPrixUnitaire;
-  }
-}
-
-async function mettreAJourCoutMoyen(produitId, coutMoyen, entrepriseId) {
-  try {
-    await db.execute(sql`
-      UPDATE produits 
-      SET cout_moyen = ${coutMoyen}, 
-          derniere_maj_cout = NOW(),
-          updated_at = NOW()
-      WHERE id = ${produitId} AND entreprise_id = ${entrepriseId}
-    `);
-  } catch (error) {
-    console.error('Erreur mise à jour CMP:', error);
-  }
-}
-
 // CRUD Catégories
 router.get('/categories', async (req, res) => {
   try {
@@ -365,84 +314,85 @@ router.post('/mouvements', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Produit non trouvé pour cette entreprise' });
     }
 
-    if (type === 'entree') {
-      await ensureOpeningValuationLayer(db, {
-        entrepriseId: entId,
-        produitId: prodId,
-        productSnapshot,
-      });
-    }
-    
-    // Insérer le mouvement
-    const movement = await db.insert(mouvementsStock).values({
-      entrepriseId: entId,
-      produitId: prodId,
-      entrepotId: entrepotId ? parseInt(entrepotId) : null,
-      type,
-      quantite: qte,
-      prixUnitaire: prix,
-      reference
-    }).returning();
-
-    if (type === 'entree') {
-      const unitCost = prix ?? Number(productSnapshot.coutMoyen || productSnapshot.prixAchat || 0);
-      await createStockValuationLayer(db, {
-        entrepriseId: entId,
-        produitId: prodId,
-        mouvementId: movement[0].id,
-        quantity: qte,
-        unitCost,
-        productSnapshot,
-        ensureOpening: false,
-      });
-    } else if (type !== 'transfert') {
-      await consumeStockValuation(db, {
-        entrepriseId: entId,
-        produitId: prodId,
-        quantity: qte,
-      });
-    }
-
-    // Mettre à jour le stock par entrepôt
-    if (entrepotId && type !== 'transfert') {
-      const currentStock = await db.query.stockParEntrepot.findFirst({
-        where: and(
-          eq(stockParEntrepot.produitId, parseInt(produitId)),
-          eq(stockParEntrepot.entrepotId, parseInt(entrepotId))
-        )
-      });
-
-      const quantityChange = type === 'entree' ? parseFloat(quantite) : -parseFloat(quantite);
-      
-      if (currentStock) {
-        await db.update(stockParEntrepot).set({
-          quantitePresente: currentStock.quantitePresente + quantityChange,
-          quantiteDisponible: currentStock.quantiteDisponible + quantityChange,
-          updatedAt: new Date()
-        }).where(eq(stockParEntrepot.id, currentStock.id));
-      } else {
-        await db.insert(stockParEntrepot).values({
-          entrepriseId: parseInt(entrepriseId),
-          produitId: parseInt(produitId),
-          entrepotId: parseInt(entrepotId),
-          quantitePresente: type === 'entree' ? parseFloat(quantite) : 0,
-          quantiteDisponible: type === 'entree' ? parseFloat(quantite) : 0
+    const [movement] = await db.transaction(async (tx) => {
+      if (type === 'entree') {
+        await ensureOpeningValuationLayer(tx, {
+          entrepriseId: entId,
+          produitId: prodId,
+          productSnapshot,
         });
       }
 
-      // Vérifier alertes
-      await checkStockAlerts(parseInt(entrepriseId), parseInt(produitId), parseInt(entrepotId));
-    }
+      const [createdMovement] = await tx.insert(mouvementsStock).values({
+        entrepriseId: entId,
+        produitId: prodId,
+        entrepotId: parseInt(entrepotId),
+        type,
+        quantite: qte,
+        prixUnitaire: prix,
+        reference
+      }).returning();
+
+      if (type === 'entree') {
+        const unitCost = prix ?? Number(productSnapshot.coutMoyen || productSnapshot.prixAchat || 0);
+        await createStockValuationLayer(tx, {
+          entrepriseId: entId,
+          produitId: prodId,
+          mouvementId: createdMovement.id,
+          quantity: qte,
+          unitCost,
+          productSnapshot,
+          ensureOpening: false,
+        });
+      } else if (type !== 'transfert') {
+        await consumeStockValuation(tx, {
+          entrepriseId: entId,
+          produitId: prodId,
+          quantity: qte,
+        });
+      }
+
+      if (type !== 'transfert') {
+        const [currentStock] = await tx.select().from(stockParEntrepot).where(and(
+          eq(stockParEntrepot.entrepriseId, entId),
+          eq(stockParEntrepot.produitId, prodId),
+          eq(stockParEntrepot.entrepotId, parseInt(entrepotId))
+        )).for('update').limit(1);
+        const quantityChange = type === 'entree' ? qte : -qte;
+
+        if (currentStock) {
+          await tx.update(stockParEntrepot).set({
+            quantitePresente: Number(currentStock.quantitePresente || 0) + quantityChange,
+            quantiteDisponible: Number(currentStock.quantiteDisponible || 0) + quantityChange,
+            updatedAt: new Date()
+          }).where(and(
+            eq(stockParEntrepot.id, currentStock.id),
+            eq(stockParEntrepot.entrepriseId, entId)
+          ));
+        } else {
+          await tx.insert(stockParEntrepot).values({
+            entrepriseId: entId,
+            produitId: prodId,
+            entrepotId: parseInt(entrepotId),
+            quantitePresente: type === 'entree' ? qte : 0,
+            quantiteDisponible: type === 'entree' ? qte : 0
+          });
+        }
+
+        await tx.update(produits).set({
+          quantite: sql`GREATEST(0, COALESCE(${produits.quantite}, 0) + ${quantityChange})`,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(produits.id, prodId),
+          eq(produits.entrepriseId, entId)
+        ));
+      }
+
+      return [createdMovement];
+    });
 
     if (type !== 'transfert') {
-      const quantityChange = type === 'entree' ? qte : -qte;
-      await db.update(produits).set({
-        quantite: sql`GREATEST(0, COALESCE(${produits.quantite}, 0) + ${quantityChange})`,
-        updatedAt: new Date(),
-      }).where(and(
-        eq(produits.id, prodId),
-        eq(produits.entrepriseId, entId)
-      ));
+      await checkStockAlerts(entId, prodId, parseInt(entrepotId));
     }
 
     // Audit log
@@ -451,12 +401,12 @@ router.post('/mouvements', async (req, res) => {
       ...auditInfo,
       action: 'CREATE',
       table: 'mouvements_stock',
-      recordId: movement[0].id,
-      nouvelleValeur: movement[0],
+      recordId: movement.id,
+      nouvelleValeur: movement,
       description: `Mouvement stock ${type}: ${quantite} unités (ref: ${reference || 'N/A'})`
     });
 
-    res.json(movement[0]);
+    res.json(movement);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -828,15 +778,16 @@ router.post('/receptions/:id/valider', async (req, res) => {
     const ecritureId = ecritureResult.rows[0].id;
 
     // Ligne débit Stock
+    const montantReceptionEstime = Number(bon.total_ht || 0) + totalLogistiqueEstimee;
     await db.execute(sql`
       INSERT INTO lignes_ecriture (entreprise_id, ecriture_id, compte_comptable_id, libelle, debit, credit)
-      VALUES (${req.entrepriseId}, ${ecritureId}, ${compteStockId}, ${'Entrée stock ' + bon.numero}, ${bon.total_ht}, 0)
+      VALUES (${req.entrepriseId}, ${ecritureId}, ${compteStockId}, ${'Entrée stock ' + bon.numero}, ${montantReceptionEstime}, 0)
     `);
 
     // Ligne crédit Fournisseurs factures non parvenues
     await db.execute(sql`
       INSERT INTO lignes_ecriture (entreprise_id, ecriture_id, compte_comptable_id, libelle, debit, credit)
-      VALUES (${req.entrepriseId}, ${ecritureId}, ${comptePontId}, ${'Stock non facturé ' + bon.numero}, 0, ${bon.total_ht})
+      VALUES (${req.entrepriseId}, ${ecritureId}, ${comptePontId}, ${'Stock non facturé ' + bon.numero}, 0, ${montantReceptionEstime})
     `);
 
     // 4. Créer les enregistrements stock_pending pour chaque ligne
@@ -976,40 +927,43 @@ router.get('/rapports/valorisation', async (req, res) => {
     const result = await db.execute(sql`
       SELECT 
         p.id, p.reference, p.nom, p.valorisation_method,
-        COALESCE(SUM(spe.quantite_presente), 0) as quantite,
+        COALESCE(NULLIF(vs_totals.quantite, 0), p.quantite, 0) as quantite,
         CASE 
           WHEN p.valorisation_method = 'FIFO' THEN (
-            SELECT COALESCE(
-              SUM(vs.cout_total) / NULLIF(SUM(vs.quantite), 0),
+            COALESCE(
+              vs_totals.valeur / NULLIF(vs_totals.quantite, 0),
               NULLIF(p.cout_moyen, 0),
               p.prix_achat,
               0
             )
-            FROM valorisations_stock vs 
-            WHERE vs.entreprise_id = p.entreprise_id
-              AND vs.produit_id = p.id
-              AND vs.quantite > 0
           )
           ELSE COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
         END as cout_unitaire,
         CASE 
           WHEN p.valorisation_method = 'FIFO' THEN (
             SELECT COALESCE(
-              NULLIF(SUM(vs.cout_total), 0),
-              COALESCE(SUM(spe.quantite_presente), 0) * COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
+              NULLIF(vs_totals.valeur, 0),
+              COALESCE(NULLIF(vs_totals.quantite, 0), p.quantite, 0) *
+                COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
             )
-            FROM valorisations_stock vs 
-            WHERE vs.entreprise_id = p.entreprise_id
-              AND vs.produit_id = p.id
-              AND vs.quantite > 0
           )
-          ELSE COALESCE(SUM(spe.quantite_presente), 0) * COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
+          ELSE COALESCE(NULLIF(vs_totals.quantite, 0), p.quantite, 0) *
+            COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
         END as valeur_totale
       FROM produits p
-      LEFT JOIN stock_par_entrepot spe ON p.id = spe.produit_id
-      WHERE p.entreprise_id = ${req.entrepriseId} AND p.actif = true
-      GROUP BY p.id, p.reference, p.nom, p.valorisation_method, p.prix_achat
-      HAVING COALESCE(SUM(spe.quantite_presente), 0) > 0
+      LEFT JOIN (
+        SELECT entreprise_id, produit_id,
+          SUM(quantite) as quantite,
+          SUM(cout_total) as valeur
+        FROM valorisations_stock
+        WHERE quantite > 0
+        GROUP BY entreprise_id, produit_id
+      ) vs_totals
+        ON vs_totals.entreprise_id = p.entreprise_id
+       AND vs_totals.produit_id = p.id
+      WHERE p.entreprise_id = ${req.entrepriseId}
+        AND p.actif = true
+        AND COALESCE(NULLIF(vs_totals.quantite, 0), p.quantite, 0) > 0
       ORDER BY p.nom
     `);
     

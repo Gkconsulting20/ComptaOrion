@@ -17,6 +17,15 @@ test('répartit les frais logistiques au prorata de la valeur des articles', () 
   assert.equal(result.unallocated, 0);
 });
 
+test('répartit aussi les frais estimés des lignes de réception', () => {
+  const result = allocateLogisticsByValue([
+    { quantite_recue: 2, prix_unitaire_estime: 500 },
+    { quantite_recue: 1, prix_unitaire_estime: 1000 },
+  ], 300);
+
+  assert.deepEqual(result.allocations, [150, 150]);
+});
+
 test('répartit les centimes restants sans perdre de montant', () => {
   const result = allocateMoneyByWeight(10, [1, 1, 1]);
 

@@ -4,6 +4,10 @@ import { clients, factures, paiements, produitPrix, produits } from '../schema.j
 import { eq, and, desc, sql, gte, lte, between, gt, isNull, or } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import emailService from '../services/emailService.js';
+import {
+  calculateSellingPriceFromMarkup,
+  synchronizeActiveProductPrices,
+} from '../services/stockValuation.js';
 
 const router = express.Router();
 
@@ -463,6 +467,7 @@ router.get('/prix-produits', async (req, res) => {
         produitId: produitPrix.produitId,
         produitNom: produits.nom,
         produitReference: produits.reference,
+        coutCMV: sql`COALESCE(NULLIF(${produits.coutMoyen}, 0), ${produits.prixAchat}, 0)`,
         coutAchat: produitPrix.coutAchat,
         margeBruteCible: produitPrix.margeBruteCible,
         prixVenteCalcule: produitPrix.prixVenteCalcule,
@@ -476,7 +481,10 @@ router.get('/prix-produits', async (req, res) => {
         createdAt: produitPrix.createdAt
       })
       .from(produitPrix)
-      .leftJoin(produits, eq(produitPrix.produitId, produits.id))
+      .leftJoin(produits, and(
+        eq(produitPrix.produitId, produits.id),
+        eq(produitPrix.entrepriseId, produits.entrepriseId)
+      ))
       .where(and(...conditions))
       .orderBy(desc(produitPrix.createdAt));
     
@@ -506,16 +514,19 @@ router.post('/prix-produits/calculer', async (req, res) => {
       });
     }
     
-    const marge = parseFloat(margeBruteCible);
-    if (marge <= 0 || marge >= 100) {
+    const marge = Number(margeBruteCible);
+    const cout = Number(coutAchat);
+    if (!Number.isFinite(marge) || marge < 0 || marge > 1000) {
       return res.status(400).json({ 
         success: false, 
-        error: 'La marge brute produit doit être comprise entre 1% et 99%' 
+        error: 'La majoration du CMV doit être comprise entre 0% et 1000%.'
       });
     }
-    
-    const cout = parseFloat(coutAchat);
-    const prixVenteCalcule = cout / (1 - marge / 100);
+    if (!Number.isFinite(cout) || cout < 0) {
+      return res.status(400).json({ success: false, error: 'Le CMV doit être un montant positif ou nul.' });
+    }
+
+    const prixVenteCalcule = calculateSellingPriceFromMarkup(cout, marge);
     const beneficeBrut = prixVenteCalcule - cout;
     
     res.json({
@@ -525,7 +536,7 @@ router.post('/prix-produits/calculer', async (req, res) => {
         margeBruteCible: marge,
         prixVenteCalcule: Math.round(prixVenteCalcule * 100) / 100,
         beneficeBrut: Math.round(beneficeBrut * 100) / 100,
-        formule: `${cout} / (1 - ${marge}%) = ${prixVenteCalcule.toFixed(2)}`
+        formule: `${cout} × (1 + ${marge}/100) = ${prixVenteCalcule.toFixed(2)}`
       }
     });
   } catch (error) {
@@ -559,53 +570,65 @@ router.post('/prix-produits', async (req, res) => {
       });
     }
     
-    const marge = parseFloat(margeBruteCible);
-    if (marge <= 0 || marge >= 100) {
+    const marge = Number(margeBruteCible);
+    if (!Number.isFinite(marge) || marge < 0 || marge > 1000) {
       return res.status(400).json({ 
         success: false, 
-        error: 'La marge brute produit doit être comprise entre 1% et 99%' 
+        error: 'La majoration du CMV doit être comprise entre 0% et 1000%.'
       });
     }
-    
-    // Formule: Prix de vente = Coût d'achat / (1 - Marge brute)
-    const cout = parseFloat(coutAchat);
-    const prixVenteCalcule = cout / (1 - marge / 100);
-    
-    const [newPrix] = await db
-      .insert(produitPrix)
-      .values({
+    const [product] = await db.select().from(produits).where(and(
+      eq(produits.id, parseInt(produitId, 10)),
+      eq(produits.entrepriseId, req.entrepriseId)
+    )).limit(1);
+    if (!product) return res.status(404).json({ success: false, error: 'Produit non trouvé dans cette entreprise.' });
+
+    const cout = Math.max(0, Number(product.coutMoyen || product.prixAchat || 0));
+    const prixVenteCalcule = calculateSellingPriceFromMarkup(cout, marge);
+    const manualPrice = prixVenteManuel === undefined || prixVenteManuel === null || prixVenteManuel === ''
+      ? null
+      : Number(prixVenteManuel);
+    if (manualPrice !== null && (!Number.isFinite(manualPrice) || manualPrice < 0)) {
+      return res.status(400).json({ success: false, error: 'Le prix manuel doit être positif ou nul.' });
+    }
+
+    const effet = dateEffet || new Date().toISOString().split('T')[0];
+    const expiration = dateExpiration || null;
+    const [newPrix] = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(produitPrix).values({
         entrepriseId: req.entrepriseId,
-        produitId: parseInt(produitId),
+        produitId: parseInt(produitId, 10),
         coutAchat: cout.toFixed(2),
         margeBruteCible: marge.toFixed(2),
         prixVenteCalcule: prixVenteCalcule.toFixed(2),
-        prixVenteManuel: prixVenteManuel ? parseFloat(prixVenteManuel).toFixed(2) : null,
+        prixVenteManuel: manualPrice === null ? null : manualPrice.toFixed(2),
         categorieClient,
         canalVente,
-        dateEffet: dateEffet || new Date().toISOString().split('T')[0],
-        dateExpiration: dateExpiration || null,
+        dateEffet: effet,
+        dateExpiration: expiration,
         devise,
         actif: true
-      })
-      .returning();
-    
-    // Mettre à jour le prix de vente du produit
-    const prixFinal = prixVenteManuel ? parseFloat(prixVenteManuel) : prixVenteCalcule;
-    await db.update(produits)
-      .set({ 
-        prixVente: prixFinal.toFixed(2),
-        prixAchat: cout.toFixed(2),
-        updatedAt: new Date()
-      })
-      .where(and(
-        eq(produits.id, parseInt(produitId)),
-        eq(produits.entrepriseId, req.entrepriseId)
-      ));
+      }).returning();
+
+      await synchronizeActiveProductPrices(tx, req.entrepriseId, product.id, cout);
+
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'produit_prix',
+        recordId: created.id,
+        nouvelleValeur: created,
+        description: `Prix calculé pour le produit ${product.nom}`,
+        executor: tx,
+        required: true,
+      });
+      return [created];
+    });
     
     res.status(201).json({
       success: true,
       data: newPrix,
-      message: `Prix calculé: ${prixVenteCalcule.toFixed(0)} ${devise} (marge ${marge}%)`
+      message: `Prix calculé: ${prixVenteCalcule.toFixed(2)} ${devise} (majoration ${marge}% du CMV)`
     });
   } catch (error) {
     console.error('Erreur POST /api/clients/prix-produits:', error);
@@ -620,9 +643,8 @@ router.post('/prix-produits', async (req, res) => {
 router.put('/prix-produits/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
-      coutAchat, 
-      margeBruteCible, 
+    const {
+      margeBruteCible,
       prixVenteManuel,
       categorieClient,
       canalVente,
@@ -630,53 +652,72 @@ router.put('/prix-produits/:id', async (req, res) => {
       dateExpiration,
       actif
     } = req.body;
-    
-    const updates = { updatedAt: new Date() };
-    
-    if (coutAchat !== undefined) updates.coutAchat = parseFloat(coutAchat).toFixed(2);
-    if (margeBruteCible !== undefined) {
-      const marge = parseFloat(margeBruteCible);
-      if (marge <= 0 || marge >= 100) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'La marge brute produit doit être comprise entre 1% et 99%' 
-        });
+
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(produitPrix).where(and(
+        eq(produitPrix.id, parseInt(id, 10)),
+        eq(produitPrix.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!existing) return { status: 404 };
+
+      const [product] = await tx.select().from(produits).where(and(
+        eq(produits.id, existing.produitId),
+        eq(produits.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!product) return { status: 404 };
+
+      const margin = margeBruteCible === undefined
+        ? Number(existing.margeBruteCible)
+        : Number(margeBruteCible);
+      if (!Number.isFinite(margin) || margin < 0 || margin > 1000) {
+        return { status: 400, error: 'La majoration du CMV doit être comprise entre 0% et 1000%.' };
       }
-      updates.margeBruteCible = marge.toFixed(2);
-    }
-    if (prixVenteManuel !== undefined) updates.prixVenteManuel = prixVenteManuel ? parseFloat(prixVenteManuel).toFixed(2) : null;
-    if (categorieClient) updates.categorieClient = categorieClient;
-    if (canalVente) updates.canalVente = canalVente;
-    if (dateEffet) updates.dateEffet = dateEffet;
-    if (dateExpiration !== undefined) updates.dateExpiration = dateExpiration || null;
-    if (actif !== undefined) updates.actif = actif;
-    
-    // Recalculer le prix si coût ou marge changent
-    if (updates.coutAchat || updates.margeBruteCible) {
-      const [existing] = await db.select()
-        .from(produitPrix)
-        .where(and(eq(produitPrix.id, parseInt(id)), eq(produitPrix.entrepriseId, req.entrepriseId)));
-      
-      if (!existing) {
-        return res.status(404).json({ success: false, error: 'Prix non trouvé' });
+
+      const manualPrice = prixVenteManuel === undefined
+        ? existing.prixVenteManuel
+        : (prixVenteManuel === null || prixVenteManuel === '' ? null : Number(prixVenteManuel));
+      if (manualPrice !== null && (!Number.isFinite(Number(manualPrice)) || Number(manualPrice) < 0)) {
+        return { status: 400, error: 'Le prix manuel doit être positif ou nul.' };
       }
-      
-      const cout = updates.coutAchat ? parseFloat(updates.coutAchat) : parseFloat(existing.coutAchat);
-      const marge = updates.margeBruteCible ? parseFloat(updates.margeBruteCible) : parseFloat(existing.margeBruteCible);
-      updates.prixVenteCalcule = (cout / (1 - marge / 100)).toFixed(2);
+
+      const cmv = Math.max(0, Number(product.coutMoyen || product.prixAchat || 0));
+      const calculatedPrice = calculateSellingPriceFromMarkup(cmv, margin);
+      const updates = {
+        coutAchat: cmv.toFixed(2),
+        margeBruteCible: margin.toFixed(2),
+        prixVenteCalcule: calculatedPrice.toFixed(2),
+        prixVenteManuel: manualPrice === null ? null : Number(manualPrice).toFixed(2),
+        updatedAt: new Date(),
+      };
+      if (categorieClient !== undefined) updates.categorieClient = categorieClient;
+      if (canalVente !== undefined) updates.canalVente = canalVente;
+      if (dateEffet !== undefined) updates.dateEffet = dateEffet;
+      if (dateExpiration !== undefined) updates.dateExpiration = dateExpiration || null;
+      if (actif !== undefined) updates.actif = actif;
+
+      const [updated] = await tx.update(produitPrix).set(updates).where(and(
+        eq(produitPrix.id, existing.id),
+        eq(produitPrix.entrepriseId, req.entrepriseId)
+      )).returning();
+      await synchronizeActiveProductPrices(tx, req.entrepriseId, product.id, cmv);
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'produit_prix',
+        recordId: updated.id,
+        ancienneValeur: existing,
+        nouvelleValeur: updated,
+        description: `Prix de vente recalculé pour le produit ${product.nom}`,
+        executor: tx,
+        required: true,
+      });
+      return { status: 200, updated };
+    });
+
+    if (result.status !== 200) {
+      return res.status(result.status).json({ success: false, error: result.error || 'Prix ou produit non trouvé.' });
     }
-    
-    const [updated] = await db
-      .update(produitPrix)
-      .set(updates)
-      .where(and(eq(produitPrix.id, parseInt(id)), eq(produitPrix.entrepriseId, req.entrepriseId)))
-      .returning();
-    
-    if (!updated) {
-      return res.status(404).json({ success: false, error: 'Prix non trouvé' });
-    }
-    
-    res.json({ success: true, data: updated });
+    res.json({ success: true, data: result.updated });
   } catch (error) {
     console.error('Erreur PUT /api/clients/prix-produits:', error);
     res.status(500).json({ success: false, error: error.message });

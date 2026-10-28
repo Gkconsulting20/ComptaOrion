@@ -3,7 +3,11 @@ import { db } from '../db.js';
 import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables, mouvementsStock, entreprises, liteIdempotency } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import emailService from '../services/emailService.js';
-import { createEcritureFactureVente, createEcriturePaiementClient } from '../services/comptabiliteService.js';
+import {
+  createEcritureCoutVente,
+  createEcritureFactureVente,
+  createEcriturePaiementClient,
+} from '../services/comptabiliteService.js';
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { consumeStockValuation } from '../services/stockValuation.js';
@@ -222,15 +226,21 @@ router.post('/lite-sale', async (req, res) => {
       }).returning();
       const itemRows = normalized.map(i => ({ entrepriseId: req.entrepriseId, factureId: invoice.id, produitId: i.produitId, description: i.description, quantite: i.quantite.toString(), prixUnitaire: i.prixUnitaire.toFixed(2), remise: i.remise.toFixed(2), totalLigne: (i.quantite * i.prixUnitaire * (1 - i.remise / 100)).toFixed(2) }));
       await tx.insert(factureItems).values(itemRows);
+      let totalCMV = 0;
       for (const [productId, quantity] of requested) {
-        const [updated] = await tx.update(produits).set({ quantite: sql`${produits.quantite} - ${quantity}`, updatedAt: new Date() }).where(and(eq(produits.id, productId), eq(produits.entrepriseId, req.entrepriseId), sql`${produits.quantite} >= ${quantity}`)).returning();
-        if (!updated) throw Object.assign(new Error('Le stock a changé, veuillez réessayer'), { status: 409 });
-        await tx.insert(mouvementsStock).values({ entrepriseId: req.entrepriseId, produitId: productId, type: 'sortie', quantite: quantity.toString(), prixUnitaire: String(productRows.find(p => p.id === productId)?.prixVente || 0), reference: numeroFacture, notes: 'Vente ComptaOrion Lite', userId: req.user.id });
-        await consumeStockValuation(tx, {
+        const costing = await consumeStockValuation(tx, {
           entrepriseId: req.entrepriseId,
           produitId: productId,
           quantity,
         });
+        if (costing.untrackedQuantity > 0.001) {
+          throw Object.assign(new Error('Le coût de revient d’une partie du stock est introuvable; vente annulée pour éviter un CMV incorrect.'), { status: 409 });
+        }
+        totalCMV += costing.coutConsomme;
+
+        const [updated] = await tx.update(produits).set({ quantite: sql`${produits.quantite} - ${quantity}`, updatedAt: new Date() }).where(and(eq(produits.id, productId), eq(produits.entrepriseId, req.entrepriseId), sql`${produits.quantite} >= ${quantity}`)).returning();
+        if (!updated) throw Object.assign(new Error('Le stock a changé, veuillez réessayer'), { status: 409 });
+        await tx.insert(mouvementsStock).values({ entrepriseId: req.entrepriseId, produitId: productId, type: 'sortie', quantite: quantity.toString(), prixUnitaire: String(productRows.find(p => p.id === productId)?.prixVente || 0), reference: numeroFacture, notes: 'Vente ComptaOrion Lite', userId: req.user.id });
       }
       let payment = null;
       if (requestedPayment > 0) {
@@ -247,6 +257,13 @@ router.post('/lite-sale', async (req, res) => {
         totalTTC,
         executor: tx,
       });
+      await createEcritureCoutVente({
+        entrepriseId: req.entrepriseId,
+        numeroFacture,
+        dateFacture: dateFacture || new Date().toISOString().slice(0, 10),
+        montantCMV: totalCMV,
+        executor: tx,
+      });
       if (payment) {
         await createEcriturePaiementClient({
           entrepriseId: req.entrepriseId,
@@ -260,7 +277,7 @@ router.post('/lite-sale', async (req, res) => {
           executor: tx,
         });
       }
-      const body = { success: true, message: 'Vente Lite enregistrée', data: { ...invoice, client, items: itemRows, paiement: payment } };
+      const body = { success: true, message: 'Vente Lite enregistrée', data: { ...invoice, client, items: itemRows, paiement: payment, montantCMV: Number(totalCMV.toFixed(2)) } };
       if (req.idempotencyKey) await tx.update(liteIdempotency).set({ status: 'completed', responseStatus: 201, responseBody: body, updatedAt: new Date() }).where(and(eq(liteIdempotency.entrepriseId, req.entrepriseId), eq(liteIdempotency.idempotencyKey, req.idempotencyKey)));
       return { body, status: 201 };
     });

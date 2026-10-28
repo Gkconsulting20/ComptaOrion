@@ -3304,9 +3304,10 @@ function TablePrixTab() {
 
   const handleEdit = (prix) => {
     setEditingPrix(prix);
+    const product = produits.find((item) => Number(item.id) === Number(prix.produitId));
     setFormData({
       produitId: prix.produitId,
-      coutAchat: prix.coutAchat,
+      coutAchat: prix.coutCMV ?? product?.coutMoyen ?? product?.prixAchat ?? prix.coutAchat,
       margeBruteCible: prix.margeBruteCible,
       prixVenteManuel: prix.prixVenteManuel || '',
       categorieClient: prix.categorieClient || 'standard',
@@ -3355,10 +3356,11 @@ function TablePrixTab() {
       <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e8f4fd', borderRadius: '8px' }}>
         <h4 style={{ margin: '0 0 10px 0' }}>📊 Formule de calcul</h4>
         <p style={{ margin: 0, color: '#555' }}>
-          <strong>Prix de Vente = Coût d'Achat ÷ (1 - Marge Brute %)</strong>
+          <strong>Prix de vente = CMV × (1 + majoration / 100)</strong>
           <br />
           <span style={{ fontSize: '13px', color: '#777' }}>
-            Exemple: Coût 100 FCFA avec marge 30% → Prix = 100 ÷ (1 - 0.30) = 143 FCFA
+            Exemple : CMV de 100 FCFA et majoration de 30 % → prix de vente de 130 FCFA.
+            Le CMV est recalculé à chaque achat, frais logistiques répartis compris.
           </span>
         </p>
       </div>
@@ -3368,8 +3370,8 @@ function TablePrixTab() {
           columns={[
             { key: 'produitNom', label: 'Produit' },
             { key: 'produitReference', label: 'Référence' },
-            { key: 'coutAchat', label: 'Coût d\'achat', render: (val) => `${parseFloat(val).toLocaleString('fr-FR')} FCFA` },
-            { key: 'margeBruteCible', label: 'Marge %', render: (val) => `${val}%` },
+            { key: 'coutCMV', label: 'CMV actuel', render: (val, row) => `${parseFloat(val ?? row.coutAchat ?? 0).toLocaleString('fr-FR')} FCFA` },
+            { key: 'margeBruteCible', label: 'Majoration CMV', render: (val) => `${val}%` },
             { key: 'prixVenteCalcule', label: 'Prix Calculé', render: (val) => `${parseFloat(val).toLocaleString('fr-FR')} FCFA` },
             { key: 'prixVenteManuel', label: 'Prix Manuel', render: (val) => val ? `${parseFloat(val).toLocaleString('fr-FR')} FCFA` : '-' },
             { key: 'categorieClient', label: 'Catégorie' },
@@ -3399,7 +3401,11 @@ function TablePrixTab() {
             label="Produit"
             type="select"
             value={formData.produitId}
-            onChange={(e) => setFormData({ ...formData, produitId: e.target.value })}
+            onChange={(e) => {
+              const product = produits.find((item) => Number(item.id) === Number(e.target.value));
+              const cmv = product?.coutMoyen || product?.prixAchat || 0;
+              setFormData({ ...formData, produitId: e.target.value, coutAchat: String(cmv) });
+            }}
             required
             disabled={!!editingPrix}
           >
@@ -3410,23 +3416,23 @@ function TablePrixTab() {
           </FormField>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', fontWeight: 500, fontSize: 14, color: '#495057', marginBottom: 5 }}>
+                CMV actuel (FCFA)
+              </label>
+              <div style={{ border: '1px solid #ced4da', borderRadius: 4, padding: '10px 12px', minHeight: 20 }}>
+                {Number(formData.coutAchat || 0).toLocaleString('fr-FR')}
+              </div>
+              <small style={{ color: '#777' }}>Calculé depuis le coût moyen pondéré du stock.</small>
+            </div>
             <FormField
-              label="Coût d'achat (FCFA)"
-              type="number"
-              value={formData.coutAchat}
-              onChange={(e) => setFormData({ ...formData, coutAchat: e.target.value })}
-              required
-              min="0"
-              step="0.01"
-            />
-            <FormField
-              label="Marge brute cible (%)"
+              label="Majoration du CMV (%)"
               type="number"
               value={formData.margeBruteCible}
               onChange={(e) => setFormData({ ...formData, margeBruteCible: e.target.value })}
               required
               min="0"
-              max="99"
+              max="1000"
               step="0.1"
             />
           </div>
@@ -3448,7 +3454,7 @@ function TablePrixTab() {
                   </p>
                 </div>
                 <div>
-                  <span style={{ color: '#666', fontSize: '12px' }}>Bénéfice brut:</span>
+                  <span style={{ color: '#666', fontSize: '12px' }}>Marge ajoutée:</span>
                   <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#28a745' }}>
                     {calculPreview.beneficeBrut?.toLocaleString('fr-FR')} FCFA
                   </p>

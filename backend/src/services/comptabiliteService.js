@@ -21,6 +21,7 @@ const COMPTES_SYSCOHADA = {
   BANQUE: '52',
   CAISSE: '57',
   ACHATS_MARCHANDISES: '601',
+  COUT_VENTES_MARCHANDISES: '603',
   ACHATS_SERVICES: '61',
   AUTRES_CHARGES_EXTERNES: '62',
   CHARGES_PERSONNEL: '64',
@@ -209,6 +210,7 @@ export async function createEcritureFactureAchat(params) {
     montantPending = 0,
     ecartPrix = 0,
     montantValorisationStock = 0,
+    montantStockDirect = 0,
     executor = db
   } = params;
 
@@ -217,7 +219,7 @@ export async function createEcritureFactureAchat(params) {
   const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor);
   const compteEcarts = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ECARTS_PRIX, executor);
   const compteAchats = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_MARCHANDISES, executor);
-  const compteStock = Number(montantValorisationStock) !== 0
+  const compteStock = Number(montantValorisationStock) !== 0 || Number(montantStockDirect) > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES, executor)
     : null;
 
@@ -234,6 +236,25 @@ export async function createEcritureFactureAchat(params) {
 
   if (Number(montantPending) <= 0 && Number(montantValorisationStock) !== 0) {
     throw new Error('Une correction de stock ne peut être passée sans réception en attente correspondante.');
+  }
+
+  const directStockAmount = Number(montantStockDirect || 0);
+  if (Number(montantPending) > 0 && directStockAmount > 0) {
+    throw new Error('Un achat direct ne peut pas être comptabilisé en même temps qu’une réception en attente.');
+  }
+  if (directStockAmount < 0 || directStockAmount > Number(totalHT) + 0.01) {
+    throw new Error('Le montant de stock direct est incohérent avec le total HT de la facture.');
+  }
+  if (Number(montantPending) <= 0 && directStockAmount > 0) {
+    if (!compteStock) {
+      throw new Error('Le compte de stock (classe 31) est requis pour comptabiliser l’achat direct.');
+    }
+    ecrituresLignes.push({
+      compteComptableId: compteStock.id,
+      debit: directStockAmount,
+      credit: 0,
+      libelle: `Entrée de stock - ${numeroFacture}`
+    });
   }
 
   if (Number(montantPending) > 0 && Number(montantValorisationStock) !== 0) {
@@ -268,12 +289,15 @@ export async function createEcritureFactureAchat(params) {
   }
 
   if (montantPending === 0 && compteAchats) {
-    ecrituresLignes.push({
-      compteComptableId: compteAchats.id,
-      debit: totalHT,
-      credit: 0,
-      libelle: `Achat marchandises - ${numeroFacture}`
-    });
+    const expenseAmount = Math.max(0, Number(totalHT) - directStockAmount);
+    if (expenseAmount > 0) {
+      ecrituresLignes.push({
+        compteComptableId: compteAchats.id,
+        debit: expenseAmount,
+        credit: 0,
+        libelle: `Achats non stockés - ${numeroFacture}`
+      });
+    }
   }
 
   if (totalTVA > 0 && compteTVA) {
@@ -375,6 +399,57 @@ export async function createEcritureFactureVente(params) {
     lignes: ecrituresLignes,
     valide: false,
     executor
+  });
+}
+
+export async function createEcritureCoutVente({
+  entrepriseId,
+  numeroFacture,
+  dateFacture,
+  montantCMV,
+  executor = db,
+}) {
+  const amount = Math.round((Number(montantCMV) || 0) * 100) / 100;
+  if (amount <= 0) return null;
+
+  const compteCMV = await getCompteByNumero(
+    entrepriseId,
+    COMPTES_SYSCOHADA.COUT_VENTES_MARCHANDISES,
+    executor
+  );
+  const compteStock = await getCompteByNumero(
+    entrepriseId,
+    COMPTES_SYSCOHADA.STOCK_MARCHANDISES,
+    executor
+  );
+  if (!compteCMV || !compteStock) {
+    throw new Error('Configurez les comptes de CMV (603) et de stock (31) avant de valider la vente.');
+  }
+
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode: JOURNAL_CODES.VENTES,
+    journalNom: 'Journal des Ventes',
+    journalType: 'ventes',
+    dateEcriture: dateFacture,
+    libelle: `Coût des marchandises vendues - ${numeroFacture}`,
+    numeroPiece: `${numeroFacture}-CMV`,
+    lignes: [
+      {
+        compteComptableId: compteCMV.id,
+        debit: amount,
+        credit: 0,
+        libelle: `CMV au coût moyen pondéré - ${numeroFacture}`,
+      },
+      {
+        compteComptableId: compteStock.id,
+        debit: 0,
+        credit: amount,
+        libelle: `Sortie du stock - ${numeroFacture}`,
+      },
+    ],
+    valide: false,
+    executor,
   });
 }
 

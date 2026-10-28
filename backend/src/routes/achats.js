@@ -17,7 +17,6 @@ import { createEcritureFactureAchat, createEcriturePaiementFournisseur } from '.
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import {
   allocateLogisticsByValue,
-  allocateMoneyByWeight,
   applySupplierInvoiceCostsToRemainingLayers,
   createStockValuationLayer,
   ensureOpeningValuationLayer,
@@ -377,6 +376,23 @@ router.put('/factures/:id/valider', async (req, res) => {
         eq(factureAchatItems.factureId, facture.id),
         eq(factureAchatItems.entrepriseId, req.entrepriseId)
       ));
+      const stockItems = factureItems.filter((item) => Number(item.produitId) > 0);
+      const logisticsItems = factureItems.filter((item) =>
+        !item.produitId && /frais|transport|douane|manutention|assurance|logistique/i.test(item.description || '')
+      );
+      const directLogisticsTotal = logisticsItems.reduce(
+        (sum, item) => sum + Math.max(0, Number(item.totalLigne) || 0),
+        0
+      );
+      const directLogisticsAllocation = allocateLogisticsByValue(stockItems, directLogisticsTotal);
+      const logisticsByItemId = new Map(stockItems.map((item, index) => [
+        item.id,
+        directLogisticsAllocation.allocations[index] || 0,
+      ]));
+      const montantStockDirect = stockItems.reduce(
+        (sum, item) => sum + Math.max(0, Number(item.totalLigne) || 0) + (logisticsByItemId.get(item.id) || 0),
+        0
+      );
       const [updated] = await tx.update(facturesAchat).set({
         statut: 'validee',
         updatedAt: new Date()
@@ -416,12 +432,15 @@ router.put('/factures/:id/valider', async (req, res) => {
           userId: req.user.id
         }).returning();
         movements.push(movement);
+        const itemCost = Math.max(0, Number(item.totalLigne) || Number(item.quantite) * Number(item.prixUnitaire));
+        const landedCost = itemCost + (logisticsByItemId.get(item.id) || 0);
         await createStockValuationLayer(tx, {
           entrepriseId: req.entrepriseId,
           produitId: product.id,
           mouvementId: movement.id,
           quantity: item.quantite,
-          unitCost: item.prixUnitaire,
+          totalCost: landedCost,
+          unitCost: Number(item.quantite) > 0 ? landedCost / Number(item.quantite) : Number(item.prixUnitaire),
           productSnapshot: product,
           ensureOpening: false,
         });
@@ -445,6 +464,7 @@ router.put('/factures/:id/valider', async (req, res) => {
           totalHT: updated.totalHT,
           totalTVA: updated.totalTVA,
           totalTTC: updated.totalTTC,
+          montantStockDirect,
           executor: tx
         });
       } catch (accountingError) {
@@ -463,7 +483,14 @@ router.put('/factures/:id/valider', async (req, res) => {
         executor: tx,
         required: true
       });
-      return { status: 200, updated, movementsCount: movements.length };
+      return {
+        status: 200,
+        updated,
+        movementsCount: movements.length,
+        montantStockDirect,
+        fraisLogistiquesAlloues: directLogisticsAllocation.allocations.reduce((sum, amount) => sum + amount, 0),
+        fraisLogistiquesNonAlloues: directLogisticsAllocation.unallocated,
+      };
     });
     if (result.status !== 200) {
       return res.status(result.status).json({ success: false, message: result.error });
@@ -474,7 +501,15 @@ router.put('/factures/:id/valider', async (req, res) => {
     return res.json({
       success: true,
       message: 'Facture validée avec succès et stock mis à jour',
-      data: updated
+      data: updated,
+      coutRevient: {
+        valeurStockCapitalisee: result.montantStockDirect,
+        fraisLogistiquesAlloues: result.fraisLogistiquesAlloues,
+        fraisLogistiquesNonAlloues: result.fraisLogistiquesNonAlloues,
+        avertissements: result.fraisLogistiquesNonAlloues > 0
+          ? ['Certains frais logistiques n’ont pas pu être répartis faute de lignes article de valeur positive.']
+          : [],
+      }
     });
   } catch (error) {
     console.error('Erreur lors de la validation de la facture:', error);
@@ -1012,6 +1047,30 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
             SET ecriture_comptable_id = ${ecriture.id}
             WHERE id = ${newFacture.id} AND entreprise_id = ${req.entrepriseId}
           `);
+        }
+        for (const layer of valuation.couchesRevalorisees) {
+          await logAudit({
+            ...extractAuditInfo(req),
+            action: 'UPDATE',
+            table: 'valorisations_stock',
+            recordId: layer.layerId,
+            ancienneValeur: {
+              produitId: layer.produitId,
+              mouvementId: layer.mouvementId,
+              quantiteRestante: layer.quantiteRestante,
+              coutTotal: layer.ancienCoutTotal,
+            },
+            nouvelleValeur: {
+              produitId: layer.produitId,
+              mouvementId: layer.mouvementId,
+              quantiteRestante: layer.quantiteRestante,
+              coutTotal: layer.nouveauCoutTotal,
+              factureFournisseurId: newFacture.id,
+            },
+            description: `Correction du coût de revient du stock restant pour la facture ${numeroFacture}`,
+            executor: tx,
+            required: true,
+          });
         }
         return { valuation, ecriture };
       });

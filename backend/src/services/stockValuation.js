@@ -1,5 +1,5 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { produits, valorisationsStock } from '../schema.js';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { produitPrix, produits, valorisationsStock } from '../schema.js';
 
 const toCents = (value) => Math.round((Number(value) + Number.EPSILON) * 100);
 const fromCents = (value) => Number(value || 0) / 100;
@@ -78,6 +78,52 @@ export function splitCostVariance(totalVariance, inventoryAdjustment) {
   };
 }
 
+export function calculateSellingPriceFromMarkup(cmv, marginPercent) {
+  const cost = Number(cmv);
+  const margin = Number(marginPercent);
+  if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(margin) || margin < 0 || margin > 1000) {
+    throw new Error('Le CMV ou le taux de marge est invalide.');
+  }
+  return Math.round((cost * (1 + margin / 100) + Number.EPSILON) * 100) / 100;
+}
+
+export async function synchronizeActiveProductPrices(executor, entrepriseId, produitId, cmv) {
+  const activePrices = await executor.select().from(produitPrix).where(and(
+    eq(produitPrix.entrepriseId, entrepriseId),
+    eq(produitPrix.produitId, produitId),
+    eq(produitPrix.actif, true),
+    sql`${produitPrix.dateEffet} <= CURRENT_DATE`,
+    sql`(${produitPrix.dateExpiration} IS NULL OR ${produitPrix.dateExpiration} >= CURRENT_DATE)`
+  )).orderBy(desc(produitPrix.dateEffet), desc(produitPrix.createdAt));
+
+  let defaultPrice = null;
+  for (const price of activePrices) {
+    const calculatedPrice = calculateSellingPriceFromMarkup(cmv, price.margeBruteCible);
+    const [updatedPrice] = await executor.update(produitPrix).set({
+      coutAchat: Number(cmv).toFixed(2),
+      prixVenteCalcule: calculatedPrice.toFixed(2),
+      updatedAt: new Date(),
+    }).where(and(
+      eq(produitPrix.id, price.id),
+      eq(produitPrix.entrepriseId, entrepriseId)
+    )).returning();
+
+    if (!defaultPrice && price.categorieClient === 'standard' && price.canalVente === 'tous') {
+      defaultPrice = Number(updatedPrice?.prixVenteManuel ?? updatedPrice?.prixVenteCalcule);
+    }
+  }
+
+  if (defaultPrice !== null && Number.isFinite(defaultPrice)) {
+    await executor.update(produits).set({
+      prixVente: defaultPrice.toFixed(2),
+      updatedAt: new Date(),
+    }).where(and(
+      eq(produits.id, produitId),
+      eq(produits.entrepriseId, entrepriseId)
+    ));
+  }
+}
+
 async function updateProductAverageCost(executor, entrepriseId, produitId) {
   const [totals] = await executor.select({
     quantity: sql`COALESCE(SUM(${valorisationsStock.quantite}), 0)`,
@@ -92,37 +138,43 @@ async function updateProductAverageCost(executor, entrepriseId, produitId) {
   const value = Number(totals?.value || 0);
   if (quantity <= 0) return;
 
+  const nextCost = Math.round((value / quantity + Number.EPSILON) * 100) / 100;
+  const [product] = await executor.select({ coutMoyen: produits.coutMoyen })
+    .from(produits)
+    .where(and(
+      eq(produits.id, produitId),
+      eq(produits.entrepriseId, entrepriseId)
+    )).for('update').limit(1);
+  if (!product || Math.abs(Number(product.coutMoyen || 0) - nextCost) < 0.005) return;
+
   await executor.update(produits).set({
-    coutMoyen: (value / quantity).toFixed(2),
+    coutMoyen: nextCost.toFixed(2),
     updatedAt: new Date(),
   }).where(and(
     eq(produits.id, produitId),
     eq(produits.entrepriseId, entrepriseId)
   ));
+  await synchronizeActiveProductPrices(executor, entrepriseId, produitId, nextCost);
 }
 
 export async function ensureOpeningValuationLayer(executor, { entrepriseId, produitId, productSnapshot }) {
-  const [existingLayer] = await executor.select({ id: valorisationsStock.id })
-    .from(valorisationsStock)
-    .where(and(
-      eq(valorisationsStock.entrepriseId, entrepriseId),
-      eq(valorisationsStock.produitId, produitId),
-      sql`${valorisationsStock.quantite} > 0`
-    ))
-    .limit(1)
-    .for('update');
-  if (existingLayer) return false;
+  let [product] = await executor.select().from(produits).where(and(
+    eq(produits.id, produitId),
+    eq(produits.entrepriseId, entrepriseId)
+  )).for('update').limit(1);
+  product ||= productSnapshot;
 
-  let product = productSnapshot;
-  if (!product) {
-    [product] = await executor.select().from(produits).where(and(
-      eq(produits.id, produitId),
-      eq(produits.entrepriseId, entrepriseId)
-    )).for('update').limit(1);
-  }
   if (!product) return false;
 
-  const quantity = Math.max(0, Number(product.quantite || 0));
+  const [layerTotals] = await executor.select({
+    quantity: sql`COALESCE(SUM(${valorisationsStock.quantite}), 0)`,
+  }).from(valorisationsStock).where(and(
+    eq(valorisationsStock.entrepriseId, entrepriseId),
+    eq(valorisationsStock.produitId, produitId),
+    sql`${valorisationsStock.quantite} > 0`
+  ));
+  const productQuantity = Math.max(0, Number(product.quantite || 0));
+  const quantity = Math.max(0, productQuantity - Number(layerTotals?.quantity || 0));
   if (quantity <= 0) return false;
 
   const unitCost = Math.max(0, Number(product.coutMoyen || product.prixAchat || 0));
@@ -193,14 +245,21 @@ export async function createStockValuationLayer(executor, {
 
 export async function consumeStockValuation(executor, { entrepriseId, produitId, quantity }) {
   const requestedMilli = toMilliUnits(quantity);
-  if (requestedMilli <= 0) return { trackedQuantity: 0, untrackedQuantity: 0 };
+  if (requestedMilli <= 0) {
+    return { trackedQuantity: 0, untrackedQuantity: 0, coutConsomme: 0 };
+  }
 
-  const [product] = await executor.select({
-    valorisationMethod: produits.valorisationMethod,
-  }).from(produits).where(and(
+  const [product] = await executor.select().from(produits).where(and(
     eq(produits.id, produitId),
     eq(produits.entrepriseId, entrepriseId)
   )).for('update').limit(1);
+  if (product) {
+    await ensureOpeningValuationLayer(executor, {
+      entrepriseId,
+      produitId,
+      productSnapshot: product,
+    });
+  }
 
   const layers = await executor.select().from(valorisationsStock).where(and(
     eq(valorisationsStock.entrepriseId, entrepriseId),
@@ -212,7 +271,11 @@ export async function consumeStockValuation(executor, { entrepriseId, produitId,
   const availableMilli = layerMilli.reduce((sum, value) => sum + value, 0);
   const consumedMilli = Math.min(requestedMilli, availableMilli);
   if (consumedMilli <= 0) {
-    return { trackedQuantity: 0, untrackedQuantity: fromMilliUnits(requestedMilli) };
+    return {
+      trackedQuantity: 0,
+      untrackedQuantity: fromMilliUnits(requestedMilli),
+      coutConsomme: 0,
+    };
   }
 
   const method = String(product?.valorisationMethod || 'CMP').toUpperCase();
@@ -244,15 +307,35 @@ export async function consumeStockValuation(executor, { entrepriseId, produitId,
     }
   }
 
+  let consumedCostCents = 0;
+  const oldCostCentsByLayer = layers.map((layer) => toCents(layer.coutTotal));
+  let newCostCentsByLayer = oldCostCentsByLayer.slice();
+
+  if (method !== 'FIFO') {
+    const oldTotalCents = oldCostCentsByLayer.reduce((sum, amount) => sum + amount, 0);
+    const averageUnitCost = Number(product?.coutMoyen) > 0
+      ? Number(product.coutMoyen)
+      : fromCents(oldTotalCents) / fromMilliUnits(availableMilli);
+    consumedCostCents = toCents(averageUnitCost * fromMilliUnits(consumedMilli));
+    const remainingTotalCents = Math.max(0, oldTotalCents - consumedCostCents);
+    const remainingCostAllocations = allocateMoneyByWeight(
+      fromCents(remainingTotalCents),
+      remainingByLayer.map(fromMilliUnits)
+    ).allocations;
+    newCostCentsByLayer = remainingCostAllocations.map(toCents);
+  }
+
   for (let i = 0; i < layers.length; i += 1) {
     const oldQuantityMilli = layerMilli[i];
     const newQuantityMilli = remainingByLayer[i];
-    if (newQuantityMilli === oldQuantityMilli) continue;
-
-    const oldCostCents = toCents(layers[i].coutTotal);
-    const newCostCents = oldQuantityMilli > 0
-      ? Math.round(oldCostCents * newQuantityMilli / oldQuantityMilli)
-      : 0;
+    const oldCostCents = oldCostCentsByLayer[i];
+    const newCostCents = method === 'FIFO'
+      ? oldQuantityMilli > 0
+        ? Math.round(oldCostCents * newQuantityMilli / oldQuantityMilli)
+        : 0
+      : newCostCentsByLayer[i];
+    if (newQuantityMilli === oldQuantityMilli && newCostCents === oldCostCents) continue;
+    if (method === 'FIFO') consumedCostCents += oldCostCents - newCostCents;
     await executor.update(valorisationsStock).set({
       quantite: fromMilliUnits(newQuantityMilli).toFixed(3),
       coutTotal: fromCents(newCostCents).toFixed(2),
@@ -262,10 +345,13 @@ export async function consumeStockValuation(executor, { entrepriseId, produitId,
     ));
   }
 
-  await updateProductAverageCost(executor, entrepriseId, produitId);
+  if (method === 'FIFO') {
+    await updateProductAverageCost(executor, entrepriseId, produitId);
+  }
   return {
     trackedQuantity: fromMilliUnits(consumedMilli),
     untrackedQuantity: fromMilliUnits(requestedMilli - consumedMilli),
+    coutConsomme: fromCents(consumedCostCents),
   };
 }
 
@@ -276,12 +362,18 @@ export async function revalueRemainingStockLayer(executor, {
   originalQuantity,
   totalActualCost,
 }) {
+  await executor.select({ id: produits.id }).from(produits).where(and(
+    eq(produits.id, produitId),
+    eq(produits.entrepriseId, entrepriseId)
+  )).for('update').limit(1);
   const [layer] = await executor.select().from(valorisationsStock).where(and(
     eq(valorisationsStock.entrepriseId, entrepriseId),
     eq(valorisationsStock.produitId, produitId),
     eq(valorisationsStock.mouvementId, mouvementId)
   )).for('update').limit(1);
-  if (!layer) return { found: false, remainingQuantity: 0, adjustment: 0 };
+  if (!layer) {
+    return { found: false, layerId: null, remainingQuantity: 0, oldValue: 0, newValue: 0, adjustment: 0 };
+  }
 
   const remainingQuantity = Number(layer.quantite || 0);
   const oldValue = Number(layer.coutTotal || 0);
@@ -300,7 +392,14 @@ export async function revalueRemainingStockLayer(executor, {
   ));
   await updateProductAverageCost(executor, entrepriseId, produitId);
 
-  return { found: true, remainingQuantity, adjustment };
+  return {
+    found: true,
+    layerId: layer.id,
+    remainingQuantity,
+    oldValue,
+    newValue,
+    adjustment,
+  };
 }
 
 export async function applySupplierInvoiceCostsToRemainingLayers(executor, {
@@ -320,6 +419,7 @@ export async function applySupplierInvoiceCostsToRemainingLayers(executor, {
   let totalAdjustmentCents = 0;
   const warnings = [];
   const productsUpdated = [];
+  const couchesRevalorisees = [];
   for (const productId of invoiceCostsByProduct.keys()) {
     if (!rowsByProduct.has(productId)) {
       warnings.push(`Produit ${productId} : aucune réception non facturée correspondante; l’écart reste en charge.`);
@@ -380,6 +480,17 @@ export async function applySupplierInvoiceCostsToRemainingLayers(executor, {
         totalActualCost: layerCosts.allocations[i],
       });
       productAdjustmentCents += toCents(result.adjustment);
+      if (result.found) {
+        couchesRevalorisees.push({
+          layerId: result.layerId,
+          produitId: productId,
+          mouvementId: movementIds[i],
+          quantiteRestante: result.remainingQuantity,
+          ancienCoutTotal: result.oldValue,
+          nouveauCoutTotal: result.newValue,
+          ajustement: result.adjustment,
+        });
+      }
     }
 
     totalAdjustmentCents += productAdjustmentCents;
@@ -393,5 +504,6 @@ export async function applySupplierInvoiceCostsToRemainingLayers(executor, {
     ajustementStock: fromCents(totalAdjustmentCents),
     avertissements: warnings,
     produitsRevalorises: productsUpdated,
+    couchesRevalorisees,
   };
 }
