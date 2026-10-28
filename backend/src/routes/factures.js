@@ -724,11 +724,26 @@ router.put('/:id', async (req, res) => {
         message: 'Facture non trouvée',
       });
     }
+    if (
+      existingFacture.statut !== 'brouillon' &&
+      ['brouillon', 'annulee'].includes(statut)
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: 'Une facture déjà validée ne peut pas être remise en brouillon ou annulée directement; créez un avoir pour conserver le stock et la comptabilité cohérents.',
+      });
+    }
     const existingItems = await db.select().from(factureItems)
       .where(and(
         eq(factureItems.factureId, parseInt(id)),
         eq(factureItems.entrepriseId, req.entrepriseId)
       ));
+    if (items !== undefined && existingFacture.statut !== 'brouillon') {
+      return res.status(409).json({
+        success: false,
+        message: 'Les lignes d’une facture validée ne peuvent pas être modifiées; créez un avoir puis une nouvelle facture.',
+      });
+    }
 
     let updateData = {
       updatedAt: new Date(),
@@ -797,64 +812,97 @@ router.put('/:id', async (req, res) => {
     }
 
     // Mettre à jour la facture
+    const updateConditions = [
+      eq(factures.id, parseInt(id)),
+      eq(factures.entrepriseId, req.entrepriseId),
+    ];
+    const isFulfillmentTransition = statut && ['envoyee', 'payee'].includes(statut) && existingFacture.statut === 'brouillon';
+    if (isFulfillmentTransition) updateConditions.push(eq(factures.statut, 'brouillon'));
+
     const [updatedFacture] = await db
       .update(factures)
       .set(updateData)
-      .where(and(
-        eq(factures.id, parseInt(id)),
-        eq(factures.entrepriseId, req.entrepriseId)
-      ))
+      .where(and(...updateConditions))
       .returning();
+    if (!updatedFacture) {
+      return res.status(409).json({ success: false, message: 'La facture a été modifiée par une autre requête; rechargez-la puis réessayez.' });
+    }
 
     // *** INTÉGRATION STOCK AUTOMATIQUE ***
     // Si le statut change vers 'envoyee' ou 'payee', générer mouvements SORTIE
-    if (statut && (statut === 'envoyee' || statut === 'payee') && existingFacture.statut === 'brouillon') {
-      // Récupérer les items de la facture
-      const factureItemsList = await db
-        .select()
-        .from(factureItems)
-        .where(eq(factureItems.factureId, parseInt(id)));
+    let montantCMVFacture = null;
+    if (isFulfillmentTransition) {
+      const factureItemsList = await db.select().from(factureItems).where(and(
+        eq(factureItems.factureId, parseInt(id)),
+        eq(factureItems.entrepriseId, req.entrepriseId)
+      ));
 
-      // Créer un mouvement SORTIE pour chaque produit
-      for (const item of factureItemsList) {
-        if (item.produitId) {
-          try {
-            await db.transaction(async (tx) => {
-              const [produit] = await tx.select().from(produits).where(and(
-                eq(produits.id, item.produitId),
-                eq(produits.entrepriseId, req.entrepriseId)
-              )).for('update').limit(1);
-              if (!produit) return;
+      try {
+        montantCMVFacture = await db.transaction(async (tx) => {
+          let totalCMV = 0;
+          const stockItems = factureItemsList
+            .filter((item) => item.produitId)
+            .sort((a, b) => Number(a.produitId) - Number(b.produitId));
 
-              await tx.insert(mouvementsStock).values({
-                entrepriseId: req.entrepriseId,
-                produitId: item.produitId,
-                type: 'sortie',
-                quantite: parseFloat(item.quantite),
-                prixUnitaire: parseFloat(item.prixUnitaire),
-                reference: `Facture ${updatedFacture.numeroFacture}`,
-                notes: `Vente client - Facture ${updatedFacture.numeroFacture}`,
-                userId: req.user?.id || null
-              });
-              await consumeStockValuation(tx, {
-                entrepriseId: req.entrepriseId,
-                produitId: item.produitId,
-                quantity: parseFloat(item.quantite),
-              });
+          for (const item of stockItems) {
+            const quantity = Number(item.quantite);
+            const [product] = await tx.select().from(produits).where(and(
+              eq(produits.id, item.produitId),
+              eq(produits.entrepriseId, req.entrepriseId)
+            )).for('update').limit(1);
+            if (!product) throw Object.assign(new Error(`Produit ${item.produitId} introuvable.`), { status: 409 });
+            if (Number(product.quantite || 0) + 0.001 < quantity) {
+              throw Object.assign(new Error(`Stock insuffisant pour le produit ${product.nom}.`), { status: 409 });
+            }
 
-              const nouvelleQuantite = Math.max(0, parseFloat(produit.quantite || 0) - parseFloat(item.quantite));
-              await tx.update(produits).set({
-                quantite: nouvelleQuantite,
-                updatedAt: new Date()
-              }).where(and(
-                eq(produits.id, item.produitId),
-                eq(produits.entrepriseId, req.entrepriseId)
-              ));
+            const costing = await consumeStockValuation(tx, {
+              entrepriseId: req.entrepriseId,
+              produitId: item.produitId,
+              quantity,
             });
-          } catch (error) {
-            console.error(`Erreur création mouvement SORTIE pour produit ${item.produitId}:`, error);
+            if (costing.untrackedQuantity > 0.001) {
+              throw Object.assign(new Error(`Le CMV du stock restant de ${product.nom} ne peut pas être établi; vente annulée.`), { status: 409 });
+            }
+            totalCMV += costing.coutConsomme;
+
+            await tx.insert(mouvementsStock).values({
+              entrepriseId: req.entrepriseId,
+              produitId: item.produitId,
+              type: 'sortie',
+              quantite: quantity,
+              prixUnitaire: Number(item.prixUnitaire),
+              reference: `Facture ${updatedFacture.numeroFacture}`,
+              notes: `Vente client - Facture ${updatedFacture.numeroFacture}`,
+              userId: req.user?.id || null
+            });
+            await tx.update(produits).set({
+              quantite: sql`${produits.quantite} - ${quantity}`,
+              updatedAt: new Date()
+            }).where(and(
+              eq(produits.id, item.produitId),
+              eq(produits.entrepriseId, req.entrepriseId),
+              sql`${produits.quantite} >= ${quantity}`
+            ));
           }
-        }
+
+          await createEcritureCoutVente({
+            entrepriseId: req.entrepriseId,
+            numeroFacture: updatedFacture.numeroFacture,
+            dateFacture: updatedFacture.dateFacture,
+            montantCMV: totalCMV,
+            executor: tx,
+          });
+          return Number(totalCMV.toFixed(2));
+        });
+      } catch (stockError) {
+        await db.update(factures).set({
+          statut: existingFacture.statut,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(factures.id, parseInt(id)),
+          eq(factures.entrepriseId, req.entrepriseId)
+        ));
+        throw stockError;
       }
     }
 
@@ -869,7 +917,7 @@ router.put('/:id', async (req, res) => {
       table: 'factures',
       recordId: parseInt(id),
       ancienneValeur: { facture: existingFacture, items: existingItems },
-      nouvelleValeur: { facture: updatedFacture, items: updatedItems },
+      nouvelleValeur: { facture: updatedFacture, items: updatedItems, montantCMV: montantCMVFacture },
       description: `Facture modifiée: ${updatedFacture.numeroFacture}`,
       required: false
     });
@@ -878,10 +926,11 @@ router.put('/:id', async (req, res) => {
       success: true,
       message: 'Facture mise à jour avec succès',
       data: updatedFacture,
+      ...(montantCMVFacture !== null ? { montantCMV: montantCMVFacture } : {}),
     });
   } catch (error) {
     console.error('Erreur PUT /api/factures/:id:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: 'Erreur lors de la mise à jour de la facture',
       error: error.message,
@@ -903,6 +952,9 @@ router.delete('/:id', async (req, res) => {
       )).limit(1);
       if (!existingFacture) {
         throw Object.assign(new Error('Facture non trouvée'), { status: 404 });
+      }
+      if (existingFacture.statut !== 'brouillon') {
+        throw Object.assign(new Error('Une facture validée ne peut pas être supprimée; passez par un avoir ou une procédure d’annulation.'), { status: 409 });
       }
 
       const [paiement] = await tx.select().from(paiements).where(and(

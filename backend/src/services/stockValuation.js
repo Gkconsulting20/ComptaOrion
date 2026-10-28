@@ -87,6 +87,15 @@ export function calculateSellingPriceFromMarkup(cmv, marginPercent) {
   return Math.round((cost * (1 + margin / 100) + Number.EPSILON) * 100) / 100;
 }
 
+export function calculateWeightedAverageSaleCost(cmv, quantity) {
+  const cost = Number(cmv);
+  const qty = Number(quantity);
+  if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(qty) || qty < 0) {
+    throw new Error('Le CMV ou la quantité vendue est invalide.');
+  }
+  return fromCents(toCents(cost * qty));
+}
+
 export async function synchronizeActiveProductPrices(executor, entrepriseId, produitId, cmv) {
   const activePrices = await executor.select().from(produitPrix).where(and(
     eq(produitPrix.entrepriseId, entrepriseId),
@@ -316,7 +325,9 @@ export async function consumeStockValuation(executor, { entrepriseId, produitId,
     const averageUnitCost = Number(product?.coutMoyen) > 0
       ? Number(product.coutMoyen)
       : fromCents(oldTotalCents) / fromMilliUnits(availableMilli);
-    consumedCostCents = toCents(averageUnitCost * fromMilliUnits(consumedMilli));
+    consumedCostCents = consumedMilli === availableMilli
+      ? oldTotalCents
+      : toCents(calculateWeightedAverageSaleCost(averageUnitCost, fromMilliUnits(consumedMilli)));
     const remainingTotalCents = Math.max(0, oldTotalCents - consumedCostCents);
     const remainingCostAllocations = allocateMoneyByWeight(
       fromCents(remainingTotalCents),

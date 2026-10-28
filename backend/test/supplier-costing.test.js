@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   allocateLogisticsByValue,
   allocateMoneyByWeight,
+  calculateSellingPriceFromMarkup,
   calculateRemainingLayerValue,
+  calculateWeightedAverageSaleCost,
   splitCostVariance,
 } from '../src/services/stockValuation.js';
 
@@ -57,4 +59,15 @@ test('sépare la correction du stock de l’écart passé en charge', () => {
     inventoryAdjustment: -300,
     expenseVariance: -700,
   });
+});
+
+test('calcule le prix catalogue en ajoutant la majoration au CMV', () => {
+  assert.equal(calculateSellingPriceFromMarkup(100, 30), 130);
+  assert.equal(calculateSellingPriceFromMarkup(0, 30), 0);
+  assert.throws(() => calculateSellingPriceFromMarkup(100, -1), /marge/i);
+});
+
+test('valorise une vente au CMV pondéré sans recalculer le coût unitaire', () => {
+  assert.equal(calculateWeightedAverageSaleCost(125, 3), 375);
+  assert.equal(calculateWeightedAverageSaleCost(125, 0.125), 15.63);
 });

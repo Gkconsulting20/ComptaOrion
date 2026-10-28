@@ -90,7 +90,7 @@ function DevisTab() {
     clientId: '',
     dateDevis: new Date().toISOString().split('T')[0],
     dateValidite: '',
-    items: [{ description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
+    items: [{ produitId: null, description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
     tauxTVA: 18,
     notesInternes: '',
     conditionsPaiement: '',
@@ -163,7 +163,7 @@ function DevisTab() {
   const addItem = () => {
     setDevisData({
       ...devisData,
-      items: [...devisData.items, { description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }]
+      items: [...devisData.items, { produitId: null, description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }]
     });
   };
 
@@ -183,7 +183,7 @@ function DevisTab() {
       clientId: '',
       dateDevis: new Date().toISOString().split('T')[0],
       dateValidite: '',
-      items: [{ description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
+      items: [{ produitId: null, description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
       tauxTVA: 18,
       notesInternes: '',
       conditionsPaiement: '',
@@ -318,7 +318,7 @@ function DevisTab() {
               {devisData.items.map((item, index) => (
                 <div key={index} style={{ 
                   display: 'grid', 
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr 80px 60px', 
+                  gridTemplateColumns: '1.5fr 2fr 1fr 1fr 1fr 80px 60px',
                   gap: '10px', 
                   marginBottom: '10px',
                   alignItems: 'end',
@@ -326,6 +326,30 @@ function DevisTab() {
                   backgroundColor: '#f8f9fa',
                   borderRadius: '4px'
                 }}>
+                  <FormField
+                    label="Produit catalogue"
+                    type="select"
+                    value={item.produitId || ''}
+                    onChange={(e) => {
+                      const selected = produits.find((product) => Number(product.id) === Number(e.target.value));
+                      const nextItems = [...devisData.items];
+                      nextItems[index] = {
+                        ...nextItems[index],
+                        produitId: selected ? Number(selected.id) : null,
+                        type: selected ? 'produit' : 'service',
+                        description: selected?.nom || nextItems[index].description,
+                        prixUnitaire: selected ? Number(selected.prixVente || 0) : nextItems[index].prixUnitaire,
+                      };
+                      setDevisData({ ...devisData, items: nextItems });
+                    }}
+                    options={[
+                      { value: '', label: 'Ligne libre / service' },
+                      ...produits.map((product) => ({
+                        value: product.id,
+                        label: `${product.reference || ''} ${product.nom} — ${Number(product.prixVente || 0).toLocaleString('fr-FR')} FCFA`,
+                      }))
+                    ]}
+                  />
                   <FormField
                     label="Description"
                     value={item.description}
@@ -716,6 +740,7 @@ function BonsLivraisonTab() {
 function FacturesClientTab() {
   const [facturesList, setFacturesList] = useState([]);
   const [clients, setClients] = useState([]);
+  const [produits, setProduits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatut, setFilterStatut] = useState('toutes');
   const [showWizard, setShowWizard] = useState(false);
@@ -726,7 +751,7 @@ function FacturesClientTab() {
     clientId: '',
     dateFacture: new Date().toISOString().split('T')[0],
     dateEcheance: '',
-    items: [{ description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
+    items: [{ produitId: null, description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
     tauxTVA: 18,
     notesInternes: '',
     conditionsPaiement: '',
@@ -739,9 +764,10 @@ function FacturesClientTab() {
 
   const loadData = async () => {
     try {
-      const [facturesRes, clientsRes] = await Promise.all([
+      const [facturesRes, clientsRes, produitsRes] = await Promise.all([
         api.get('/factures'),
-        api.get('/clients')
+        api.get('/clients'),
+        api.get('/produits')
       ]);
       const normalized = (facturesRes.data || []).map(f => ({
         ...f.facture,
@@ -749,6 +775,7 @@ function FacturesClientTab() {
       }));
       setFacturesList(normalized);
       setClients(clientsRes.data || []);
+      setProduits(produitsRes.data || []);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -772,7 +799,7 @@ function FacturesClientTab() {
       clientId: '',
       dateFacture: new Date().toISOString().split('T')[0],
       dateEcheance: '',
-      items: [{ description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
+      items: [{ produitId: null, description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
       tauxTVA: 18,
       notesInternes: '',
       conditionsPaiement: '',
@@ -810,7 +837,7 @@ function FacturesClientTab() {
   const addItem = () => {
     setFactureData({
       ...factureData,
-      items: [...factureData.items, { description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }]
+      items: [...factureData.items, { produitId: null, description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }]
     });
   };
 
@@ -937,6 +964,29 @@ function FacturesClientTab() {
               }}>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                   <div style={{ flex: 2 }}>
+                    <FormField
+                      label="Produit catalogue (prix automatique)"
+                      type="select"
+                      value={item.produitId || ''}
+                      onChange={(e) => {
+                        const selected = produits.find((product) => Number(product.id) === Number(e.target.value));
+                        const nextItems = [...factureData.items];
+                        nextItems[index] = {
+                          ...nextItems[index],
+                          produitId: selected ? Number(selected.id) : null,
+                          description: selected?.nom || nextItems[index].description,
+                          prixUnitaire: selected ? Number(selected.prixVente || 0) : nextItems[index].prixUnitaire,
+                        };
+                        setFactureData({ ...factureData, items: nextItems });
+                      }}
+                      options={[
+                        { value: '', label: 'Ligne libre / service' },
+                        ...produits.map((product) => ({
+                          value: product.id,
+                          label: `${product.reference || ''} ${product.nom} — ${Number(product.prixVente || 0).toLocaleString('fr-FR')} FCFA`,
+                        }))
+                      ]}
+                    />
                     <FormField
                       label="Description"
                       value={item.description}
@@ -3265,7 +3315,7 @@ function TablePrixTab() {
   };
 
   const handleCalculPreview = async () => {
-    if (!formData.coutAchat || !formData.margeBruteCible) return;
+    if (formData.coutAchat === '' || formData.coutAchat === undefined || formData.margeBruteCible === '') return;
     
     try {
       const res = await api.post('/clients/prix-produits/calculer', {
@@ -3279,7 +3329,7 @@ function TablePrixTab() {
   };
 
   useEffect(() => {
-    if (formData.coutAchat && formData.margeBruteCible) {
+    if (formData.coutAchat !== '' && formData.coutAchat !== undefined && formData.margeBruteCible !== '') {
       const timer = setTimeout(handleCalculPreview, 300);
       return () => clearTimeout(timer);
     }

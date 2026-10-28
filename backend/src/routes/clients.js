@@ -563,10 +563,10 @@ router.post('/prix-produits', async (req, res) => {
       devise = 'FCFA'
     } = req.body;
     
-    if (!produitId || coutAchat === undefined || margeBruteCible === undefined) {
+    if (!produitId || margeBruteCible === undefined) {
       return res.status(400).json({ 
         success: false, 
-        error: 'produitId, coutAchat et margeBruteCible sont requis' 
+        error: 'produitId et margeBruteCible sont requis'
       });
     }
     
@@ -583,7 +583,10 @@ router.post('/prix-produits', async (req, res) => {
     )).limit(1);
     if (!product) return res.status(404).json({ success: false, error: 'Produit non trouvé dans cette entreprise.' });
 
-    const cout = Math.max(0, Number(product.coutMoyen || product.prixAchat || 0));
+    const currentAverageCost = Number(product.coutMoyen);
+    const cout = Math.max(0, currentAverageCost > 0
+      ? currentAverageCost
+      : Number(product.prixAchat) || 0);
     const prixVenteCalcule = calculateSellingPriceFromMarkup(cout, marge);
     const manualPrice = prixVenteManuel === undefined || prixVenteManuel === null || prixVenteManuel === ''
       ? null
