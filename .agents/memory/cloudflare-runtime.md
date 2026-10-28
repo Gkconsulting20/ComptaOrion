@@ -48,3 +48,9 @@ Le push de `main` sur GitHub déclenche automatiquement le déploiement de produ
 **Why:** Le Worker de l’ERP est relié à Workers Builds; son déclencheur exécute `npm run build` puis `npx wrangler deploy`. Un push avant la mise à niveau du schéma Render peut donc publier du code qui attend des tables absentes.
 
 **How to apply:** Simuler la migration avec l’URL Render, appliquer la migration additive sur la base confirmée, vérifier qu’une simulation suivante ne prévoit plus de changements, puis pousser `main` et contrôler le résultat du build correspondant au commit.
+
+Les builds Cloudflare ne peuvent pas télécharger les paquets depuis les URLs internes du pare-feu npm de Replit inscrites dans le lockfile racine.
+
+**Why:** `npm clean-install` peut échouer avec `ENOTFOUND package-firewall.replit.internal` alors que le build local réussit.
+
+**How to apply:** Garder les URLs `resolved` du lockfile racine accessibles depuis Cloudflare, préserver versions et intégrités, puis vérifier `npm ci` et `npm run cloudflare:check` avant le push.

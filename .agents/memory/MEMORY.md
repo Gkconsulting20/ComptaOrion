@@ -3,7 +3,7 @@
 - [Hébergement ERP](erp-hosting.md) — Cloudflare pour l’application, Supabase PostgreSQL visée en remplacement de Render après migration et tests validés.
 - [Rotation des jetons](jwt-refresh-rotation.md) — ajouter un identifiant aléatoire à chaque refresh JWT pour garantir une rotation effective.
 - [Authentification GitHub](github-auth.md) — l’état OAuth d’intégration ne prouve pas que les opérations Git sont autorisées.
-- [Runtime Cloudflare](cloudflare-runtime.md) — vérifier le runtime, SQL et R2, pas seulement le bundle ; migrer explicitement chaque base cible.
+- [Runtime Cloudflare](cloudflare-runtime.md) — vérifier runtime, SQL et R2, et garder les URLs de paquets du lockfile accessibles aux builds Workers.
 - [Paiements associatifs](association-payments.md) — séparer dépenses engagées, paiements réels et approbation ; chaque paiement réel a son écriture équilibrée.
 - [Coût de revient fournisseurs](supplier-costing.md) — répartir les frais logistiques au prorata de la valeur des articles pour calculer leur coût de revient.
 - [Pause du module Paie & RH](payroll-paused.md) — garder Paie & RH masqué pendant la préparation du lancement initial de l’application.
