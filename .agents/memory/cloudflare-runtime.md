@@ -54,3 +54,9 @@ Les builds Cloudflare ne peuvent pas télécharger les paquets depuis les URLs i
 **Why:** `npm clean-install` peut échouer avec `ENOTFOUND package-firewall.replit.internal` alors que le build local réussit.
 
 **How to apply:** Garder les URLs `resolved` du lockfile racine accessibles depuis Cloudflare, préserver versions et intégrités, puis vérifier `npm ci` et `npm run cloudflare:check` avant le push.
+
+Un build Workers qui s’arrête avant l’installation avec le message de jeton supprimé/renouvelé doit être réparé dans la configuration Workers Builds, pas dans le code source.
+
+**Why:** Cloudflare peut conserver un ancien jeton API sélectionné pour un Worker alors que l’ancienne version du Worker continue de fonctionner.
+
+**How to apply:** Dans les paramètres Build du Worker, sélectionner ou créer un jeton API valide puis relancer le build; ne jamais copier sa valeur dans le dépôt ou le chat.
