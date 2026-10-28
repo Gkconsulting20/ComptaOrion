@@ -125,12 +125,9 @@ export default function ImportWizard({ onClose }) {
       formData.append('sourceLogiciel', source);
       formData.append('typeEntite', entityType);
       
-      const token = localStorage.getItem('token');
       const response = await fetch('/api/import/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        credentials: 'include',
         body: formData
       });
       

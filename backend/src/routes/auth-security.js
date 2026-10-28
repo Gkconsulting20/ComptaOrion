@@ -1,8 +1,8 @@
 import express from 'express';
 import { db } from '../db.js';
 import crypto from 'crypto';
-import { users, sessions, auditConnexions, passwordResetTokens, permissions } from '../schema.js';
-import { generateToken, generateRefreshToken, verifyRefreshToken, hashPassword, comparePassword, authMiddleware, saasAdminOnly } from '../auth.js';
+import { users, sessions, auditConnexions, passwordResetTokens, permissions, entreprises } from '../schema.js';
+import { generateToken, generateRefreshToken, verifyRefreshToken, hashPassword, comparePassword, authMiddleware, saasAdminOnly, readCookie, setAuthCookies, clearAuthCookies, REFRESH_TOKEN_COOKIE } from '../auth.js';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 
 const router = express.Router();
@@ -76,6 +76,7 @@ router.post('/login', async (req, res) => {
       userAgent,
       statut: 'success'
     });
+    setAuthCookies(res, token, refreshToken);
 
     res.json({
       message: 'Connexion réussie',
@@ -87,8 +88,6 @@ router.post('/login', async (req, res) => {
         role: user.role,
         entrepriseId: user.entrepriseId
       },
-      token,
-      refreshToken,
       session: { id: session[0].id, expiresAt }
     });
   } catch (error) {
@@ -130,6 +129,7 @@ router.post('/logout', authMiddleware, async (req, res) => {
       statut: 'success'
     });
 
+    clearAuthCookies(res);
     res.json({ message: 'Déconnexion réussie' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -142,7 +142,11 @@ router.post('/logout', authMiddleware, async (req, res) => {
 
 router.post('/refresh', async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = readCookie(req, REFRESH_TOKEN_COOKIE);
+    if (!refreshToken) {
+      clearAuthCookies(res);
+      return res.status(401).json({ error: 'Session expirée' });
+    }
     const decoded = verifyRefreshToken(refreshToken);
 
     if (!decoded) {
@@ -189,13 +193,37 @@ router.post('/refresh', async (req, res) => {
       statut: 'success'
     });
 
-    res.json({
-      message: 'Token rafraîchi',
-      token: newToken,
-      refreshToken: newRefreshToken
-    });
+    setAuthCookies(res, newToken, newRefreshToken);
+    res.json({ message: 'Session rafraîchie' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/session', authMiddleware, async (req, res) => {
+  try {
+    const [user] = await db.select({
+      id: users.id,
+      username: users.username,
+      email: users.email,
+      nom: users.nom,
+      prenom: users.prenom,
+      role: users.role,
+      entrepriseId: users.entrepriseId,
+      actif: users.actif
+    }).from(users).where(and(
+      eq(users.id, req.user.id),
+      eq(users.entrepriseId, req.user.entrepriseId)
+    )).limit(1);
+    if (!user?.actif) {
+      clearAuthCookies(res);
+      return res.status(401).json({ error: 'Session expirée' });
+    }
+    const [entreprise] = await db.select().from(entreprises)
+      .where(eq(entreprises.id, user.entrepriseId)).limit(1);
+    return res.json({ user, entreprise: entreprise || null });
+  } catch (error) {
+    return res.status(500).json({ error: 'Impossible de vérifier la session' });
   }
 });
 

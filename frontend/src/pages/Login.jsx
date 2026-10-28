@@ -33,6 +33,7 @@ export function Login({ onLoginSuccess }) {
       const response = await fetch('/api/auth-security/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(formData)
       });
 
@@ -42,8 +43,6 @@ export function Login({ onLoginSuccess }) {
         throw new Error(data.error || 'Erreur de connexion');
       }
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('refreshToken', data.refreshToken);
       localStorage.setItem('user', JSON.stringify(data.user));
       localStorage.setItem('entrepriseId', data.user.entrepriseId);
       if (data.entreprise) {
@@ -53,7 +52,7 @@ export function Login({ onLoginSuccess }) {
         localStorage.setItem('sessionId', data.session.id);
       }
 
-      onLoginSuccess(data.user);
+      onLoginSuccess(data.user, data.entreprise);
     } catch (err) {
       setError(err.message);
     } finally {

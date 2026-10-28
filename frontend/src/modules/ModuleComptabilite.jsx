@@ -51,9 +51,8 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
 
   const exportCharteCSV = async () => {
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch('/api/comptabilite/export/charte-comptes', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include'
       });
       if (!response.ok) throw new Error('Erreur téléchargement');
       const csvText = await response.text();
@@ -120,9 +119,8 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
             )}
             <Button variant="secondary" onClick={async () => {
               try {
-                const token = localStorage.getItem('token');
                 const response = await fetch('/api/comptabilite/export/comptes', {
-                  headers: { 'Authorization': `Bearer ${token}` }
+                  credentials: 'include'
                 });
                 if (!response.ok) throw new Error('Erreur téléchargement');
                 const csvText = await response.text();

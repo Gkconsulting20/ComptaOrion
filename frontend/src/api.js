@@ -4,43 +4,23 @@ class ApiClient {
   }
 
   getHeaders() {
-    const token = localStorage.getItem('token');
-    const headers = {
+    return {
       'Content-Type': 'application/json'
     };
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    return headers;
   }
 
   async handleUnauthorized() {
-    const refreshToken = localStorage.getItem('refreshToken');
-    
-    if (refreshToken) {
-      try {
-        const response = await fetch(`/api/auth-security/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          localStorage.setItem('token', data.token);
-          if (data.refreshToken) {
-            localStorage.setItem('refreshToken', data.refreshToken);
-          }
-          return true;
-        }
-      } catch (error) {
-        console.error('Refresh token failed:', error);
-      }
+    try {
+      const response = await fetch('/api/auth-security/refresh', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      if (response.ok) return true;
+    } catch (error) {
+      console.error('Refresh token failed:', error);
     }
-    
-    localStorage.clear();
+
+    ['user', 'entreprise', 'entrepriseId', 'sessionId'].forEach(key => localStorage.removeItem(key));
     window.location.href = '/';
     return false;
   }
@@ -49,6 +29,7 @@ class ApiClient {
     const url = `${this.baseURL}${endpoint}`;
     const config = {
       ...options,
+      credentials: 'include',
       headers: {
         ...this.getHeaders(),
         ...options.headers,

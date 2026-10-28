@@ -1176,13 +1176,11 @@ function RapportsTab() {
     try {
       // Construire l'URL manuellement pour éviter les conflits avec api.get()
       const url = `/api/clients/rapport-periode?dateDebut=${encodeURIComponent(dateDebut)}&dateFin=${encodeURIComponent(dateFin)}`;
-      const token = localStorage.getItem('token');
-      
       const response = await fetch(url, {
         method: 'GET',
+        credentials: 'include',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': token ? `Bearer ${token}` : ''
+          'Content-Type': 'application/json'
         }
       });
       
@@ -2397,7 +2395,7 @@ function ParametresTab() {
               <Button variant="secondary" onClick={async () => {
                 try {
                   const response = await fetch('/api/clients/export/csv', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    credentials: 'include'
                   });
                   const blob = await response.blob();
                   const url = window.URL.createObjectURL(blob);

@@ -14,6 +14,40 @@ if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
 
 const JWT_EXPIRES_IN = '24h';
 const REFRESH_EXPIRES_IN = '7d';
+export const ACCESS_TOKEN_COOKIE = 'comptaorion_access';
+export const REFRESH_TOKEN_COOKIE = 'comptaorion_refresh';
+
+function cookieFlags(path, maxAge) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  return `Path=${path}; Max-Age=${maxAge}; HttpOnly; SameSite=Strict${secure}`;
+}
+
+export function readCookie(req, name) {
+  const cookieHeader = req.headers.cookie || '';
+  const prefix = `${name}=`;
+  const part = cookieHeader.split(';').map(value => value.trim()).find(value => value.startsWith(prefix));
+  if (!part) return null;
+  try {
+    return decodeURIComponent(part.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
+export function setAuthCookies(res, accessToken, refreshToken) {
+  res.append('Set-Cookie', [
+    `${ACCESS_TOKEN_COOKIE}=${encodeURIComponent(accessToken)}; ${cookieFlags('/', 86400)}`,
+    `${REFRESH_TOKEN_COOKIE}=${encodeURIComponent(refreshToken)}; ${cookieFlags('/api/auth-security', 604800)}`
+  ]);
+}
+
+export function clearAuthCookies(res) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.append('Set-Cookie', [
+    `${ACCESS_TOKEN_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict${secure}`,
+    `${REFRESH_TOKEN_COOKIE}=; Path=/api/auth-security; Max-Age=0; HttpOnly; SameSite=Strict${secure}`
+  ]);
+}
 
 /**
  * Génère un token JWT pour un utilisateur
@@ -84,12 +118,14 @@ export async function comparePassword(password, hash) {
  */
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.substring(7)
+    : readCookie(req, ACCESS_TOKEN_COOKIE);
+
+  if (!token) {
     return res.status(401).json({ error: 'Token manquant ou invalide' });
   }
-  
-  const token = authHeader.substring(7);
+
   const decoded = verifyToken(token);
   
   if (!decoded) {

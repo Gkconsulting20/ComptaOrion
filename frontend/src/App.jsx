@@ -53,31 +53,58 @@ export default function App() {
   const [showCommercialPortal, setShowCommercialPortal] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    const storedEntreprise = localStorage.getItem('entreprise');
-    
-    if (token && storedUser) {
-      setIsAuthenticated(true);
-      setUser(JSON.parse(storedUser));
-      if (storedEntreprise) {
-        setEntreprise(JSON.parse(storedEntreprise));
+    let cancelled = false;
+    const initialize = async () => {
+      const urlPath = window.location.pathname;
+      if (urlPath === '/inscription' || urlPath.startsWith('/inscription')) {
+        setShowInscription(true);
+        setLoading(false);
+        return;
       }
-    }
-    
-    const urlPath = window.location.pathname;
-    if (urlPath === '/inscription' || urlPath.startsWith('/inscription')) {
-      setShowInscription(true);
-    } else if (urlPath === '/commercial' || urlPath.startsWith('/commercial')) {
-      setShowCommercialPortal(true);
-    }
-    
-    setLoading(false);
+      if (urlPath === '/commercial' || urlPath.startsWith('/commercial')) {
+        setShowCommercialPortal(true);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        let response = await fetch('/api/auth-security/session', { credentials: 'include' });
+        if (response.status === 401) {
+          const refreshResponse = await fetch('/api/auth-security/refresh', {
+            method: 'POST',
+            credentials: 'include'
+          });
+          if (refreshResponse.ok) {
+            response = await fetch('/api/auth-security/session', { credentials: 'include' });
+          }
+        }
+        if (response.ok) {
+          const data = await response.json();
+          if (!cancelled) {
+            setIsAuthenticated(true);
+            setUser(data.user);
+            setEntreprise(data.entreprise || null);
+            localStorage.setItem('user', JSON.stringify(data.user));
+            localStorage.setItem('entrepriseId', data.user.entrepriseId);
+            if (data.entreprise) localStorage.setItem('entreprise', JSON.stringify(data.entreprise));
+          }
+        } else {
+          ['user', 'entreprise', 'entrepriseId', 'sessionId'].forEach(key => localStorage.removeItem(key));
+        }
+      } catch (error) {
+        console.error('Impossible de vérifier la session:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    initialize();
+    return () => { cancelled = true; };
   }, []);
 
-  const handleLogin = (userData) => {
+  const handleLogin = (userData, entrepriseData) => {
     setIsAuthenticated(true);
     setUser(userData);
+    setEntreprise(entrepriseData || null);
   };
 
   // Filtrer les modules selon les permissions
@@ -92,25 +119,18 @@ export default function App() {
   );
 
   const handleLogout = async () => {
-    const token = localStorage.getItem('token');
     const sessionId = localStorage.getItem('sessionId');
     
     try {
-      await fetch('/api/auth-security/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ sessionId: sessionId ? parseInt(sessionId) : null })
-      });
+      await api.post('/auth-security/logout', { sessionId: sessionId ? parseInt(sessionId) : null });
     } catch (error) {
       console.error('Logout error:', error);
     }
     
-    localStorage.clear();
+    ['user', 'entreprise', 'entrepriseId', 'sessionId'].forEach(key => localStorage.removeItem(key));
     setIsAuthenticated(false);
     setUser(null);
+    setEntreprise(null);
     setCurrentView('dashboard');
   };
 
