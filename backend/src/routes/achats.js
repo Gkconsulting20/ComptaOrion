@@ -18,6 +18,8 @@ import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import {
   allocateLogisticsByWeight,
   applySupplierInvoiceCostsToRemainingLayers,
+  convertQuantityToBase,
+  convertUnitPriceToBase,
   createStockValuationLayer,
   ensureOpeningValuationLayer,
   splitCostVariance,
@@ -213,20 +215,42 @@ router.post('/factures', async (req, res) => {
       }
 
       const produitId = item.produitId ? Number(item.produitId) : null;
+      let inputUnit = String(item.uniteSaisie || '').trim();
+      let quantityInStockUnit = quantite;
+      let priceInStockUnit = prixUnitaire;
       if (produitId !== null) {
         if (!Number.isSafeInteger(produitId) || produitId <= 0) {
           return res.status(400).json({ success: false, message: 'Produit invalide.' });
         }
         const [produit] = await db
-          .select({ id: produits.id })
+          .select({ id: produits.id, uniteMesure: produits.uniteMesure })
           .from(produits)
           .where(and(eq(produits.id, produitId), eq(produits.entrepriseId, req.entrepriseId)))
           .limit(1);
         if (!produit) {
           return res.status(400).json({ success: false, message: 'Un produit de la facture n’appartient pas à cette entreprise.' });
         }
+        inputUnit = inputUnit || produit.uniteMesure || 'pièce';
+        try {
+          quantityInStockUnit = convertQuantityToBase(quantite, inputUnit, produit.uniteMesure || 'pièce');
+          priceInStockUnit = convertUnitPriceToBase(prixUnitaire, inputUnit, produit.uniteMesure || 'pièce');
+        } catch (error) {
+          return res.status(400).json({ success: false, message: error.message, produitId });
+        }
+      } else {
+        inputUnit = inputUnit || 'unité';
       }
-      lignesNormalisees.push({ ...item, produitId, description, quantite, prixUnitaire, remise });
+      lignesNormalisees.push({
+        ...item,
+        produitId,
+        description,
+        quantite: quantityInStockUnit,
+        quantiteSaisie: quantite,
+        uniteSaisie: inputUnit,
+        prixUnitaire: priceInStockUnit,
+        prixUnitaireSaisi: prixUnitaire,
+        remise,
+      });
     }
 
     // Vérifier que le fournisseur existe
@@ -315,7 +339,10 @@ router.post('/factures', async (req, res) => {
           produitId: item.produitId,
           description: item.description,
           quantite: item.quantite.toString(),
+          quantiteSaisie: item.quantiteSaisie.toString(),
+          uniteSaisie: item.uniteSaisie,
           prixUnitaire: item.prixUnitaire.toFixed(2),
+          prixUnitaireSaisi: item.prixUnitaireSaisi.toFixed(2),
           remise: item.remise.toFixed(2),
           totalLigne: totalLigne.toFixed(2),
         };
@@ -387,6 +414,7 @@ router.put('/factures/:id/valider', async (req, res) => {
       const weightProducts = stockItems.length
         ? await tx.select({
           id: produits.id,
+          uniteMesure: produits.uniteMesure,
           poidsParUnite: produits.poidsParUnite,
           unitePoids: produits.unitePoids,
         }).from(produits).where(and(
@@ -398,6 +426,7 @@ router.put('/factures/:id/valider', async (req, res) => {
       const directLogisticsAllocation = allocateLogisticsByWeight(
         stockItems.map((item) => ({
           ...item,
+          uniteMesure: weightsByProduct.get(item.produitId)?.uniteMesure,
           poidsParUnite: weightsByProduct.get(item.produitId)?.poidsParUnite,
           unitePoids: weightsByProduct.get(item.produitId)?.unitePoids,
         })),
@@ -890,18 +919,60 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       }
     }
 
+    const productIds = [...new Set(lignes
+      .map((ligne) => parseInt(ligne.produitId, 10))
+      .filter((id) => Number.isSafeInteger(id) && id > 0))];
+    const weightProducts = productIds.length
+      ? await db.select({
+        id: produits.id,
+        nom: produits.nom,
+        uniteMesure: produits.uniteMesure,
+        poidsParUnite: produits.poidsParUnite,
+        unitePoids: produits.unitePoids,
+      }).from(produits).where(and(
+        eq(produits.entrepriseId, req.entrepriseId),
+        inArray(produits.id, productIds)
+      ))
+      : [];
+    if (weightProducts.length !== productIds.length ||
+        lignes.some((ligne) => ligne.produitId && !Number.isSafeInteger(parseInt(ligne.produitId, 10)))) {
+      return res.status(400).json({ success: false, message: 'Un ou plusieurs produits de la facture sont introuvables dans cette entreprise.' });
+    }
+    const weightsByProductId = new Map(weightProducts.map((product) => [product.id, product]));
+    let totalArticlesHT = 0;
+    const lignesProcessed = [];
+    for (const ligne of lignes) {
+      const quantityInput = Number(ligne.quantite);
+      const unitPriceInput = Number(ligne.prixUnitaireReel);
+      const productId = parseInt(ligne.produitId, 10);
+      const product = Number.isSafeInteger(productId) ? weightsByProductId.get(productId) : null;
+      const inputUnit = String(ligne.uniteSaisie || product?.uniteMesure || 'unité');
+      let quantityInStockUnit = quantityInput;
+      let priceInStockUnit = unitPriceInput;
+      if (product) {
+        try {
+          quantityInStockUnit = convertQuantityToBase(quantityInput, inputUnit, product.uniteMesure || 'pièce');
+          priceInStockUnit = convertUnitPriceToBase(unitPriceInput, inputUnit, product.uniteMesure || 'pièce');
+        } catch (error) {
+          return res.status(400).json({ success: false, message: error.message, produitId: productId });
+        }
+      }
+      const total = quantityInput * unitPriceInput;
+      totalArticlesHT += total;
+      lignesProcessed.push({
+        ...ligne,
+        produitId: product ? productId : null,
+        quantite: quantityInStockUnit,
+        quantiteSaisie: quantityInput,
+        uniteSaisie: inputUnit,
+        prixUnitaireReel: priceInStockUnit,
+        prixUnitaireSaisi: unitPriceInput,
+        totalLigne: total,
+      });
+    }
+
     // Générer numéro de facture
     const numeroFacture = await genererNumeroFactureAchat(req.entrepriseId);
-
-    // Calculer totaux articles
-    let totalArticlesHT = 0;
-    const lignesProcessed = lignes.map(l => {
-      const qt = parseFloat(l.quantite);
-      const pu = parseFloat(l.prixUnitaireReel);
-      const total = qt * pu;
-      totalArticlesHT += total;
-      return { ...l, totalLigne: total };
-    });
 
     // Calculer totaux coûts logistiques
     let totalLogistique = 0;
@@ -914,26 +985,11 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     const totalHT = totalArticlesHT + totalLogistique;
     const totalTTC = totalHT + totalTVA;
     const lignesArticles = lignesProcessed.filter((ligne) => Number.isSafeInteger(parseInt(ligne.produitId, 10)) && parseInt(ligne.produitId, 10) > 0);
-    const productIds = [...new Set(lignesArticles.map((ligne) => parseInt(ligne.produitId, 10)))];
-    const weightProducts = productIds.length
-      ? await db.select({
-        id: produits.id,
-        nom: produits.nom,
-        poidsParUnite: produits.poidsParUnite,
-        unitePoids: produits.unitePoids,
-      }).from(produits).where(and(
-        eq(produits.entrepriseId, req.entrepriseId),
-        inArray(produits.id, productIds)
-      ))
-      : [];
-    if (weightProducts.length !== productIds.length) {
-      return res.status(400).json({ success: false, message: 'Un ou plusieurs produits de la facture sont introuvables dans cette entreprise.' });
-    }
-    const weightsByProductId = new Map(weightProducts.map((product) => [product.id, product]));
     const lignesPourRepartition = lignesArticles.map((ligne) => ({
       ...ligne,
       poidsParUnite: weightsByProductId.get(parseInt(ligne.produitId, 10))?.poidsParUnite,
       unitePoids: weightsByProductId.get(parseInt(ligne.produitId, 10))?.unitePoids,
+      uniteMesure: weightsByProductId.get(parseInt(ligne.produitId, 10))?.uniteMesure,
     }));
     const repartitionLogistique = allocateLogisticsByWeight(lignesPourRepartition, totalLogistique);
     const produitsSansPoids = repartitionLogistique.missingWeightIndexes
@@ -959,8 +1015,15 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     // Créer les lignes de facture
     for (const ligne of lignesProcessed) {
       await db.execute(sql`
-        INSERT INTO facture_achat_items (entreprise_id, facture_id, produit_id, description, quantite, prix_unitaire, total_ligne)
-        VALUES (${req.entrepriseId}, ${newFacture.id}, ${ligne.produitId ? parseInt(ligne.produitId) : null}, ${ligne.description}, ${ligne.quantite}, ${ligne.prixUnitaireReel}, ${ligne.totalLigne.toFixed(2)})
+        INSERT INTO facture_achat_items (
+          entreprise_id, facture_id, produit_id, description, quantite,
+          quantite_saisie, unite_saisie, prix_unitaire, prix_unitaire_saisi, total_ligne
+        )
+        VALUES (
+          ${req.entrepriseId}, ${newFacture.id}, ${ligne.produitId ? parseInt(ligne.produitId) : null},
+          ${ligne.description}, ${ligne.quantite}, ${ligne.quantiteSaisie}, ${ligne.uniteSaisie},
+          ${ligne.prixUnitaireReel}, ${ligne.prixUnitaireSaisi}, ${ligne.totalLigne.toFixed(2)}
+        )
       `);
     }
 

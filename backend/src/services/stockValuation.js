@@ -140,16 +140,15 @@ export function allocateLogisticsByWeight(lines, logisticsTotal) {
       const weightUnit = line.unitePoids ?? line.unite_poids ??
         line.product_unite_poids ?? line.unitePoidsParUnite;
       const stockUnit = line.uniteMesure ?? line.unite_mesure ?? line.product_unite_mesure;
-      const lineWeightKg = explicitTotalKg !== undefined && explicitTotalKg !== null
-        ? Number(explicitTotalKg)
-        : (weightPerUnit !== undefined && weightPerUnit !== null && weightPerUnit !== ''
+      const kgPerStockUnit = getWeightUnitFactorKg(stockUnit) ??
+        (weightPerUnit !== undefined && weightPerUnit !== null && weightPerUnit !== ''
           ? convertWeightToKg(weightPerUnit, weightUnit || 'kg')
-          : convertWeightToKg(1, stockUnit) * quantity);
+          : null);
       const normalizedLineWeightKg = explicitTotalKg !== undefined && explicitTotalKg !== null
-        ? lineWeightKg
-        : (weightPerUnit !== undefined && weightPerUnit !== null && weightPerUnit !== ''
-          ? lineWeightKg * quantity
-          : lineWeightKg);
+        ? Number(explicitTotalKg)
+        : kgPerStockUnit === null
+          ? null
+          : kgPerStockUnit * quantity;
       if (!Number.isFinite(normalizedLineWeightKg) || normalizedLineWeightKg <= 0) {
         throw new Error('Poids total nul ou invalide.');
       }

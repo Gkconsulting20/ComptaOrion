@@ -6,7 +6,7 @@ import { Modal } from '../components/Modal';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
-import { convertPriceFromBase, getMeasurementUnitOptions } from '../utils/measurementUnits';
+import { convertPriceFromBase, getMeasurementUnitOptions, isMassUnit } from '../utils/measurementUnits';
 
 function NonFactureTab({ fournisseurs, produits }) {
   const [subTab, setSubTab] = useState('stock');
@@ -879,36 +879,44 @@ export function StockInventaire() {
                 placeholder="Ex. pièce, sac, kg"
                 required
               />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <FormField
-                  label={`Poids par unité de stock${form.uniteMesure ? ` (${form.uniteMesure})` : ''}`}
-                  type="number"
-                  value={form.poidsParUnite ?? ''}
-                  onChange={(e) => setForm({
-                    ...form,
-                    poidsParUnite: e.target.value === '' ? '' : parseFloat(e.target.value),
-                  })}
-                  min="0.000001"
-                  step="0.000001"
-                  placeholder="Ex. 0,5 pour une pièce de 500 g"
-                />
-                <FormField
-                  label="Unité du poids"
-                  type="select"
-                  value={form.unitePoids || 'kg'}
-                  onChange={(e) => setForm({ ...form, unitePoids: e.target.value })}
-                  options={[
-                    { value: 'g', label: 'Gramme (g)' },
-                    { value: 'kg', label: 'Kilogramme (kg)' },
-                    { value: 't', label: 'Tonne (t)' },
-                    { value: 'mg', label: 'Milligramme (mg)' },
-                    { value: 'lb', label: 'Livre (lb)' },
-                  ]}
-                />
-              </div>
-              <small style={{ display: 'block', margin: '-8px 0 12px', color: '#666' }}>
-                Obligatoire pour répartir des frais logistiques au poids. Exemple : une pièce de 500 g = 500 g par unité.
-              </small>
+              {isMassUnit(form.uniteMesure) ? (
+                <small style={{ display: 'block', margin: '-8px 0 12px', color: '#666' }}>
+                  Le poids est automatiquement déduit de l’unité principale ; les saisies en g, kg et t seront converties.
+                </small>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <FormField
+                      label={`Poids par unité de stock${form.uniteMesure ? ` (${form.uniteMesure})` : ''}`}
+                      type="number"
+                      value={form.poidsParUnite ?? ''}
+                      onChange={(e) => setForm({
+                        ...form,
+                        poidsParUnite: e.target.value === '' ? '' : parseFloat(e.target.value),
+                      })}
+                      min="0.000001"
+                      step="0.000001"
+                      placeholder="Ex. 0,5 pour une pièce de 500 g"
+                    />
+                    <FormField
+                      label="Unité du poids"
+                      type="select"
+                      value={form.unitePoids || 'kg'}
+                      onChange={(e) => setForm({ ...form, unitePoids: e.target.value })}
+                      options={[
+                        { value: 'g', label: 'Gramme (g)' },
+                        { value: 'kg', label: 'Kilogramme (kg)' },
+                        { value: 't', label: 'Tonne (t)' },
+                        { value: 'mg', label: 'Milligramme (mg)' },
+                        { value: 'lb', label: 'Livre (lb)' },
+                      ]}
+                    />
+                  </div>
+                  <small style={{ display: 'block', margin: '-8px 0 12px', color: '#666' }}>
+                    Obligatoire pour répartir des frais logistiques sur les articles à la pièce ou au sac.
+                  </small>
+                </>
+              )}
               <FormField label="Prix Achat" type="number" value={form.prixAchat || 0} onChange={(e) => setForm({...form, prixAchat: parseFloat(e.target.value) || 0})} />
               <FormField label="Prix Vente" type="number" value={form.prixVente || 0} onChange={(e) => setForm({...form, prixVente: parseFloat(e.target.value) || 0})} required />
               <FormField label="Stock Min" type="number" value={form.stockMinimum || 10} onChange={(e) => setForm({...form, stockMinimum: parseFloat(e.target.value) || 0})} />
@@ -1215,7 +1223,9 @@ export function StockInventaire() {
                 { label: 'Unité principale de stock', value: selectedProduit.uniteMesure || 'pièce' },
                 {
                   label: 'Poids par unité de stock',
-                  value: selectedProduit.poidsParUnite
+                  value: isMassUnit(selectedProduit.uniteMesure)
+                    ? `Automatique depuis ${selectedProduit.uniteMesure}`
+                    : selectedProduit.poidsParUnite
                     ? `${selectedProduit.poidsParUnite} ${selectedProduit.unitePoids || 'kg'}`
                     : 'Non renseigné',
                 }

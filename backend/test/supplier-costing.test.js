@@ -6,6 +6,8 @@ import {
   calculateSellingPriceFromMarkup,
   calculateRemainingLayerValue,
   calculateWeightedAverageSaleCost,
+  convertQuantityToBase,
+  convertUnitPriceToBase,
   convertWeightToKg,
   splitCostVariance,
 } from '../src/services/stockValuation.js';
@@ -14,6 +16,21 @@ test('convertit grammes, kilogrammes et tonnes en kilogrammes', () => {
   assert.equal(convertWeightToKg(500, 'g'), 0.5);
   assert.equal(convertWeightToKg(1, 'kg'), 1);
   assert.equal(convertWeightToKg(1, 't'), 1000);
+});
+
+test('convertit une tonne saisie vers le stock en kilogrammes et ajuste son prix unitaire', () => {
+  assert.equal(convertQuantityToBase(1, 'tonne', 'kg'), 1000);
+  assert.equal(convertUnitPriceToBase(10000, 't', 'kg'), 10);
+});
+
+test('répartit les frais selon les poids après conversion des unités principales', () => {
+  const result = allocateLogisticsByWeight([
+    { quantite: 200, uniteMesure: 'kg' },
+    { quantite: 0.8, uniteMesure: 't' },
+  ], 10000);
+
+  assert.deepEqual(result.allocations, [2000, 8000]);
+  assert.equal(result.totalWeightKg, 1000);
 });
 
 test('répartit les frais logistiques au prorata du poids total des articles', () => {

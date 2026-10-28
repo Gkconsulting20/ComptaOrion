@@ -4,6 +4,12 @@ import { pool } from '../src/db.js';
 
 // Additive upgrade only. Never use drizzle-kit push against an older ERP database.
 const apply = process.argv.includes('--apply');
+const scopeArg = process.argv.find(arg => arg.startsWith('--scope='));
+const scope = scopeArg?.slice('--scope='.length);
+const scopedTables = scope === 'stock-units'
+  ? new Set(['produits', 'lignes_reception', 'facture_achat_items'])
+  : null;
+if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
 const source = execFileSync(process.execPath, [
   'node_modules/drizzle-kit/bin.cjs', 'export', '--dialect=postgresql', '--schema=./src/schema.js',
 ], { cwd: fileURLToPath(new URL('..', import.meta.url)), encoding: 'utf8' });
@@ -28,11 +34,13 @@ try {
   const added = new Set();
   for (const statement of source.split(/;\s*(?:--> statement-breakpoint)?\s*/)) {
     const type = statement.match(/^CREATE TYPE "public"\."([^"]+)"/);
-    if (type && !types.has(type[1])) actions.push(statement);
+    if (!scopedTables && type && !types.has(type[1])) actions.push(statement);
     const table = statement.match(/^CREATE TABLE "([^"]+)" \(\n([\s\S]*?)\n\)$/);
     if (!table) continue;
     const [, name, body] = table;
+    if (scopedTables && !scopedTables.has(name)) continue;
     if (!present.has(name)) {
+      if (scopedTables) throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
       actions.push(statement);
       added.add(name);
     } else {
@@ -60,7 +68,7 @@ try {
     if (apply) await client.query(sql);
   }
   const legacyAssets = present.get('immobilisations');
-  if (apply && legacyAssets?.has('categorie') &&
+  if (!scopedTables && apply && legacyAssets?.has('categorie') &&
       (added.has('immobilisations.categorie_id') || added.has('immobilisations.valeur_nette_comptable'))) {
     // Keep each old category and its depreciation settings; no deletion of legacy data.
     await client.query(`
@@ -127,7 +135,7 @@ try {
   )).rows.map((row) => row.indexname));
   for (const statement of source.split(/;\s*(?:--> statement-breakpoint)?\s*/)) {
     const index = statement.match(/^CREATE UNIQUE INDEX "([^"]+)"/);
-    if (!index || !associationIndexes.has(index[1]) || existingIndexes.has(index[1])) continue;
+    if (scopedTables || !index || !associationIndexes.has(index[1]) || existingIndexes.has(index[1])) continue;
     console.log(`INDEX ${index[1]} (${apply ? 'application' : 'simulation'})`);
     if (apply) await client.query(statement);
   }

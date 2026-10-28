@@ -8,7 +8,11 @@ import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 import { formatPeriodeFR } from '../utils/dateUtils';
-import { getMeasurementUnitOptions } from '../utils/measurementUnits';
+import {
+  convertPriceBetweenUnits,
+  convertQuantityBetweenUnits,
+  getMeasurementUnitOptions,
+} from '../utils/measurementUnits';
 import SupplierInvoiceOcr from './SupplierInvoiceOcr';
 
 function FacturationTab({ fournisseurs }) {
@@ -416,6 +420,9 @@ function FacturationTab({ fournisseurs }) {
               </div>
 
               <h5>Articles ({factureForm.lignes.length})</h5>
+              <p style={{ color: '#666', fontSize: '13px', marginTop: '-8px' }}>
+                Les quantités en g, kg ou t sont converties vers l’unité principale du produit avant le calcul du stock et des frais logistiques.
+              </p>
               <div style={{ maxHeight: '200px', overflow: 'auto', marginBottom: '20px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
@@ -443,7 +450,36 @@ function FacturationTab({ fournisseurs }) {
                             />
                             <select
                               value={ligne.uniteSaisie || ligne.uniteStock}
-                              onChange={(e) => updateLigne(idx, 'uniteSaisie', e.target.value)}
+                              onChange={(e) => {
+                                const newUnit = e.target.value;
+                                const newQuantity = convertQuantityBetweenUnits(
+                                  ligne.quantite,
+                                  ligne.uniteSaisie || ligne.uniteStock,
+                                  newUnit
+                                );
+                                const newPrice = convertPriceBetweenUnits(
+                                  ligne.prixUnitaireReel,
+                                  ligne.uniteSaisie || ligne.uniteStock,
+                                  newUnit
+                                );
+                                const newEstimatedPrice = convertPriceBetweenUnits(
+                                  ligne.prixEstime,
+                                  ligne.uniteSaisie || ligne.uniteStock,
+                                  newUnit
+                                );
+                                setFactureForm(prev => ({
+                                  ...prev,
+                                  lignes: prev.lignes.map((item, itemIndex) => itemIndex === idx
+                                    ? {
+                                      ...item,
+                                      uniteSaisie: newUnit,
+                                      quantite: newQuantity,
+                                      prixUnitaireReel: newPrice,
+                                      prixEstime: newEstimatedPrice,
+                                    }
+                                    : item),
+                                }));
+                              }}
                               style={{ minWidth: '70px', padding: '5px', border: '1px solid #ddd', borderRadius: '4px' }}
                             >
                               {getMeasurementUnitOptions(ligne.uniteStock).map((unit) => (

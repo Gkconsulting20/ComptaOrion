@@ -20,7 +20,12 @@ export function isMassUnit(unit) {
 }
 
 export function getMeasurementUnitOptions(stockUnit) {
-  if (isMassUnit(stockUnit)) return MASS_UNITS;
+  if (isMassUnit(stockUnit)) {
+    const baseFactor = FACTORS.get(normalize(stockUnit));
+    return MASS_UNITS.map((option) => option.factorKg === baseFactor
+      ? { ...option, value: String(stockUnit), label: `${option.label} — unité principale` }
+      : option);
+  }
   const value = String(stockUnit || 'pièce');
   return [{ value, label: value }];
 }
@@ -31,6 +36,26 @@ export function convertPriceFromBase(pricePerBaseUnit, inputUnit, stockUnit) {
   const baseFactor = FACTORS.get(normalize(stockUnit));
   if (!Number.isFinite(price) || inputFactor === undefined || baseFactor === undefined) return price;
   return price * inputFactor / baseFactor;
+}
+
+export function convertPriceBetweenUnits(pricePerOldUnit, oldUnit, newUnit) {
+  const price = Number(pricePerOldUnit);
+  const oldFactor = FACTORS.get(normalize(oldUnit));
+  const newFactor = FACTORS.get(normalize(newUnit));
+  if (!Number.isFinite(price) || oldFactor === undefined || newFactor === undefined || oldFactor === 0) {
+    return price;
+  }
+  return price * newFactor / oldFactor;
+}
+
+export function convertQuantityBetweenUnits(quantityInOldUnit, oldUnit, newUnit) {
+  const quantity = Number(quantityInOldUnit);
+  const oldFactor = FACTORS.get(normalize(oldUnit));
+  const newFactor = FACTORS.get(normalize(newUnit));
+  if (!Number.isFinite(quantity) || oldFactor === undefined || newFactor === undefined || newFactor === 0) {
+    return quantity;
+  }
+  return quantity * oldFactor / newFactor;
 }
 
 export function getUnitLabel(unit) {
