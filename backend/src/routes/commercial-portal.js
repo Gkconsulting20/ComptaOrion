@@ -7,15 +7,39 @@ import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'comptaorion-commercial-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET;
+const COMMERCIAL_COOKIE = 'comptaorion_commercial';
+
+function readCommercialCookie(req) {
+  const prefix = `${COMMERCIAL_COOKIE}=`;
+  const value = (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith(prefix));
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
+function setCommercialCookie(res, token) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.append('Set-Cookie', `${COMMERCIAL_COOKIE}=${encodeURIComponent(token)}; Path=/api/commercial; Max-Age=604800; HttpOnly; SameSite=Strict${secure}`);
+}
+
+function clearCommercialCookie(res) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.append('Set-Cookie', `${COMMERCIAL_COOKIE}=; Path=/api/commercial; Max-Age=0; HttpOnly; SameSite=Strict${secure}`);
+}
 
 function authenticateCommercial(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.split(' ')[1]
+    : readCommercialCookie(req);
+  if (!token) {
     return res.status(401).json({ error: 'Token manquant' });
   }
 
-  const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     if (decoded.type !== 'commercial') {
@@ -70,9 +94,9 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    setCommercialCookie(res, token);
     res.json({
       success: true,
-      token,
       commercial: {
         id: commercial.id,
         nom: commercial.nom,
@@ -86,6 +110,11 @@ router.post('/login', async (req, res) => {
     console.error('Erreur login commercial:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+router.post('/logout', (_req, res) => {
+  clearCommercialCookie(res);
+  res.json({ success: true });
 });
 
 router.get('/me', authenticateCommercial, async (req, res) => {

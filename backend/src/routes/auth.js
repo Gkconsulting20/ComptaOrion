@@ -1,14 +1,19 @@
 import express from 'express';
 import { db } from '../db.js';
-import { users, entreprises } from '../schema.js';
-import { eq } from 'drizzle-orm';
+import { users, entreprises, sessions, auditConnexions } from '../schema.js';
+import { and, eq, gt, isNull } from 'drizzle-orm';
+import crypto from 'crypto';
 import {
   generateToken,
   generateRefreshToken,
   hashPassword,
   comparePassword,
   verifyRefreshToken,
-  verifyToken,
+  readCookie,
+  setAuthCookies,
+  clearAuthCookies,
+  REFRESH_TOKEN_COOKIE,
+  authMiddleware,
 } from '../auth.js';
 import { initializeSyscohadaForEnterprise } from '../services/syscohadaService.js';
 
@@ -85,10 +90,6 @@ router.post('/register', async (req, res) => {
       console.error('Erreur initialisation SYSCOHADA:', syscohadaError.message);
     }
 
-    // Générer les tokens
-    const token = generateToken(newUser);
-    const refreshToken = generateRefreshToken(newUser);
-
     res.status(201).json({
       message: 'Inscription réussie',
       user: {
@@ -101,8 +102,6 @@ router.post('/register', async (req, res) => {
         entrepriseId: newUser.entrepriseId,
       },
       entreprise: newEntreprise,
-      token,
-      refreshToken,
     });
   } catch (error) {
     console.error('Erreur lors de l\'inscription:', error);
@@ -160,6 +159,27 @@ router.post('/login', async (req, res) => {
     // Générer les tokens
     const token = generateToken(user);
     const refreshToken = generateRefreshToken(user);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const ipAddress = req.ip || req.connection?.remoteAddress || null;
+    const userAgent = req.get('user-agent');
+    const [session] = await db.insert(sessions).values({
+      userId: user.id,
+      enterpriseId: user.entrepriseId,
+      tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
+      refreshTokenHash: crypto.createHash('sha256').update(refreshToken).digest('hex'),
+      ipAddress,
+      userAgent,
+      expiresAt
+    }).returning();
+    await db.insert(auditConnexions).values({
+      userId: user.id,
+      enterpriseId: user.entrepriseId,
+      type: 'login',
+      ipAddress,
+      userAgent,
+      statut: 'success'
+    });
+    setAuthCookies(res, token, refreshToken, '/api/auth');
 
     res.json({
       message: 'Connexion réussie',
@@ -173,8 +193,7 @@ router.post('/login', async (req, res) => {
         entrepriseId: user.entrepriseId,
       },
       entreprise,
-      token,
-      refreshToken,
+      session: { id: session.id, expiresAt },
     });
   } catch (error) {
     console.error('Erreur lors de la connexion:', error);
@@ -188,9 +207,10 @@ router.post('/login', async (req, res) => {
  */
 router.post('/refresh', async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = readCookie(req, REFRESH_TOKEN_COOKIE);
 
     if (!refreshToken) {
+      clearAuthCookies(res);
       return res.status(400).json({ error: 'Refresh token requis' });
     }
 
@@ -198,6 +218,7 @@ router.post('/refresh', async (req, res) => {
     const decoded = verifyRefreshToken(refreshToken);
 
     if (!decoded) {
+      clearAuthCookies(res);
       return res.status(401).json({ error: 'Refresh token invalide ou expiré' });
     }
 
@@ -208,14 +229,33 @@ router.post('/refresh', async (req, res) => {
       .where(eq(users.id, decoded.id));
 
     if (!user || !user.actif) {
+      clearAuthCookies(res);
       return res.status(401).json({ error: 'Utilisateur introuvable ou inactif' });
     }
 
-    // Générer un nouveau token
+    const oldHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const [session] = await db.select().from(sessions).where(and(
+      eq(sessions.userId, user.id),
+      eq(sessions.enterpriseId, user.entrepriseId),
+      eq(sessions.refreshTokenHash, oldHash),
+      gt(sessions.expiresAt, new Date()),
+      isNull(sessions.logoutAt)
+    )).limit(1);
+    if (!session) {
+      clearAuthCookies(res);
+      return res.status(401).json({ error: 'Session invalide ou expirée' });
+    }
+
     const newToken = generateToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+    await db.update(sessions).set({
+      tokenHash: crypto.createHash('sha256').update(newToken).digest('hex'),
+      refreshTokenHash: crypto.createHash('sha256').update(newRefreshToken).digest('hex')
+    }).where(eq(sessions.id, session.id));
+    setAuthCookies(res, newToken, newRefreshToken, '/api/auth');
 
     res.json({
-      token: newToken,
+      message: 'Session rafraîchie',
     });
   } catch (error) {
     console.error('Erreur lors du refresh:', error);
@@ -227,27 +267,13 @@ router.post('/refresh', async (req, res) => {
  * GET /auth/me
  * Récupérer les infos de l'utilisateur connecté
  */
-router.get('/me', async (req, res) => {
+router.get('/me', authMiddleware, async (req, res) => {
   try {
-    // Vérifier le token
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Token manquant' });
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-      return res.status(401).json({ error: 'Token invalide' });
-    }
-
     // Récupérer l'utilisateur
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.id, decoded.id));
+      .where(eq(users.id, req.user.id));
 
     if (!user) {
       return res.status(404).json({ error: 'Utilisateur introuvable' });

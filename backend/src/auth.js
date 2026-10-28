@@ -34,10 +34,10 @@ export function readCookie(req, name) {
   }
 }
 
-export function setAuthCookies(res, accessToken, refreshToken) {
+export function setAuthCookies(res, accessToken, refreshToken, refreshPath = '/api/auth-security') {
   res.append('Set-Cookie', [
     `${ACCESS_TOKEN_COOKIE}=${encodeURIComponent(accessToken)}; ${cookieFlags('/', 86400)}`,
-    `${REFRESH_TOKEN_COOKIE}=${encodeURIComponent(refreshToken)}; ${cookieFlags('/api/auth-security', 604800)}`
+    `${REFRESH_TOKEN_COOKIE}=${encodeURIComponent(refreshToken)}; ${cookieFlags(refreshPath, 604800)}`
   ]);
 }
 
@@ -45,7 +45,8 @@ export function clearAuthCookies(res) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.append('Set-Cookie', [
     `${ACCESS_TOKEN_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict${secure}`,
-    `${REFRESH_TOKEN_COOKIE}=; Path=/api/auth-security; Max-Age=0; HttpOnly; SameSite=Strict${secure}`
+    `${REFRESH_TOKEN_COOKIE}=; Path=/api/auth-security; Max-Age=0; HttpOnly; SameSite=Strict${secure}`,
+    `${REFRESH_TOKEN_COOKIE}=; Path=/api/auth; Max-Age=0; HttpOnly; SameSite=Strict${secure}`
   ]);
 }
 

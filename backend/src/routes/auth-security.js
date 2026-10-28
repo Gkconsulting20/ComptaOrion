@@ -76,6 +76,8 @@ router.post('/login', async (req, res) => {
       userAgent,
       statut: 'success'
     });
+    const [entreprise] = await db.select().from(entreprises)
+      .where(eq(entreprises.id, user.entrepriseId)).limit(1);
     setAuthCookies(res, token, refreshToken);
 
     res.json({
@@ -88,6 +90,7 @@ router.post('/login', async (req, res) => {
         role: user.role,
         entrepriseId: user.entrepriseId
       },
+      entreprise: entreprise || null,
       session: { id: session[0].id, expiresAt }
     });
   } catch (error) {
@@ -113,6 +116,7 @@ router.post('/logout', authMiddleware, async (req, res) => {
     });
 
     if (!session) {
+      clearAuthCookies(res);
       return res.status(403).json({ error: 'Session non autorisée ou introuvable' });
     }
 
@@ -150,6 +154,7 @@ router.post('/refresh', async (req, res) => {
     const decoded = verifyRefreshToken(refreshToken);
 
     if (!decoded) {
+      clearAuthCookies(res);
       return res.status(401).json({ error: 'Refresh token invalide ou expiré' });
     }
 
@@ -157,7 +162,8 @@ router.post('/refresh', async (req, res) => {
       where: eq(users.id, decoded.id)
     });
 
-    if (!user) {
+    if (!user || !user.actif) {
+      clearAuthCookies(res);
       return res.status(401).json({ error: 'Utilisateur non trouvé' });
     }
 
@@ -166,12 +172,15 @@ router.post('/refresh', async (req, res) => {
     const session = await db.query.sessions.findFirst({
       where: and(
         eq(sessions.userId, user.id),
+        eq(sessions.enterpriseId, user.entrepriseId),
         eq(sessions.refreshTokenHash, refreshTokenHash),
-        gt(sessions.expiresAt, new Date())
+        gt(sessions.expiresAt, new Date()),
+        isNull(sessions.logoutAt)
       )
     });
 
     if (!session) {
+      clearAuthCookies(res);
       return res.status(401).json({ error: 'Session invalide ou expirée' });
     }
 

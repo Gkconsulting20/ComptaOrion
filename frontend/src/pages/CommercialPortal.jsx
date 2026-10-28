@@ -12,21 +12,21 @@ export function CommercialPortal() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('commercialToken');
+    localStorage.removeItem('commercialToken');
     const storedCommercial = localStorage.getItem('commercial');
-    if (token && storedCommercial) {
+    if (storedCommercial) {
       setIsAuthenticated(true);
       setCommercial(JSON.parse(storedCommercial));
-      loadDashboard(token);
+      loadDashboard();
     } else {
       setLoading(false);
     }
   }, []);
 
-  const loadDashboard = async (token) => {
+  const loadDashboard = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/commercial/dashboard`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include'
       });
       if (!response.ok) throw new Error('Session expirée');
       const data = await response.json();
@@ -48,6 +48,7 @@ export function CommercialPortal() {
       const response = await fetch(`${API_BASE}/api/commercial/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(loginData)
       });
       
@@ -57,18 +58,21 @@ export function CommercialPortal() {
         throw new Error(data.error || 'Erreur de connexion');
       }
       
-      localStorage.setItem('commercialToken', data.token);
       localStorage.setItem('commercial', JSON.stringify(data.commercial));
       setIsAuthenticated(true);
       setCommercial(data.commercial);
-      loadDashboard(data.token);
+      loadDashboard();
     } catch (err) {
       setError(err.message);
       setLoading(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch(`${API_BASE}/api/commercial/logout`, {
+      method: 'POST',
+      credentials: 'include'
+    }).catch(() => {});
     localStorage.removeItem('commercialToken');
     localStorage.removeItem('commercial');
     setIsAuthenticated(false);
