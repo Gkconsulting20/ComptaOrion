@@ -9,8 +9,8 @@ L’utilisateur souhaite pousser l’ERP vers GitHub et utiliser Cloudflare pour
 
 **How to apply:** Ne pas proposer une publication Replit comme résultat de cette migration. Distinguer interface statique et serveur métier lors de la préparation Cloudflare.
 
-L’utilisateur confirme qu’il dispose uniquement d’une base PostgreSQL sur Render, sans service Web Render.
+L’utilisateur demande maintenant une base PostgreSQL Supabase pour remplacer Render.
 
-**Why:** Il a clarifié explicitement cette distinction après avoir employé le mot « backend » pour désigner sa base. Le nom donné précédemment comme « base Cloudflare » désignait le stockage de fichiers R2.
+**Why:** Il a explicitement changé la cible de base de données après avoir demandé de remplacer Render par Supabase.
 
-**How to apply:** Garder le frontend et le backend dans le Worker Cloudflare et raccorder celui-ci à la base PostgreSQL Render existante. Vérifier la base cible et les comptes existants avant de créer un administrateur de test. Ne pas créer de base D1 ni de service Web Render. Ne pas supprimer les données existantes.
+**How to apply:** Garder le frontend et le backend sur Cloudflare. Traiter Supabase PostgreSQL comme cible, mais conserver Render jusqu’à la migration du schéma et des données, aux contrôles de cohérence et aux tests de l’application. Ne pas créer de D1 ou de service Web Render et ne pas supprimer les données Render avant validation.
