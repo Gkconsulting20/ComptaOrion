@@ -13,6 +13,7 @@ import {
   versementsFinancementsProjets,
 } from '../schema.js';
 import { createEcritureComptable } from '../services/comptabiliteService.js';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 const positiveAmount = (value) => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 999999999999999.99;
@@ -128,6 +129,16 @@ router.post('/projects', async (req, res) => {
         devise: devise.toUpperCase(),
         userId: req.user.id,
       }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'projets_associatifs',
+        recordId: created.id,
+        nouvelleValeur: created,
+        description: `Projet associatif créé: ${created.code} - ${created.nom}`,
+        executor: tx,
+        required: true
+      });
       return created;
     });
     if (!project) return res.status(409).json({ error: 'Ce code de projet est déjà utilisé.' });
@@ -141,29 +152,47 @@ router.post('/projects', async (req, res) => {
 
 router.put('/projects/:id', async (req, res) => {
   try {
-    const project = await findProject(req.params.id, req.entrepriseId);
-    if (!project) return res.status(404).json({ error: 'Projet introuvable.' });
-    const changes = {};
-    for (const key of ['nom', 'description', 'bailleur', 'referenceConvention']) {
-      if (key in req.body) changes[key] = String(req.body[key] || '').trim() || null;
-    }
-    if ('statut' in req.body) {
-      if (!['actif', 'suspendu', 'termine', 'archive'].includes(req.body.statut)) return res.status(400).json({ error: 'Statut invalide.' });
-      changes.statut = req.body.statut;
-    }
-    if ('budgetTotal' in req.body) {
-      if (!positiveAmount(req.body.budgetTotal)) return res.status(400).json({ error: 'Le budget doit être positif.' });
-      changes.budgetTotal = Number(req.body.budgetTotal).toFixed(2);
-    }
-    if ('dateFin' in req.body) {
-      if (req.body.dateFin && (!isoDate(req.body.dateFin) || req.body.dateFin < project.dateDebut)) return res.status(400).json({ error: 'Date de fin invalide.' });
-      changes.dateFin = req.body.dateFin || null;
-    }
-    changes.updatedAt = new Date();
-    const [updated] = await db.update(projetsAssociatifs).set(changes)
-      .where(and(eq(projetsAssociatifs.id, project.id), eq(projetsAssociatifs.entrepriseId, req.entrepriseId)))
-      .returning();
-    res.json(updated);
+    const result = await db.transaction(async (tx) => {
+      const project = await findProject(req.params.id, req.entrepriseId, tx);
+      if (!project) return { status: 404, body: { error: 'Projet introuvable.' } };
+      const changes = {};
+      for (const key of ['nom', 'description', 'bailleur', 'referenceConvention']) {
+        if (key in req.body) changes[key] = String(req.body[key] || '').trim() || null;
+      }
+      if ('statut' in req.body) {
+        if (!['actif', 'suspendu', 'termine', 'archive'].includes(req.body.statut)) {
+          return { status: 400, body: { error: 'Statut invalide.' } };
+        }
+        changes.statut = req.body.statut;
+      }
+      if ('budgetTotal' in req.body) {
+        if (!positiveAmount(req.body.budgetTotal)) return { status: 400, body: { error: 'Le budget doit être positif.' } };
+        changes.budgetTotal = Number(req.body.budgetTotal).toFixed(2);
+      }
+      if ('dateFin' in req.body) {
+        if (req.body.dateFin && (!isoDate(req.body.dateFin) || req.body.dateFin < project.dateDebut)) {
+          return { status: 400, body: { error: 'Date de fin invalide.' } };
+        }
+        changes.dateFin = req.body.dateFin || null;
+      }
+      changes.updatedAt = new Date();
+      const [updated] = await tx.update(projetsAssociatifs).set(changes)
+        .where(and(eq(projetsAssociatifs.id, project.id), eq(projetsAssociatifs.entrepriseId, req.entrepriseId)))
+        .returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'projets_associatifs',
+        recordId: project.id,
+        ancienneValeur: project,
+        nouvelleValeur: updated,
+        description: `Projet associatif modifié: ${project.code}`,
+        executor: tx,
+        required: true
+      });
+      return { status: 200, body: updated };
+    });
+    res.status(result.status).json(result.body);
   } catch (error) {
     console.error('Erreur modification projet associatif:', error.message);
     res.status(500).json({ error: 'Impossible de mettre à jour le projet.' });
@@ -335,6 +364,17 @@ router.post('/projects/:id/budgets', async (req, res) => {
       const [line] = existing
         ? await tx.update(budgetsProjetsAssociatifs).set(values).where(eq(budgetsProjetsAssociatifs.id, existing.id)).returning()
         : await tx.insert(budgetsProjetsAssociatifs).values(values).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: existing ? 'UPDATE' : 'CREATE',
+        table: 'budgets_projets_associatifs',
+        recordId: line.id,
+        ancienneValeur: existing || null,
+        nouvelleValeur: line,
+        description: `Poste budgétaire ${existing ? 'modifié' : 'créé'}: ${line.poste} (${project.code})`,
+        executor: tx,
+        required: true
+      });
       return { status: existing ? 200 : 201, body: line };
     });
     res.status(result.status).json(result.body);
@@ -350,17 +390,30 @@ router.post('/projects/:id/financings', async (req, res) => {
     return res.status(400).json({ error: 'Bailleur et montant engagé valide requis.' });
   }
   try {
-    const project = await findProject(req.params.id, req.entrepriseId);
-    if (!project) return res.status(404).json({ error: 'Projet introuvable.' });
-    if (project.statut !== 'actif') return res.status(409).json({ error: 'Le projet n’accepte plus de financement.' });
-    const [financing] = await db.insert(financementsProjetsAssociatifs).values({
-      entrepriseId: req.entrepriseId,
-      projetId: project.id,
-      bailleur: String(bailleur).trim(),
-      referenceConvention: String(referenceConvention || '').trim() || null,
-      montantEngage: Number(montantEngage).toFixed(2),
-    }).returning();
-    res.status(201).json(financing);
+    const result = await db.transaction(async (tx) => {
+      const project = await findProject(req.params.id, req.entrepriseId, tx);
+      if (!project) return { status: 404, body: { error: 'Projet introuvable.' } };
+      if (project.statut !== 'actif') return { status: 409, body: { error: 'Le projet n’accepte plus de financement.' } };
+      const [financing] = await tx.insert(financementsProjetsAssociatifs).values({
+        entrepriseId: req.entrepriseId,
+        projetId: project.id,
+        bailleur: String(bailleur).trim(),
+        referenceConvention: String(referenceConvention || '').trim() || null,
+        montantEngage: Number(montantEngage).toFixed(2),
+      }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'financements_projets_associatifs',
+        recordId: financing.id,
+        nouvelleValeur: financing,
+        description: `Financement engagé pour ${project.code}: ${financing.bailleur}`,
+        executor: tx,
+        required: true
+      });
+      return { status: 201, body: financing };
+    });
+    res.status(result.status).json(result.body);
   } catch (error) {
     console.error('Erreur financement associatif:', error.message);
     res.status(500).json({ error: 'Impossible d’enregistrer le financement.' });
@@ -428,6 +481,16 @@ router.post('/projects/:id/financings/:financingId/receipts', async (req, res) =
         ecritureId: entry.id,
         userId: req.user.id,
       }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'versements_financements_projets',
+        recordId: receipt.id,
+        nouvelleValeur: { receipt, accountingEntry: entry },
+        description: `Financement reçu pour ${project.code}: ${value}`,
+        executor: tx,
+        required: true
+      });
       return { status: 201, body: { receipt, accountingEntry: entry, montantRestant: remaining - Number(value) } };
     });
     res.status(result.status).json(result.body);
@@ -454,6 +517,17 @@ router.post('/projects/:id/expenses', async (req, res) => {
       if (expense.projetId === project.id) return { status: 200, body: expense };
       const [linked] = await tx.update(depenses).set({ projetId: project.id, updatedAt: new Date() })
         .where(and(eq(depenses.id, expense.id), eq(depenses.entrepriseId, req.entrepriseId))).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'depenses',
+        recordId: expense.id,
+        ancienneValeur: expense,
+        nouvelleValeur: linked,
+        description: `Dépense rattachée au projet ${project.code}`,
+        executor: tx,
+        required: true
+      });
       return { status: 200, body: linked };
     });
     res.status(result.status).json(result.body);
@@ -574,6 +648,16 @@ router.post('/projects/:id/expenses/:expenseId/payments', async (req, res) => {
         ecritureId: entry.id,
         userId: req.user.id,
       }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'paiements_depenses_projets',
+        recordId: payment.id,
+        nouvelleValeur: { payment, accountingEntry: entry },
+        description: `Paiement de dépense du projet ${project.code}: ${amount}`,
+        executor: tx,
+        required: true
+      });
       return {
         status: 201,
         body: {
@@ -597,10 +681,30 @@ router.delete('/projects/:id/expenses/:expenseId', async (req, res) => {
     return res.status(400).json({ error: 'Projet ou dépense invalide.' });
   }
   try {
-    const [unlinked] = await db.update(depenses).set({ projetId: null, updatedAt: new Date() })
-      .where(and(eq(depenses.projetId, Number(req.params.id)), eq(depenses.id, Number(req.params.expenseId)),
-        eq(depenses.entrepriseId, req.entrepriseId))).returning({ id: depenses.id });
-    if (!unlinked) return res.status(404).json({ error: 'Dépense associée introuvable.' });
+    const result = await db.transaction(async (tx) => {
+      const [expense] = await tx.select().from(depenses).where(and(
+        eq(depenses.projetId, Number(req.params.id)),
+        eq(depenses.id, Number(req.params.expenseId)),
+        eq(depenses.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!expense) return null;
+      const [unlinked] = await tx.update(depenses).set({ projetId: null, updatedAt: new Date() })
+        .where(and(eq(depenses.projetId, Number(req.params.id)), eq(depenses.id, expense.id),
+          eq(depenses.entrepriseId, req.entrepriseId))).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'depenses',
+        recordId: expense.id,
+        ancienneValeur: expense,
+        nouvelleValeur: unlinked,
+        description: 'Dépense détachée de son projet associatif',
+        executor: tx,
+        required: true
+      });
+      return unlinked;
+    });
+    if (!result) return res.status(404).json({ error: 'Dépense associée introuvable.' });
     res.json({ message: 'Dépense détachée du projet.' });
   } catch (error) {
     console.error('Erreur retrait dépense-projet:', error.message);

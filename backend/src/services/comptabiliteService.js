@@ -205,14 +205,15 @@ export async function createEcritureFactureAchat(params) {
     totalTVA = 0,
     totalTTC,
     montantPending = 0,
-    ecartPrix = 0
+    ecartPrix = 0,
+    executor = db
   } = params;
 
-  const compte401 = fournisseurCompteId ? await getCompteById(fournisseurCompteId) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS);
-  const compte408 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS_FACTURES_NON_PARVENUES);
-  const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE);
-  const compteEcarts = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ECARTS_PRIX);
-  const compteAchats = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_MARCHANDISES);
+  const compte401 = fournisseurCompteId ? await getCompteById(fournisseurCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS, executor);
+  const compte408 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS_FACTURES_NON_PARVENUES, executor);
+  const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor);
+  const compteEcarts = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ECARTS_PRIX, executor);
+  const compteAchats = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_MARCHANDISES, executor);
 
   const ecrituresLignes = [];
 
@@ -284,7 +285,8 @@ export async function createEcritureFactureAchat(params) {
     libelle: `Facture ${numeroFacture} - ${fournisseurNom}`,
     numeroPiece: numeroFacture,
     lignes: ecrituresLignes,
-    valide: false
+    valide: false,
+    executor
   });
 }
 
@@ -362,16 +364,17 @@ export async function createEcriturePaiementFournisseur(params) {
     fournisseurCompteId,
     montant,
     modePaiement,
-    compteBancaireId
+    compteBancaireId,
+    executor = db
   } = params;
 
   const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
   const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
   
-  const compte401 = fournisseurCompteId ? await getCompteById(fournisseurCompteId) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS);
+  const compte401 = fournisseurCompteId ? await getCompteById(fournisseurCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS, executor);
   const compteTresorerie = modePaiement === 'especes' 
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE);
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE, executor)
+    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE, executor);
 
   const ecrituresLignes = [];
 
@@ -407,7 +410,8 @@ export async function createEcriturePaiementFournisseur(params) {
     libelle: `Paiement ${fournisseurNom} - ${reference}`,
     numeroPiece: reference,
     lignes: ecrituresLignes,
-    valide: false
+    valide: false,
+    executor
   });
 }
 
@@ -480,7 +484,8 @@ export async function createEcritureDepense(params) {
     description,
     montant,
     modePaiement,
-    categorieCompte
+    categorieCompte,
+    executor = db
   } = params;
 
   const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
@@ -490,10 +495,10 @@ export async function createEcritureDepense(params) {
   // - On débite le compte Personnel - Avances (421) pour solder l'avance faite par l'employé
   // - On crédite la trésorerie (52 ou 57) pour le décaissement
   // Note: La charge a déjà été comptabilisée lors de l'approbation de la dépense
-  const compteAvance = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.PERSONNEL_AVANCES);
+  const compteAvance = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.PERSONNEL_AVANCES, executor);
   const compteTresorerie = modePaiement === 'especes' 
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE);
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE, executor)
+    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE, executor);
 
   const ecrituresLignes = [];
 
@@ -529,7 +534,8 @@ export async function createEcritureDepense(params) {
     libelle: `Remboursement dépense ${employeNom} - ${description}`,
     numeroPiece: reference,
     lignes: ecrituresLignes,
-    valide: false
+    valide: false,
+    executor
   });
 }
 

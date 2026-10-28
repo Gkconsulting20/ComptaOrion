@@ -14,6 +14,7 @@ import {
 } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { createEcritureFactureAchat, createEcriturePaiementFournisseur } from '../services/comptabiliteService.js';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -281,10 +282,8 @@ router.post('/factures', async (req, res) => {
       });
     }
 
-    // Créer la facture
-    const [newFacture] = await db
-      .insert(facturesAchat)
-      .values({
+    const { newFacture, insertedItems } = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(facturesAchat).values({
         entrepriseId: req.entrepriseId,
         numeroFacture,
         numeroFactureFournisseur: numeroExterne || null,
@@ -300,32 +299,33 @@ router.post('/factures', async (req, res) => {
         soldeRestant: totalTTC.toFixed(2),
         notes: notes || null,
         userId: req.user.id,
-      })
-      .returning();
-
-    // Créer les lignes de facture
-    const itemsToInsert = lignesNormalisees.map(item => {
-      const quantite = item.quantite;
-      const prixUnitaire = item.prixUnitaire;
-      const remise = item.remise;
-      const totalLigne = quantite * prixUnitaire * (1 - remise / 100);
-
-      return {
-        entrepriseId: req.entrepriseId,
-        factureId: newFacture.id,
-        produitId: item.produitId,
-        description: item.description,
-        quantite: quantite.toString(),
-        prixUnitaire: prixUnitaire.toFixed(2),
-        remise: remise.toFixed(2),
-        totalLigne: totalLigne.toFixed(2),
-      };
+      }).returning();
+      const itemsToInsert = lignesNormalisees.map(item => {
+        const totalLigne = item.quantite * item.prixUnitaire * (1 - item.remise / 100);
+        return {
+          entrepriseId: req.entrepriseId,
+          factureId: created.id,
+          produitId: item.produitId,
+          description: item.description,
+          quantite: item.quantite.toString(),
+          prixUnitaire: item.prixUnitaire.toFixed(2),
+          remise: item.remise.toFixed(2),
+          totalLigne: totalLigne.toFixed(2),
+        };
+      });
+      const inserted = await tx.insert(factureAchatItems).values(itemsToInsert).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'factures_achat',
+        recordId: created.id,
+        nouvelleValeur: { facture: created, items: inserted },
+        description: `Facture fournisseur créée: ${created.numeroFacture}`,
+        executor: tx,
+        required: true
+      });
+      return { newFacture: created, insertedItems: inserted };
     });
-
-    const insertedItems = await db
-      .insert(factureAchatItems)
-      .values(itemsToInsert)
-      .returning();
 
     return res.status(201).json({
       success: true,
@@ -425,6 +425,16 @@ router.put('/factures/:id/valider', async (req, res) => {
     }
 
     console.log(`✅ Facture ${updated.numeroFacture} validée - ${factureItems.length} mouvements de stock créés`);
+    await logAudit({
+      ...extractAuditInfo(req),
+      action: 'UPDATE',
+      table: 'factures_achat',
+      recordId: updated.id,
+      ancienneValeur: facture,
+      nouvelleValeur: { facture: updated, items: factureItems },
+      description: `Facture fournisseur validée: ${updated.numeroFacture}`,
+      required: false
+    });
 
     return res.json({
       success: true,
@@ -581,11 +591,12 @@ router.post('/factures/:id/paiement', async (req, res) => {
 
     // Impact automatique sur COMPTABILITÉ
     // Débit: Fournisseur (401) - Crédit: Banque/Caisse
+    let accountingEntry = null;
     try {
       const fournisseurData = await db.select().from(fournisseurs).where(eq(fournisseurs.id, factureData.fournisseurId)).limit(1);
       const fournisseurInfo = fournisseurData[0] || {};
       
-      await createEcriturePaiementFournisseur({
+      accountingEntry = await createEcriturePaiementFournisseur({
         entrepriseId: req.entrepriseId,
         reference: reference || `PAI-F-${paiement.id}`,
         datePaiement: datePaiement || new Date().toISOString().split('T')[0],
@@ -598,6 +609,26 @@ router.post('/factures/:id/paiement', async (req, res) => {
     } catch (comptaError) {
       console.warn('Avertissement: Écriture comptable paiement fournisseur non générée:', comptaError.message);
     }
+
+    await logAudit({
+      ...extractAuditInfo(req),
+      action: 'CREATE',
+      table: 'paiements_fournisseurs',
+      recordId: paiement.id,
+      nouvelleValeur: { paiement, factureAvant: factureData, factureApres: factureUpdated, accountingEntry },
+      description: `Paiement fournisseur enregistré: ${montantPaiement.toFixed(2)} pour ${factureData.numeroFacture}`,
+      required: false
+    });
+    await logAudit({
+      ...extractAuditInfo(req),
+      action: 'UPDATE',
+      table: 'factures_achat',
+      recordId: factureUpdated.id,
+      ancienneValeur: factureData,
+      nouvelleValeur: factureUpdated,
+      description: `Solde mis à jour après paiement de ${factureData.numeroFacture}`,
+      required: false
+    });
 
     return res.json({
       success: true,

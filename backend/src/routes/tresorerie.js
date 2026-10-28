@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, employes, comptesComptables, rapprochementsBancaires } from '../schema.js';
 import { eq, and, like, inArray, or, ne, notInArray, between, sql } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = Router();
 
@@ -260,19 +261,32 @@ router.post('/comptes/create', async (req, res) => {
       }
     }
 
-    const newCompte = await db.insert(comptesBancaires).values({
-      entrepriseId: req.entrepriseId,
-      nomCompte,
-      numeroCompte,
-      banque,
-      soldeInitial: soldeInitial || '0',
-      soldeActuel: soldeInitial || '0',
-      type: type || 'banque',
-      compteComptableId: compteComptableId ? parseInt(compteComptableId) : null,
-      actif: true
-    }).returning();
+    const newCompte = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(comptesBancaires).values({
+        entrepriseId: req.entrepriseId,
+        nomCompte,
+        numeroCompte,
+        banque,
+        soldeInitial: soldeInitial || '0',
+        soldeActuel: soldeInitial || '0',
+        type: type || 'banque',
+        compteComptableId: compteComptableId ? parseInt(compteComptableId) : null,
+        actif: true
+      }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'comptes_bancaires',
+        recordId: created.id,
+        nouvelleValeur: created,
+        description: `Compte de trésorerie créé: ${created.nomCompte}`,
+        executor: tx,
+        required: true
+      });
+      return created;
+    });
 
-    res.json(newCompte[0]);
+    res.status(201).json(newCompte);
   } catch (err) {
     console.error('Erreur création compte bancaire:', err);
     res.status(500).json({ error: err.message });
@@ -300,8 +314,13 @@ router.put('/comptes/:id', async (req, res) => {
       }
     }
 
-    const updated = await db.update(comptesBancaires)
-      .set({
+    const updated = await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(comptesBancaires).where(and(
+        eq(comptesBancaires.id, parseInt(id)),
+        eq(comptesBancaires.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!previous) return null;
+      const [current] = await tx.update(comptesBancaires).set({
         nomCompte,
         numeroCompte,
         banque,
@@ -309,18 +328,26 @@ router.put('/comptes/:id', async (req, res) => {
         compteComptableId: compteComptableId ? parseInt(compteComptableId) : null,
         actif,
         updatedAt: new Date()
-      })
-      .where(and(
+      }).where(and(
         eq(comptesBancaires.id, parseInt(id)),
         eq(comptesBancaires.entrepriseId, req.entrepriseId)
-      ))
-      .returning();
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'comptes_bancaires',
+        recordId: current.id,
+        ancienneValeur: previous,
+        nouvelleValeur: current,
+        description: `Compte de trésorerie modifié: ${current.nomCompte}`,
+        executor: tx,
+        required: true
+      });
+      return current;
+    });
 
-    if (updated.length === 0) {
-      return res.status(404).json({ error: 'Compte bancaire introuvable ou non autorisé' });
-    }
-
-    res.json(updated[0]);
+    if (!updated) return res.status(404).json({ error: 'Compte bancaire introuvable ou non autorisé' });
+    res.json(updated);
   } catch (err) {
     console.error('Erreur modification compte bancaire:', err);
     res.status(500).json({ error: err.message });
@@ -332,33 +359,39 @@ router.delete('/comptes/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const compte = await db.select().from(comptesBancaires)
-      .where(and(
+    const result = await db.transaction(async (tx) => {
+      const [account] = await tx.select().from(comptesBancaires).where(and(
         eq(comptesBancaires.id, parseInt(id)),
         eq(comptesBancaires.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+      )).for('update').limit(1);
+      if (!account) return { status: 404, error: 'Compte bancaire introuvable ou non autorisé' };
 
-    if (compte.length === 0) {
-      return res.status(404).json({ error: 'Compte bancaire introuvable ou non autorisé' });
-    }
+      const [transaction] = await tx.select({ id: transactionsTresorerie.id }).from(transactionsTresorerie)
+        .where(and(
+          eq(transactionsTresorerie.compteBancaireId, parseInt(id)),
+          eq(transactionsTresorerie.entrepriseId, req.entrepriseId)
+        )).limit(1);
+      if (transaction) {
+        return { status: 400, error: 'Impossible de supprimer ce compte car il contient des transactions. Désactivez-le plutôt.' };
+      }
 
-    const transactions = await db.select().from(transactionsTresorerie)
-      .where(eq(transactionsTresorerie.compteBancaireId, parseInt(id)))
-      .limit(1);
-
-    if (transactions.length > 0) {
-      return res.status(400).json({ 
-        error: 'Impossible de supprimer ce compte car il contient des transactions. Désactivez-le plutôt.' 
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'DELETE',
+        table: 'comptes_bancaires',
+        recordId: account.id,
+        ancienneValeur: account,
+        description: `Compte de trésorerie supprimé: ${account.nomCompte}`,
+        executor: tx,
+        required: true
       });
-    }
-
-    await db.delete(comptesBancaires)
-      .where(and(
-        eq(comptesBancaires.id, parseInt(id)),
+      await tx.delete(comptesBancaires).where(and(
+        eq(comptesBancaires.id, account.id),
         eq(comptesBancaires.entrepriseId, req.entrepriseId)
       ));
-    
+      return { status: 200 };
+    });
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     res.json({ message: 'Compte supprimé avec succès' });
   } catch (err) {
     console.error('Erreur suppression compte bancaire:', err);
@@ -482,65 +515,58 @@ router.post('/rapprochements', async (req, res) => {
   try {
     const { compteBancaireId, dateDebut, dateFin, soldeReleve, notes } = req.body;
 
-    // Récupérer le compte bancaire
-    const compte = await db.select().from(comptesBancaires)
-      .where(and(
+    const created = await db.transaction(async (tx) => {
+      const [account] = await tx.select().from(comptesBancaires).where(and(
         eq(comptesBancaires.id, parseInt(compteBancaireId)),
         eq(comptesBancaires.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+      )).limit(1);
+      if (!account) return { status: 404, error: 'Compte bancaire non trouvé' };
 
-    if (compte.length === 0) {
-      return res.status(404).json({ error: 'Compte bancaire non trouvé' });
-    }
-
-    // Calculer le solde comptable pour la période
-    const transactions = await db.select().from(transactionsTresorerie)
-      .where(and(
+      const transactions = await tx.select().from(transactionsTresorerie).where(and(
         eq(transactionsTresorerie.compteBancaireId, parseInt(compteBancaireId)),
         eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
         between(transactionsTresorerie.dateTransaction, dateDebut, dateFin)
       ));
-
-    let soldeComptable = parseFloat(compte[0].soldeInitial || 0);
-    
-    // Ajouter toutes les transactions jusqu'à la date de fin
-    const toutesTransactions = await db.select().from(transactionsTresorerie)
-      .where(and(
+      let soldeComptable = parseFloat(account.soldeInitial || 0);
+      const toutesTransactions = await tx.select().from(transactionsTresorerie).where(and(
         eq(transactionsTresorerie.compteBancaireId, parseInt(compteBancaireId)),
         eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
         sql`${transactionsTresorerie.dateTransaction} <= ${dateFin}`
       ));
+      toutesTransactions.forEach((transaction) => {
+        soldeComptable += transaction.type === 'encaissement'
+          ? parseFloat(transaction.montant || 0)
+          : -parseFloat(transaction.montant || 0);
+      });
 
-    toutesTransactions.forEach(t => {
-      if (t.type === 'encaissement') {
-        soldeComptable += parseFloat(t.montant || 0);
-      } else {
-        soldeComptable -= parseFloat(t.montant || 0);
-      }
+      const ecart = parseFloat(soldeReleve) - soldeComptable;
+      const [rapprochement] = await tx.insert(rapprochementsBancaires).values({
+        entrepriseId: req.entrepriseId,
+        compteBancaireId: parseInt(compteBancaireId),
+        dateDebut,
+        dateFin,
+        soldeReleve: soldeReleve.toString(),
+        soldeComptable: soldeComptable.toString(),
+        ecart: ecart.toString(),
+        statut: Math.abs(ecart) < 0.01 ? 'valide' : 'en_cours',
+        notes,
+        userId: req.user?.id || req.userId || null,
+      }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'rapprochements_bancaires',
+        recordId: rapprochement.id,
+        nouvelleValeur: rapprochement,
+        description: `Rapprochement bancaire créé: compte ${account.nomCompte}`,
+        executor: tx,
+        required: true
+      });
+      return { rapprochement, transactionsCount: transactions.length };
     });
 
-    const ecart = parseFloat(soldeReleve) - soldeComptable;
-
-    // Créer le rapprochement
-    const [rapprochement] = await db.insert(rapprochementsBancaires).values({
-      entrepriseId: req.entrepriseId,
-      compteBancaireId: parseInt(compteBancaireId),
-      dateDebut,
-      dateFin,
-      soldeReleve: soldeReleve.toString(),
-      soldeComptable: soldeComptable.toString(),
-      ecart: ecart.toString(),
-      statut: Math.abs(ecart) < 0.01 ? 'valide' : 'en_cours',
-      notes,
-      userId: req.userId,
-    }).returning();
-
-    res.json({ 
-      success: true, 
-      rapprochement,
-      transactionsCount: transactions.length 
-    });
+    if (created.status) return res.status(created.status).json({ error: created.error });
+    res.status(201).json({ success: true, ...created });
   } catch (err) {
     console.error('Erreur création rapprochement:', err);
     res.status(500).json({ error: err.message });
@@ -592,17 +618,42 @@ router.put('/rapprochements/:id/transactions/:transactionId', async (req, res) =
   try {
     const { id, transactionId } = req.params;
     const { rapproche } = req.body;
+    if (typeof rapproche !== 'boolean') return res.status(400).json({ error: 'Le statut de rapprochement doit être booléen.' });
+    const result = await db.transaction(async (tx) => {
+      const [reconciliation] = await tx.select().from(rapprochementsBancaires).where(and(
+        eq(rapprochementsBancaires.id, parseInt(id)),
+        eq(rapprochementsBancaires.entrepriseId, req.entrepriseId)
+      )).limit(1);
+      if (!reconciliation) return { status: 404, error: 'Rapprochement non trouvé.' };
 
-    await db.update(transactionsTresorerie)
-      .set({ 
-        rapproche,
-        rapprochementId: rapproche ? parseInt(id) : null 
-      })
-      .where(and(
+      const [previous] = await tx.select().from(transactionsTresorerie).where(and(
         eq(transactionsTresorerie.id, parseInt(transactionId)),
-        eq(transactionsTresorerie.entrepriseId, req.entrepriseId)
-      ));
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId),
+        eq(transactionsTresorerie.compteBancaireId, reconciliation.compteBancaireId)
+      )).for('update').limit(1);
+      if (!previous) return { status: 404, error: 'Transaction non trouvée dans ce compte.' };
 
+      const [updated] = await tx.update(transactionsTresorerie).set({
+        rapproche,
+        rapprochementId: rapproche ? parseInt(id) : null
+      }).where(and(
+        eq(transactionsTresorerie.id, previous.id),
+        eq(transactionsTresorerie.entrepriseId, req.entrepriseId)
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'transactions_tresorerie',
+        recordId: updated.id,
+        ancienneValeur: previous,
+        nouvelleValeur: updated,
+        description: `Transaction ${rapproche ? 'rapprochée' : 'déréconciliée'}`,
+        executor: tx,
+        required: true
+      });
+      return { status: 200 };
+    });
+    if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     res.json({ success: true });
   } catch (err) {
     console.error('Erreur mise à jour transaction:', err);
@@ -614,17 +665,33 @@ router.put('/rapprochements/:id/transactions/:transactionId', async (req, res) =
 router.put('/rapprochements/:id/valider', async (req, res) => {
   try {
     const { id } = req.params;
-
-    await db.update(rapprochementsBancaires)
-      .set({ 
-        statut: 'valide',
-        updatedAt: new Date() 
-      })
-      .where(and(
+    const updated = await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(rapprochementsBancaires).where(and(
         eq(rapprochementsBancaires.id, parseInt(id)),
         eq(rapprochementsBancaires.entrepriseId, req.entrepriseId)
-      ));
-
+      )).for('update').limit(1);
+      if (!previous) return null;
+      const [current] = await tx.update(rapprochementsBancaires).set({
+        statut: 'valide',
+        updatedAt: new Date()
+      }).where(and(
+        eq(rapprochementsBancaires.id, previous.id),
+        eq(rapprochementsBancaires.entrepriseId, req.entrepriseId)
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'rapprochements_bancaires',
+        recordId: current.id,
+        ancienneValeur: previous,
+        nouvelleValeur: current,
+        description: `Rapprochement bancaire validé: ${current.id}`,
+        executor: tx,
+        required: true
+      });
+      return current;
+    });
+    if (!updated) return res.status(404).json({ error: 'Rapprochement non trouvé.' });
     res.json({ success: true });
   } catch (err) {
     console.error('Erreur validation rapprochement:', err);
