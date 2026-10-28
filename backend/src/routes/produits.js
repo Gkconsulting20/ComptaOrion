@@ -3,7 +3,12 @@ import { db } from '../db.js';
 import { produits, mouvementsStock } from '../schema.js';
 import { eq, and, desc, sql, lte } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
-import { consumeStockValuation, createStockValuationLayer, ensureOpeningValuationLayer } from '../services/stockValuation.js';
+import {
+  consumeStockValuation,
+  convertWeightToKg,
+  createStockValuationLayer,
+  ensureOpeningValuationLayer,
+} from '../services/stockValuation.js';
 
 const router = express.Router();
 
@@ -128,6 +133,8 @@ router.post('/', async (req, res) => {
       description,
       categorie,
       uniteMesure,
+      poidsParUnite,
+      unitePoids,
       quantite,
       stockMinimum,
       prixAchat,
@@ -173,6 +180,19 @@ router.post('/', async (req, res) => {
         message: 'Le prix de vente doit être un nombre positif',
       });
     }
+    const normalizedWeight = poidsParUnite === undefined || poidsParUnite === null || poidsParUnite === ''
+      ? null
+      : Number(poidsParUnite);
+    if (normalizedWeight !== null) {
+      if (!Number.isFinite(normalizedWeight) || normalizedWeight <= 0) {
+        return res.status(400).json({ success: false, message: 'Le poids par unité doit être supérieur à zéro.' });
+      }
+      try {
+        convertWeightToKg(normalizedWeight, unitePoids || 'kg');
+      } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+    }
 
     // Créer le produit avec l'entrepriseId automatique
     const newProduit = await db.transaction(async (tx) => {
@@ -183,6 +203,8 @@ router.post('/', async (req, res) => {
         description: description || null,
         categorie: categorie || null,
         uniteMesure: uniteMesure || 'pièce',
+        poidsParUnite: normalizedWeight === null ? null : normalizedWeight.toFixed(6),
+        unitePoids: unitePoids || 'kg',
         quantite: quantite || '0',
         stockMinimum: stockMinimum || '0',
         prixAchat: prixAchat || '0',
@@ -241,6 +263,8 @@ router.put('/:id', async (req, res) => {
       description,
       categorie,
       uniteMesure,
+      poidsParUnite,
+      unitePoids,
       quantite,
       stockMinimum,
       prixAchat,
@@ -295,6 +319,25 @@ router.put('/:id', async (req, res) => {
         message: 'Le prix de vente doit être un nombre positif',
       });
     }
+    const normalizedWeight = poidsParUnite === undefined
+      ? undefined
+      : (poidsParUnite === null || poidsParUnite === '' ? null : Number(poidsParUnite));
+    if (normalizedWeight !== undefined && normalizedWeight !== null) {
+      if (!Number.isFinite(normalizedWeight) || normalizedWeight <= 0) {
+        return res.status(400).json({ success: false, message: 'Le poids par unité doit être supérieur à zéro.' });
+      }
+      try {
+        convertWeightToKg(normalizedWeight, unitePoids || existingProduit[0].unitePoids || 'kg');
+      } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+    } else if (unitePoids !== undefined) {
+      try {
+        convertWeightToKg(1, unitePoids);
+      } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+    }
 
     // Construire l'objet de mise à jour
     const updateData = {
@@ -306,6 +349,8 @@ router.put('/:id', async (req, res) => {
     if (description !== undefined) updateData.description = description;
     if (categorie !== undefined) updateData.categorie = categorie;
     if (uniteMesure !== undefined) updateData.uniteMesure = uniteMesure;
+    if (normalizedWeight !== undefined) updateData.poidsParUnite = normalizedWeight === null ? null : normalizedWeight.toFixed(6);
+    if (unitePoids !== undefined) updateData.unitePoids = unitePoids;
     if (quantite !== undefined) updateData.quantite = quantite;
     if (stockMinimum !== undefined) updateData.stockMinimum = stockMinimum;
     if (prixAchat !== undefined) updateData.prixAchat = prixAchat;

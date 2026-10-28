@@ -12,11 +12,11 @@ import {
   mouvementsStock,
   produits
 } from '../schema.js';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, and, inArray, sql, desc } from 'drizzle-orm';
 import { createEcritureFactureAchat, createEcriturePaiementFournisseur } from '../services/comptabiliteService.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import {
-  allocateLogisticsByValue,
+  allocateLogisticsByWeight,
   applySupplierInvoiceCostsToRemainingLayers,
   createStockValuationLayer,
   ensureOpeningValuationLayer,
@@ -384,7 +384,25 @@ router.put('/factures/:id/valider', async (req, res) => {
         (sum, item) => sum + Math.max(0, Number(item.totalLigne) || 0),
         0
       );
-      const directLogisticsAllocation = allocateLogisticsByValue(stockItems, directLogisticsTotal);
+      const weightProducts = stockItems.length
+        ? await tx.select({
+          id: produits.id,
+          poidsParUnite: produits.poidsParUnite,
+          unitePoids: produits.unitePoids,
+        }).from(produits).where(and(
+          eq(produits.entrepriseId, req.entrepriseId),
+          inArray(produits.id, stockItems.map((item) => item.produitId))
+        ))
+        : [];
+      const weightsByProduct = new Map(weightProducts.map((product) => [product.id, product]));
+      const directLogisticsAllocation = allocateLogisticsByWeight(
+        stockItems.map((item) => ({
+          ...item,
+          poidsParUnite: weightsByProduct.get(item.produitId)?.poidsParUnite,
+          unitePoids: weightsByProduct.get(item.produitId)?.unitePoids,
+        })),
+        directLogisticsTotal
+      );
       const logisticsByItemId = new Map(stockItems.map((item, index) => [
         item.id,
         directLogisticsAllocation.allocations[index] || 0,
@@ -490,6 +508,7 @@ router.put('/factures/:id/valider', async (req, res) => {
         montantStockDirect,
         fraisLogistiquesAlloues: directLogisticsAllocation.allocations.reduce((sum, amount) => sum + amount, 0),
         fraisLogistiquesNonAlloues: directLogisticsAllocation.unallocated,
+        poidsTotalKg: directLogisticsAllocation.totalWeightKg,
       };
     });
     if (result.status !== 200) {
@@ -506,8 +525,9 @@ router.put('/factures/:id/valider', async (req, res) => {
         valeurStockCapitalisee: result.montantStockDirect,
         fraisLogistiquesAlloues: result.fraisLogistiquesAlloues,
         fraisLogistiquesNonAlloues: result.fraisLogistiquesNonAlloues,
+        poidsTotalKg: result.poidsTotalKg,
         avertissements: result.fraisLogistiquesNonAlloues > 0
-          ? ['Certains frais logistiques n’ont pas pu être répartis faute de lignes article de valeur positive.']
+          ? ['Frais logistiques non répartis : renseignez le poids par unité de stock des produits concernés.']
           : [],
       }
     });
@@ -894,7 +914,31 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     const totalHT = totalArticlesHT + totalLogistique;
     const totalTTC = totalHT + totalTVA;
     const lignesArticles = lignesProcessed.filter((ligne) => Number.isSafeInteger(parseInt(ligne.produitId, 10)) && parseInt(ligne.produitId, 10) > 0);
-    const repartitionLogistique = allocateLogisticsByValue(lignesArticles, totalLogistique);
+    const productIds = [...new Set(lignesArticles.map((ligne) => parseInt(ligne.produitId, 10)))];
+    const weightProducts = productIds.length
+      ? await db.select({
+        id: produits.id,
+        nom: produits.nom,
+        poidsParUnite: produits.poidsParUnite,
+        unitePoids: produits.unitePoids,
+      }).from(produits).where(and(
+        eq(produits.entrepriseId, req.entrepriseId),
+        inArray(produits.id, productIds)
+      ))
+      : [];
+    if (weightProducts.length !== productIds.length) {
+      return res.status(400).json({ success: false, message: 'Un ou plusieurs produits de la facture sont introuvables dans cette entreprise.' });
+    }
+    const weightsByProductId = new Map(weightProducts.map((product) => [product.id, product]));
+    const lignesPourRepartition = lignesArticles.map((ligne) => ({
+      ...ligne,
+      poidsParUnite: weightsByProductId.get(parseInt(ligne.produitId, 10))?.poidsParUnite,
+      unitePoids: weightsByProductId.get(parseInt(ligne.produitId, 10))?.unitePoids,
+    }));
+    const repartitionLogistique = allocateLogisticsByWeight(lignesPourRepartition, totalLogistique);
+    const produitsSansPoids = repartitionLogistique.missingWeightIndexes
+      .map((index) => weightsByProductId.get(parseInt(lignesArticles[index]?.produitId, 10))?.nom)
+      .filter(Boolean);
     const invoiceCostsByProduct = new Map();
     for (const [index, ligne] of lignesArticles.entries()) {
       const produitId = parseInt(ligne.produitId, 10);
@@ -1094,11 +1138,13 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
         receptionsRapprochees: receptionsIds.length,
         coutRevient: {
           ...coutRevient,
+          fraisLogistiquesAlloues: totalLogistique - repartitionLogistique.unallocated,
           fraisLogistiquesNonAlloues: repartitionLogistique.unallocated,
+          poidsTotalKg: repartitionLogistique.totalWeightKg,
           avertissements: [
             ...coutRevient.avertissements,
             ...(repartitionLogistique.unallocated > 0
-              ? ['Certains frais logistiques n’ont pas été répartis car aucune ligne article de valeur positive n’est disponible.']
+              ? [`${repartitionLogistique.unallocated.toLocaleString('fr-FR')} FCFA de frais restent non répartis : renseignez le poids par unité de stock${produitsSansPoids.length ? ` pour ${[...new Set(produitsSansPoids)].join(', ')}` : ''}.`]
               : []),
             ...(comptabiliteAvertissement ? [comptabiliteAvertissement] : []),
           ],

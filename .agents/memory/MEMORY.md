@@ -5,7 +5,7 @@
 - [Authentification GitHub](github-auth.md) — l’état OAuth d’intégration ne prouve pas que les opérations Git sont autorisées.
 - [Runtime Cloudflare](cloudflare-runtime.md) — vérifier runtime, SQL et R2, et garder les URLs de paquets du lockfile accessibles aux builds Workers.
 - [Paiements associatifs](association-payments.md) — séparer dépenses engagées, paiements réels et approbation ; chaque paiement réel a son écriture équilibrée.
-- [Coût de revient fournisseurs](supplier-costing.md) — frais logistiques au prorata; calculer le prix de vente par majoration du CMV courant.
+- [Coût de revient fournisseurs](supplier-costing.md) — répartir les frais au poids converti; calculer le prix de vente par majoration du CMV courant.
 - [Pause du module Paie & RH](payroll-paused.md) — garder Paie & RH masqué pendant la préparation du lancement initial de l’application.
 - [Espace commercial](saas-commercial-portal.md) — le portail commercial sert à gérer la commercialisation de ComptaOrion, avec des comptes distincts de l’ERP.
 - [Piste d’audit](audit-trail-policy.md) — les traces de création, modification et suppression sont une exigence de sécurité pour les clients.

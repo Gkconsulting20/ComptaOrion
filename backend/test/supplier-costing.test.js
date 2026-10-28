@@ -1,31 +1,39 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  allocateLogisticsByValue,
+  allocateLogisticsByWeight,
   allocateMoneyByWeight,
   calculateSellingPriceFromMarkup,
   calculateRemainingLayerValue,
   calculateWeightedAverageSaleCost,
+  convertWeightToKg,
   splitCostVariance,
 } from '../src/services/stockValuation.js';
 
-test('répartit les frais logistiques au prorata de la valeur des articles', () => {
-  const result = allocateLogisticsByValue([
-    { quantite: 2, prixUnitaireReel: 500 },
-    { quantite: 1, prixUnitaireReel: 2000 },
-  ], 300);
-
-  assert.deepEqual(result.allocations, [100, 200]);
-  assert.equal(result.unallocated, 0);
+test('convertit grammes, kilogrammes et tonnes en kilogrammes', () => {
+  assert.equal(convertWeightToKg(500, 'g'), 0.5);
+  assert.equal(convertWeightToKg(1, 'kg'), 1);
+  assert.equal(convertWeightToKg(1, 't'), 1000);
 });
 
-test('répartit aussi les frais estimés des lignes de réception', () => {
-  const result = allocateLogisticsByValue([
-    { quantite_recue: 2, prix_unitaire_estime: 500 },
-    { quantite_recue: 1, prix_unitaire_estime: 1000 },
+test('répartit les frais logistiques au prorata du poids total des articles', () => {
+  const result = allocateLogisticsByWeight([
+    { quantite: 2, poidsParUnite: 1, unitePoids: 'kg' },
+    { quantite: 1, poidsParUnite: 500, unitePoids: 'g' },
   ], 300);
 
-  assert.deepEqual(result.allocations, [150, 150]);
+  assert.deepEqual(result.allocations, [240, 60]);
+  assert.equal(result.unallocated, 0);
+  assert.equal(result.totalWeightKg, 2.5);
+});
+
+test('convertit le poids par pièce pour répartir les frais logistiques', () => {
+  const result = allocateLogisticsByWeight([
+    { quantite: 10, poidsParUnite: 500, unitePoids: 'g' },
+    { quantite: 1, poidsParUnite: 1, unitePoids: 'kg' },
+  ], 300);
+
+  assert.deepEqual(result.allocations, [250, 50]);
 });
 
 test('répartit les centimes restants sans perdre de montant', () => {
@@ -36,13 +44,15 @@ test('répartit les centimes restants sans perdre de montant', () => {
   assert.deepEqual(result.allocations, [3.34, 3.33, 3.33]);
 });
 
-test('conserve les frais non attribuables quand aucune ligne article n’a de valeur', () => {
-  const result = allocateLogisticsByValue([
-    { quantite: 0, prixUnitaireReel: 100 },
+test('ne répartit rien si le poids d’une ligne de stock manque', () => {
+  const result = allocateLogisticsByWeight([
+    { quantite: 2, poidsParUnite: 1, unitePoids: 'kg' },
+    { quantite: 1, poidsParUnite: null, unitePoids: 'kg' },
   ], 25);
 
-  assert.deepEqual(result.allocations, [0]);
+  assert.deepEqual(result.allocations, [0, 0]);
   assert.equal(result.unallocated, 25);
+  assert.deepEqual(result.missingWeightIndexes, [1]);
 });
 
 test('ne réévalue que la quantité restante de la réception', () => {

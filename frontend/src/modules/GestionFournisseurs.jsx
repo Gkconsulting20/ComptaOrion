@@ -189,8 +189,12 @@ function FacturationTab({ fournisseurs }) {
         notes: factureForm.notes
       };
       
-      await api.post('/achats/factures-avec-rapprochement', payload);
-      alert('Facture créée avec succès !');
+      const response = await api.post('/achats/factures-avec-rapprochement', payload);
+      const warnings = response.data?.coutRevient?.avertissements || [];
+      alert([
+        'Facture créée avec succès.',
+        ...warnings,
+      ].join('\n\n'));
       setShowFactureModal(false);
       loadData();
     } catch (err) {

@@ -287,6 +287,8 @@ export const produits = pgTable('produits', {
   description: text('description'),
   categoriId: integer('categorie_id').references(() => categoriesStock.id),
   uniteMesure: varchar('unite_mesure', { length: 50 }).default('pièce'),
+  poidsParUnite: decimal('poids_par_unite', { precision: 15, scale: 6 }),
+  unitePoids: varchar('unite_poids', { length: 20 }).default('kg'),
   quantite: decimal('quantite', { precision: 15, scale: 3 }).default('0'),
   stockMinimum: decimal('stock_minimum', { precision: 15, scale: 3 }).default('0'),
   prixAchat: decimal('prix_achat', { precision: 15, scale: 2 }).default('0'),

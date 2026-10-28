@@ -43,23 +43,99 @@ export function allocateMoneyByWeight(totalAmount, weights) {
   };
 }
 
-export function allocateLogisticsByValue(lines, logisticsTotal) {
-  const weights = lines.map((line) => {
-    const explicitTotal = line.totalLigne ?? line.total_ligne;
-    if (explicitTotal !== undefined && explicitTotal !== null) {
-      return Math.max(0, Number(explicitTotal) || 0);
-    }
-    const quantity = Math.max(0, Number(line.quantite ?? line.quantite_recue ?? line.quantity) || 0);
-    const unitPrice = Math.max(0, Number(
-      line.prixUnitaireReel ??
-      line.prix_unitaire_reel ??
-      line.prix_unitaire_estime ??
-      line.prix_unitaire ??
-      line.unitPrice
+const WEIGHT_UNIT_FACTORS_KG = Object.freeze({
+  mg: 0.000001,
+  milligramme: 0.000001,
+  milligrammes: 0.000001,
+  g: 0.001,
+  gramme: 0.001,
+  grammes: 0.001,
+  kg: 1,
+  kilo: 1,
+  kilos: 1,
+  kilogramme: 1,
+  kilogrammes: 1,
+  t: 1000,
+  tonne: 1000,
+  tonnes: 1000,
+  lb: 0.45359237,
+  lbs: 0.45359237,
+  livre: 0.45359237,
+  livres: 0.45359237,
+  oz: 0.028349523125,
+  once: 0.028349523125,
+  onces: 0.028349523125,
+});
+
+function normalizeWeightUnit(unit) {
+  return String(unit || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '');
+}
+
+export function getWeightUnitFactorKg(unit) {
+  return WEIGHT_UNIT_FACTORS_KG[normalizeWeightUnit(unit)] ?? null;
+}
+
+export function convertWeightToKg(value, unit) {
+  const amount = Number(value);
+  const factor = getWeightUnitFactorKg(unit);
+  if (!Number.isFinite(amount) || amount < 0 || factor === null) {
+    throw new Error(`Poids ou unité de poids invalide (${unit || 'non définie'}).`);
+  }
+  return amount * factor;
+}
+
+export function allocateLogisticsByWeight(lines, logisticsTotal) {
+  const weightsKg = [];
+  const missingWeightIndexes = [];
+
+  for (const [index, line] of lines.entries()) {
+    const quantity = Math.max(0, Number(
+      line.quantite ?? line.quantite_recue ?? line.quantiteRecue ?? line.quantity
     ) || 0);
-    return quantity * unitPrice;
-  });
-  return allocateMoneyByWeight(logisticsTotal, weights);
+    if (quantity === 0) {
+      weightsKg.push(0);
+      continue;
+    }
+
+    try {
+      const explicitTotalKg = line.poidsTotalKg ?? line.poids_total_kg;
+      const weightPerUnit = line.poidsParUnite ?? line.poids_par_unite ??
+        line.product_poids_par_unite ?? line.poidsParUniteStock;
+      const weightUnit = line.unitePoids ?? line.unite_poids ??
+        line.product_unite_poids ?? line.unitePoidsParUnite;
+      const lineWeightKg = explicitTotalKg !== undefined && explicitTotalKg !== null
+        ? Number(explicitTotalKg)
+        : convertWeightToKg(weightPerUnit, weightUnit) * quantity;
+      if (!Number.isFinite(lineWeightKg) || lineWeightKg <= 0) {
+        throw new Error('Poids total nul ou invalide.');
+      }
+      weightsKg.push(lineWeightKg);
+    } catch {
+      missingWeightIndexes.push(index);
+      weightsKg.push(0);
+    }
+  }
+
+  if (missingWeightIndexes.length > 0) {
+    const totalCents = toCents(logisticsTotal);
+    return {
+      allocations: lines.map(() => 0),
+      unallocated: fromCents(totalCents),
+      totalWeightKg: weightsKg.reduce((sum, weight) => sum + weight, 0),
+      weightsKg,
+      missingWeightIndexes,
+    };
+  }
+
+  const allocation = allocateMoneyByWeight(logisticsTotal, weightsKg);
+  return {
+    ...allocation,
+    totalWeightKg: weightsKg.reduce((sum, weight) => sum + weight, 0),
+    weightsKg,
+    missingWeightIndexes,
+  };
 }
 
 export function calculateRemainingLayerValue(totalLayerValue, remainingQuantity, originalQuantity) {

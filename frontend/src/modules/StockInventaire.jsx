@@ -255,7 +255,18 @@ export function StockInventaire() {
   const openModal = (type, item = null) => {
     setModal({ open: true, type, item });
     if (type === 'produit') {
-      setForm(item || { reference: '', nom: '', categorieId: null, prixAchat: 0, prixVente: 0, stockMinimum: 10, uniteMesure: 'pièce', valorisationMethod: 'FIFO' });
+      setForm(item || {
+        reference: '',
+        nom: '',
+        categorieId: null,
+        prixAchat: 0,
+        prixVente: 0,
+        stockMinimum: 10,
+        uniteMesure: 'pièce',
+        poidsParUnite: '',
+        unitePoids: 'kg',
+        valorisationMethod: 'FIFO',
+      });
     } else if (type === 'categorie') {
       setForm(item || { nom: '', description: '' });
     } else if (type === 'entrepot') {
@@ -859,6 +870,43 @@ export function StockInventaire() {
               <FormField label="Catégorie" type="select" value={form.categorieId || ''} 
                 onChange={(e) => setForm({...form, categorieId: parseInt(e.target.value) || null})}
                 options={[{ value: '', label: '-- Sélectionner --' }, ...data.categories.map(c => ({ value: c.id, label: c.nom }))]} />
+              <FormField
+                label="Unité principale de stock"
+                value={form.uniteMesure || 'pièce'}
+                onChange={(e) => setForm({ ...form, uniteMesure: e.target.value })}
+                placeholder="Ex. pièce, sac, kg"
+                required
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <FormField
+                  label={`Poids par unité de stock${form.uniteMesure ? ` (${form.uniteMesure})` : ''}`}
+                  type="number"
+                  value={form.poidsParUnite ?? ''}
+                  onChange={(e) => setForm({
+                    ...form,
+                    poidsParUnite: e.target.value === '' ? '' : parseFloat(e.target.value),
+                  })}
+                  min="0.000001"
+                  step="0.000001"
+                  placeholder="Ex. 0,5 pour une pièce de 500 g"
+                />
+                <FormField
+                  label="Unité du poids"
+                  type="select"
+                  value={form.unitePoids || 'kg'}
+                  onChange={(e) => setForm({ ...form, unitePoids: e.target.value })}
+                  options={[
+                    { value: 'g', label: 'Gramme (g)' },
+                    { value: 'kg', label: 'Kilogramme (kg)' },
+                    { value: 't', label: 'Tonne (t)' },
+                    { value: 'mg', label: 'Milligramme (mg)' },
+                    { value: 'lb', label: 'Livre (lb)' },
+                  ]}
+                />
+              </div>
+              <small style={{ display: 'block', margin: '-8px 0 12px', color: '#666' }}>
+                Obligatoire pour répartir des frais logistiques au poids. Exemple : une pièce de 500 g = 500 g par unité.
+              </small>
               <FormField label="Prix Achat" type="number" value={form.prixAchat || 0} onChange={(e) => setForm({...form, prixAchat: parseFloat(e.target.value) || 0})} />
               <FormField label="Prix Vente" type="number" value={form.prixVente || 0} onChange={(e) => setForm({...form, prixVente: parseFloat(e.target.value) || 0})} required />
               <FormField label="Stock Min" type="number" value={form.stockMinimum || 10} onChange={(e) => setForm({...form, stockMinimum: parseFloat(e.target.value) || 0})} />
@@ -1135,7 +1183,13 @@ export function StockInventaire() {
                   const cat = data.categories.find(c => c.id === selectedProduit.categorieId);
                   return cat ? cat.nom : 'Non catégorisé';
                 })() },
-                { label: 'Unité Mesure', value: selectedProduit.uniteMesure || 'pièce' }
+                { label: 'Unité principale de stock', value: selectedProduit.uniteMesure || 'pièce' },
+                {
+                  label: 'Poids par unité de stock',
+                  value: selectedProduit.poidsParUnite
+                    ? `${selectedProduit.poidsParUnite} ${selectedProduit.unitePoids || 'kg'}`
+                    : 'Non renseigné',
+                }
               ]
             },
             {

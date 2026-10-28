@@ -3,9 +3,11 @@ name: Coût de revient fournisseurs
 description: Règle choisie pour intégrer les frais logistiques aux achats de stock.
 ---
 
-Pour les achats de stock, répartir les frais logistiques au prorata de la valeur des lignes d’articles.
+Pour les achats de stock, répartir les frais logistiques au prorata du poids total des lignes d’articles. Conserver l’unité de stock du produit et convertir le poids unitaire saisi vers le kilogramme.
 
-**Why:** L’utilisateur a choisi explicitement cette règle pour que les articles plus chers reçoivent une part proportionnelle des frais.
+**Why:** L’utilisateur a demandé explicitement une répartition par poids plutôt que par valeur et a confirmé que les produits vendus à la pièce doivent avoir un poids par unité.
+
+**How to apply:** Calculer le poids d’une ligne depuis sa quantité et le poids par unité de stock. Si le poids manque ou ne peut pas être converti, ne pas répartir ce coût par valeur en silence; signaler l’article à compléter.
 
 Ne pas réévaluer les ventes passées lors de la réception ultérieure de la facture; corriger seulement le stock encore disponible.
 

@@ -4,7 +4,7 @@ import { produits, categoriesStock, entrepots, stockParEntrepot, mouvementsStock
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import {
-  allocateLogisticsByValue,
+  allocateLogisticsByWeight,
   consumeStockValuation,
   createStockValuationLayer,
   ensureOpeningValuationLayer,
@@ -618,6 +618,8 @@ router.post('/receptions/:id/valider', async (req, res) => {
 
     const lignesResult = await db.execute(sql`
       SELECT lr.*, p.nom as produit_nom, p.prix_achat,
+             p.poids_par_unite as product_poids_par_unite,
+             p.unite_poids as product_unite_poids,
              p.quantite as product_quantite, p.cout_moyen as product_cout_moyen,
              p.valorisation_method as product_valorisation_method
       FROM lignes_reception lr
@@ -644,10 +646,19 @@ router.post('/receptions/:id/valider', async (req, res) => {
       (sum, cout) => sum + Math.max(0, Number(cout.montant) || 0),
       0
     );
-    const allocationsLogistiquesEstimees = allocateLogisticsByValue(
+    const repartitionLogistiqueEstimee = allocateLogisticsByWeight(
       lignes,
       totalLogistiqueEstimee
-    ).allocations;
+    );
+    const allocationsLogistiquesEstimees = repartitionLogistiqueEstimee.allocations;
+    const produitsSansPoids = repartitionLogistiqueEstimee.missingWeightIndexes
+      .map((index) => lignes[index]?.produit_nom || `ligne ${index + 1}`);
+    if (totalLogistiqueEstimee > 0 && produitsSansPoids.length > 0) {
+      return res.status(400).json({
+        error: 'La réception ne peut pas être validée : renseignez le poids par unité de stock des articles avant de répartir les frais logistiques.',
+        produitsSansPoids,
+      });
+    }
 
     // 1. Créer les mouvements de stock pour chaque ligne
     for (const [lineIndex, ligne] of lignes.entries()) {
@@ -833,7 +844,9 @@ router.post('/receptions/:id/valider', async (req, res) => {
       details: {
         stockMouvements: lignes.length,
         ecritureComptable: numeroPiece,
-        totalHT: bon.total_ht
+        totalHT: bon.total_ht,
+        poidsTotalKg: repartitionLogistiqueEstimee.totalWeightKg,
+        fraisLogistiquesAlloues: allocationsLogistiquesEstimees.reduce((sum, amount) => sum + amount, 0),
       }
     });
   } catch (error) {
