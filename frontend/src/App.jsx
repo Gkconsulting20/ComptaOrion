@@ -1,23 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import './app.css';
-import { ClientsModule } from './modules/ClientsModule';
-import { GestionFournisseurs } from './modules/GestionFournisseurs';
-import { TresorerieModule } from './modules/TresorerieModule';
-import { StockInventaire } from './modules/StockInventaire';
-import { ModuleComptabilite } from './modules/ModuleComptabilite';
-import { DepensesModule } from './modules/DepensesModule';
-import { ParametresModule } from './modules/ParametresModule';
-import { AuthenticationModule } from './modules/AuthenticationModule';
-import { SaaSAdminModule } from './modules/SaaSAdminModule';
-import { IAAssistantModule } from './modules/IAAssistantModule';
-import { ImpotsModule } from './modules/ImpotsModule';
-import IntegrationsModule from './modules/IntegrationsModule';
-import { Login } from './pages/Login';
-import { Inscription } from './pages/Inscription';
-import { CommercialPortal } from './pages/CommercialPortal';
-import { DashboardView } from './Dashboard';
-import { AssociationAccountingModule } from './modules/AssociationAccountingModule';
 import api from './api';
+
+const loadNamed = (loader, exportName) => lazy(() =>
+  loader().then(module => ({ default: module[exportName] }))
+);
+
+const ClientsModule = loadNamed(() => import('./modules/ClientsModule'), 'ClientsModule');
+const GestionFournisseurs = loadNamed(() => import('./modules/GestionFournisseurs'), 'GestionFournisseurs');
+const TresorerieModule = loadNamed(() => import('./modules/TresorerieModule'), 'TresorerieModule');
+const StockInventaire = loadNamed(() => import('./modules/StockInventaire'), 'StockInventaire');
+const ModuleComptabilite = loadNamed(() => import('./modules/ModuleComptabilite'), 'ModuleComptabilite');
+const ParametresModule = loadNamed(() => import('./modules/ParametresModule'), 'ParametresModule');
+const AuthenticationModule = loadNamed(() => import('./modules/AuthenticationModule'), 'AuthenticationModule');
+const SaaSAdminModule = loadNamed(() => import('./modules/SaaSAdminModule'), 'SaaSAdminModule');
+const IAAssistantModule = loadNamed(() => import('./modules/IAAssistantModule'), 'IAAssistantModule');
+const ImpotsModule = loadNamed(() => import('./modules/ImpotsModule'), 'ImpotsModule');
+const IntegrationsModule = lazy(() => import('./modules/IntegrationsModule'));
+const Login = loadNamed(() => import('./pages/Login'), 'Login');
+const Inscription = loadNamed(() => import('./pages/Inscription'), 'Inscription');
+const CommercialPortal = loadNamed(() => import('./pages/CommercialPortal'), 'CommercialPortal');
+const DashboardView = loadNamed(() => import('./Dashboard'), 'DashboardView');
+const AssociationAccountingModule = loadNamed(
+  () => import('./modules/AssociationAccountingModule'),
+  'AssociationAccountingModule'
+);
+
+function LazyModuleFallback() {
+  return (
+    <div role="status" aria-live="polite" style={{ padding: '24px', color: '#64748b' }}>
+      Chargement du module…
+    </div>
+  );
+}
 
 // L'assistant reste dans le code pour une activation future, mais il est
 // désactivé par défaut afin qu'aucun appel IA payant ne puisse être déclenché.
@@ -157,15 +172,15 @@ export default function App() {
   }
 
   if (showInscription) {
-    return <Inscription />;
+    return <Suspense fallback={<LazyModuleFallback />}><Inscription /></Suspense>;
   }
 
   if (showCommercialPortal) {
-    return <CommercialPortal />;
+    return <Suspense fallback={<LazyModuleFallback />}><CommercialPortal /></Suspense>;
   }
 
   if (!isAuthenticated) {
-    return <Login onLoginSuccess={handleLogin} />;
+    return <Suspense fallback={<LazyModuleFallback />}><Login onLoginSuccess={handleLogin} /></Suspense>;
   }
 
   const renderView = () => {
@@ -330,7 +345,9 @@ export default function App() {
             boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
             minHeight: 'calc(100vh - 200px)'
           }}>
-            {renderView()}
+            <Suspense fallback={<LazyModuleFallback />}>
+              {renderView()}
+            </Suspense>
           </div>
         </div>
       </div>
