@@ -847,21 +847,27 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     for (const recId of receptionsIds) {
       // Mettre à jour le bon de réception
       await db.execute(sql`
-        UPDATE bons_reception SET facture_achat_id = ${newFacture.id}, updated_at = NOW() WHERE id = ${parseInt(recId)}
+        UPDATE bons_reception
+        SET facture_achat_id = ${newFacture.id}, updated_at = NOW()
+        WHERE id = ${parseInt(recId)} AND entreprise_id = ${req.entrepriseId}
       `);
 
       // Mettre à jour les stock_pending -> invoiced
       await db.execute(sql`
         UPDATE stock_pending 
         SET statut = 'invoiced', facture_achat_id = ${newFacture.id}, date_facturation = NOW(), updated_at = NOW()
-        WHERE bon_reception_id = ${parseInt(recId)} AND statut = 'pending'
+        WHERE entreprise_id = ${req.entrepriseId}
+          AND bon_reception_id = ${parseInt(recId)}
+          AND statut = 'pending'
       `);
 
       // Mettre à jour les logistique_pending -> invoiced
       await db.execute(sql`
         UPDATE logistique_pending 
         SET statut = 'invoiced', facture_achat_id = ${newFacture.id}, date_facturation = NOW(), updated_at = NOW()
-        WHERE bon_reception_id = ${parseInt(recId)} AND statut = 'pending'
+        WHERE entreprise_id = ${req.entrepriseId}
+          AND bon_reception_id = ${parseInt(recId)}
+          AND statut = 'pending'
       `);
     }
 
@@ -871,7 +877,9 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
         await db.execute(sql`
           UPDATE stock_pending 
           SET prix_reel = ${ligne.prixUnitaireReel}, ecart_prix = ${ligne.prixUnitaireReel} - prix_estime
-          WHERE facture_achat_id = ${newFacture.id} AND produit_id = ${parseInt(ligne.produitId)}
+          WHERE entreprise_id = ${req.entrepriseId}
+            AND facture_achat_id = ${newFacture.id}
+            AND produit_id = ${parseInt(ligne.produitId)}
         `);
       }
     }
@@ -881,7 +889,9 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       await db.execute(sql`
         UPDATE logistique_pending 
         SET montant_reel = ${cout.montant.toFixed(2)}, ecart_montant = ${cout.montant} - montant_estime
-        WHERE facture_achat_id = ${newFacture.id} AND type = ${cout.type}
+        WHERE entreprise_id = ${req.entrepriseId}
+          AND facture_achat_id = ${newFacture.id}
+          AND type = ${cout.type}
       `);
     }
 
@@ -920,7 +930,9 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
 
       if (ecriture) {
         await db.execute(sql`
-          UPDATE factures_achat SET ecriture_comptable_id = ${ecriture.id} WHERE id = ${newFacture.id}
+          UPDATE factures_achat
+          SET ecriture_comptable_id = ${ecriture.id}
+          WHERE id = ${newFacture.id} AND entreprise_id = ${req.entrepriseId}
         `);
       }
     } catch (comptaError) {
