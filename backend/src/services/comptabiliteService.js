@@ -208,6 +208,7 @@ export async function createEcritureFactureAchat(params) {
     totalTTC,
     montantPending = 0,
     ecartPrix = 0,
+    montantValorisationStock = 0,
     executor = db
   } = params;
 
@@ -216,6 +217,9 @@ export async function createEcritureFactureAchat(params) {
   const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor);
   const compteEcarts = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ECARTS_PRIX, executor);
   const compteAchats = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_MARCHANDISES, executor);
+  const compteStock = Number(montantValorisationStock) !== 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES, executor)
+    : null;
 
   const ecrituresLignes = [];
 
@@ -228,7 +232,24 @@ export async function createEcritureFactureAchat(params) {
     });
   }
 
-  if (ecartPrix !== 0 && compteEcarts) {
+  if (Number(montantPending) <= 0 && Number(montantValorisationStock) !== 0) {
+    throw new Error('Une correction de stock ne peut être passée sans réception en attente correspondante.');
+  }
+
+  if (Number(montantPending) > 0 && Number(montantValorisationStock) !== 0) {
+    if (!compteStock) {
+      throw new Error('Le compte de stock (classe 31) est requis pour comptabiliser la correction de valorisation.');
+    }
+    const adjustment = Number(montantValorisationStock);
+    ecrituresLignes.push({
+      compteComptableId: compteStock.id,
+      debit: adjustment > 0 ? adjustment : 0,
+      credit: adjustment < 0 ? Math.abs(adjustment) : 0,
+      libelle: `Correction du coût du stock restant - ${numeroFacture}`
+    });
+  }
+
+  if (Number(montantPending) > 0 && ecartPrix !== 0 && compteEcarts) {
     if (ecartPrix > 0) {
       ecrituresLignes.push({
         compteComptableId: compteEcarts.id,

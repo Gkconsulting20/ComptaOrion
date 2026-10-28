@@ -6,6 +6,7 @@ import emailService from '../services/emailService.js';
 import { createEcritureFactureVente, createEcriturePaiementClient } from '../services/comptabiliteService.js';
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { consumeStockValuation } from '../services/stockValuation.js';
 
 const router = express.Router();
 
@@ -225,6 +226,11 @@ router.post('/lite-sale', async (req, res) => {
         const [updated] = await tx.update(produits).set({ quantite: sql`${produits.quantite} - ${quantity}`, updatedAt: new Date() }).where(and(eq(produits.id, productId), eq(produits.entrepriseId, req.entrepriseId), sql`${produits.quantite} >= ${quantity}`)).returning();
         if (!updated) throw Object.assign(new Error('Le stock a changé, veuillez réessayer'), { status: 409 });
         await tx.insert(mouvementsStock).values({ entrepriseId: req.entrepriseId, produitId: productId, type: 'sortie', quantite: quantity.toString(), prixUnitaire: String(productRows.find(p => p.id === productId)?.prixVente || 0), reference: numeroFacture, notes: 'Vente ComptaOrion Lite', userId: req.user.id });
+        await consumeStockValuation(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: productId,
+          quantity,
+        });
       }
       let payment = null;
       if (requestedPayment > 0) {
@@ -796,35 +802,38 @@ router.put('/:id', async (req, res) => {
       for (const item of factureItemsList) {
         if (item.produitId) {
           try {
-            // Créer mouvement de stock SORTIE
-            await db.insert(mouvementsStock).values({
-              entrepriseId: req.entrepriseId,
-              produitId: item.produitId,
-              type: 'sortie',
-              quantite: parseFloat(item.quantite),
-              prixUnitaire: parseFloat(item.prixUnitaire),
-              reference: `Facture ${updatedFacture.numeroFacture}`,
-              notes: `Vente client - Facture ${updatedFacture.numeroFacture}`,
-              userId: req.user?.id || null
-            });
+            await db.transaction(async (tx) => {
+              const [produit] = await tx.select().from(produits).where(and(
+                eq(produits.id, item.produitId),
+                eq(produits.entrepriseId, req.entrepriseId)
+              )).for('update').limit(1);
+              if (!produit) return;
 
-            // Mettre à jour le stock du produit (décrémenter)
-            const [produit] = await db
-              .select()
-              .from(produits)
-              .where(and(eq(produits.id, item.produitId), eq(produits.entrepriseId, req.entrepriseId)))
-              .limit(1);
+              await tx.insert(mouvementsStock).values({
+                entrepriseId: req.entrepriseId,
+                produitId: item.produitId,
+                type: 'sortie',
+                quantite: parseFloat(item.quantite),
+                prixUnitaire: parseFloat(item.prixUnitaire),
+                reference: `Facture ${updatedFacture.numeroFacture}`,
+                notes: `Vente client - Facture ${updatedFacture.numeroFacture}`,
+                userId: req.user?.id || null
+              });
+              await consumeStockValuation(tx, {
+                entrepriseId: req.entrepriseId,
+                produitId: item.produitId,
+                quantity: parseFloat(item.quantite),
+              });
 
-            if (produit) {
               const nouvelleQuantite = Math.max(0, parseFloat(produit.quantite || 0) - parseFloat(item.quantite));
-              await db
-                .update(produits)
-                .set({ 
-                  quantite: nouvelleQuantite,
-                  updatedAt: new Date()
-                })
-                .where(and(eq(produits.id, item.produitId), eq(produits.entrepriseId, req.entrepriseId)));
-            }
+              await tx.update(produits).set({
+                quantite: nouvelleQuantite,
+                updatedAt: new Date()
+              }).where(and(
+                eq(produits.id, item.produitId),
+                eq(produits.entrepriseId, req.entrepriseId)
+              ));
+            });
           } catch (error) {
             console.error(`Erreur création mouvement SORTIE pour produit ${item.produitId}:`, error);
           }

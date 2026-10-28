@@ -3,6 +3,12 @@ import { db } from '../db.js';
 import { produits, categoriesStock, entrepots, stockParEntrepot, mouvementsStock, alertesStock, inventairesTournants, bonsReception, lignesReception, fournisseurs, ecritures, lignesEcritures, comptesComptables, journaux } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import {
+  allocateLogisticsByValue,
+  consumeStockValuation,
+  createStockValuationLayer,
+  ensureOpeningValuationLayer,
+} from '../services/stockValuation.js';
 
 const router = express.Router();
 
@@ -350,10 +356,21 @@ router.post('/mouvements', async (req, res) => {
     const prodId = parseInt(produitId);
     const qte = parseFloat(quantite);
     const prix = prixUnitaire ? parseFloat(prixUnitaire) : null;
-    
-    if (type === 'entree' && prix) {
-      const nouveauCMP = await calculerCoutMoyenPondere(prodId, qte, prix, entId);
-      await mettreAJourCoutMoyen(prodId, nouveauCMP, entId);
+
+    const [productSnapshot] = await db.select().from(produits).where(and(
+      eq(produits.id, prodId),
+      eq(produits.entrepriseId, entId)
+    )).limit(1);
+    if (!productSnapshot) {
+      return res.status(404).json({ success: false, error: 'Produit non trouvé pour cette entreprise' });
+    }
+
+    if (type === 'entree') {
+      await ensureOpeningValuationLayer(db, {
+        entrepriseId: entId,
+        produitId: prodId,
+        productSnapshot,
+      });
     }
     
     // Insérer le mouvement
@@ -366,6 +383,25 @@ router.post('/mouvements', async (req, res) => {
       prixUnitaire: prix,
       reference
     }).returning();
+
+    if (type === 'entree') {
+      const unitCost = prix ?? Number(productSnapshot.coutMoyen || productSnapshot.prixAchat || 0);
+      await createStockValuationLayer(db, {
+        entrepriseId: entId,
+        produitId: prodId,
+        mouvementId: movement[0].id,
+        quantity: qte,
+        unitCost,
+        productSnapshot,
+        ensureOpening: false,
+      });
+    } else if (type !== 'transfert') {
+      await consumeStockValuation(db, {
+        entrepriseId: entId,
+        produitId: prodId,
+        quantity: qte,
+      });
+    }
 
     // Mettre à jour le stock par entrepôt
     if (entrepotId && type !== 'transfert') {
@@ -396,6 +432,17 @@ router.post('/mouvements', async (req, res) => {
 
       // Vérifier alertes
       await checkStockAlerts(parseInt(entrepriseId), parseInt(produitId), parseInt(entrepotId));
+    }
+
+    if (type !== 'transfert') {
+      const quantityChange = type === 'entree' ? qte : -qte;
+      await db.update(produits).set({
+        quantite: sql`GREATEST(0, COALESCE(${produits.quantite}, 0) + ${quantityChange})`,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(produits.id, prodId),
+        eq(produits.entrepriseId, entId)
+      ));
     }
 
     // Audit log
@@ -620,7 +667,9 @@ router.post('/receptions/:id/valider', async (req, res) => {
     }
 
     const lignesResult = await db.execute(sql`
-      SELECT lr.*, p.nom as produit_nom, p.prix_achat
+      SELECT lr.*, p.nom as produit_nom, p.prix_achat,
+             p.quantite as product_quantite, p.cout_moyen as product_cout_moyen,
+             p.valorisation_method as product_valorisation_method
       FROM lignes_reception lr
       LEFT JOIN produits p ON lr.produit_id = p.id
       WHERE lr.bon_reception_id = ${bonId}
@@ -632,31 +681,88 @@ router.post('/receptions/:id/valider', async (req, res) => {
       return res.status(400).json({ error: 'Aucune ligne dans ce bon de réception' });
     }
 
-    // 1. Créer les mouvements de stock pour chaque ligne
-    for (const ligne of lignes) {
-      // Mouvement d'entrée
-      const mvtResult = await db.execute(sql`
-        INSERT INTO mouvements_stock (entreprise_id, produit_id, type, quantite, prix_unitaire, reference, notes, user_id)
-        VALUES (${req.entrepriseId}, ${ligne.produit_id}, 'entree', ${ligne.quantite_recue}, ${ligne.prix_unitaire_estime}, ${bon.numero}, ${'Réception: ' + bon.numero}, ${req.userId})
-        RETURNING id
+    let coutsLogistiquesEstimes = [];
+    if (bon.commande_achat_id) {
+      const coutsResult = await db.execute(sql`
+        SELECT * FROM couts_logistiques_commande
+        WHERE entreprise_id = ${req.entrepriseId}
+          AND commande_achat_id = ${bon.commande_achat_id}
       `);
-      
-      // Mettre à jour la ligne avec l'ID du mouvement
-      await db.execute(sql`
-        UPDATE lignes_reception SET mouvement_stock_id = ${mvtResult.rows[0].id} WHERE id = ${ligne.id}
-      `);
+      coutsLogistiquesEstimes = coutsResult.rows || [];
+    }
+    const totalLogistiqueEstimee = coutsLogistiquesEstimes.reduce(
+      (sum, cout) => sum + Math.max(0, Number(cout.montant) || 0),
+      0
+    );
+    const allocationsLogistiquesEstimees = allocateLogisticsByValue(
+      lignes,
+      totalLogistiqueEstimee
+    ).allocations;
 
-      // Mettre à jour le stock par entrepôt si entrepôt défini
-      if (bon.entrepot_id) {
-        await db.execute(sql`
-          INSERT INTO stock_par_entrepot (entreprise_id, produit_id, entrepot_id, quantite_presente, quantite_disponible)
-          VALUES (${req.entrepriseId}, ${ligne.produit_id}, ${bon.entrepot_id}, ${ligne.quantite_recue}, ${ligne.quantite_recue})
-          ON CONFLICT (produit_id, entrepot_id) DO UPDATE 
-          SET quantite_presente = stock_par_entrepot.quantite_presente + ${ligne.quantite_recue},
-              quantite_disponible = stock_par_entrepot.quantite_disponible + ${ligne.quantite_recue},
-              updated_at = NOW()
+    // 1. Créer les mouvements de stock pour chaque ligne
+    for (const [lineIndex, ligne] of lignes.entries()) {
+      const quantity = Number(ligne.quantite_recue);
+      const estimatedUnitCost = Number(ligne.prix_unitaire_estime || 0);
+      const allocatedLogistics = allocationsLogistiquesEstimees[lineIndex] || 0;
+      const productSnapshot = {
+        id: ligne.produit_id,
+        quantite: ligne.product_quantite,
+        coutMoyen: ligne.product_cout_moyen,
+        prixAchat: ligne.prix_achat,
+        valorisationMethod: ligne.product_valorisation_method,
+      };
+
+      await db.transaction(async (tx) => {
+        await ensureOpeningValuationLayer(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: Number(ligne.produit_id),
+          productSnapshot,
+        });
+
+        const mvtResult = await tx.execute(sql`
+          INSERT INTO mouvements_stock (entreprise_id, produit_id, type, quantite, prix_unitaire, reference, notes, user_id)
+          VALUES (${req.entrepriseId}, ${ligne.produit_id}, 'entree', ${ligne.quantite_recue}, ${ligne.prix_unitaire_estime}, ${bon.numero}, ${'Réception: ' + bon.numero}, ${req.userId})
+          RETURNING id
         `);
-      }
+        const movementId = mvtResult.rows[0].id;
+
+        await tx.execute(sql`
+          UPDATE lignes_reception
+          SET mouvement_stock_id = ${movementId}
+          WHERE id = ${ligne.id} AND entreprise_id = ${req.entrepriseId}
+        `);
+
+        if (bon.entrepot_id) {
+          await tx.execute(sql`
+            INSERT INTO stock_par_entrepot (entreprise_id, produit_id, entrepot_id, quantite_presente, quantite_disponible)
+            VALUES (${req.entrepriseId}, ${ligne.produit_id}, ${bon.entrepot_id}, ${ligne.quantite_recue}, ${ligne.quantite_recue})
+            ON CONFLICT (produit_id, entrepot_id) DO UPDATE
+            SET quantite_presente = stock_par_entrepot.quantite_presente + ${ligne.quantite_recue},
+                quantite_disponible = stock_par_entrepot.quantite_disponible + ${ligne.quantite_recue},
+                updated_at = NOW()
+          `);
+        }
+
+        await tx.execute(sql`
+          UPDATE produits
+          SET quantite = COALESCE(quantite, 0) + ${quantity},
+              updated_at = NOW()
+          WHERE id = ${ligne.produit_id}
+            AND entreprise_id = ${req.entrepriseId}
+        `);
+
+        const estimatedTotalCost = quantity * estimatedUnitCost + allocatedLogistics;
+        await createStockValuationLayer(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: Number(ligne.produit_id),
+          mouvementId: Number(movementId),
+          quantity,
+          totalCost: estimatedTotalCost,
+          unitCost: quantity > 0 ? estimatedTotalCost / quantity : estimatedUnitCost,
+          productSnapshot,
+          ensureOpening: false,
+        });
+      });
     }
 
     // 2. Créer l'écriture comptable (Stock au Débit / Stock non facturé au Crédit)
@@ -744,12 +850,7 @@ router.post('/receptions/:id/valider', async (req, res) => {
 
     // 5. Créer les enregistrements logistique_pending si commande d'achat associée
     if (bon.commande_achat_id) {
-      const coutsResult = await db.execute(sql`
-        SELECT * FROM couts_logistiques_commande WHERE commande_achat_id = ${bon.commande_achat_id}
-      `);
-      
-      const coutsLogistiques = coutsResult.rows || [];
-      for (const cout of coutsLogistiques) {
+      for (const cout of coutsLogistiquesEstimes) {
         await db.execute(sql`
           INSERT INTO logistique_pending (entreprise_id, bon_reception_id, commande_achat_id, fournisseur_id, type, description, montant_estime, date_reception, statut)
           VALUES (${req.entrepriseId}, ${bonId}, ${bon.commande_achat_id}, ${bon.fournisseur_id}, ${cout.type}, ${cout.description}, ${cout.montant}, ${bon.date_reception}, 'pending')
@@ -878,19 +979,31 @@ router.get('/rapports/valorisation', async (req, res) => {
         COALESCE(SUM(spe.quantite_presente), 0) as quantite,
         CASE 
           WHEN p.valorisation_method = 'FIFO' THEN (
-            SELECT COALESCE(AVG(cout_unitaire), p.prix_achat) 
+            SELECT COALESCE(
+              SUM(vs.cout_total) / NULLIF(SUM(vs.quantite), 0),
+              NULLIF(p.cout_moyen, 0),
+              p.prix_achat,
+              0
+            )
             FROM valorisations_stock vs 
-            WHERE vs.produit_id = p.id
+            WHERE vs.entreprise_id = p.entreprise_id
+              AND vs.produit_id = p.id
+              AND vs.quantite > 0
           )
-          ELSE COALESCE(p.prix_achat, 0)
+          ELSE COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
         END as cout_unitaire,
         CASE 
           WHEN p.valorisation_method = 'FIFO' THEN (
-            SELECT COALESCE(SUM(cout_total), 0) 
+            SELECT COALESCE(
+              NULLIF(SUM(vs.cout_total), 0),
+              COALESCE(SUM(spe.quantite_presente), 0) * COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
+            )
             FROM valorisations_stock vs 
-            WHERE vs.produit_id = p.id
+            WHERE vs.entreprise_id = p.entreprise_id
+              AND vs.produit_id = p.id
+              AND vs.quantite > 0
           )
-          ELSE COALESCE(SUM(spe.quantite_presente), 0) * COALESCE(p.prix_achat, 0)
+          ELSE COALESCE(SUM(spe.quantite_presente), 0) * COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
         END as valeur_totale
       FROM produits p
       LEFT JOIN stock_par_entrepot spe ON p.id = spe.produit_id

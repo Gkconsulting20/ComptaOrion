@@ -15,6 +15,14 @@ import {
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { createEcritureFactureAchat, createEcriturePaiementFournisseur } from '../services/comptabiliteService.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import {
+  allocateLogisticsByValue,
+  allocateMoneyByWeight,
+  applySupplierInvoiceCostsToRemainingLayers,
+  createStockValuationLayer,
+  ensureOpeningValuationLayer,
+  splitCostVariance,
+} from '../services/stockValuation.js';
 
 const router = express.Router();
 
@@ -392,6 +400,11 @@ router.put('/factures/:id/valider', async (req, res) => {
           eq(produits.entrepriseId, req.entrepriseId)
         )).for('update').limit(1);
         if (!product) throw Object.assign(new Error(`Produit ${item.produitId} introuvable ou non autorisé.`), { status: 409 });
+        await ensureOpeningValuationLayer(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: product.id,
+          productSnapshot: product,
+        });
         const [movement] = await tx.insert(mouvementsStock).values({
           entrepriseId: req.entrepriseId,
           produitId: product.id,
@@ -403,6 +416,15 @@ router.put('/factures/:id/valider', async (req, res) => {
           userId: req.user.id
         }).returning();
         movements.push(movement);
+        await createStockValuationLayer(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: product.id,
+          mouvementId: movement.id,
+          quantity: item.quantite,
+          unitCost: item.prixUnitaire,
+          productSnapshot: product,
+          ensureOpening: false,
+        });
         await tx.update(produits).set({
           quantite: sql`${produits.quantite} + ${item.quantite}`,
           updatedAt: new Date()
@@ -763,12 +785,30 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     if (!receptionsIds || receptionsIds.length === 0) {
       return res.status(400).json({ success: false, message: 'Au moins une réception à rapprocher est obligatoire' });
     }
+    if (!Array.isArray(lignes) || lignes.length === 0) {
+      return res.status(400).json({ success: false, message: 'Ajoutez au moins une ligne d’article à la facture.' });
+    }
     if (totalTVADeclare === undefined || totalTVADeclare === null || String(totalTVADeclare).trim() === '') {
       return res.status(400).json({ success: false, message: 'Saisissez la TVA figurant sur la facture; saisissez 0 si elle est exonérée.' });
     }
     const totalTVA = Number(totalTVADeclare);
     if (!Number.isFinite(totalTVA) || totalTVA < 0) {
       return res.status(400).json({ success: false, message: 'Le montant de TVA doit être un nombre positif ou nul.' });
+    }
+    const ligneInvalide = lignes.some((ligne) => {
+      const quantite = Number(ligne.quantite);
+      const prix = Number(ligne.prixUnitaireReel);
+      return !Number.isFinite(quantite) || quantite <= 0 || !Number.isFinite(prix) || prix < 0;
+    });
+    if (ligneInvalide) {
+      return res.status(400).json({ success: false, message: 'Chaque ligne doit avoir une quantité positive et un prix valide.' });
+    }
+    const coutsInvalides = (coutsLogistiques || []).some((cout) => {
+      const montant = Number(cout.montantReel);
+      return !Number.isFinite(montant) || montant < 0;
+    });
+    if (coutsInvalides) {
+      return res.status(400).json({ success: false, message: 'Chaque frais logistique doit être un montant positif ou nul.' });
     }
 
     // Vérifier que le fournisseur existe
@@ -818,6 +858,16 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
 
     const totalHT = totalArticlesHT + totalLogistique;
     const totalTTC = totalHT + totalTVA;
+    const lignesArticles = lignesProcessed.filter((ligne) => Number.isSafeInteger(parseInt(ligne.produitId, 10)) && parseInt(ligne.produitId, 10) > 0);
+    const repartitionLogistique = allocateLogisticsByValue(lignesArticles, totalLogistique);
+    const invoiceCostsByProduct = new Map();
+    for (const [index, ligne] of lignesArticles.entries()) {
+      const produitId = parseInt(ligne.produitId, 10);
+      const current = invoiceCostsByProduct.get(produitId) || { quantity: 0, totalCost: 0 };
+      current.quantity += Number(ligne.quantite);
+      current.totalCost += Number(ligne.totalLigne) + Number(repartitionLogistique.allocations[index] || 0);
+      invoiceCostsByProduct.set(produitId, current);
+    }
 
     // Créer la facture
     const factureResult = await db.execute(sql`
@@ -914,29 +964,65 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     const totalPending = parseFloat(pendingResult.rows?.[0]?.total_stock_pending || 0) + parseFloat(pendingResult.rows?.[0]?.total_logistique_pending || 0);
     const ecartPrix = totalHT - totalPending;
 
+    let coutRevient = {
+      ajustementStock: 0,
+      produitsRevalorises: [],
+      avertissements: [],
+    };
+    let comptabiliteAvertissement = null;
     try {
-      const ecriture = await createEcritureFactureAchat({
-        entrepriseId: req.entrepriseId,
-        numeroFacture: numeroFacture,
-        dateFacture: dateFacture || new Date().toISOString().split('T')[0],
-        fournisseurNom: fournisseur.raison_sociale || fournisseur.nom,
-        fournisseurCompteId: fournisseur.compte_comptable_id,
-        totalHT,
-        totalTVA,
-        totalTTC,
-        montantPending: totalPending,
-        ecartPrix
-      });
-
-      if (ecriture) {
-        await db.execute(sql`
-          UPDATE factures_achat
-          SET ecriture_comptable_id = ${ecriture.id}
-          WHERE id = ${newFacture.id} AND entreprise_id = ${req.entrepriseId}
+      const result = await db.transaction(async (tx) => {
+        const pendingRowsResult = await tx.execute(sql`
+          SELECT sp.produit_id, sp.quantite_pending, lr.mouvement_stock_id
+          FROM stock_pending sp
+          JOIN lignes_reception lr
+            ON lr.id = sp.ligne_reception_id
+           AND lr.entreprise_id = sp.entreprise_id
+          WHERE sp.entreprise_id = ${req.entrepriseId}
+            AND sp.facture_achat_id = ${newFacture.id}
+          ORDER BY sp.id
         `);
-      }
+        const valuation = await applySupplierInvoiceCostsToRemainingLayers(tx, {
+          entrepriseId: req.entrepriseId,
+          receiptRows: pendingRowsResult.rows || [],
+          invoiceCostsByProduct,
+        });
+        const variance = splitCostVariance(ecartPrix, valuation.ajustementStock);
+        const ecriture = await createEcritureFactureAchat({
+          entrepriseId: req.entrepriseId,
+          numeroFacture,
+          dateFacture: dateFacture || new Date().toISOString().split('T')[0],
+          fournisseurNom: fournisseur.raison_sociale || fournisseur.nom,
+          fournisseurCompteId: fournisseur.compte_comptable_id,
+          totalHT,
+          totalTVA,
+          totalTTC,
+          montantPending: totalPending,
+          ecartPrix: variance.expenseVariance,
+          montantValorisationStock: variance.inventoryAdjustment,
+          executor: tx,
+        });
+
+        if (!ecriture && variance.inventoryAdjustment !== 0) {
+          throw new Error('La correction du stock n’a pas pu être enregistrée dans le journal comptable.');
+        }
+        if (ecriture) {
+          await tx.execute(sql`
+            UPDATE factures_achat
+            SET ecriture_comptable_id = ${ecriture.id}
+            WHERE id = ${newFacture.id} AND entreprise_id = ${req.entrepriseId}
+          `);
+        }
+        return { valuation, ecriture };
+      });
+      coutRevient = result.valuation;
+      if (!result.ecriture) comptabiliteAvertissement = 'L’écriture comptable n’a pas été créée : vérifiez les comptes configurés.';
     } catch (comptaError) {
-      console.warn('Avertissement: Écriture comptable non générée:', comptaError.message);
+      comptabiliteAvertissement = comptaError.message;
+      coutRevient.avertissements.push(
+        `La correction de valorisation et l’écriture comptable ont été annulées ensemble : ${comptaError.message}`
+      );
+      console.warn('Avertissement: valorisation ou écriture comptable non générée:', comptaError.message);
     }
 
     res.status(201).json({
@@ -946,7 +1032,18 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
         ...newFacture,
         totalArticles: totalArticlesHT,
         totalLogistique,
-        receptionsRapprochees: receptionsIds.length
+        receptionsRapprochees: receptionsIds.length,
+        coutRevient: {
+          ...coutRevient,
+          fraisLogistiquesNonAlloues: repartitionLogistique.unallocated,
+          avertissements: [
+            ...coutRevient.avertissements,
+            ...(repartitionLogistique.unallocated > 0
+              ? ['Certains frais logistiques n’ont pas été répartis car aucune ligne article de valeur positive n’est disponible.']
+              : []),
+            ...(comptabiliteAvertissement ? [comptabiliteAvertissement] : []),
+          ],
+        }
       }
     });
   } catch (error) {

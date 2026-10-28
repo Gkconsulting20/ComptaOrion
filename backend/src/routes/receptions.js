@@ -4,6 +4,7 @@ import { commandesAchat, commandesAchatItems, produits, mouvementsStock, fournis
 import { eq, and, sql } from 'drizzle-orm';
 import { createEcritureReception } from '../services/comptabiliteService.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { createStockValuationLayer, ensureOpeningValuationLayer } from '../services/stockValuation.js';
 
 const router = express.Router();
 
@@ -85,6 +86,11 @@ router.post('/', async (req, res) => {
             eq(produits.entrepriseId, req.entrepriseId)
           )).for('update').limit(1);
           if (!product) throw Object.assign(new Error(`Produit ${commandeItem.produitId} introuvable`), { status: 409 });
+          await ensureOpeningValuationLayer(tx, {
+            entrepriseId: req.entrepriseId,
+            produitId: product.id,
+            productSnapshot: product,
+          });
           const [updatedProduct] = await tx.update(produits).set({
             quantite: (Number(product.quantite) + quantiteRecue).toString(),
             updatedAt: new Date()
@@ -104,6 +110,15 @@ router.post('/', async (req, res) => {
             userId: req.user.id,
           }).returning();
           movements.push(movement);
+          await createStockValuationLayer(tx, {
+            entrepriseId: req.entrepriseId,
+            produitId: product.id,
+            mouvementId: movement.id,
+            quantity: quantiteRecue,
+            unitCost: Number(commandeItem.prixUnitaire || 0),
+            productSnapshot: product,
+            ensureOpening: false,
+          });
         }
       }
       if (changedLines.length === 0) {

@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { produits, mouvementsStock } from '../schema.js';
 import { eq, and, desc, sql, lte } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { consumeStockValuation, createStockValuationLayer, ensureOpeningValuationLayer } from '../services/stockValuation.js';
 
 const router = express.Router();
 
@@ -474,6 +475,14 @@ router.post('/:id/ajuster-stock', async (req, res) => {
       if (nouvelleQuantite < 0) {
         throw Object.assign(new Error('Le stock ne peut pas être négatif'), { status: 400 });
       }
+      const stockDelta = nouvelleQuantite - parseFloat(product.quantite || 0);
+      if (stockDelta > 0) {
+        await ensureOpeningValuationLayer(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: product.id,
+          productSnapshot: product,
+        });
+      }
 
       const [updated] = await tx.update(produits).set({
         quantite: nouvelleQuantite.toString(),
@@ -491,6 +500,25 @@ router.post('/:id/ajuster-stock', async (req, res) => {
         motif: motif || null,
         userId: req.user.id,
       }).returning();
+
+      if (stockDelta > 0) {
+        const unitCost = Number(product.coutMoyen || product.prixAchat || 0);
+        await createStockValuationLayer(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: product.id,
+          mouvementId: movement.id,
+          quantity: stockDelta,
+          unitCost,
+          productSnapshot: product,
+          ensureOpening: false,
+        });
+      } else if (stockDelta < 0) {
+        await consumeStockValuation(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: product.id,
+          quantity: Math.abs(stockDelta),
+        });
+      }
 
       await logAudit({
         ...extractAuditInfo(req),
