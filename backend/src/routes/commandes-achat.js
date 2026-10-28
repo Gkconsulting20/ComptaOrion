@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { commandesAchat, commandesAchatItems, produits, fournisseurs, mouvementsStock, coutsLogistiquesCommande } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -220,10 +221,8 @@ router.post('/', async (req, res) => {
     const totalTVA = totalArticlesHT * 0.18; // TVA à récupérer depuis les paramètres entreprise
     const totalTTC = totalHT + totalTVA;
 
-    // Créer la commande
-    const [newCommande] = await db
-      .insert(commandesAchat)
-      .values({
+    const creation = await db.transaction(async (tx) => {
+      const [newCommande] = await tx.insert(commandesAchat).values({
         entrepriseId: req.entrepriseId,
         numeroCommande,
         fournisseurId: parseInt(fournisseurId),
@@ -239,17 +238,14 @@ router.post('/', async (req, res) => {
         conditionsLivraison: conditionsLivraison || null,
         modeLivraison: modeLivraison || null,
         userId: req.user.id,
-      })
-      .returning();
+      }).returning();
 
-    // Créer les lignes de commande
-    const itemsToInsert = items.map(item => {
-      const quantite = parseFloat(item.quantite);
-      const prixUnitaire = parseFloat(item.prixUnitaire);
-      const remise = parseFloat(item.remise || 0);
-      const totalLigne = quantite * prixUnitaire * (1 - remise / 100);
-
-      return {
+      const itemsToInsert = items.map(item => {
+        const quantite = parseFloat(item.quantite);
+        const prixUnitaire = parseFloat(item.prixUnitaire);
+        const remise = parseFloat(item.remise || 0);
+        const totalLigne = quantite * prixUnitaire * (1 - remise / 100);
+        return {
         entrepriseId: req.entrepriseId,
         commandeId: newCommande.id,
         produitId: item.produitId ? parseInt(item.produitId) : null,
@@ -259,38 +255,42 @@ router.post('/', async (req, res) => {
         prixUnitaire: prixUnitaire.toFixed(2),
         remise: remise.toFixed(2),
         totalLigne: totalLigne.toFixed(2),
-      };
+        };
+      });
+
+      const insertedItems = await tx.insert(commandesAchatItems).values(itemsToInsert).returning();
+
+      let insertedCouts = [];
+      if (coutsLogistiques && Array.isArray(coutsLogistiques) && coutsLogistiques.length > 0) {
+        const coutsToInsert = coutsLogistiques.map(cout => ({
+          entrepriseId: req.entrepriseId,
+          commandeAchatId: newCommande.id,
+          type: cout.type,
+          description: cout.description || null,
+          montant: parseFloat(cout.montant).toFixed(2),
+        }));
+        insertedCouts = await tx.insert(coutsLogistiquesCommande).values(coutsToInsert).returning();
+      }
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'commandes_achat',
+        recordId: newCommande.id,
+        nouvelleValeur: { commande: newCommande, items: insertedItems, coutsLogistiques: insertedCouts },
+        description: `Commande d’achat créée: ${newCommande.numeroCommande}`,
+        executor: tx,
+        required: true
+      });
+      return { newCommande, insertedItems, insertedCouts };
     });
-
-    const insertedItems = await db
-      .insert(commandesAchatItems)
-      .values(itemsToInsert)
-      .returning();
-
-    // Créer les coûts logistiques
-    let insertedCouts = [];
-    if (coutsLogistiques && Array.isArray(coutsLogistiques) && coutsLogistiques.length > 0) {
-      const coutsToInsert = coutsLogistiques.map(cout => ({
-        entrepriseId: req.entrepriseId,
-        commandeAchatId: newCommande.id,
-        type: cout.type,
-        description: cout.description || null,
-        montant: parseFloat(cout.montant).toFixed(2),
-      }));
-
-      insertedCouts = await db
-        .insert(coutsLogistiquesCommande)
-        .values(coutsToInsert)
-        .returning();
-    }
 
     return res.status(201).json({
       success: true,
       message: 'Commande créée avec succès',
       data: {
-        ...newCommande,
-        items: insertedItems,
-        coutsLogistiques: insertedCouts
+        ...creation.newCommande,
+        items: creation.insertedItems,
+        coutsLogistiques: creation.insertedCouts
       }
     });
   } catch (error) {
@@ -307,45 +307,44 @@ router.post('/', async (req, res) => {
 router.put('/:id/confirmer', async (req, res) => {
   try {
     const { id } = req.params;
-
-    const [commande] = await db
-      .select()
-      .from(commandesAchat)
-      .where(
-        and(
-          eq(commandesAchat.id, parseInt(id)),
-          eq(commandesAchat.entrepriseId, req.entrepriseId)
-        )
-      )
-      .limit(1);
-
-    if (!commande) {
-      return res.status(404).json({
-        success: false,
-        message: 'Commande non trouvée'
-      });
-    }
-
-    if (commande.statut !== 'brouillon') {
-      return res.status(400).json({
-        success: false,
-        message: 'Seules les commandes en brouillon peuvent être confirmées'
-      });
-    }
-
-    const [updated] = await db
-      .update(commandesAchat)
-      .set({
+    const result = await db.transaction(async (tx) => {
+      const [commande] = await tx.select().from(commandesAchat).where(and(
+        eq(commandesAchat.id, parseInt(id)),
+        eq(commandesAchat.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!commande) return { status: 404 };
+      if (commande.statut !== 'brouillon') return { status: 400 };
+      const [updated] = await tx.update(commandesAchat).set({
         statut: 'confirmee',
         updatedAt: new Date()
-      })
-      .where(eq(commandesAchat.id, parseInt(id)))
-      .returning();
+      }).where(and(
+        eq(commandesAchat.id, commande.id),
+        eq(commandesAchat.entrepriseId, req.entrepriseId)
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'commandes_achat',
+        recordId: updated.id,
+        ancienneValeur: commande,
+        nouvelleValeur: updated,
+        description: `Commande d’achat confirmée: ${updated.numeroCommande}`,
+        executor: tx,
+        required: true
+      });
+      return { status: 200, updated };
+    });
+    if (result.status !== 200) {
+      return res.status(result.status).json({
+        success: false,
+        message: result.status === 404 ? 'Commande non trouvée' : 'Seules les commandes en brouillon peuvent être confirmées'
+      });
+    }
 
     return res.json({
       success: true,
       message: 'Commande confirmée avec succès',
-      data: updated
+      data: result.updated
     });
   } catch (error) {
     console.error('Erreur lors de la confirmation de la commande:', error);
@@ -363,45 +362,45 @@ router.put('/:id/annuler', async (req, res) => {
     const { id } = req.params;
     const { motifAnnulation } = req.body;
 
-    const [commande] = await db
-      .select()
-      .from(commandesAchat)
-      .where(
-        and(
-          eq(commandesAchat.id, parseInt(id)),
-          eq(commandesAchat.entrepriseId, req.entrepriseId)
-        )
-      )
-      .limit(1);
-
-    if (!commande) {
-      return res.status(404).json({
-        success: false,
-        message: 'Commande non trouvée'
-      });
-    }
-
-    if (commande.statut === 'livree') {
-      return res.status(400).json({
-        success: false,
-        message: 'Une commande livrée ne peut pas être annulée'
-      });
-    }
-
-    const [updated] = await db
-      .update(commandesAchat)
-      .set({
+    const result = await db.transaction(async (tx) => {
+      const [commande] = await tx.select().from(commandesAchat).where(and(
+        eq(commandesAchat.id, parseInt(id)),
+        eq(commandesAchat.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!commande) return { status: 404 };
+      if (commande.statut === 'livree') return { status: 400 };
+      const [updated] = await tx.update(commandesAchat).set({
         statut: 'annulee',
         notes: motifAnnulation ? `${commande.notes || ''}\n\nAnnulation: ${motifAnnulation}` : commande.notes,
         updatedAt: new Date()
-      })
-      .where(eq(commandesAchat.id, parseInt(id)))
-      .returning();
+      }).where(and(
+        eq(commandesAchat.id, commande.id),
+        eq(commandesAchat.entrepriseId, req.entrepriseId)
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'commandes_achat',
+        recordId: updated.id,
+        ancienneValeur: commande,
+        nouvelleValeur: updated,
+        description: `Commande d’achat annulée: ${updated.numeroCommande}`,
+        executor: tx,
+        required: true
+      });
+      return { status: 200, updated };
+    });
+    if (result.status !== 200) {
+      return res.status(result.status).json({
+        success: false,
+        message: result.status === 404 ? 'Commande non trouvée' : 'Une commande livrée ne peut pas être annulée'
+      });
+    }
 
     return res.json({
       success: true,
       message: 'Commande annulée avec succès',
-      data: updated
+      data: result.updated
     });
   } catch (error) {
     console.error('Erreur lors de l\'annulation de la commande:', error);

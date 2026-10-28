@@ -6,3 +6,4 @@
 - [Paiements associatifs](association-payments.md) — séparer dépenses engagées, paiements réels et approbation ; chaque paiement réel a son écriture équilibrée.
 - [Pause du module Paie & RH](payroll-paused.md) — garder Paie & RH masqué pendant la préparation du lancement initial de l’application.
 - [Espace commercial](saas-commercial-portal.md) — le portail commercial sert à gérer la commercialisation de ComptaOrion, avec des comptes distincts de l’ERP.
+- [Piste d’audit](audit-trail-policy.md) — les traces de création, modification et suppression sont une exigence de sécurité pour les clients.

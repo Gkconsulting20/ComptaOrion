@@ -97,3 +97,64 @@ test('les nouveaux forfaits ont une limite par défaut de trois utilisateurs', a
   assert.match(route, /\?\s*3\s*:/);
   assert.match(frontend, /\{\s*limiteUtilisateurs:\s*3/);
 });
+
+test('les modules financiers modifiés journalisent les changements dans la transaction', async () => {
+  const modules = [
+    '../src/routes/association-accounting.js',
+    '../src/routes/dépenses.js',
+    '../src/routes/tresorerie.js',
+    '../src/routes/achats.js',
+    '../src/routes/produits.js',
+    '../src/routes/devis.js',
+    '../src/routes/commandes-achat.js',
+    '../src/routes/bons-livraison.js',
+    '../src/routes/receptions.js',
+    '../src/routes/ecritures-recurrentes.js',
+    '../src/routes/devises.js',
+    '../src/routes/immobilisations.js',
+    '../src/routes/impots.js',
+    '../src/routes/upload.js'
+  ];
+
+  for (const modulePath of modules) {
+    const source = await read(modulePath);
+    assert.match(source, /logAudit/, `${modulePath} doit enregistrer un audit`);
+    assert.match(source, /executor:\s*tx/, `${modulePath} doit écrire l’audit dans la transaction`);
+    assert.match(source, /required:\s*true/, `${modulePath} ne doit pas ignorer une erreur d’audit`);
+  }
+});
+
+test('les réceptions et actifs utilisent le tenant et l’auteur de la session', async () => {
+  const reception = await read('../src/routes/receptions.js');
+  const assets = await read('../src/routes/immobilisations.js');
+
+  assert.match(reception, /eq\(commandesAchat\.entrepriseId, req\.entrepriseId\)/);
+  assert.match(reception, /userId:\s*req\.user\.id/);
+  assert.doesNotMatch(reception, /req\.body\.userId/);
+
+  assert.match(assets, /entrepriseId:\s*req\.entrepriseId/);
+  assert.match(assets, /extractAuditInfo\(req\)/);
+  assert.doesNotMatch(assets, /const \{[^}]*userId[^}]*\}\s*=\s*req\.body/);
+  assert.doesNotMatch(assets, /const \{[^}]*entrepriseId[^}]*\}\s*=\s*req\.body/);
+});
+
+test('les anciennes routes de consultation d’audit restent isolées par entreprise', async () => {
+  const routes = await read('../src/routes/parametres.js');
+  const listing = routes.slice(
+    routes.indexOf("router.get('/audit-logs'"),
+    routes.indexOf("router.get('/audit-logs/:id'")
+  );
+  const detail = routes.slice(
+    routes.indexOf("router.get('/audit-logs/:id'"),
+    routes.indexOf("router.get('/audit-stats'")
+  );
+  const stats = routes.slice(routes.indexOf("router.get('/audit-stats'"));
+
+  assert.match(listing, /eq\(auditLogs\.entrepriseId, req\.entrepriseId\)/);
+  assert.match(listing, /Math\.min/);
+  assert.doesNotMatch(listing, /parseInt\(entrepriseId\)/);
+  assert.match(detail, /eq\(auditLogs\.entrepriseId, req\.entrepriseId\)/);
+  assert.match(detail, /404/);
+  assert.match(stats, /eq\(auditLogs\.entrepriseId, req\.entrepriseId\)/);
+  assert.doesNotMatch(stats, /parseInt\(entrepriseId\)/);
+});

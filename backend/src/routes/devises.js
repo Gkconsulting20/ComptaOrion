@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { tauxChange, devises, entreprises } from '../schema.js';
 import { eq, and, desc, lte, or } from 'drizzle-orm';
 import { authMiddleware, entrepriseIsolation } from '../auth.js';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -165,18 +166,31 @@ router.post('/taux', async (req, res) => {
       return res.status(400).json({ message: 'Le taux doit être un nombre positif' });
     }
     
-    const nouveauTaux = await db.insert(tauxChange).values({
-      entrepriseId: req.entrepriseId,
-      deviseSource: deviseSource.toUpperCase(),
-      deviseCible: deviseCible.toUpperCase(),
-      taux: tauxNum.toString(),
-      dateEffet,
-      source: 'manuel',
-      notes,
-      createdBy: req.userId
-    }).returning();
+    const nouveauTaux = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(tauxChange).values({
+        entrepriseId: req.entrepriseId,
+        deviseSource: deviseSource.toUpperCase(),
+        deviseCible: deviseCible.toUpperCase(),
+        taux: tauxNum.toString(),
+        dateEffet,
+        source: 'manuel',
+        notes,
+        createdBy: req.user.id
+      }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'taux_change',
+        recordId: created.id,
+        nouvelleValeur: created,
+        description: `Taux de change ajouté: ${created.deviseSource}/${created.deviseCible}`,
+        executor: tx,
+        required: true
+      });
+      return created;
+    });
     
-    res.status(201).json(nouveauTaux[0]);
+    res.status(201).json(nouveauTaux);
   } catch (error) {
     console.error('Erreur POST taux:', error);
     res.status(500).json({ message: 'Erreur serveur', error: error.message });
@@ -194,19 +208,31 @@ router.put('/taux/:id', async (req, res) => {
     if (notes !== undefined) updateData.notes = notes;
     if (actif !== undefined) updateData.actif = actif;
     
-    const updated = await db.update(tauxChange)
-      .set(updateData)
-      .where(and(
+    const updated = await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(tauxChange).where(and(
         eq(tauxChange.id, parseInt(id)),
         eq(tauxChange.entrepriseId, req.entrepriseId)
-      ))
-      .returning();
-    
-    if (updated.length === 0) {
-      return res.status(404).json({ message: 'Taux non trouvé' });
-    }
-    
-    res.json(updated[0]);
+      )).for('update').limit(1);
+      if (!previous) return null;
+      const [current] = await tx.update(tauxChange).set(updateData).where(and(
+        eq(tauxChange.id, previous.id),
+        eq(tauxChange.entrepriseId, req.entrepriseId)
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'taux_change',
+        recordId: current.id,
+        ancienneValeur: previous,
+        nouvelleValeur: current,
+        description: `Taux de change modifié: ${current.deviseSource}/${current.deviseCible}`,
+        executor: tx,
+        required: true
+      });
+      return current;
+    });
+    if (!updated) return res.status(404).json({ message: 'Taux non trouvé' });
+    res.json(updated);
   } catch (error) {
     console.error('Erreur PUT taux:', error);
     res.status(500).json({ message: 'Erreur serveur', error: error.message });
@@ -217,17 +243,29 @@ router.delete('/taux/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    const deleted = await db.delete(tauxChange)
-      .where(and(
+    const deleted = await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(tauxChange).where(and(
         eq(tauxChange.id, parseInt(id)),
         eq(tauxChange.entrepriseId, req.entrepriseId)
-      ))
-      .returning();
-    
-    if (deleted.length === 0) {
-      return res.status(404).json({ message: 'Taux non trouvé' });
-    }
-    
+      )).for('update').limit(1);
+      if (!previous) return null;
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'DELETE',
+        table: 'taux_change',
+        recordId: previous.id,
+        ancienneValeur: previous,
+        description: `Taux de change supprimé: ${previous.deviseSource}/${previous.deviseCible}`,
+        executor: tx,
+        required: true
+      });
+      await tx.delete(tauxChange).where(and(
+        eq(tauxChange.id, previous.id),
+        eq(tauxChange.entrepriseId, req.entrepriseId)
+      ));
+      return previous;
+    });
+    if (!deleted) return res.status(404).json({ message: 'Taux non trouvé' });
     res.json({ message: 'Taux supprimé', id: parseInt(id) });
   } catch (error) {
     console.error('Erreur DELETE taux:', error);

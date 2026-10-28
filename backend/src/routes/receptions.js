@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { commandesAchat, commandesAchatItems, produits, mouvementsStock, fournisseurs } from '../schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { createEcritureReception } from '../services/comptabiliteService.js';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -32,208 +33,191 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Vérifier que la commande existe et est confirmée
-    const [commande] = await db
-      .select()
-      .from(commandesAchat)
-      .where(
-        and(
-          eq(commandesAchat.id, parseInt(commandeId)),
-          eq(commandesAchat.entrepriseId, req.entrepriseId)
-        )
-      )
-      .limit(1);
-
-    if (!commande) {
-      return res.status(404).json({
-        success: false,
-        message: 'Commande non trouvée'
-      });
-    }
-
-    if (commande.statut !== 'confirmee' && commande.statut !== 'preparee') {
-      return res.status(400).json({
-        success: false,
-        message: 'Seules les commandes confirmées ou en préparation peuvent être reçues'
-      });
-    }
-
-    // Traiter chaque ligne de réception
-    const mouvements = [];
-    let toutRecu = true;
-
-    for (const item of items) {
-      const quantiteRecue = parseFloat(item.quantiteRecue);
-      
-      if (quantiteRecue <= 0) {
-        continue; // Ignorer les quantités nulles
+    const receipt = await db.transaction(async (tx) => {
+      const [commande] = await tx.select().from(commandesAchat).where(and(
+        eq(commandesAchat.id, parseInt(commandeId)),
+        eq(commandesAchat.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!commande) throw Object.assign(new Error('Commande non trouvée'), { status: 404 });
+      if (!['confirmee', 'preparee'].includes(commande.statut)) {
+        throw Object.assign(new Error('Seules les commandes confirmées ou en préparation peuvent être reçues'), { status: 400 });
       }
 
-      // Récupérer la ligne de commande avec isolation tenant ET commande
-      const [commandeItem] = await db
-        .select()
-        .from(commandesAchatItems)
-        .where(
-          and(
-            eq(commandesAchatItems.id, parseInt(item.commandeItemId)),
-            eq(commandesAchatItems.commandeId, parseInt(commandeId)),
-            eq(commandesAchatItems.entrepriseId, req.entrepriseId)
-          )
-        )
-        .limit(1);
+      const movements = [];
+      const changedLines = [];
+      const changedProducts = [];
+      let toutRecu = true;
+      let totalHTReception = 0;
+      const date = dateReception || new Date().toISOString().split('T')[0];
+      for (const item of items) {
+        const quantiteRecue = Number(item.quantiteRecue);
+        if (!Number.isFinite(quantiteRecue) || quantiteRecue < 0) {
+          throw Object.assign(new Error('Une quantité reçue est invalide.'), { status: 400 });
+        }
+        if (quantiteRecue === 0) continue;
+        const [commandeItem] = await tx.select().from(commandesAchatItems).where(and(
+          eq(commandesAchatItems.id, parseInt(item.commandeItemId)),
+          eq(commandesAchatItems.commandeId, commande.id),
+          eq(commandesAchatItems.entrepriseId, req.entrepriseId)
+        )).for('update').limit(1);
+        if (!commandeItem) {
+          throw Object.assign(new Error(`Ligne de commande ${item.commandeItemId} non trouvée`), { status: 404 });
+        }
+        const ordered = Number(commandeItem.quantite);
+        const alreadyReceived = Number(commandeItem.quantiteRecue || '0');
+        const newReceived = alreadyReceived + quantiteRecue;
+        if (newReceived > ordered) {
+          throw Object.assign(new Error(`La quantité reçue (${newReceived}) dépasse la quantité commandée (${ordered}) pour ${commandeItem.description}`), { status: 400 });
+        }
+        const [updatedLine] = await tx.update(commandesAchatItems).set({
+          quantiteRecue: newReceived.toString()
+        }).where(and(
+          eq(commandesAchatItems.id, commandeItem.id),
+          eq(commandesAchatItems.entrepriseId, req.entrepriseId)
+        )).returning();
+        changedLines.push({ before: commandeItem, after: updatedLine });
+        if (newReceived < ordered) toutRecu = false;
+        totalHTReception += quantiteRecue * Number(commandeItem.prixUnitaire || 0);
 
-      if (!commandeItem) {
-        return res.status(404).json({
-          success: false,
-          message: `Ligne de commande ${item.commandeItemId} non trouvée`
-        });
-      }
-
-      const quantiteCommandee = parseFloat(commandeItem.quantite);
-      const quantiteDejaRecue = parseFloat(commandeItem.quantiteRecue || '0');
-      const nouvelleQuantiteRecue = quantiteDejaRecue + quantiteRecue;
-
-      // Vérifier qu'on ne dépasse pas la quantité commandée
-      if (nouvelleQuantiteRecue > quantiteCommandee) {
-        return res.status(400).json({
-          success: false,
-          message: `La quantité reçue (${nouvelleQuantiteRecue}) dépasse la quantité commandée (${quantiteCommandee}) pour l'article ${commandeItem.description}`
-        });
-      }
-
-      // Mettre à jour la ligne de commande
-      await db
-        .update(commandesAchatItems)
-        .set({
-          quantiteRecue: nouvelleQuantiteRecue.toString()
-        })
-        .where(eq(commandesAchatItems.id, commandeItem.id));
-
-      // Si pas tout reçu pour cette ligne, la commande n'est pas complète
-      if (nouvelleQuantiteRecue < quantiteCommandee) {
-        toutRecu = false;
-      }
-
-      // Créer le mouvement de stock (entrée)
-      if (commandeItem.produitId) {
-        mouvements.push({
-          entrepriseId: req.entrepriseId,
-          produitId: commandeItem.produitId,
-          type: 'entree',
-          quantite: quantiteRecue.toString(),
-          dateMouvement: dateReception || new Date().toISOString().split('T')[0],
-          reference: `Réception ${commande.numeroCommande}`,
-          notes: notes || `Réception commande ${commande.numeroCommande}${numeroLivraison ? ` - BL ${numeroLivraison}` : ''}`,
-          userId: req.user.id,
-        });
-
-        // Mettre à jour le stock du produit
-        const [produit] = await db
-          .select()
-          .from(produits)
-          .where(
-            and(
-              eq(produits.id, commandeItem.produitId),
-              eq(produits.entrepriseId, req.entrepriseId)
-            )
-          )
-          .limit(1);
-
-        if (produit) {
-          const nouvelleQuantite = parseFloat(produit.quantite) + quantiteRecue;
-          await db
-            .update(produits)
-            .set({
-              quantite: nouvelleQuantite.toString(),
-              updatedAt: new Date()
-            })
-            .where(eq(produits.id, commandeItem.produitId));
+        if (commandeItem.produitId) {
+          const [product] = await tx.select().from(produits).where(and(
+            eq(produits.id, commandeItem.produitId),
+            eq(produits.entrepriseId, req.entrepriseId)
+          )).for('update').limit(1);
+          if (!product) throw Object.assign(new Error(`Produit ${commandeItem.produitId} introuvable`), { status: 409 });
+          const [updatedProduct] = await tx.update(produits).set({
+            quantite: (Number(product.quantite) + quantiteRecue).toString(),
+            updatedAt: new Date()
+          }).where(and(
+            eq(produits.id, product.id),
+            eq(produits.entrepriseId, req.entrepriseId)
+          )).returning();
+          changedProducts.push({ before: product, after: updatedProduct });
+          const [movement] = await tx.insert(mouvementsStock).values({
+            entrepriseId: req.entrepriseId,
+            produitId: product.id,
+            type: 'entree',
+            quantite: quantiteRecue.toString(),
+            dateMouvement: date,
+            reference: `Réception ${commande.numeroCommande}`,
+            notes: notes || `Réception commande ${commande.numeroCommande}${numeroLivraison ? ` - BL ${numeroLivraison}` : ''}`,
+            userId: req.user.id,
+          }).returning();
+          movements.push(movement);
         }
       }
-    }
+      if (changedLines.length === 0) {
+        throw Object.assign(new Error('Indiquez au moins une quantité reçue supérieure à zéro.'), { status: 400 });
+      }
+      const allOrderLines = await tx.select().from(commandesAchatItems).where(and(
+        eq(commandesAchatItems.commandeId, commande.id),
+        eq(commandesAchatItems.entrepriseId, req.entrepriseId)
+      ));
+      toutRecu = allOrderLines.every(line => Number(line.quantiteRecue || 0) >= Number(line.quantite));
 
-    // Enregistrer les mouvements de stock
-    if (mouvements.length > 0) {
-      await db.insert(mouvementsStock).values(mouvements);
-    }
-
-    // Mettre à jour le statut de la commande
-    const nouveauStatut = toutRecu ? 'livree' : 'preparee';
-    await db
-      .update(commandesAchat)
-      .set({
+      const nouveauStatut = toutRecu ? 'livree' : 'preparee';
+      const [updatedCommande] = await tx.update(commandesAchat).set({
         statut: nouveauStatut,
         updatedAt: new Date()
-      })
-      .where(eq(commandesAchat.id, parseInt(commandeId)));
+      }).where(and(
+        eq(commandesAchat.id, commande.id),
+        eq(commandesAchat.entrepriseId, req.entrepriseId)
+      )).returning();
 
-    // Générer l'écriture comptable pour la réception (uniquement pour les quantités effectivement reçues)
-    let ecritureComptable = null;
-    if (mouvements.length > 0) {
-      try {
-        // Récupérer le fournisseur avec filtre entrepriseId
-        let fournisseurNom = 'Fournisseur';
-        if (commande.fournisseurId) {
-          const [fourn] = await db.select().from(fournisseurs)
-            .where(and(
-              eq(fournisseurs.id, commande.fournisseurId),
-              eq(fournisseurs.entrepriseId, req.entrepriseId)
-            ));
-          if (fourn) fournisseurNom = fourn.raisonSociale;
-        }
-
-        // Calculer le total HT basé uniquement sur les quantités reçues dans cette opération
-        let totalHTReception = 0;
-        for (const item of items) {
-          const quantiteRecue = parseFloat(item.quantiteRecue);
-          if (quantiteRecue > 0) {
-            // Récupérer le prix unitaire avec isolation tenant ET commande
-            const [commandeItem] = await db
-              .select()
-              .from(commandesAchatItems)
-              .where(and(
-                eq(commandesAchatItems.id, parseInt(item.commandeItemId)),
-                eq(commandesAchatItems.commandeId, parseInt(commandeId)),
-                eq(commandesAchatItems.entrepriseId, req.entrepriseId)
-              ))
-              .limit(1);
-            
-            if (commandeItem) {
-              const prixUnitaire = parseFloat(commandeItem.prixUnitaire || 0);
-              totalHTReception += quantiteRecue * prixUnitaire;
-            }
-          }
-        }
-
-        // Ne créer l'écriture que si le montant est positif
-        if (totalHTReception > 0) {
-          ecritureComptable = await createEcritureReception({
-            entrepriseId: req.entrepriseId,
-            receptionNumero: `REC-${commande.numeroCommande}-${Date.now()}`,
-            dateReception: dateReception || new Date().toISOString().split('T')[0],
-            fournisseurNom,
-            totalHT: totalHTReception
-          });
-        }
-      } catch (err) {
-        console.warn('Écriture comptable non générée:', err.message);
+      let ecritureComptable = null;
+      if (totalHTReception > 0) {
+        const [fourn] = await tx.select().from(fournisseurs).where(and(
+          eq(fournisseurs.id, commande.fournisseurId),
+          eq(fournisseurs.entrepriseId, req.entrepriseId)
+        )).limit(1);
+        ecritureComptable = await createEcritureReception({
+          entrepriseId: req.entrepriseId,
+          receptionNumero: `REC-${commande.numeroCommande}-${Date.now()}`,
+          dateReception: date,
+          fournisseurNom: fourn?.raisonSociale || 'Fournisseur',
+          totalHT: totalHTReception,
+          executor: tx
+        });
       }
-    }
+
+      for (const change of changedLines) {
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'UPDATE',
+          table: 'commandes_achat_items',
+          recordId: change.after.id,
+          ancienneValeur: change.before,
+          nouvelleValeur: change.after,
+          description: `Quantité reçue modifiée pour la commande ${commande.numeroCommande}`,
+          executor: tx,
+          required: true
+        });
+      }
+      for (const change of changedProducts) {
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'UPDATE',
+          table: 'produits',
+          recordId: change.after.id,
+          ancienneValeur: change.before,
+          nouvelleValeur: change.after,
+          description: `Stock mis à jour après réception ${commande.numeroCommande}`,
+          executor: tx,
+          required: true
+        });
+      }
+      for (const movement of movements) {
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'CREATE',
+          table: 'mouvements_stock',
+          recordId: movement.id,
+          nouvelleValeur: movement,
+          description: `Entrée de stock enregistrée pour ${commande.numeroCommande}`,
+          executor: tx,
+          required: true
+        });
+      }
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'commandes_achat',
+        recordId: updatedCommande.id,
+        ancienneValeur: commande,
+        nouvelleValeur: { ...updatedCommande, mouvementsStock: movements, ecritureComptable },
+        description: `Réception de marchandises enregistrée: ${commande.numeroCommande}`,
+        executor: tx,
+        required: true
+      });
+      if (ecritureComptable) {
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'CREATE',
+          table: 'ecritures',
+          recordId: ecritureComptable.id,
+          nouvelleValeur: ecritureComptable,
+          description: `Écriture comptable créée pour réception ${commande.numeroCommande}`,
+          executor: tx,
+          required: true
+        });
+      }
+      return {
+        commandeId: commande.id,
+        statut: nouveauStatut,
+        mouvementsStock: movements.length,
+        toutRecu,
+        ecritureComptableId: ecritureComptable?.id || null
+      };
+    });
 
     return res.json({
       success: true,
-      message: toutRecu ? 'Réception complète enregistrée' : 'Réception partielle enregistrée',
-      data: {
-        commandeId: parseInt(commandeId),
-        statut: nouveauStatut,
-        mouvementsStock: mouvements.length,
-        toutRecu,
-        ecritureComptableId: ecritureComptable?.id || null
-      }
+      message: receipt.toutRecu ? 'Réception complète enregistrée' : 'Réception partielle enregistrée',
+      data: receipt
     });
   } catch (error) {
     console.error('Erreur lors de l\'enregistrement de la réception:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       success: false,
       message: 'Erreur lors de l\'enregistrement de la réception',
       error: error.message

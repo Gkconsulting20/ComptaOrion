@@ -158,11 +158,21 @@ router.post('/create', async (req, res) => {
     }).returning();
 
     // Créer demande d'approbation initiale
-    await tx.insert(approvalsDepenses).values({
+    const [approval] = await tx.insert(approvalsDepenses).values({
       entrepriseId: req.entrepriseId,
       depenseId: depense[0].id,
       etape: 'manager',
       statut: 'en_attente'
+    }).returning();
+    await logAudit({
+      ...extractAuditInfo(req),
+      action: 'CREATE',
+      table: 'approvals_depenses',
+      recordId: approval.id,
+      nouvelleValeur: approval,
+      description: `Demande d’approbation créée pour la dépense ${depense[0].id}`,
+      executor: tx,
+      required: true
     });
 
     // Audit

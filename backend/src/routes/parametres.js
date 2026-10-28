@@ -386,13 +386,14 @@ router.get('/pays', (req, res) => {
 
 router.get('/audit-logs', async (req, res) => {
   try {
-    const { entrepriseId, limit = 100, offset = 0 } = req.query;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     const { auditLogs } = await import('../schema.js');
     
     const logs = await db.query.auditLogs.findMany({
-      where: eq(auditLogs.entrepriseId, parseInt(entrepriseId)),
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+      where: eq(auditLogs.entrepriseId, req.entrepriseId),
+      limit,
+      offset,
       orderBy: (logs) => [desc(logs.createdAt)]
     });
     
@@ -408,9 +409,12 @@ router.get('/audit-logs/:id', async (req, res) => {
     const { auditLogs } = await import('../schema.js');
     
     const log = await db.query.auditLogs.findFirst({
-      where: eq(auditLogs.id, parseInt(id))
+      where: and(
+        eq(auditLogs.id, parseInt(id)),
+        eq(auditLogs.entrepriseId, req.entrepriseId)
+      )
     });
-    
+    if (!log) return res.status(404).json({ error: 'Trace d’audit introuvable' });
     res.json(log);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -419,13 +423,13 @@ router.get('/audit-logs/:id', async (req, res) => {
 
 router.get('/audit-stats', async (req, res) => {
   try {
-    const { entrepriseId, startDate, endDate } = req.query;
+    const { startDate, endDate } = req.query;
     const { auditLogs } = await import('../schema.js');
     
     // Statistiques par action
     const stats = await db.query.auditLogs.findMany({
       where: and(
-        eq(auditLogs.entrepriseId, parseInt(entrepriseId)),
+        eq(auditLogs.entrepriseId, req.entrepriseId),
         startDate ? gte(auditLogs.createdAt, new Date(startDate)) : undefined,
         endDate ? lte(auditLogs.createdAt, new Date(endDate)) : undefined
       )

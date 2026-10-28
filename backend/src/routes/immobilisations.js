@@ -1,7 +1,8 @@
 import express from 'express';
 import { db } from '../db.js';
-import { immobilisations, categoriesImmobilisations, amortissements, cessionsImmobilisations, auditLogs } from '../schema.js';
+import { immobilisations, categoriesImmobilisations, amortissements, cessionsImmobilisations } from '../schema.js';
 import { eq, and, gte, lte } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -23,16 +24,29 @@ router.get('/categories', async (req, res) => {
 
 router.post('/categories', async (req, res) => {
   try {
-    const { entrepriseId, nom, dureeVie, methodeAmortissement, compteAmortissement, compte } = req.body;
-    const result = await db.insert(categoriesImmobilisations).values({
-      entrepriseId: parseInt(entrepriseId),
-      nom,
-      dureeVie: parseInt(dureeVie),
-      methodeAmortissement, // linéaire ou dégressif
-      compteAmortissement,
-      compte
-    }).returning();
-    res.json(result[0]);
+    const { nom, dureeVie, methodeAmortissement, compteAmortissement, compte } = req.body;
+    const result = await db.transaction(async (tx) => {
+      const [category] = await tx.insert(categoriesImmobilisations).values({
+        entrepriseId: req.entrepriseId,
+        nom,
+        dureeVie: parseInt(dureeVie),
+        methodeAmortissement,
+        compteAmortissement,
+        compte
+      }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'categories_immobilisations',
+        recordId: category.id,
+        nouvelleValeur: category,
+        description: `Catégorie d’immobilisation créée: ${category.nom}`,
+        executor: tx,
+        required: true
+      });
+      return category;
+    });
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -56,33 +70,33 @@ router.get('/list', async (req, res) => {
 
 router.post('/create', async (req, res) => {
   try {
-    const { entrepriseId, reference, description, categorieId, dateAcquisition, valeurAcquisition, userId, ipAddress } = req.body;
-    
-    const immo = await db.insert(immobilisations).values({
-      entrepriseId: parseInt(entrepriseId),
-      reference,
-      description,
-      categorieId: parseInt(categorieId),
-      dateAcquisition: new Date(dateAcquisition),
-      valeurAcquisition: parseFloat(valeurAcquisition),
-      valeurNetteComptable: parseFloat(valeurAcquisition),
-      amortissementCumule: 0,
-      statut: 'actif'
-    }).returning();
-
-    // Audit
-    await db.insert(auditLogs).values({
-      entrepriseId: parseInt(entrepriseId),
-      userId,
-      action: 'CREATE',
-      tableName: 'immobilisations',
-      recordId: immo[0].id,
-      nouvelleValeur: JSON.stringify(immo[0]),
-      description: `Création immobilisation ${reference}`,
-      ipAddress
+    const { reference, description, categorieId, dateAcquisition, valeurAcquisition } = req.body;
+    const immo = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(immobilisations).values({
+        entrepriseId: req.entrepriseId,
+        reference,
+        description,
+        categorieId: parseInt(categorieId),
+        dateAcquisition: new Date(dateAcquisition),
+        valeurAcquisition: parseFloat(valeurAcquisition),
+        valeurNetteComptable: parseFloat(valeurAcquisition),
+        amortissementCumule: 0,
+        statut: 'actif'
+      }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'immobilisations',
+        recordId: created.id,
+        nouvelleValeur: created,
+        description: `Immobilisation créée: ${created.reference}`,
+        executor: tx,
+        required: true
+      });
+      return created;
     });
 
-    res.json(immo[0]);
+    res.json(immo);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -133,38 +147,68 @@ async function calculerAmortissementMensuel(entrepriseId, immobilisationId, mois
 
 router.post('/calculer-amortissements', async (req, res) => {
   try {
-    const { entrepriseId } = req.body;
-    const eId = parseInt(entrepriseId);
-
-    const immobsList = await db.query.immobilisations.findMany({
-      where: and(
+    const eId = req.entrepriseId;
+    const resultats = await db.transaction(async (tx) => {
+      const immobsList = await tx.select().from(immobilisations).where(and(
         eq(immobilisations.entrepriseId, eId),
         eq(immobilisations.statut, 'actif')
-      )
-    });
+      )).for('update');
+      const records = [];
+      for (const immo of immobsList) {
+        const [categorie] = await tx.select().from(categoriesImmobilisations).where(and(
+          eq(categoriesImmobilisations.id, immo.categorieId),
+          eq(categoriesImmobilisations.entrepriseId, eId)
+        )).limit(1);
+        if (!categorie) continue;
 
-    const resultats = [];
-    for (const immo of immobsList) {
-      const amort = await calculerAmortissementMensuel(eId, immo.id, new Date());
-      if (amort) {
-        // Enregistrer l'amortissement
-        const result = await db.insert(amortissements).values({
+        let montant = 0;
+        if (categorie.methodeAmortissement === 'linéaire') {
+          montant = Number(immo.valeurAcquisition) / (Number(categorie.dureeVie) * 12);
+        } else if (categorie.methodeAmortissement === 'dégressif') {
+          const factor = Number(categorie.dureeVie) <= 5 ? 2 : 1.5;
+          montant = Number(immo.valeurNetteComptable) / (Number(categorie.dureeVie) * 12) * factor;
+        }
+        if (!Number.isFinite(montant) || montant <= 0) continue;
+
+        const [amort] = await tx.insert(amortissements).values({
           entrepriseId: eId,
           immobilisationId: immo.id,
           dateAmortissement: new Date(),
-          montant: parseFloat(amort.montant)
+          montant: Number(montant.toFixed(2))
         }).returning();
+        const [updated] = await tx.update(immobilisations).set({
+          amortissementCumule: Number((Number(immo.amortissementCumule) + montant).toFixed(2)),
+          valeurNetteComptable: Number((Number(immo.valeurNetteComptable) - montant).toFixed(2))
+        }).where(and(
+          eq(immobilisations.id, immo.id),
+          eq(immobilisations.entrepriseId, eId)
+        )).returning();
 
-        // Mettre à jour l'immobilisation
-        const nouvelleVNC = parseFloat(immo.valeurNetteComptable) - parseFloat(amort.montant);
-        await db.update(immobilisations).set({
-          amortissementCumule: parseFloat(immo.amortissementCumule) + parseFloat(amort.montant),
-          valeurNetteComptable: nouvelleVNC
-        }).where(eq(immobilisations.id, immo.id));
-
-        resultats.push(result[0]);
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'CREATE',
+          table: 'amortissements',
+          recordId: amort.id,
+          nouvelleValeur: amort,
+          description: `Amortissement enregistré pour ${immo.reference}`,
+          executor: tx,
+          required: true
+        });
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'UPDATE',
+          table: 'immobilisations',
+          recordId: updated.id,
+          ancienneValeur: immo,
+          nouvelleValeur: updated,
+          description: `Valeur nette mise à jour après amortissement: ${immo.reference}`,
+          executor: tx,
+          required: true
+        });
+        records.push(amort);
       }
-    }
+      return records;
+    });
 
     res.json({
       message: `${resultats.length} amortissements calculés et comptabilisés`,
@@ -181,47 +225,55 @@ router.post('/calculer-amortissements', async (req, res) => {
 
 router.post('/cession', async (req, res) => {
   try {
-    const { entrepriseId, immobilisationId, dateCession, prixVente, userId, ipAddress } = req.body;
-
-    const immo = await db.query.immobilisations.findFirst({
-      where: eq(immobilisations.id, parseInt(immobilisationId))
+    const { immobilisationId, dateCession, prixVente } = req.body;
+    const cession = await db.transaction(async (tx) => {
+      const [immo] = await tx.select().from(immobilisations).where(and(
+        eq(immobilisations.id, parseInt(immobilisationId)),
+        eq(immobilisations.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!immo) return null;
+      const gainPerte = parseFloat(prixVente) - parseFloat(immo.valeurNetteComptable);
+      const [created] = await tx.insert(cessionsImmobilisations).values({
+        entrepriseId: req.entrepriseId,
+        immobilisationId: immo.id,
+        dateCession: new Date(dateCession),
+        valeurNetteComptable: immo.valeurNetteComptable,
+        prixVente: parseFloat(prixVente),
+        gainPerte,
+        comptabilisee: false
+      }).returning();
+      const [updated] = await tx.update(immobilisations).set({
+        statut: 'cédée',
+        dateCession: new Date(dateCession)
+      }).where(and(
+        eq(immobilisations.id, immo.id),
+        eq(immobilisations.entrepriseId, req.entrepriseId)
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'cessions_immobilisations',
+        recordId: created.id,
+        nouvelleValeur: created,
+        description: `Cession enregistrée pour ${immo.reference}; gain/perte ${gainPerte}`,
+        executor: tx,
+        required: true
+      });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'immobilisations',
+        recordId: updated.id,
+        ancienneValeur: immo,
+        nouvelleValeur: updated,
+        description: `Immobilisation cédée: ${immo.reference}`,
+        executor: tx,
+        required: true
+      });
+      return created;
     });
-
-    if (!immo) {
-      return res.status(404).json({ error: 'Immobilisation non trouvée' });
-    }
-
-    const gainPerte = parseFloat(prixVente) - parseFloat(immo.valeurNetteComptable);
-
-    // Enregistrer la cession
-    const cession = await db.insert(cessionsImmobilisations).values({
-      entrepriseId: parseInt(entrepriseId),
-      immobilisationId: parseInt(immobilisationId),
-      dateCession: new Date(dateCession),
-      valeurNetteComptable: immo.valeurNetteComptable,
-      prixVente: parseFloat(prixVente),
-      gainPerte: gainPerte,
-      comptabilisee: false
-    }).returning();
-
-    // Mettre à jour le statut
-    await db.update(immobilisations).set({
-      statut: 'cédée',
-      dateCession: new Date(dateCession)
-    }).where(eq(immobilisations.id, parseInt(immobilisationId)));
-
-    // Audit
-    await db.insert(auditLogs).values({
-      entrepriseId: parseInt(entrepriseId),
-      userId,
-      action: 'UPDATE',
-      tableName: 'immobilisations',
-      recordId: parseInt(immobilisationId),
-      description: `Cession immobilisation - Gain/Perte: ${gainPerte}`,
-      ipAddress
-    });
-
-    res.json(cession[0]);
+    if (!cession) return res.status(404).json({ error: 'Immobilisation non trouvée' });
+    res.json(cession);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

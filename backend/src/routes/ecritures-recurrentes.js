@@ -10,6 +10,7 @@ import {
   lignesEcritures
 } from '../schema.js';
 import { eq, and, sql, gte, lte } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -118,8 +119,8 @@ router.post('/', async (req, res) => {
       dateDebut, frequence, jourDuMois, moisDebut
     );
 
-    const [nouvelleRecurrente] = await db.insert(ecrituresRecurrentes)
-      .values({
+    const nouvelleRecurrente = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(ecrituresRecurrentes).values({
         entrepriseId: req.entrepriseId,
         journalId,
         nom,
@@ -133,8 +134,19 @@ router.post('/', async (req, res) => {
         lignesModele: JSON.stringify(lignesModele),
         prochaineDateGeneration,
         actif: true
-      })
-      .returning();
+      }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'ecritures_recurrentes',
+        recordId: created.id,
+        nouvelleValeur: created,
+        description: `Modèle d’écriture récurrente créé: ${created.nom}`,
+        executor: tx,
+        required: true
+      });
+      return created;
+    });
 
     res.json(nouvelleRecurrente);
   } catch (err) {
@@ -159,18 +171,6 @@ router.put('/:id', async (req, res) => {
       actif
     } = req.body;
 
-    const [existe] = await db.select()
-      .from(ecrituresRecurrentes)
-      .where(and(
-        eq(ecrituresRecurrentes.id, parseInt(id)),
-        eq(ecrituresRecurrentes.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
-
-    if (!existe) {
-      return res.status(404).json({ error: 'Écriture récurrente introuvable' });
-    }
-
     if (lignesModele && lignesModele.length > 0) {
       let totalDebit = 0;
       let totalCredit = 0;
@@ -190,8 +190,13 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    const [updated] = await db.update(ecrituresRecurrentes)
-      .set({
+    const updated = await db.transaction(async (tx) => {
+      const [existe] = await tx.select().from(ecrituresRecurrentes).where(and(
+        eq(ecrituresRecurrentes.id, parseInt(id)),
+        eq(ecrituresRecurrentes.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!existe) return null;
+      const [current] = await tx.update(ecrituresRecurrentes).set({
         journalId,
         nom,
         description,
@@ -204,13 +209,24 @@ router.put('/:id', async (req, res) => {
         lignesModele: lignesModele ? JSON.stringify(lignesModele) : undefined,
         actif,
         updatedAt: new Date()
-      })
-      .where(and(
-        eq(ecrituresRecurrentes.id, parseInt(id)),
+      }).where(and(
+        eq(ecrituresRecurrentes.id, existe.id),
         eq(ecrituresRecurrentes.entrepriseId, req.entrepriseId)
-      ))
-      .returning();
-
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'ecritures_recurrentes',
+        recordId: current.id,
+        ancienneValeur: existe,
+        nouvelleValeur: current,
+        description: `Modèle d’écriture récurrente modifié: ${current.nom}`,
+        executor: tx,
+        required: true
+      });
+      return current;
+    });
+    if (!updated) return res.status(404).json({ error: 'Écriture récurrente introuvable' });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -221,23 +237,29 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [existe] = await db.select()
-      .from(ecrituresRecurrentes)
-      .where(and(
+    const deleted = await db.transaction(async (tx) => {
+      const [existe] = await tx.select().from(ecrituresRecurrentes).where(and(
         eq(ecrituresRecurrentes.id, parseInt(id)),
         eq(ecrituresRecurrentes.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
-
-    if (!existe) {
-      return res.status(404).json({ error: 'Écriture récurrente introuvable' });
-    }
-
-    await db.delete(ecrituresRecurrentes)
-      .where(and(
-        eq(ecrituresRecurrentes.id, parseInt(id)),
+      )).for('update').limit(1);
+      if (!existe) return false;
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'DELETE',
+        table: 'ecritures_recurrentes',
+        recordId: existe.id,
+        ancienneValeur: existe,
+        description: `Modèle d’écriture récurrente supprimé: ${existe.nom}`,
+        executor: tx,
+        required: true
+      });
+      await tx.delete(ecrituresRecurrentes).where(and(
+        eq(ecrituresRecurrentes.id, existe.id),
         eq(ecrituresRecurrentes.entrepriseId, req.entrepriseId)
       ));
+      return true;
+    });
+    if (!deleted) return res.status(404).json({ error: 'Écriture récurrente introuvable' });
 
     res.json({ message: 'Écriture récurrente supprimée avec succès' });
   } catch (err) {
@@ -297,21 +319,29 @@ router.post('/:id/generer', async (req, res) => {
       }
     });
 
-    const [nouvelleEcriture] = await db.insert(ecritures)
-      .values({
+    const dateGeneration = dateEcriture || new Date().toISOString().split('T')[0];
+    const generation = await db.transaction(async (tx) => {
+      const [lockedRecurrence] = await tx.select().from(ecrituresRecurrentes).where(and(
+        eq(ecrituresRecurrentes.id, recurrente.id),
+        eq(ecrituresRecurrentes.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!lockedRecurrence || !lockedRecurrence.actif) {
+        throw Object.assign(new Error('Écriture récurrente introuvable ou inactive'), { status: 409 });
+      }
+      const [nouvelleEcriture] = await tx.insert(ecritures).values({
         entrepriseId: req.entrepriseId,
-        journalId: recurrente.journalId,
-        dateEcriture: dateEcriture || new Date().toISOString().split('T')[0],
-        reference: `REC-${recurrente.id}-${Date.now()}`,
-        description: `${recurrente.nom} - ${recurrente.description || ''}`,
+        journalId: lockedRecurrence.journalId,
+        dateEcriture: dateGeneration,
+        reference: `REC-${lockedRecurrence.id}-${Date.now()}`,
+        description: `${lockedRecurrence.nom} - ${lockedRecurrence.description || ''}`,
         statut: 'brouillon',
         totalDebit: totalDebit.toString(),
         totalCredit: totalCredit.toString()
-      })
-      .returning();
+      }).returning();
 
+      const insertedLines = [];
     for (const ligne of lignes) {
-      await db.insert(lignesEcritures)
+        const [inserted] = await tx.insert(lignesEcritures)
         .values({
           entrepriseId: req.entrepriseId,
           ecritureId: nouvelleEcriture.id,
@@ -319,36 +349,63 @@ router.post('/:id/generer', async (req, res) => {
           montant: ligne.montant.toString(),
           type: ligne.type,
           description: ligne.description
-        });
-    }
+        }).returning();
+        insertedLines.push(inserted);
+      }
 
-    await db.insert(histoGeneration)
+      const [history] = await tx.insert(histoGeneration)
       .values({
         entrepriseId: req.entrepriseId,
-        ecritureRecurrenteId: recurrente.id,
+        ecritureRecurrenteId: lockedRecurrence.id,
         ecritureId: nouvelleEcriture.id,
-        dateEcriture: dateEcriture || new Date().toISOString().split('T')[0],
+        dateEcriture: dateGeneration,
         statut: 'generee'
-      });
+      }).returning();
 
-    const prochaineDateGeneration = calculerProchaineDateGeneration(
-      dateEcriture || new Date().toISOString().split('T')[0],
-      recurrente.frequence,
-      recurrente.jourDuMois,
-      recurrente.moisDebut
-    );
+      const prochaineDateGeneration = calculerProchaineDateGeneration(
+        dateGeneration,
+        lockedRecurrence.frequence,
+        lockedRecurrence.jourDuMois,
+        lockedRecurrence.moisDebut
+      );
 
-    await db.update(ecrituresRecurrentes)
+      const [updatedRecurrence] = await tx.update(ecrituresRecurrentes)
       .set({
-        derniereDateGeneration: dateEcriture || new Date().toISOString().split('T')[0],
+        derniereDateGeneration: dateGeneration,
         prochaineDateGeneration,
         updatedAt: new Date()
       })
-      .where(eq(ecrituresRecurrentes.id, recurrente.id));
+      .where(and(
+        eq(ecrituresRecurrentes.id, lockedRecurrence.id),
+        eq(ecrituresRecurrentes.entrepriseId, req.entrepriseId)
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'ecritures',
+        recordId: nouvelleEcriture.id,
+        nouvelleValeur: { ecriture: nouvelleEcriture, lignes: insertedLines, modeleId: lockedRecurrence.id, generation: history },
+        description: `Écriture générée depuis le modèle récurrent ${lockedRecurrence.nom}`,
+        executor: tx,
+        required: true
+      });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'ecritures_recurrentes',
+        recordId: updatedRecurrence.id,
+        ancienneValeur: lockedRecurrence,
+        nouvelleValeur: updatedRecurrence,
+        description: `Prochaine date de génération mise à jour pour ${lockedRecurrence.nom}`,
+        executor: tx,
+        required: true
+      });
+      return nouvelleEcriture;
+    });
 
     res.json({ 
       message: 'Écriture générée avec succès',
-      ecriture: nouvelleEcriture
+      ecriture: generation
     });
   } catch (err) {
     await db.insert(histoGeneration)
@@ -373,11 +430,22 @@ router.get('/parametres/comptables', async (req, res) => {
       .limit(1);
 
     if (!params) {
-      const [nouveauParams] = await db.insert(parametresComptables)
-        .values({
-          entrepriseId: req.entrepriseId
-        })
-        .returning();
+      const nouveauParams = await db.transaction(async (tx) => {
+        const [created] = await tx.insert(parametresComptables)
+          .values({ entrepriseId: req.entrepriseId })
+          .returning();
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'CREATE',
+          table: 'parametres_comptables',
+          recordId: created.id,
+          nouvelleValeur: created,
+          description: 'Paramètres comptables par défaut initialisés',
+          executor: tx,
+          required: true
+        });
+        return created;
+      });
       
       return res.json(nouveauParams);
     }
@@ -404,15 +472,11 @@ router.put('/parametres/comptables', async (req, res) => {
       archiverApresNJours
     } = req.body;
 
-    const [existe] = await db.select()
-      .from(parametresComptables)
-      .where(eq(parametresComptables.entrepriseId, req.entrepriseId))
-      .limit(1);
-
-    let result;
-    if (!existe) {
-      [result] = await db.insert(parametresComptables)
-        .values({
+    const result = await db.transaction(async (tx) => {
+      const [existe] = await tx.select().from(parametresComptables)
+        .where(eq(parametresComptables.entrepriseId, req.entrepriseId))
+        .for('update').limit(1);
+      const data = {
           entrepriseId: req.entrepriseId,
           prefixeEcritures,
           numeroSuivantEcriture,
@@ -425,27 +489,24 @@ router.put('/parametres/comptables', async (req, res) => {
           afficherSoldesComptes,
           afficherCodeComplet,
           archiverApresNJours
-        })
-        .returning();
-    } else {
-      [result] = await db.update(parametresComptables)
-        .set({
-          prefixeEcritures,
-          numeroSuivantEcriture,
-          formatNumeroEcriture,
-          validationAutomatique,
-          toleranceDesequilibre,
-          bloquerSiDesequilibre,
-          clotureDateLimite,
-          exerciceCourant,
-          afficherSoldesComptes,
-          afficherCodeComplet,
-          archiverApresNJours,
-          updatedAt: new Date()
-        })
-        .where(eq(parametresComptables.entrepriseId, req.entrepriseId))
-        .returning();
-    }
+      };
+      const [current] = existe
+        ? await tx.update(parametresComptables).set({ ...data, updatedAt: new Date() })
+            .where(eq(parametresComptables.entrepriseId, req.entrepriseId)).returning()
+        : await tx.insert(parametresComptables).values(data).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: existe ? 'UPDATE' : 'CREATE',
+        table: 'parametres_comptables',
+        recordId: current.id,
+        ancienneValeur: existe || undefined,
+        nouvelleValeur: current,
+        description: 'Paramètres comptables modifiés',
+        executor: tx,
+        required: true
+      });
+      return current;
+    });
 
     res.json(result);
   } catch (err) {

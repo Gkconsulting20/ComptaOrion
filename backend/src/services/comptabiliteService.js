@@ -155,11 +155,12 @@ export async function createEcritureReception(params) {
     receptionNumero,
     dateReception,
     fournisseurNom,
-    totalHT
+    totalHT,
+    executor = db
   } = params;
 
-  const compteStock = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES);
-  const compte408 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS_FACTURES_NON_PARVENUES);
+  const compteStock = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES, executor);
+  const compte408 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS_FACTURES_NON_PARVENUES, executor);
 
   if (!compteStock || !compte408) {
     console.warn('Comptes comptables (31x ou 408) non configurés pour entreprise', entrepriseId);
@@ -190,7 +191,8 @@ export async function createEcritureReception(params) {
     libelle: `Réception ${receptionNumero} - ${fournisseurNom}`,
     numeroPiece: receptionNumero,
     lignes: ecrituresLignes,
-    valide: false
+    valide: false,
+    executor
   });
 }
 

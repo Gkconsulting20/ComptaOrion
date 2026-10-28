@@ -349,92 +349,105 @@ router.post('/factures', async (req, res) => {
 router.put('/factures/:id/valider', async (req, res) => {
   try {
     const { id } = req.params;
+    const result = await db.transaction(async (tx) => {
+      const [facture] = await tx.select().from(facturesAchat).where(and(
+        eq(facturesAchat.id, parseInt(id)),
+        eq(facturesAchat.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!facture) return { status: 404, error: 'Facture non trouvée' };
+      if (facture.statut !== 'brouillon') {
+        return { status: 400, error: 'Seules les factures en brouillon peuvent être validées' };
+      }
 
-    const [facture] = await db
-      .select()
-      .from(facturesAchat)
-      .where(
-        and(
-          eq(facturesAchat.id, parseInt(id)),
-          eq(facturesAchat.entrepriseId, req.entrepriseId)
-        )
-      )
-      .limit(1);
+      const [fournisseur] = await tx.select().from(fournisseurs).where(and(
+        eq(fournisseurs.id, facture.fournisseurId),
+        eq(fournisseurs.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!fournisseur) return { status: 409, error: 'Fournisseur de la facture introuvable.' };
 
-    if (!facture) {
-      return res.status(404).json({
-        success: false,
-        message: 'Facture non trouvée'
-      });
-    }
-
-    if (facture.statut !== 'brouillon') {
-      return res.status(400).json({
-        success: false,
-        message: 'Seules les factures en brouillon peuvent être validées'
-      });
-    }
-
-    const [updated] = await db
-      .update(facturesAchat)
-      .set({
+      const factureItems = await tx.select().from(factureAchatItems).where(and(
+        eq(factureAchatItems.factureId, facture.id),
+        eq(factureAchatItems.entrepriseId, req.entrepriseId)
+      ));
+      const [updated] = await tx.update(facturesAchat).set({
         statut: 'validee',
         updatedAt: new Date()
-      })
-      .where(eq(facturesAchat.id, parseInt(id)))
-      .returning();
-
-    // Mettre à jour le solde dû du fournisseur
-    await db
-      .update(fournisseurs)
-      .set({
+      }).where(and(
+        eq(facturesAchat.id, facture.id),
+        eq(facturesAchat.entrepriseId, req.entrepriseId)
+      )).returning();
+      await tx.update(fournisseurs).set({
         soldeDu: sql`${fournisseurs.soldeDu} + ${updated.totalTTC}`,
         updatedAt: new Date()
-      })
-      .where(eq(fournisseurs.id, facture.fournisseurId));
+      }).where(and(
+        eq(fournisseurs.id, fournisseur.id),
+        eq(fournisseurs.entrepriseId, req.entrepriseId)
+      ));
 
-    // ✅ NOUVEAU: Génération automatique des mouvements de stock ENTRÉE
-    const factureItems = await db
-      .select()
-      .from(factureAchatItems)
-      .where(eq(factureAchatItems.factureId, parseInt(id)));
-
-    for (const item of factureItems) {
-      if (item.produitId) {
-        // Créer mouvement de stock ENTRÉE
-        await db.insert(mouvementsStock).values({
+      const movements = [];
+      for (const item of factureItems) {
+        if (!item.produitId) continue;
+        const [product] = await tx.select().from(produits).where(and(
+          eq(produits.id, item.produitId),
+          eq(produits.entrepriseId, req.entrepriseId)
+        )).for('update').limit(1);
+        if (!product) throw Object.assign(new Error(`Produit ${item.produitId} introuvable ou non autorisé.`), { status: 409 });
+        const [movement] = await tx.insert(mouvementsStock).values({
           entrepriseId: req.entrepriseId,
-          produitId: item.produitId,
+          produitId: product.id,
           type: 'entree',
           quantite: item.quantite,
           prixUnitaire: item.prixUnitaire,
           reference: `Facture ${updated.numeroFacture}`,
           notes: `Réception depuis facture fournisseur ${updated.numeroFactureFournisseur || updated.numeroFacture}`,
           userId: req.user.id
-        });
-
-        // Mettre à jour le stock du produit
-        await db
-          .update(produits)
-          .set({
-            quantite: sql`${produits.quantite} + ${item.quantite}`,
-            updatedAt: new Date()
-          })
-          .where(eq(produits.id, item.produitId));
+        }).returning();
+        movements.push(movement);
+        await tx.update(produits).set({
+          quantite: sql`${produits.quantite} + ${item.quantite}`,
+          updatedAt: new Date()
+        }).where(and(
+          eq(produits.id, product.id),
+          eq(produits.entrepriseId, req.entrepriseId)
+        ));
       }
-    }
 
-    console.log(`✅ Facture ${updated.numeroFacture} validée - ${factureItems.length} mouvements de stock créés`);
-    await logAudit({
-      ...extractAuditInfo(req),
-      action: 'UPDATE',
-      table: 'factures_achat',
-      recordId: updated.id,
-      ancienneValeur: facture,
-      nouvelleValeur: { facture: updated, items: factureItems },
-      description: `Facture fournisseur validée: ${updated.numeroFacture}`,
-      required: false
+      let accountingEntry = null;
+      try {
+        accountingEntry = await createEcritureFactureAchat({
+          entrepriseId: req.entrepriseId,
+          numeroFacture: updated.numeroFacture,
+          dateFacture: updated.dateFacture,
+          fournisseurNom: fournisseur.raisonSociale || fournisseur.nom || 'Fournisseur',
+          fournisseurCompteId: fournisseur.compteComptableId,
+          totalHT: updated.totalHT,
+          totalTVA: updated.totalTVA,
+          totalTTC: updated.totalTTC,
+          executor: tx
+        });
+      } catch (accountingError) {
+        console.error('Erreur création de l’écriture de facture fournisseur:', accountingError.message);
+        throw accountingError;
+      }
+
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'factures_achat',
+        recordId: updated.id,
+        ancienneValeur: facture,
+        nouvelleValeur: { facture: updated, items: factureItems, mouvementsStock: movements, accountingEntry },
+        description: `Facture fournisseur validée: ${updated.numeroFacture}`,
+        executor: tx,
+        required: true
+      });
+      return { status: 200, updated, movementsCount: movements.length };
     });
+    if (result.status !== 200) {
+      return res.status(result.status).json({ success: false, message: result.error });
+    }
+    const updated = result.updated;
+    console.log(`✅ Facture ${updated.numeroFacture} validée - ${result.movementsCount} mouvements de stock créés`);
 
     return res.json({
       success: true,
@@ -476,175 +489,150 @@ router.post('/factures/:id/paiement', async (req, res) => {
       });
     }
 
-    const montantPaiement = parseFloat(montant);
-
-    // Récupérer la facture
-    const [factureData] = await db
-      .select()
-      .from(facturesAchat)
-      .where(
-        and(
-          eq(facturesAchat.id, parseInt(id)),
-          eq(facturesAchat.entrepriseId, req.entrepriseId)
-        )
-      )
-      .limit(1);
-
-    if (!factureData) {
-      return res.status(404).json({
-        success: false,
-        message: 'Facture non trouvée'
-      });
+    const montantPaiement = Number(montant);
+    const date = datePaiement || new Date().toISOString().split('T')[0];
+    if (!Number.isFinite(montantPaiement) || montantPaiement <= 0 || Number.isNaN(new Date(date).getTime())) {
+      return res.status(400).json({ success: false, message: 'Le montant et la date du paiement sont invalides.' });
     }
 
-    const soldeRestant = parseFloat(factureData.soldeRestant);
+    const result = await db.transaction(async (tx) => {
+      const [factureData] = await tx.select().from(facturesAchat).where(and(
+        eq(facturesAchat.id, parseInt(id)),
+        eq(facturesAchat.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!factureData) throw Object.assign(new Error('Facture non trouvée'), { status: 404 });
+      const soldeRestant = Number(factureData.soldeRestant);
+      if (montantPaiement > soldeRestant + 0.005) {
+        throw Object.assign(new Error(`Le montant du paiement (${montantPaiement}) dépasse le solde restant (${soldeRestant})`), { status: 400 });
+      }
 
-    if (montantPaiement > soldeRestant) {
-      return res.status(400).json({
-        success: false,
-        message: `Le montant du paiement (${montantPaiement}) dépasse le solde restant (${soldeRestant})`
-      });
-    }
+      const [fournisseurInfo] = await tx.select().from(fournisseurs).where(and(
+        eq(fournisseurs.id, factureData.fournisseurId),
+        eq(fournisseurs.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!fournisseurInfo) throw Object.assign(new Error('Fournisseur de la facture introuvable.'), { status: 409 });
 
-    // Enregistrer le paiement
-    const [paiement] = await db
-      .insert(paiementsFournisseurs)
-      .values({
+      let bankAccount = null;
+      if (compteBancaireId) {
+        [bankAccount] = await tx.select().from(comptesBancaires).where(and(
+          eq(comptesBancaires.id, parseInt(compteBancaireId)),
+          eq(comptesBancaires.entrepriseId, req.entrepriseId)
+        )).for('update').limit(1);
+        if (!bankAccount) throw Object.assign(new Error('Compte bancaire introuvable ou non autorisé.'), { status: 400 });
+      }
+
+      const [paiement] = await tx.insert(paiementsFournisseurs).values({
         entrepriseId: req.entrepriseId,
         factureId: parseInt(id),
         fournisseurId: factureData.fournisseurId,
         montant: montantPaiement.toFixed(2),
         modePaiement: modePaiement || null,
         reference: reference || null,
-        datePaiement: datePaiement || new Date().toISOString().split('T')[0],
+        datePaiement: date,
         notes: notes || null,
         userId: req.user.id,
-      })
-      .returning();
+      }).returning();
 
-    // Mettre à jour la facture
-    const nouveauMontantPaye = parseFloat(factureData.montantPaye) + montantPaiement;
-    const nouveauSolde = parseFloat(factureData.totalTTC) - nouveauMontantPaye;
-    const nouveauStatut = nouveauSolde <= 0.01 ? 'payee' : 'partiellement_payee';
-
-    const [factureUpdated] = await db
-      .update(facturesAchat)
-      .set({
+      const nouveauMontantPaye = Number(factureData.montantPaye) + montantPaiement;
+      const nouveauSolde = Math.max(0, Number(factureData.totalTTC) - nouveauMontantPaye);
+      const [factureUpdated] = await tx.update(facturesAchat).set({
         montantPaye: nouveauMontantPaye.toFixed(2),
         soldeRestant: nouveauSolde.toFixed(2),
-        statut: nouveauStatut,
+        statut: nouveauSolde <= 0.01 ? 'payee' : 'partiellement_payee',
         updatedAt: new Date()
-      })
-      .where(
-        and(
-          eq(facturesAchat.id, parseInt(id)),
-          eq(facturesAchat.entrepriseId, req.entrepriseId)
-        )
-      )
-      .returning();
+      }).where(and(
+        eq(facturesAchat.id, parseInt(id)),
+        eq(facturesAchat.entrepriseId, req.entrepriseId)
+      )).returning();
 
-    // Impact sur le solde dû du fournisseur
-    await db
-      .update(fournisseurs)
-      .set({
+      await tx.update(fournisseurs).set({
         soldeDu: sql`${fournisseurs.soldeDu} - ${montantPaiement}`,
         updatedAt: new Date()
-      })
-      .where(
-        and(
-          eq(fournisseurs.id, factureData.fournisseurId),
-          eq(fournisseurs.entrepriseId, req.entrepriseId)
-        )
-      );
+      }).where(and(
+        eq(fournisseurs.id, factureData.fournisseurId),
+        eq(fournisseurs.entrepriseId, req.entrepriseId)
+      ));
 
-    // Impact sur la trésorerie si un compte bancaire est spécifié
-    if (compteBancaireId) {
-      // Créer la transaction de trésorerie (décaissement)
-      await db.insert(transactionsTresorerie).values({
-        entrepriseId: req.entrepriseId,
-        compteBancaireId: parseInt(compteBancaireId),
-        type: 'decaissement',
-        montant: montantPaiement.toFixed(2),
-        dateTransaction: datePaiement || new Date().toISOString().split('T')[0],
-        categorie: 'Achat',
-        description: `Paiement facture ${factureData.numeroFacture}`,
-        tiersNom: null,
-        numeroPiece: factureData.numeroFacture,
-        modePaiement: modePaiement || null,
-        userId: req.user.id,
-      });
-
-      // Mettre à jour le solde du compte bancaire
-      await db
-        .update(comptesBancaires)
-        .set({
+      let cashTransaction = null;
+      if (bankAccount) {
+        [cashTransaction] = await tx.insert(transactionsTresorerie).values({
+          entrepriseId: req.entrepriseId,
+          compteBancaireId: bankAccount.id,
+          type: 'decaissement',
+          montant: montantPaiement.toFixed(2),
+          dateTransaction: date,
+          categorie: 'Achat',
+          description: `Paiement facture ${factureData.numeroFacture}`,
+          tiersNom: fournisseurInfo.raisonSociale || fournisseurInfo.nom || null,
+          numeroPiece: factureData.numeroFacture,
+          modePaiement: modePaiement || null,
+          userId: req.user.id,
+        }).returning();
+        await tx.update(comptesBancaires).set({
           soldeActuel: sql`${comptesBancaires.soldeActuel} - ${montantPaiement}`,
           updatedAt: new Date()
-        })
-        .where(
-          and(
-            eq(comptesBancaires.id, parseInt(compteBancaireId)),
-            eq(comptesBancaires.entrepriseId, req.entrepriseId)
-          )
-        );
-    }
+        }).where(and(
+          eq(comptesBancaires.id, bankAccount.id),
+          eq(comptesBancaires.entrepriseId, req.entrepriseId)
+        ));
+      }
 
-    // Impact automatique sur COMPTABILITÉ
-    // Débit: Fournisseur (401) - Crédit: Banque/Caisse
-    let accountingEntry = null;
-    try {
-      const fournisseurData = await db.select().from(fournisseurs).where(eq(fournisseurs.id, factureData.fournisseurId)).limit(1);
-      const fournisseurInfo = fournisseurData[0] || {};
-      
-      accountingEntry = await createEcriturePaiementFournisseur({
-        entrepriseId: req.entrepriseId,
-        reference: reference || `PAI-F-${paiement.id}`,
-        datePaiement: datePaiement || new Date().toISOString().split('T')[0],
-        fournisseurNom: fournisseurInfo.raisonSociale || fournisseurInfo.nom || 'Fournisseur',
-        fournisseurCompteId: fournisseurInfo.compteComptableId,
-        montant: montantPaiement,
-        modePaiement: modePaiement === 'especes' ? 'especes' : 'banque',
-        compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null
+      let accountingEntry = null;
+      try {
+        accountingEntry = await createEcriturePaiementFournisseur({
+          entrepriseId: req.entrepriseId,
+          reference: reference || `PAI-F-${paiement.id}`,
+          datePaiement: date,
+          fournisseurNom: fournisseurInfo.raisonSociale || fournisseurInfo.nom || 'Fournisseur',
+          fournisseurCompteId: fournisseurInfo.compteComptableId,
+          montant: montantPaiement,
+          modePaiement: modePaiement === 'especes' ? 'especes' : 'banque',
+          compteBancaireId: bankAccount?.id || null,
+          executor: tx
+        });
+      } catch (comptaError) {
+        console.warn('Avertissement: Écriture comptable paiement fournisseur non générée:', comptaError.message);
+      }
+
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'paiements_fournisseurs',
+        recordId: paiement.id,
+        nouvelleValeur: { paiement, factureAvant: factureData, factureApres: factureUpdated, accountingEntry, cashTransaction },
+        description: `Paiement fournisseur enregistré: ${montantPaiement.toFixed(2)} pour ${factureData.numeroFacture}`,
+        executor: tx,
+        required: true
       });
-    } catch (comptaError) {
-      console.warn('Avertissement: Écriture comptable paiement fournisseur non générée:', comptaError.message);
-    }
-
-    await logAudit({
-      ...extractAuditInfo(req),
-      action: 'CREATE',
-      table: 'paiements_fournisseurs',
-      recordId: paiement.id,
-      nouvelleValeur: { paiement, factureAvant: factureData, factureApres: factureUpdated, accountingEntry },
-      description: `Paiement fournisseur enregistré: ${montantPaiement.toFixed(2)} pour ${factureData.numeroFacture}`,
-      required: false
-    });
-    await logAudit({
-      ...extractAuditInfo(req),
-      action: 'UPDATE',
-      table: 'factures_achat',
-      recordId: factureUpdated.id,
-      ancienneValeur: factureData,
-      nouvelleValeur: factureUpdated,
-      description: `Solde mis à jour après paiement de ${factureData.numeroFacture}`,
-      required: false
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'factures_achat',
+        recordId: factureUpdated.id,
+        ancienneValeur: factureData,
+        nouvelleValeur: factureUpdated,
+        description: `Solde mis à jour après paiement de ${factureData.numeroFacture}`,
+        executor: tx,
+        required: true
+      });
+      return { paiement, factureUpdated };
     });
 
     return res.json({
       success: true,
       message: 'Paiement enregistré avec succès',
       data: {
-        paiement,
+        paiement: result.paiement,
         facture: {
-          montantPaye: factureUpdated.montantPaye,
-          soldeRestant: factureUpdated.soldeRestant,
-          statut: factureUpdated.statut
+          montantPaye: result.factureUpdated.montantPaye,
+          soldeRestant: result.factureUpdated.soldeRestant,
+          statut: result.factureUpdated.statut
         }
       }
     });
   } catch (error) {
     console.error('Erreur lors de l\'enregistrement du paiement:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       success: false,
       message: 'Erreur lors de l\'enregistrement du paiement',
       error: error.message

@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { parametresFiscaux, declarationsFiscales } from '../schema.js';
 import { and, eq, sql } from 'drizzle-orm';
 import crypto from 'crypto';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -192,41 +193,42 @@ router.post('/parametres', async (req, res) => {
       });
     }
 
-    const [existing] = await db
-      .select()
-      .from(parametresFiscaux)
-      .where(eq(parametresFiscaux.entrepriseId, req.entrepriseId))
-      .limit(1);
-
-    const dataToSave = {
-      entrepriseId: req.entrepriseId,
-      pays,
-      administrationNom,
-      numeroIFU,
-      numeroNIF,
-      centreImpots,
-      regimeImposition,
-      apiUrl,
-      apiIdentifiant,
-      apiCleSecrete: apiCleSecrete && apiCleSecrete !== '••••••••' ? encrypt(apiCleSecrete) : existing?.apiCleSecrete,
-      connexionActive: false,
-      updatedAt: new Date()
-    };
-
-    let savedParams;
-
-    if (existing) {
-      [savedParams] = await db
-        .update(parametresFiscaux)
-        .set(dataToSave)
-        .where(eq(parametresFiscaux.id, existing.id))
-        .returning();
-    } else {
-      [savedParams] = await db
-        .insert(parametresFiscaux)
-        .values(dataToSave)
-        .returning();
-    }
+    const savedParams = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(parametresFiscaux)
+        .where(eq(parametresFiscaux.entrepriseId, req.entrepriseId))
+        .for('update').limit(1);
+      const dataToSave = {
+        entrepriseId: req.entrepriseId,
+        pays,
+        administrationNom,
+        numeroIFU,
+        numeroNIF,
+        centreImpots,
+        regimeImposition,
+        apiUrl,
+        apiIdentifiant,
+        apiCleSecrete: apiCleSecrete && apiCleSecrete !== '••••••••' ? encrypt(apiCleSecrete) : existing?.apiCleSecrete,
+        connexionActive: false,
+        updatedAt: new Date()
+      };
+      const [saved] = existing
+        ? await tx.update(parametresFiscaux).set(dataToSave)
+            .where(eq(parametresFiscaux.id, existing.id)).returning()
+        : await tx.insert(parametresFiscaux).values(dataToSave).returning();
+      const safeValue = (value) => value ? { ...value, apiCleSecrete: value.apiCleSecrete ? '••••••••' : null } : value;
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: existing ? 'UPDATE' : 'CREATE',
+        table: 'parametres_fiscaux',
+        recordId: saved.id,
+        ancienneValeur: safeValue(existing),
+        nouvelleValeur: safeValue(saved),
+        description: 'Paramètres fiscaux modifiés',
+        executor: tx,
+        required: true
+      });
+      return saved;
+    });
 
     res.json({
       success: true,
@@ -329,17 +331,27 @@ router.post('/declarations/tva', async (req, res) => {
       creditTVA: totals.creditTVA,
       avertissement: 'Brouillon préparatoire uniquement; vérifier les comptes et le régime fiscal avant tout dépôt.'
     });
-    const [draft] = await db
-      .insert(declarationsFiscales)
-      .values({
+    const draft = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(declarationsFiscales).values({
         entrepriseId: req.entrepriseId,
         type: 'tva',
         periode,
         montant: totals.tvaADecaisser.toFixed(2),
         statut: 'brouillon',
         notes
-      })
-      .returning();
+      }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'declarations_fiscales',
+        recordId: created.id,
+        nouvelleValeur: created,
+        description: `Brouillon de déclaration TVA créé pour ${periode}`,
+        executor: tx,
+        required: true
+      });
+      return created;
+    });
 
     return res.status(201).json({
       success: true,
@@ -370,40 +382,47 @@ router.post('/declarations/:id/depot-manuel', async (req, res) => {
     if (!Number.isSafeInteger(declarationId) || declarationId <= 0) {
       return res.status(400).json({ success: false, message: 'Identifiant de déclaration invalide.' });
     }
-    const [declaration] = await db
-      .select()
-      .from(declarationsFiscales)
-      .where(and(
+    const result = await db.transaction(async (tx) => {
+      const [declaration] = await tx.select().from(declarationsFiscales).where(and(
         eq(declarationsFiscales.id, declarationId),
         eq(declarationsFiscales.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
-    if (!declaration) {
-      return res.status(404).json({ success: false, message: 'Déclaration introuvable.' });
-    }
-    if (declaration.type !== 'tva' || declaration.statut !== 'brouillon') {
-      return res.status(400).json({ success: false, message: 'Seul un brouillon TVA peut être marqué comme déposé.' });
-    }
-
-    const [updated] = await db
-      .update(declarationsFiscales)
-      .set({
+      )).for('update').limit(1);
+      if (!declaration) return { status: 404 };
+      if (declaration.type !== 'tva' || declaration.statut !== 'brouillon') return { status: 400 };
+      const [updated] = await tx.update(declarationsFiscales).set({
         statut: 'soumise',
         numeroDeclaration: numeroDeclaration.trim(),
         dateDeclaration,
         dateSoumission: new Date(),
         updatedAt: new Date()
-      })
-      .where(and(
+      }).where(and(
         eq(declarationsFiscales.id, declaration.id),
         eq(declarationsFiscales.entrepriseId, req.entrepriseId)
-      ))
-      .returning();
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'declarations_fiscales',
+        recordId: updated.id,
+        ancienneValeur: declaration,
+        nouvelleValeur: updated,
+        description: `Dépôt manuel déclaré pour la période ${declaration.periode}`,
+        executor: tx,
+        required: true
+      });
+      return { status: 200, updated };
+    });
+    if (result.status !== 200) {
+      return res.status(result.status).json({
+        success: false,
+        message: result.status === 404 ? 'Déclaration introuvable.' : 'Seul un brouillon TVA peut être marqué comme déposé.'
+      });
+    }
 
     return res.json({
       success: true,
       message: 'Le dépôt manuel déclaré par l’utilisateur a été enregistré; aucune connexion à l’OTR n’a été effectuée.',
-      data: updated
+      data: result.updated
     });
   } catch (error) {
     console.error('Erreur POST /api/impots/declarations/:id/depot-manuel:', error);

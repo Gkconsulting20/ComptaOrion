@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { produits, mouvementsStock } from '../schema.js';
 import { eq, and, desc, sql, lte } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -173,9 +174,8 @@ router.post('/', async (req, res) => {
     }
 
     // Créer le produit avec l'entrepriseId automatique
-    const newProduit = await db
-      .insert(produits)
-      .values({
+    const newProduit = await db.transaction(async (tx) => {
+      const [product] = await tx.insert(produits).values({
         entrepriseId: req.entrepriseId,
         reference: reference || null,
         nom: nom.trim(),
@@ -189,13 +189,24 @@ router.post('/', async (req, res) => {
         fournisseurId: fournisseurId || null,
         emplacement: emplacement || null,
         actif: actif !== undefined ? actif : true,
-      })
-      .returning();
+      }).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'produits',
+        recordId: product.id,
+        nouvelleValeur: product,
+        description: `Produit créé: ${product.nom}`,
+        executor: tx,
+        required: true
+      });
+      return product;
+    });
 
     res.status(201).json({
       success: true,
       message: 'Produit créé avec succès',
-      data: newProduit[0],
+      data: newProduit,
     });
   } catch (error) {
     console.error('Erreur POST /api/produits:', error);
@@ -303,14 +314,32 @@ router.put('/:id', async (req, res) => {
     if (actif !== undefined) updateData.actif = actif;
 
     // Mettre à jour le produit
-    const updatedProduit = await db
-      .update(produits)
-      .set(updateData)
-      .where(and(
+    const updatedProduit = await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(produits).where(and(
         eq(produits.id, parseInt(id)),
         eq(produits.entrepriseId, req.entrepriseId)
-      ))
-      .returning();
+      )).for('update').limit(1);
+      if (!previous) return null;
+      const [updated] = await tx.update(produits).set(updateData).where(and(
+        eq(produits.id, parseInt(id)),
+        eq(produits.entrepriseId, req.entrepriseId)
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'produits',
+        recordId: updated.id,
+        ancienneValeur: previous,
+        nouvelleValeur: updated,
+        description: `Produit modifié: ${updated.nom}`,
+        executor: tx,
+        required: true
+      });
+      return updated;
+    });
+    if (!updatedProduit) {
+      return res.status(404).json({ success: false, message: 'Produit non trouvé ou accès non autorisé' });
+    }
 
     res.json({
       success: true,
@@ -360,13 +389,27 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
-    // Supprimer le produit
-    await db
-      .delete(produits)
-      .where(and(
+    await db.transaction(async (tx) => {
+      const [product] = await tx.select().from(produits).where(and(
         eq(produits.id, parseInt(id)),
         eq(produits.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!product) throw Object.assign(new Error('Produit non trouvé ou accès non autorisé'), { status: 404 });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'DELETE',
+        table: 'produits',
+        recordId: product.id,
+        ancienneValeur: product,
+        description: `Produit supprimé: ${product.nom}`,
+        executor: tx,
+        required: true
+      });
+      await tx.delete(produits).where(and(
+        eq(produits.id, product.id),
+        eq(produits.entrepriseId, req.entrepriseId)
       ));
+    });
 
     res.json({
       success: true,
@@ -415,63 +458,66 @@ router.post('/:id/ajuster-stock', async (req, res) => {
       });
     }
 
-    // Vérifier que le produit existe
-    const [produit] = await db
-      .select()
-      .from(produits)
-      .where(and(
+    const updatedProduit = await db.transaction(async (tx) => {
+      const [product] = await tx.select().from(produits).where(and(
         eq(produits.id, parseInt(id)),
         eq(produits.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+      )).for('update').limit(1);
+      if (!product) return null;
 
-    if (!produit) {
-      return res.status(404).json({
-        success: false,
-        message: 'Produit non trouvé',
-      });
-    }
+      let nouvelleQuantite = parseFloat(product.quantite);
+      if (type === 'entree' || (type === 'ajustement' && Number(quantite) > 0)) {
+        nouvelleQuantite += Number(quantite);
+      } else {
+        nouvelleQuantite -= Math.abs(Number(quantite));
+      }
+      if (nouvelleQuantite < 0) {
+        throw Object.assign(new Error('Le stock ne peut pas être négatif'), { status: 400 });
+      }
 
-    // Calculer la nouvelle quantité
-    let nouvelleQuantite = parseFloat(produit.quantite);
-    if (type === 'entree' || (type === 'ajustement' && quantite > 0)) {
-      nouvelleQuantite += parseFloat(quantite);
-    } else {
-      nouvelleQuantite -= Math.abs(parseFloat(quantite));
-    }
-
-    if (nouvelleQuantite < 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Le stock ne peut pas être négatif',
-      });
-    }
-
-    // Mettre à jour le produit
-    const [updatedProduit] = await db
-      .update(produits)
-      .set({ 
+      const [updated] = await tx.update(produits).set({
         quantite: nouvelleQuantite.toString(),
         updatedAt: new Date(),
-      })
-      .where(and(
-        eq(produits.id, parseInt(id)),
+      }).where(and(
+        eq(produits.id, product.id),
         eq(produits.entrepriseId, req.entrepriseId)
-      ))
-      .returning();
-
-    // Enregistrer le mouvement
-    await db
-      .insert(mouvementsStock)
-      .values({
+      )).returning();
+      const [movement] = await tx.insert(mouvementsStock).values({
         entrepriseId: req.entrepriseId,
-        produitId: parseInt(id),
+        produitId: product.id,
         type,
-        quantite: Math.abs(parseFloat(quantite)).toString(),
+        quantite: Math.abs(Number(quantite)).toString(),
         dateMouvement: new Date().toISOString().split('T')[0],
         motif: motif || null,
         userId: req.user.id,
+      }).returning();
+
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'produits',
+        recordId: updated.id,
+        ancienneValeur: product,
+        nouvelleValeur: updated,
+        description: `Stock ajusté pour ${updated.nom}: ${product.quantite} → ${updated.quantite}`,
+        executor: tx,
+        required: true
       });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'mouvements_stock',
+        recordId: movement.id,
+        nouvelleValeur: movement,
+        description: `Mouvement de stock ${type} enregistré pour ${updated.nom}`,
+        executor: tx,
+        required: true
+      });
+      return updated;
+    });
+    if (!updatedProduit) {
+      return res.status(404).json({ success: false, message: 'Produit non trouvé' });
+    }
 
     res.json({
       success: true,
@@ -480,7 +526,7 @@ router.post('/:id/ajuster-stock', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur POST /api/produits/:id/ajuster-stock:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: 'Erreur lors de l\'ajustement du stock',
       error: error.message,

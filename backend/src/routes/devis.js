@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../db.js';
 import { devis, devisItems, factures, factureItems, clients } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
@@ -176,10 +177,8 @@ router.post('/', async (req, res) => {
     // Générer le numéro de devis
     const numeroDevis = await genererNumeroDevis(req.entrepriseId);
 
-    // Créer le devis
-    const [newDevis] = await db
-      .insert(devis)
-      .values({
+    const newDevis = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(devis).values({
         entrepriseId: req.entrepriseId,
         numeroDevis,
         clientId: parseInt(clientId),
@@ -192,28 +191,35 @@ router.post('/', async (req, res) => {
         notes: notes || null,
         conditionsVente: conditionsVente || null,
         userId: req.user.id,
-      })
-      .returning();
+      }).returning();
 
-    // Créer les lignes du devis
-    const devisItemsData = items.map(item => {
-      const totalLigne = parseFloat(item.quantite) * parseFloat(item.prixUnitaire);
-      const remise = parseFloat(item.remise || 0);
-      const totalApresRemise = totalLigne * (1 - remise / 100);
-
-      return {
+      const devisItemsData = items.map(item => {
+        const totalLigne = parseFloat(item.quantite) * parseFloat(item.prixUnitaire);
+        const remise = parseFloat(item.remise || 0);
+        return {
         entrepriseId: req.entrepriseId,
-        devisId: newDevis.id,
+        devisId: created.id,
         produitId: item.produitId || null,
         description: item.description,
         quantite: item.quantite,
         prixUnitaire: item.prixUnitaire,
         remise: item.remise || '0',
-        totalLigne: totalApresRemise.toFixed(2),
-      };
+        totalLigne: (totalLigne * (1 - remise / 100)).toFixed(2),
+        };
+      });
+      const insertedItems = await tx.insert(devisItems).values(devisItemsData).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'devis',
+        recordId: created.id,
+        nouvelleValeur: { devis: created, items: insertedItems },
+        description: `Devis créé: ${created.numeroDevis}`,
+        executor: tx,
+        required: true
+      });
+      return created;
     });
-
-    await db.insert(devisItems).values(devisItemsData);
 
     res.status(201).json({
       success: true,
@@ -237,101 +243,79 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      statut,
-      dateDevis,
-      dateExpiration,
-      notes,
-      conditionsVente,
-      items,
-    } = req.body;
-
-    // Vérifier que le devis existe
-    const [existingDevis] = await db
-      .select()
-      .from(devis)
-      .where(and(
+    const { statut, dateDevis, dateExpiration, notes, conditionsVente, items } = req.body;
+    const updatedDevis = await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(devis).where(and(
         eq(devis.id, parseInt(id)),
         eq(devis.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+      )).for('update').limit(1);
+      if (!previous) throw Object.assign(new Error('Devis non trouvé'), { status: 404 });
+      const previousItems = await tx.select().from(devisItems).where(and(
+        eq(devisItems.devisId, previous.id),
+        eq(devisItems.entrepriseId, req.entrepriseId)
+      ));
+      const updateData = { updatedAt: new Date() };
+      if (statut !== undefined) updateData.statut = statut;
+      if (dateDevis !== undefined) updateData.dateDevis = dateDevis;
+      if (dateExpiration !== undefined) updateData.dateExpiration = dateExpiration;
+      if (notes !== undefined) updateData.notes = notes;
+      if (conditionsVente !== undefined) updateData.conditionsVente = conditionsVente;
 
-    if (!existingDevis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Devis non trouvé',
-      });
-    }
+      if (Array.isArray(items) && items.length > 0) {
+        let totalHT = 0;
+        for (const item of items) {
+          const totalLigne = Number(item.quantite) * Number(item.prixUnitaire);
+          const remise = Number(item.remise || 0);
+          totalHT += totalLigne * (1 - remise / 100);
+        }
+        const [company] = await tx.select({ tauxTva: sql`taux_tva` })
+          .from(sql`entreprises`).where(sql`id = ${req.entrepriseId}`);
+        const tauxTva = Number(company?.tauxTva || 18);
+        const totalTVA = totalHT * (tauxTva / 100);
+        updateData.totalHT = totalHT.toFixed(2);
+        updateData.totalTVA = totalTVA.toFixed(2);
+        updateData.totalTTC = (totalHT + totalTVA).toFixed(2);
+        await tx.delete(devisItems).where(and(
+          eq(devisItems.devisId, previous.id),
+          eq(devisItems.entrepriseId, req.entrepriseId)
+        ));
+        await tx.insert(devisItems).values(items.map((item) => {
+          const totalLigne = Number(item.quantite) * Number(item.prixUnitaire);
+          const remise = Number(item.remise || 0);
+          return {
+            entrepriseId: req.entrepriseId,
+            devisId: previous.id,
+            produitId: item.produitId || null,
+            description: item.description,
+            quantite: item.quantite,
+            prixUnitaire: item.prixUnitaire,
+            remise: item.remise || '0',
+            totalLigne: (totalLigne * (1 - remise / 100)).toFixed(2)
+          };
+        }));
+      }
 
-    // Si les items sont fournis, recalculer les totaux
-    let updateData = {
-      updatedAt: new Date(),
-    };
-
-    if (statut !== undefined) updateData.statut = statut;
-    if (dateDevis !== undefined) updateData.dateDevis = dateDevis;
-    if (dateExpiration !== undefined) updateData.dateExpiration = dateExpiration;
-    if (notes !== undefined) updateData.notes = notes;
-    if (conditionsVente !== undefined) updateData.conditionsVente = conditionsVente;
-
-    if (items && items.length > 0) {
-      // Supprimer les anciennes lignes
-      await db
-        .delete(devisItems)
-        .where(eq(devisItems.devisId, parseInt(id)));
-
-      // Calculer les nouveaux totaux
-      let totalHT = 0;
-      items.forEach(item => {
-        const totalLigne = parseFloat(item.quantite) * parseFloat(item.prixUnitaire);
-        const remise = parseFloat(item.remise || 0);
-        const totalApresRemise = totalLigne * (1 - remise / 100);
-        totalHT += totalApresRemise;
-      });
-
-      const [entreprise] = await db
-        .select({ tauxTva: sql`taux_tva` })
-        .from(sql`entreprises`)
-        .where(sql`id = ${req.entrepriseId}`);
-
-      const tauxTva = parseFloat(entreprise?.tauxTva || 18);
-      const totalTVA = totalHT * (tauxTva / 100);
-      const totalTTC = totalHT + totalTVA;
-
-      updateData.totalHT = totalHT.toFixed(2);
-      updateData.totalTVA = totalTVA.toFixed(2);
-      updateData.totalTTC = totalTTC.toFixed(2);
-
-      // Créer les nouvelles lignes
-      const newItemsData = items.map(item => {
-        const totalLigne = parseFloat(item.quantite) * parseFloat(item.prixUnitaire);
-        const remise = parseFloat(item.remise || 0);
-        const totalApresRemise = totalLigne * (1 - remise / 100);
-
-        return {
-          entrepriseId: req.entrepriseId,
-          devisId: parseInt(id),
-          produitId: item.produitId || null,
-          description: item.description,
-          quantite: item.quantite,
-          prixUnitaire: item.prixUnitaire,
-          remise: item.remise || '0',
-          totalLigne: totalApresRemise.toFixed(2),
-        };
-      });
-
-      await db.insert(devisItems).values(newItemsData);
-    }
-
-    // Mettre à jour le devis
-    const [updatedDevis] = await db
-      .update(devis)
-      .set(updateData)
-      .where(and(
-        eq(devis.id, parseInt(id)),
+      const [updated] = await tx.update(devis).set(updateData).where(and(
+        eq(devis.id, previous.id),
         eq(devis.entrepriseId, req.entrepriseId)
-      ))
-      .returning();
+      )).returning();
+      const updatedItems = await tx.select().from(devisItems).where(and(
+        eq(devisItems.devisId, previous.id),
+        eq(devisItems.entrepriseId, req.entrepriseId)
+      ));
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'devis',
+        recordId: updated.id,
+        ancienneValeur: { devis: previous, items: previousItems },
+        nouvelleValeur: { devis: updated, items: updatedItems },
+        description: `Devis modifié: ${updated.numeroDevis}`,
+        executor: tx,
+        required: true
+      });
+      return updated;
+    });
 
     res.json({
       success: true,
@@ -340,7 +324,7 @@ router.put('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur PUT /api/devis/:id:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: 'Erreur lors de la mise à jour du devis',
       error: error.message,
@@ -355,36 +339,39 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Vérifier que le devis existe
-    const [existingDevis] = await db
-      .select()
-      .from(devis)
-      .where(and(
+    const result = await db.transaction(async (tx) => {
+      const [existingDevis] = await tx.select().from(devis).where(and(
         eq(devis.id, parseInt(id)),
         eq(devis.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
-
-    if (!existingDevis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Devis non trouvé',
+      )).for('update').limit(1);
+      if (!existingDevis) return { status: 404 };
+      const items = await tx.select().from(devisItems).where(and(
+        eq(devisItems.devisId, existingDevis.id),
+        eq(devisItems.entrepriseId, req.entrepriseId)
+      ));
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'DELETE',
+        table: 'devis',
+        recordId: existingDevis.id,
+        ancienneValeur: { devis: existingDevis, items },
+        description: `Devis supprimé: ${existingDevis.numeroDevis}`,
+        executor: tx,
+        required: true
       });
-    }
-
-    // Supprimer les lignes du devis
-    await db
-      .delete(devisItems)
-      .where(eq(devisItems.devisId, parseInt(id)));
-
-    // Supprimer le devis
-    await db
-      .delete(devis)
-      .where(and(
-        eq(devis.id, parseInt(id)),
+      await tx.delete(devisItems).where(and(
+        eq(devisItems.devisId, existingDevis.id),
+        eq(devisItems.entrepriseId, req.entrepriseId)
+      ));
+      await tx.delete(devis).where(and(
+        eq(devis.id, existingDevis.id),
         eq(devis.entrepriseId, req.entrepriseId)
       ));
+      return { status: 200 };
+    });
+    if (result.status === 404) {
+      return res.status(404).json({ success: false, message: 'Devis non trouvé' });
+    }
 
     res.json({
       success: true,
@@ -392,7 +379,7 @@ router.delete('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur DELETE /api/devis/:id:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: 'Erreur lors de la suppression du devis',
       error: error.message,
@@ -407,63 +394,30 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/transformer-facture', async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Récupérer le devis avec ses lignes
-    const [devisData] = await db
-      .select()
-      .from(devis)
-      .where(and(
+    const result = await db.transaction(async (tx) => {
+      const [devisData] = await tx.select().from(devis).where(and(
         eq(devis.id, parseInt(id)),
         eq(devis.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+      )).for('update').limit(1);
+      if (!devisData) return { status: 404 };
+      if (devisData.statut !== 'acceptee') return { status: 400 };
 
-    if (!devisData) {
-      return res.status(404).json({
-        success: false,
-        message: 'Devis non trouvé',
-      });
-    }
+      const items = await tx.select().from(devisItems).where(and(
+        eq(devisItems.devisId, devisData.id),
+        eq(devisItems.entrepriseId, req.entrepriseId)
+      ));
+      const annee = new Date().getFullYear();
+      const [lastFacture] = await tx.select({ numeroFacture: factures.numeroFacture })
+        .from(factures).where(and(
+          eq(factures.entrepriseId, req.entrepriseId),
+          sql`EXTRACT(YEAR FROM ${factures.dateFacture}::date) = ${annee}`
+        )).orderBy(desc(factures.createdAt)).limit(1);
+      let numero = 1;
+      const match = lastFacture?.numeroFacture?.match(/FACT-(\d{4})-(\d+)/);
+      if (match) numero = parseInt(match[2]) + 1;
+      const numeroFacture = `FACT-${annee}-${numero.toString().padStart(4, '0')}`;
 
-    if (devisData.statut !== 'acceptee') {
-      return res.status(400).json({
-        success: false,
-        message: 'Seuls les devis acceptés peuvent être transformés en facture',
-      });
-    }
-
-    // Récupérer les lignes du devis
-    const items = await db
-      .select()
-      .from(devisItems)
-      .where(eq(devisItems.devisId, parseInt(id)));
-
-    // Générer le numéro de facture
-    const annee = new Date().getFullYear();
-    const [lastFacture] = await db
-      .select({ numeroFacture: factures.numeroFacture })
-      .from(factures)
-      .where(and(
-        eq(factures.entrepriseId, req.entrepriseId),
-        sql`EXTRACT(YEAR FROM ${factures.dateFacture}::date) = ${annee}`
-      ))
-      .orderBy(desc(factures.createdAt))
-      .limit(1);
-
-    let numero = 1;
-    if (lastFacture?.numeroFacture) {
-      const match = lastFacture.numeroFacture.match(/FACT-(\d{4})-(\d+)/);
-      if (match) {
-        numero = parseInt(match[2]) + 1;
-      }
-    }
-
-    const numeroFacture = `FACT-${annee}-${numero.toString().padStart(4, '0')}`;
-
-    // Créer la facture
-    const [newFacture] = await db
-      .insert(factures)
-      .values({
+      const [newFacture] = await tx.insert(factures).values({
         entrepriseId: req.entrepriseId,
         numeroFacture,
         clientId: devisData.clientId,
@@ -477,31 +431,47 @@ router.post('/:id/transformer-facture', async (req, res) => {
         soldeRestant: devisData.totalTTC,
         notes: devisData.notes,
         userId: req.user.id,
-      })
-      .returning();
-
-    // Créer les lignes de facture
-    const factureItemsData = items.map(item => ({
-      entrepriseId: req.entrepriseId,
-      factureId: newFacture.id,
-      produitId: item.produitId,
-      description: item.description,
-      quantite: item.quantite,
-      prixUnitaire: item.prixUnitaire,
-      remise: item.remise,
-      totalLigne: item.totalLigne,
-    }));
-
-    await db.insert(factureItems).values(factureItemsData);
+      }).returning();
+      const factureItemsData = items.map(item => ({
+        entrepriseId: req.entrepriseId,
+        factureId: newFacture.id,
+        produitId: item.produitId,
+        description: item.description,
+        quantite: item.quantite,
+        prixUnitaire: item.prixUnitaire,
+        remise: item.remise,
+        totalLigne: item.totalLigne,
+      }));
+      const insertedItems = factureItemsData.length
+        ? await tx.insert(factureItems).values(factureItemsData).returning()
+        : [];
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'factures',
+        recordId: newFacture.id,
+        nouvelleValeur: { facture: newFacture, items: insertedItems, devisSource: devisData.id },
+        description: `Facture ${newFacture.numeroFacture} créée depuis le devis ${devisData.numeroDevis}`,
+        executor: tx,
+        required: true
+      });
+      return { status: 201, newFacture };
+    });
+    if (result.status !== 201) {
+      return res.status(result.status).json({
+        success: false,
+        message: result.status === 404 ? 'Devis non trouvé' : 'Seuls les devis acceptés peuvent être transformés en facture'
+      });
+    }
 
     res.status(201).json({
       success: true,
       message: 'Facture créée avec succès à partir du devis',
-      data: newFacture,
+      data: result.newFacture,
     });
   } catch (error) {
     console.error('Erreur POST /api/devis/:id/transformer-facture:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: 'Erreur lors de la transformation du devis en facture',
       error: error.message,
