@@ -26,3 +26,9 @@ Pour la bibliothèque de prix client, calculer le prix de vente par `PV = CMV ×
 **Why:** L’utilisateur a explicitement choisi une majoration exprimée en pourcentage du CMV.
 
 **How to apply:** Utiliser le CMV courant révisé par les achats pour calculer les prix; une vente consomme ce coût sans recalculer le CMV unitaire.
+
+Pour les factures fournisseurs, débiter le compte de charge correspondant à la nature de la ligne (notamment transport au compte 61) et créditer le compte collectif fournisseur 401. Garder un identifiant auxiliaire unique par fournisseur pour le suivi détaillé, sans créer un compte général distinct pour chaque fournisseur.
+
+**Why:** L’utilisateur a demandé un seul compte fournisseur au passif, tout en conservant l’imputation par nature et l’identification individuelle des fournisseurs.
+
+**How to apply:** Les factures et paiements fournisseurs utilisent le compte 401 commun; relier les lignes opérationnelles au fournisseur par son identifiant auxiliaire. Ne pas supprimer les anciens comptes personnalisés sans audit des soldes.

@@ -6,7 +6,7 @@
 - [Runtime Cloudflare](cloudflare-runtime.md) — vérifier runtime, SQL et R2, et garder les URLs de paquets du lockfile accessibles aux builds Workers.
 - [Paiements associatifs](association-payments.md) — séparer dépenses engagées, paiements réels et approbation ; chaque paiement réel a son écriture équilibrée.
 - [Synchronisation comptabilité-trésorerie](treasury-accounting-sync.md) — relier les journaux de banque au compte bancaire lié et éviter les mouvements en double.
-- [Coût de revient fournisseurs](supplier-costing.md) — répartir les frais au poids converti; calculer le prix de vente par majoration du CMV courant.
+- [Coût de revient fournisseurs](supplier-costing.md) — calculer les frais au poids, majorer le CMV et suivre les fournisseurs via le compte collectif 401.
 - [Pause du module Paie & RH](payroll-paused.md) — garder Paie & RH masqué pendant la préparation du lancement initial de l’application.
 - [Espace commercial](saas-commercial-portal.md) — le portail commercial sert à gérer la commercialisation de ComptaOrion, avec des comptes distincts de l’ERP.
 - [Interface ComptaOrion](comptaorion-interface.md) — garder la navigation regroupée et la barre latérale sombre, avec ComptaOrion distinct de l’entreprise NERU.

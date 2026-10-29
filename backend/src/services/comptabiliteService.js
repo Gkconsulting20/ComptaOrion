@@ -236,7 +236,6 @@ export async function createEcritureFactureAchat(params) {
     numeroFacture,
     dateFacture,
     fournisseurNom,
-    fournisseurCompteId,
     totalHT,
     totalTVA = 0,
     totalTTC,
@@ -247,7 +246,10 @@ export async function createEcritureFactureAchat(params) {
     executor = db
   } = params;
 
-  const compte401 = fournisseurCompteId ? await getCompteById(fournisseurCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS, executor);
+  const compte401 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS, executor);
+  if (!compte401) {
+    throw new Error('Le compte fournisseur collectif 401 est requis pour comptabiliser une facture fournisseur.');
+  }
   const compte408 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS_FACTURES_NON_PARVENUES, executor);
   const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor);
   const compteEcarts = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ECARTS_PRIX, executor);
@@ -325,7 +327,7 @@ export async function createEcritureFactureAchat(params) {
     const expenseAmount = Math.max(0, Number(totalHT) - directStockAmount);
     if (expenseAmount > 0) {
       if (!compteAchatsServices) {
-        throw new Error('Le compte comptable des services extérieurs (61) est requis pour les achats non stockés.');
+        throw new Error('Le compte de transport/frais fournisseur (61) est requis pour les achats non stockés.');
       }
       ecrituresLignes.push({
         compteComptableId: compteAchatsServices.id,
@@ -345,14 +347,12 @@ export async function createEcritureFactureAchat(params) {
     });
   }
 
-  if (compte401) {
-    ecrituresLignes.push({
-      compteComptableId: compte401.id,
-      debit: 0,
-      credit: totalTTC,
-      libelle: `Fournisseur ${fournisseurNom} - ${numeroFacture}`
-    });
-  }
+  ecrituresLignes.push({
+    compteComptableId: compte401.id,
+    debit: 0,
+    credit: totalTTC,
+    libelle: `Fournisseur ${fournisseurNom} - ${numeroFacture}`
+  });
 
   if (ecrituresLignes.length < 2) {
     console.warn('Pas assez de comptes comptables configurés pour créer écriture facture achat');
@@ -495,7 +495,6 @@ export async function createEcriturePaiementFournisseur(params) {
     reference,
     datePaiement,
     fournisseurNom,
-    fournisseurCompteId,
     montant,
     modePaiement,
     compteBancaireId,
@@ -505,19 +504,20 @@ export async function createEcriturePaiementFournisseur(params) {
   const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
   const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
   
-  const compte401 = fournisseurCompteId ? await getCompteById(fournisseurCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS, executor);
+  const compte401 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS, executor);
+  if (!compte401) {
+    throw new Error('Le compte fournisseur collectif 401 est requis pour comptabiliser un paiement fournisseur.');
+  }
   const compteTresorerie = await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
 
   const ecrituresLignes = [];
 
-  if (compte401) {
-    ecrituresLignes.push({
-      compteComptableId: compte401.id,
-      debit: montant,
-      credit: 0,
-      libelle: `Règlement ${fournisseurNom}`
-    });
-  }
+  ecrituresLignes.push({
+    compteComptableId: compte401.id,
+    debit: montant,
+    credit: 0,
+    libelle: `Règlement ${fournisseurNom}`
+  });
 
   if (compteTresorerie) {
     ecrituresLignes.push({
@@ -620,6 +620,7 @@ export async function createEcritureChargeNoteFrais({
     eq(comptesComptables.entrepriseId, tenantId),
     eq(comptesComptables.actif, true),
   )).limit(1);
+  // Les notes de frais d’un salarié sont une dette envers le personnel; les factures fournisseurs utilisent le compte collectif 401.
   const [employeeAdvanceAccount] = await executor.select().from(comptesComptables).where(and(
     eq(comptesComptables.entrepriseId, tenantId),
     eq(comptesComptables.numero, COMPTES_SYSCOHADA.PERSONNEL_AVANCES),

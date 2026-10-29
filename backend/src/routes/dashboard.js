@@ -218,10 +218,6 @@ router.get('/global', async (req, res) => {
     }
     
     const period = await getDashboardPeriod(req, eId);
-    const dateFilter = (column) => and(
-      gte(column, period.start),
-      lte(column, period.effectiveEnd),
-    );
     const [salesHistory, purchasesHistory, clientPaymentHistory, supplierPaymentHistory, treasuryMovementHistory, allProducts, valuationLayers] = await Promise.all([
       db.select({
         id: factures.id,
@@ -284,7 +280,6 @@ router.get('/global', async (req, res) => {
       return normalized && normalized >= period.start && normalized <= period.effectiveEnd;
     };
     const ventesData = salesHistory.filter((invoice) => inPeriod(invoice.dateFacture));
-    const achatsData = purchasesHistory.filter((invoice) => inPeriod(invoice.dateFacture));
     const expenseAccounts = await getAccountedExpensesByAccount(eId, period);
     const ventesMois = sumMoney(ventesData, 'totalTTC');
     const depensesMois = expenseAccounts.reduce((sum, account) => sum + account.montant, 0);

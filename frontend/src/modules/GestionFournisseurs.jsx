@@ -1244,7 +1244,7 @@ export function GestionFournisseurs() {
               </div>
               <Table
                 columns={[
-                  { key: 'numeroFournisseur', label: 'N° Fournisseur' },
+                  { key: 'codeAuxiliaire', label: 'ID Fournisseur' },
                   { key: 'nom', label: 'Nom' },
                   { key: 'email', label: 'Email' },
                   { key: 'telephone', label: 'Téléphone' },

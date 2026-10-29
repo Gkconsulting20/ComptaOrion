@@ -146,6 +146,7 @@ export const clients = pgTable('clients', {
 export const fournisseurs = pgTable('fournisseurs', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  // Champ historique; les factures fournisseurs utilisent le compte collectif 401.
   compteComptableId: integer('compte_comptable_id'),
   codeAuxiliaire: varchar('code_auxiliaire', { length: 20 }),
   numeroFournisseur: varchar('numero_fournisseur', { length: 50 }).unique(),
