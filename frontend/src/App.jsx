@@ -265,11 +265,10 @@ export default function App() {
               aria-controls="app-navigation"
             >
               <span className="app-menu-glyph" aria-hidden="true">☰</span>
-              <span>Menu</span>
             </button>
             <div className="app-page-heading">
               <h1>{activeModule?.label || 'Tableau de bord'}</h1>
-              <p>{entreprise?.nom || 'ComptaOrion ERP'}</p>
+              <p>Entreprise · {entreprise?.nom || 'ComptaOrion ERP'}</p>
             </div>
           </div>
 
