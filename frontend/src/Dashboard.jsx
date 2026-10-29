@@ -290,9 +290,12 @@ export function DashboardView() {
   const config = getDrillDownConfig();
 
   return (
-    <div style={{ padding: '20px', backgroundColor: '#f5f5f5', minHeight: '100%' }}>
-      <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ margin: '0 0 15px 0', fontSize: '24px', color: '#333' }}>Tableau de bord</h1>
+    <div className="dashboard-page">
+      <div className="dashboard-page-header">
+        <div>
+          <h1 className="dashboard-page-title">Vue d’ensemble</h1>
+          <p className="dashboard-page-subtitle">Votre activité financière sur la période sélectionnée</p>
+        </div>
         
         {/* Composant PeriodFilter avec toutes les périodes fiscales */}
         <PeriodFilter
@@ -306,7 +309,7 @@ export function DashboardView() {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+      <div className="dashboard-kpi-grid">
         <KpiCard 
           title={`Ventes ${getDynamicPeriodeLabel()}`}
           value={formatMoney(kpis?.ventesMois)} 
@@ -354,8 +357,8 @@ export function DashboardView() {
       </div>
 
       <div style={{ marginBottom: '24px' }}>
-        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#666' }}>Cycle de Trésorerie</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+        <h3 className="dashboard-section-title">Cycle de trésorerie</h3>
+        <div className="dashboard-cycle-grid">
           <KpiCard 
             title="Délai paiement clients (DSO)" 
             value={`${kpis?.dso || 0} jours`} 
@@ -401,11 +404,11 @@ export function DashboardView() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
-        <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '16px', color: '#333' }}>
+      <div className="dashboard-charts-grid">
+        <div className="dashboard-chart-card">
+          <h3>
             Évolution des ventes (12 mois)
-            <span style={{ fontSize: '11px', color: '#999', fontWeight: 'normal', marginLeft: '10px' }}>Cliquer sur une barre pour détails</span>
+            <span className="dashboard-chart-hint">Cliquer sur une barre pour les détails</span>
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={ventesMensuelles} onClick={handleBarClick} style={{ cursor: 'pointer' }}>
@@ -418,10 +421,10 @@ export function DashboardView() {
           </ResponsiveContainer>
         </div>
 
-        <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '16px', color: '#333' }}>
+        <div className="dashboard-chart-card">
+          <h3>
             Répartition des dépenses
-            <span style={{ fontSize: '11px', color: '#999', fontWeight: 'normal', marginLeft: '10px' }}>Cliquer sur une tranche pour détails</span>
+            <span className="dashboard-chart-hint">Cliquer sur une tranche pour les détails</span>
           </h3>
           {depensesCategories.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
@@ -455,7 +458,7 @@ export function DashboardView() {
       </div>
 
       {(kpis?.facturesEnRetard?.nombre > 0 || kpis?.stockFaible?.nombre > 0) && (
-        <div style={{ marginTop: '20px', backgroundColor: 'white', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+        <div className="dashboard-alerts">
           <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '16px', color: '#333' }}>Alertes</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {kpis?.facturesEnRetard?.nombre > 0 && (
@@ -494,38 +497,32 @@ export function DashboardView() {
 }
 
 function KpiCard({ title, value, subtitle, color, icon, onClick, small }) {
+  const handleKeyDown = (event) => {
+    if (onClick && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      onClick();
+    }
+  };
+
   return (
-    <div 
+    <div
+      className={`dashboard-kpi-card${small ? ' is-small' : ''}${onClick ? ' is-clickable' : ''}`}
+      style={{ '--kpi-accent': color }}
       onClick={onClick}
-      style={{ 
-        backgroundColor: 'white', 
-        borderRadius: '8px', 
-        padding: small ? '12px 16px' : '20px', 
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        borderLeft: `4px solid ${color}`,
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'transform 0.2s, box-shadow 0.2s'
-      }}
-      onMouseEnter={(e) => {
-        if (onClick) {
-          e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'none';
-        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-      }}
+      onKeyDown={handleKeyDown}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? `${title}: ${value}. Cliquer pour voir le détail.` : undefined}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: small ? '11px' : '14px', color: '#666', marginBottom: small ? '4px' : '8px' }}>{title}</div>
-          <div style={{ fontSize: small ? '18px' : '24px', fontWeight: 'bold', color: color }}>{value}</div>
-          {subtitle && <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>{subtitle}</div>}
+          <span className="dashboard-kpi-title">{title}</span>
+          <strong className="dashboard-kpi-value">{value}</strong>
+          {subtitle && <span className="dashboard-kpi-subtitle">{subtitle}</span>}
         </div>
-        <div style={{ fontSize: small ? '20px' : '28px' }}>{icon}</div>
+        <span className="dashboard-kpi-icon" aria-hidden="true">{icon}</span>
       </div>
-      {onClick && !small && <div style={{ fontSize: '11px', color: '#999', marginTop: '8px' }}>Cliquer pour détails</div>}
+      {onClick && !small && <span className="dashboard-kpi-subtitle">Cliquer pour voir le détail</span>}
     </div>
   );
 }

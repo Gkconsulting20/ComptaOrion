@@ -59,7 +59,9 @@ const ALL_MODULES = [
 
 export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window === 'undefined' || window.innerWidth > 680
+  );
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [entreprise, setEntreprise] = useState(null);
@@ -132,6 +134,12 @@ export default function App() {
     (!m.requiresAdmin || isAdmin) &&
     (!m.requiresAssociationAccess || associationAccess)
   );
+  const activeModule = MODULES.find(module => module.id === currentView);
+
+  const handleModuleSelect = (moduleId) => {
+    setCurrentView(moduleId);
+    if (window.innerWidth <= 680) setSidebarOpen(false);
+  };
 
   const handleLogout = async () => {
     const sessionId = localStorage.getItem('sessionId');
@@ -203,153 +211,89 @@ export default function App() {
   };
 
   return (
-    <div className="app" style={{display: 'flex', minHeight: '100vh', backgroundColor: '#f5f5f5'}}>
-      <div style={{
-        width: sidebarOpen ? '280px' : '60px',
-        backgroundColor: '#2c3e50',
-        color: 'white',
-        padding: '20px',
-        transition: 'width 0.3s',
-        overflowY: 'auto',
-        boxShadow: '2px 0 10px rgba(0,0,0,0.1)',
-        position: 'sticky',
-        top: 0,
-        height: '100vh'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          marginBottom: '30px',
-          paddingBottom: '20px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-          gap: '10px'
-        }}>
-          <img 
-            src="/logo-comptaorion.png" 
-            alt="ComptaOrion" 
-            style={{
-              width: sidebarOpen ? '50px' : '40px',
-              height: sidebarOpen ? '50px' : '40px',
-              transition: 'all 0.3s',
-              objectFit: 'contain'
-            }}
-          />
+    <div className="app">
+      {sidebarOpen && typeof window !== 'undefined' && window.innerWidth <= 680 && (
+        <button
+          type="button"
+          className="app-sidebar-backdrop"
+          aria-label="Fermer le menu"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <aside
+        id="app-navigation"
+        className={`app-sidebar ${sidebarOpen ? 'is-open' : 'is-closed'}`}
+        aria-label="Navigation principale"
+      >
+        <div className="app-sidebar-brand">
+          <img src="/logo-comptaorion.png" alt="" />
           {sidebarOpen && (
-            <h2 style={{margin: 0, fontSize: '20px'}}>
-              ComptaOrion
-            </h2>
+            <div className="app-sidebar-brand-copy">
+              <strong>ComptaOrion</strong>
+              <span>Gestion financière</span>
+            </div>
           )}
         </div>
-        <nav>
-          {MODULES.map(m => (
-            <div
-              key={m.id}
-              onClick={() => setCurrentView(m.id)}
-              style={{
-                padding: '12px 10px',
-                cursor: 'pointer',
-                backgroundColor: currentView === m.id ? '#3498db' : 'transparent',
-                borderRadius: '6px',
-                marginBottom: '4px',
-                transition: 'all 0.2s',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                fontSize: sidebarOpen ? '14px' : '18px',
-                textAlign: sidebarOpen ? 'left' : 'center',
-              }}
-              onMouseEnter={(e) => {
-                if (currentView !== m.id) {
-                  e.currentTarget.style.backgroundColor = 'rgba(52, 152, 219, 0.3)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentView !== m.id) {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
-              title={`${m.icon} ${m.label}`}
+
+        <nav className="app-sidebar-nav">
+          {MODULES.map(module => (
+            <button
+              type="button"
+              key={module.id}
+              className={`app-nav-item ${currentView === module.id ? 'is-active' : ''}`}
+              onClick={() => handleModuleSelect(module.id)}
+              aria-current={currentView === module.id ? 'page' : undefined}
+              title={`${module.icon} ${module.label}`}
             >
-              {sidebarOpen ? `${m.icon} ${m.label}` : m.icon}
-            </div>
+              <span className="app-nav-icon" aria-hidden="true">{module.icon}</span>
+              {sidebarOpen && <span className="app-nav-label">{module.label}</span>}
+            </button>
           ))}
         </nav>
-      </div>
+      </aside>
 
-      <div style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
-        <div style={{
-          padding: '20px 30px',
-          backgroundColor: 'white',
-          borderBottom: '1px solid #e0e0e0',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 100
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '24px',
-              cursor: 'pointer',
-              color: '#2c3e50',
-              padding: '5px 10px',
-              borderRadius: '4px',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-              ☰
-            </button>
-            <h1 style={{margin: 0, fontSize: '24px', color: '#2c3e50', fontWeight: '600'}}>
-              {entreprise?.nom || 'ComptaOrion ERP'}
-            </h1>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={{fontSize: '12px', color: '#7f8c8d', fontWeight: '500'}}>
-              👤 {user?.nom || user?.username || 'Utilisateur'}
-            </span>
+      <div className="app-main">
+        <header className="app-topbar">
+          <div className="app-topbar-heading">
             <button
-              onClick={handleLogout}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#e74c3c',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: '500'
-              }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#c0392b'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = '#e74c3c'}
+              type="button"
+              className="app-menu-toggle"
+              onClick={() => setSidebarOpen(open => !open)}
+              aria-label={sidebarOpen ? 'Réduire le menu' : 'Ouvrir le menu'}
+              aria-expanded={sidebarOpen}
+              aria-controls="app-navigation"
             >
-              🚪 Déconnexion
+              <span className="app-menu-glyph" aria-hidden="true">☰</span>
+              <span>Menu</span>
+            </button>
+            <div className="app-page-heading">
+              <h1>{activeModule?.label || 'Tableau de bord'}</h1>
+              <p>{entreprise?.nom || 'ComptaOrion ERP'}</p>
+            </div>
+          </div>
+
+          <div className="app-topbar-actions">
+            <div className="app-user-chip" title={user?.nom || user?.username || 'Utilisateur'}>
+              <span className="app-user-avatar" aria-hidden="true">
+                {(user?.nom || user?.username || 'U').trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="app-user-name">{user?.nom || user?.username || 'Utilisateur'}</span>
+            </div>
+            <button type="button" className="app-logout-button" onClick={handleLogout}>
+              <span aria-hidden="true">↪</span>
+              <span>Déconnexion</span>
             </button>
           </div>
-        </div>
-        
-        <div style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: '30px',
-          backgroundColor: '#f5f5f5'
-        }}>
-          <div style={{
-            backgroundColor: 'white', 
-            padding: '30px', 
-            borderRadius: '8px', 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            minHeight: 'calc(100vh - 200px)'
-          }}>
+        </header>
+
+        <main className="app-content-scroll">
+          <div className="app-view-container">
             <Suspense fallback={<LazyModuleFallback />}>
               {renderView()}
             </Suspense>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );
