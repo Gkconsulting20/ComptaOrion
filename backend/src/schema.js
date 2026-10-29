@@ -707,6 +707,7 @@ export const comptesComptables = pgTable('comptes_comptables', {
 export const categoriesDepenses = pgTable('categories_depenses', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  compteComptableId: integer('compte_comptable_id').references(() => comptesComptables.id),
   nom: varchar('nom', { length: 255 }).notNull(),
   description: text('description'),
   limiteApproval: decimal('limite_approval', { precision: 15, scale: 2 }).default('0'),

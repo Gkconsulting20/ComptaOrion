@@ -1,12 +1,29 @@
 import express from 'express';
 import { db } from '../db.js';
-import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, employes, liteIdempotency, projetsAssociatifs } from '../schema.js';
+import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, employes, liteIdempotency, projetsAssociatifs, comptesComptables } from '../schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
-import { createEcritureDepense } from '../services/comptabiliteService.js';
+import { createEcritureDepense, createEcritureChargeNoteFrais } from '../services/comptabiliteService.js';
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
+
+async function getChargeAccount(executor, entrepriseId, rawAccountId) {
+  const accountId = Number(rawAccountId);
+  if (!Number.isSafeInteger(accountId) || accountId <= 0) {
+    throw Object.assign(new Error('Choisissez un compte de charge pour cette catégorie.'), { status: 400 });
+  }
+
+  const [account] = await executor.select().from(comptesComptables).where(and(
+    eq(comptesComptables.id, accountId),
+    eq(comptesComptables.entrepriseId, Number(entrepriseId)),
+    eq(comptesComptables.actif, true),
+  )).limit(1);
+  if (!account || !String(account.numero).startsWith('6')) {
+    throw Object.assign(new Error('Le compte choisi doit être un compte de charge actif de classe 6 de cette entreprise.'), { status: 400 });
+  }
+  return account;
+}
 
 router.get('/projects-options', async (req, res) => {
   try {
@@ -41,10 +58,12 @@ router.get('/categories', async (req, res) => {
 
 router.post('/categories', async (req, res) => {
   try {
-    const { nom, description, limiteApproval } = req.body;
+    const { nom, description, limiteApproval, compteComptableId } = req.body;
     const category = await db.transaction(async (tx) => {
+      const account = await getChargeAccount(tx, req.entrepriseId, compteComptableId);
       const [created] = await tx.insert(categoriesDepenses).values({
         entrepriseId: req.entrepriseId,
+        compteComptableId: account.id,
         nom,
         description,
         limiteApproval: parseFloat(limiteApproval) || 0
@@ -64,6 +83,44 @@ router.post('/categories', async (req, res) => {
     res.status(201).json(category);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/categories/:id', async (req, res) => {
+  try {
+    const categoryId = Number(req.params.id);
+    if (!Number.isSafeInteger(categoryId) || categoryId <= 0) {
+      return res.status(400).json({ error: 'Identifiant de catégorie invalide.' });
+    }
+    const updated = await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(categoriesDepenses).where(and(
+        eq(categoriesDepenses.id, categoryId),
+        eq(categoriesDepenses.entrepriseId, req.entrepriseId),
+      )).for('update').limit(1);
+      if (!previous) throw Object.assign(new Error('Catégorie introuvable.'), { status: 404 });
+      const account = await getChargeAccount(tx, req.entrepriseId, req.body.compteComptableId);
+      const [category] = await tx.update(categoriesDepenses).set({
+        compteComptableId: account.id,
+      }).where(and(
+        eq(categoriesDepenses.id, categoryId),
+        eq(categoriesDepenses.entrepriseId, req.entrepriseId),
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'categories_depenses',
+        recordId: category.id,
+        ancienneValeur: previous,
+        nouvelleValeur: category,
+        description: `Compte de charge modifié pour la catégorie ${category.nom}`,
+        executor: tx,
+        required: true,
+      });
+      return category;
+    });
+    res.json(updated);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -269,6 +326,7 @@ router.post('/approve/:depenseId/:etape', async (req, res) => {
 
       let updatedExpense = expense;
       let nextApproval = null;
+      let accountingEntry = null;
       if (statut === 'rejetée') {
         [updatedExpense] = await tx.update(depenses).set({ statut: 'rejetée', updatedAt: new Date() })
           .where(and(eq(depenses.id, expense.id), eq(depenses.entrepriseId, req.entrepriseId))).returning();
@@ -280,6 +338,35 @@ router.post('/approve/:depenseId/:etape', async (req, res) => {
           statut: 'en_attente'
         }).returning();
       } else {
+        const [category] = await tx.select().from(categoriesDepenses).where(and(
+          eq(categoriesDepenses.id, expense.categorieId),
+          eq(categoriesDepenses.entrepriseId, req.entrepriseId),
+        )).limit(1);
+        if (!category?.compteComptableId) {
+          throw Object.assign(new Error('Associez un compte de charge à cette catégorie avant l’approbation comptable.'), { status: 400 });
+        }
+
+        const charge = await createEcritureChargeNoteFrais({
+          entrepriseId: req.entrepriseId,
+          depenseId: expense.id,
+          dateDepense: expense.dateDepense,
+          description: expense.description || `Dépense #${expense.id}`,
+          montant: expense.montantApprouve || expense.montant,
+          compteChargeId: category.compteComptableId,
+          executor: tx,
+        });
+        accountingEntry = charge.ecriture;
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'CREATE',
+          table: 'ecritures',
+          recordId: charge.ecriture.id,
+          nouvelleValeur: { ecriture: charge.ecriture, lignes: charge.lignes },
+          description: `Charge comptabilisée pour la dépense ${expense.id} sur le compte ${category.compteComptableId}`,
+          executor: tx,
+          required: true,
+        });
+
         [updatedExpense] = await tx.update(depenses).set({
           statut: 'approuvée',
           montantApprouve: expense.montant,
@@ -314,7 +401,11 @@ router.post('/approve/:depenseId/:etape', async (req, res) => {
       }
       return {
         status: 200,
-        body: { message: statut === 'rejetée' ? 'Dépense rejetée' : `Dépense approuvée pour l'étape: ${etape}`, approval }
+        body: {
+          message: statut === 'rejetée' ? 'Dépense rejetée' : `Dépense approuvée pour l'étape: ${etape}`,
+          approval,
+          accountingEntry,
+        }
       };
     });
     res.status(result.status).json(result.body);

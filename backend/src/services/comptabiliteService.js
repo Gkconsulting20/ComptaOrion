@@ -605,6 +605,74 @@ export async function createEcriturePaiementClient(params) {
   });
 }
 
+export async function createEcritureChargeNoteFrais({
+  entrepriseId,
+  depenseId,
+  dateDepense,
+  description,
+  montant,
+  compteChargeId,
+  executor = db,
+}) {
+  const tenantId = Number(entrepriseId);
+  const [chargeAccount] = await executor.select().from(comptesComptables).where(and(
+    eq(comptesComptables.id, Number(compteChargeId)),
+    eq(comptesComptables.entrepriseId, tenantId),
+    eq(comptesComptables.actif, true),
+  )).limit(1);
+  const [employeeAdvanceAccount] = await executor.select().from(comptesComptables).where(and(
+    eq(comptesComptables.entrepriseId, tenantId),
+    eq(comptesComptables.numero, COMPTES_SYSCOHADA.PERSONNEL_AVANCES),
+    eq(comptesComptables.actif, true),
+  )).limit(1);
+
+  if (!chargeAccount || !String(chargeAccount.numero).startsWith('6')) {
+    throw Object.assign(new Error('La catégorie doit être liée à un compte de charge actif de classe 6.'), { status: 400 });
+  }
+  if (!employeeAdvanceAccount) {
+    throw Object.assign(new Error('Le compte d’avances au personnel (421) est requis pour comptabiliser cette dépense.'), { status: 400 });
+  }
+
+  const reference = `DEP-${Number(depenseId)}`;
+  const [existing] = await executor.select().from(ecritures).where(and(
+    eq(ecritures.entrepriseId, tenantId),
+    eq(ecritures.numeroPiece, reference),
+  )).limit(1);
+  if (existing) {
+    throw Object.assign(new Error('Une écriture existe déjà pour cette dépense; vérifiez son historique avant de poursuivre.'), { status: 409 });
+  }
+
+  const amount = Number(montant);
+  const lignes = [
+    {
+      compteComptableId: chargeAccount.id,
+      debit: amount,
+      credit: 0,
+      libelle: description,
+    },
+    {
+      compteComptableId: employeeAdvanceAccount.id,
+      debit: 0,
+      credit: amount,
+      libelle: 'Dette envers l’employé pour dépense approuvée',
+    },
+  ];
+  const ecriture = await createEcritureComptable({
+    entrepriseId: tenantId,
+    journalCode: JOURNAL_CODES.OD,
+    journalNom: 'Journal des opérations diverses',
+    journalType: 'OD',
+    dateEcriture: new Date(dateDepense),
+    libelle: `Charge approuvée - ${description}`,
+    numeroPiece: reference,
+    lignes,
+    valide: true,
+    executor,
+  });
+
+  return { ecriture, lignes };
+}
+
 export async function createEcritureDepense(params) {
   const {
     entrepriseId,

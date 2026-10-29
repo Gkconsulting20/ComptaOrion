@@ -8,7 +8,7 @@ const scopeArg = process.argv.find(arg => arg.startsWith('--scope='));
 const scope = scopeArg?.slice('--scope='.length);
 const migrationScopes = new Map([
   ['stock-units', new Set(['produits', 'lignes_reception', 'facture_achat_items'])],
-  ['expense-tracking', new Set(['projets_associatifs', 'depenses'])],
+  ['expense-tracking', new Set(['projets_associatifs', 'categories_depenses', 'depenses'])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);

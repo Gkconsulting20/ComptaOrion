@@ -143,6 +143,33 @@ async function getCostOfSalesForInvoices(entrepriseId, salesInvoices) {
   return { cmv: complete ? Math.round(cmv * 100) / 100 : null, complete };
 }
 
+async function getAccountedExpensesByAccount(entrepriseId, period) {
+  const rows = await db.select({
+    numeroCompte: comptesComptables.numero,
+    nomCompte: comptesComptables.nom,
+    montant: sql`COALESCE(SUM(${lignesEcritures.debit} - ${lignesEcritures.credit}), 0)`,
+  }).from(ecritures)
+    .innerJoin(lignesEcritures, and(
+      eq(lignesEcritures.ecritureId, ecritures.id),
+      eq(lignesEcritures.entrepriseId, ecritures.entrepriseId),
+    ))
+    .innerJoin(comptesComptables, and(
+      eq(comptesComptables.id, lignesEcritures.compteComptableId),
+      eq(comptesComptables.entrepriseId, lignesEcritures.entrepriseId),
+    ))
+    .where(and(
+      eq(ecritures.entrepriseId, Number(entrepriseId)),
+      eq(ecritures.valide, true),
+      gte(ecritures.dateEcriture, period.start),
+      lte(ecritures.dateEcriture, period.effectiveEnd),
+      like(comptesComptables.numero, '6%'),
+    ))
+    .groupBy(comptesComptables.numero, comptesComptables.nom)
+    .orderBy(desc(sql`SUM(${lignesEcritures.debit} - ${lignesEcritures.credit})`));
+
+  return rows.map((row) => ({ ...row, montant: Number(row.montant || 0) }));
+}
+
 // Dashboard global - tous les KPIs
 router.get('/global', async (req, res) => {
   try {
