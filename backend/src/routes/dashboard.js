@@ -1,9 +1,40 @@
 import express from 'express';
 import { db } from '../db.js';
-import { factures, paiements, facturesAchat, paiementsFournisseurs, stockParEntrepot, produits, mouvementsStock, factureItems, entreprises } from '../schema.js';
-import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
+import {
+  factures,
+  paiements,
+  facturesAchat,
+  paiementsFournisseurs,
+  stockParEntrepot,
+  produits,
+  mouvementsStock,
+  factureItems,
+  entreprises,
+  depenses as depensesTable,
+  categoriesDepenses,
+  ecritures,
+  lignesEcritures,
+  comptesComptables,
+  valorisationsStock,
+} from '../schema.js';
+import { eq, and, gte, lte, desc, sql, inArray, like } from 'drizzle-orm';
+import {
+  VALID_SALES_STATUSES,
+  VALID_PURCHASE_STATUSES,
+  calculateCashConversionCycle,
+  calculateCurrentInventoryValue,
+  calculateGrossMargin,
+  calculateNetCashflow,
+  calculateWorkingCapitalDays,
+  countInclusiveDays,
+  dateOnly,
+  outstandingBalanceAt,
+  sumMoney,
+} from '../services/dashboardMetrics.js';
 
 const router = express.Router();
+const SALES_STATUS_VALUES = [...VALID_SALES_STATUSES];
+const PURCHASE_STATUS_VALUES = [...VALID_PURCHASE_STATUSES];
 
 // Fonction utilitaire pour obtenir dates de l'année fiscale par défaut (année civile)
 function getDefaultFiscalYearDates() {
@@ -34,228 +65,234 @@ async function getFiscalYearDatesForEntreprise(entrepriseId) {
   return getDefaultFiscalYearDates();
 }
 
-// Fonction utilitaire pour obtenir dates du mois
-function getMonthDates() {
-  const now = new Date();
-  const debut = new Date(now.getFullYear(), now.getMonth(), 1);
-  const fin = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { debut, fin };
+async function getDashboardPeriod(req, entrepriseId) {
+  const defaults = await getFiscalYearDatesForEntreprise(entrepriseId);
+  const start = dateOnly(req.query.dateDebut || req.query.startDate || defaults.debut);
+  const end = dateOnly(req.query.dateFin || req.query.endDate || defaults.fin);
+  if (!start || !end || start > end) {
+    throw Object.assign(new Error('La période sélectionnée est invalide.'), { status: 400 });
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const effectiveEnd = end < today ? end : today;
+  return {
+    start,
+    end,
+    effectiveEnd,
+    days: countInclusiveDays(start, effectiveEnd),
+  };
+}
+
+async function getCostOfSalesForInvoices(entrepriseId, salesInvoices) {
+  if (!salesInvoices.length) return { cmv: 0, complete: true };
+
+  const invoiceIds = salesInvoices.map((invoice) => invoice.id);
+  const pieces = salesInvoices
+    .filter((invoice) => invoice.numeroFacture)
+    .map((invoice) => `${invoice.numeroFacture}-CMV`);
+
+  const [items, costRows] = await Promise.all([
+    db.select({
+      factureId: factureItems.factureId,
+      produitId: factureItems.produitId,
+    }).from(factureItems).where(and(
+      eq(factureItems.entrepriseId, entrepriseId),
+      inArray(factureItems.factureId, invoiceIds),
+    )),
+    pieces.length
+      ? db.select({
+        numeroPiece: ecritures.numeroPiece,
+        montant: sql`COALESCE(SUM(${lignesEcritures.debit} - ${lignesEcritures.credit}), 0)`,
+      })
+        .from(ecritures)
+        .innerJoin(lignesEcritures, eq(lignesEcritures.ecritureId, ecritures.id))
+        .innerJoin(comptesComptables, eq(comptesComptables.id, lignesEcritures.compteComptableId))
+        .where(and(
+          eq(ecritures.entrepriseId, entrepriseId),
+          inArray(ecritures.numeroPiece, pieces),
+          like(comptesComptables.numero, '603%'),
+        ))
+        .groupBy(ecritures.numeroPiece)
+      : Promise.resolve([]),
+  ]);
+
+  const itemsByInvoice = new Map();
+  for (const item of items) {
+    const rows = itemsByInvoice.get(Number(item.factureId)) || [];
+    rows.push(item);
+    itemsByInvoice.set(Number(item.factureId), rows);
+  }
+  const costByPiece = new Map(costRows.map((row) => [row.numeroPiece, Number(row.montant || 0)]));
+
+  let complete = true;
+  let cmv = 0;
+  for (const invoice of salesInvoices) {
+    const invoiceItems = itemsByInvoice.get(Number(invoice.id)) || [];
+    const piece = invoice.numeroFacture ? `${invoice.numeroFacture}-CMV` : null;
+    const hasRecordedCost = piece ? costByPiece.has(piece) : false;
+    const hasStockItems = invoiceItems.some((item) => item.produitId != null);
+    if ((invoiceItems.length === 0 && Number(invoice.totalHT || 0) > 0 && !hasRecordedCost) ||
+        (hasStockItems && !hasRecordedCost)) {
+      complete = false;
+    }
+    if (hasRecordedCost) cmv += costByPiece.get(piece);
+  }
+
+  return { cmv: complete ? Math.round(cmv * 100) / 100 : null, complete };
 }
 
 // Dashboard global - tous les KPIs
 router.get('/global', async (req, res) => {
   try {
-    const { dateDebut, dateFin, startDate, endDate } = req.query;
     const eId = req.entrepriseId;
     
     if (!eId) {
       return res.status(401).json({ error: 'Authentification requise' });
     }
     
-    // Par défaut: année fiscale de l'entreprise
-    const { debut, fin } = await getFiscalYearDatesForEntreprise(eId);
-    const dateStart = dateDebut ? new Date(dateDebut) : (startDate ? new Date(startDate) : debut);
-    const dateEnd = dateFin ? new Date(dateFin) : (endDate ? new Date(endDate) : fin);
-
-    // Ventes du mois (factures payées/envoyées)
-    const ventesData = await db.query.factures.findMany({
-      where: and(
+    const period = await getDashboardPeriod(req, eId);
+    const dateFilter = (column) => and(
+      gte(column, period.start),
+      lte(column, period.effectiveEnd),
+    );
+    const [salesHistory, purchasesHistory, clientPaymentHistory, supplierPaymentHistory, allProducts, valuationLayers] = await Promise.all([
+      db.select({
+        id: factures.id,
+        numeroFacture: factures.numeroFacture,
+        statut: factures.statut,
+        dateFacture: factures.dateFacture,
+        totalHT: factures.totalHT,
+        totalTTC: factures.totalTTC,
+        soldeRestant: factures.soldeRestant,
+      }).from(factures).where(and(
         eq(factures.entrepriseId, eId),
-        gte(factures.createdAt, dateStart),
-        lte(factures.createdAt, dateEnd)
-      )
-    });
-    const ventesMois = ventesData.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
-
-    // Dépenses du mois (factures fournisseurs)
-    const depensesData = await db.query.facturesAchat.findMany({
-      where: and(
+        lte(factures.dateFacture, period.effectiveEnd),
+        inArray(factures.statut, SALES_STATUS_VALUES),
+      )),
+      db.select({
+        id: facturesAchat.id,
+        statut: facturesAchat.statut,
+        dateFacture: facturesAchat.dateFacture,
+        totalHT: facturesAchat.totalHT,
+        totalTTC: facturesAchat.totalTTC,
+        fournisseurId: facturesAchat.fournisseurId,
+      }).from(facturesAchat).where(and(
         eq(facturesAchat.entrepriseId, eId),
-        gte(facturesAchat.createdAt, dateStart),
-        lte(facturesAchat.createdAt, dateEnd)
-      )
-    });
-    const depensesMois = depensesData.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
+        lte(facturesAchat.dateFacture, period.effectiveEnd),
+        inArray(facturesAchat.statut, PURCHASE_STATUS_VALUES),
+      )),
+      db.select({
+        factureId: paiements.factureId,
+        montant: paiements.montant,
+        datePaiement: paiements.datePaiement,
+      }).from(paiements).where(and(
+        eq(paiements.entrepriseId, eId),
+        lte(paiements.datePaiement, period.effectiveEnd),
+      )),
+      db.select({
+        factureId: paiementsFournisseurs.factureId,
+        montant: paiementsFournisseurs.montant,
+        datePaiement: paiementsFournisseurs.datePaiement,
+      }).from(paiementsFournisseurs).where(and(
+        eq(paiementsFournisseurs.entrepriseId, eId),
+        lte(paiementsFournisseurs.datePaiement, period.effectiveEnd),
+      )),
+      db.query.produits.findMany({ where: eq(produits.entrepriseId, eId) }),
+      db.select({
+        produitId: valorisationsStock.produitId,
+        quantite: valorisationsStock.quantite,
+        coutTotal: valorisationsStock.coutTotal,
+      }).from(valorisationsStock).where(eq(valorisationsStock.entrepriseId, eId)),
+    ]);
+    const inPeriod = (date) => {
+      const normalized = dateOnly(date);
+      return normalized && normalized >= period.start && normalized <= period.effectiveEnd;
+    };
+    const ventesData = salesHistory.filter((invoice) => inPeriod(invoice.dateFacture));
+    const achatsData = purchasesHistory.filter((invoice) => inPeriod(invoice.dateFacture));
+    const approvedExpenseRows = await db.select({
+      montant: depensesTable.montant,
+      montantApprouve: depensesTable.montantApprouve,
+    }).from(depensesTable).where(and(
+      eq(depensesTable.entrepriseId, eId),
+      eq(depensesTable.statut, 'approuvée'),
+      dateFilter(depensesTable.dateDepense),
+    ));
+    const approvedExpenseTotal = approvedExpenseRows.reduce(
+      (sum, expense) => sum + Number(expense.montantApprouve || expense.montant || 0),
+      0,
+    );
+    const ventesMois = sumMoney(ventesData, 'totalTTC');
+    const depensesMois = sumMoney(achatsData, 'totalTTC') + approvedExpenseTotal;
+    const ventesHT = sumMoney(ventesData, 'totalHT');
 
     // Factures en retard (statut = 'retard') - dans la période sélectionnée
-    const factulesRetard = await db.query.factures.findMany({
-      where: and(
-        eq(factures.entrepriseId, eId),
-        eq(factures.statut, 'retard'),
-        gte(factures.createdAt, dateStart),
-        lte(factures.createdAt, dateEnd)
-      )
-    });
-    const facturesRetardTotal = factulesRetard.length;
-    const montantRetard = factulesRetard.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
+    const facturesRetard = ventesData.filter((invoice) => invoice.statut === 'retard');
+    const facturesRetardTotal = facturesRetard.length;
+    const montantRetard = facturesRetard.reduce((sum, invoice) => sum + Math.max(0, Number(invoice.soldeRestant || 0)), 0);
 
     // Stock faible (quantité < seuil minimum)
-    const stockFaible = await db.query.produits.findMany({
-      where: eq(produits.entrepriseId, eId)
-    });
-    const produitsFaibles = stockFaible.filter(p => {
-      return parseFloat(p.quantite || 0) < parseFloat(p.stockMinimum || 0);
-    });
+    const produitsFaibles = allProducts.filter((product) =>
+      Number(product.quantite || 0) < Number(product.stockMinimum || 0)
+    );
 
-    // Calcul du Coût des Marchandises Vendues (CMV)
-    // Méthode 1: À partir des lignes de factures (si disponibles)
-    // Méthode 2: Estimation basée sur les achats de la période (fallback)
-    const facturesIds = ventesData.map(f => f.id);
-    let cmv = 0;
-    let cmvMethode = 'lignes_factures';
-    
-    if (facturesIds.length > 0) {
-      // Récupérer tous les produits pour avoir leurs prix d'achat
-      const produitsMap = {};
-      const allProduits = await db.query.produits.findMany({
-        where: eq(produits.entrepriseId, eId)
-      });
-      allProduits.forEach(p => { produitsMap[p.id] = parseFloat(p.prixAchat || 0); });
-      
-      // Calculer le CMV à partir des lignes de factures (requête sécurisée)
-      const itemsResult = await db
-        .select({
-          produitId: factureItems.produitId,
-          quantite: factureItems.quantite,
-          prixUnitaire: factureItems.prixUnitaire
-        })
-        .from(factureItems)
-        .where(
-          and(
-            eq(factureItems.entrepriseId, eId),
-            sql`${factureItems.factureId} IN (${sql.join(facturesIds.map(id => sql`${id}`), sql`, `)})`
-          )
-        );
-      
-      (itemsResult || []).forEach(item => {
-        const prixAchat = produitsMap[item.produitId] || 0;
-        const quantite = parseFloat(item.quantite || 0);
-        cmv += quantite * prixAchat;
-      });
-    }
+    const costOfSales = await getCostOfSalesForInvoices(eId, ventesData);
+    const grossMargin = calculateGrossMargin(ventesHT, costOfSales.cmv, costOfSales.complete);
+    const clientPaymentsInPeriod = clientPaymentHistory.filter((payment) => inPeriod(payment.datePaiement));
+    const supplierPaymentsInPeriod = supplierPaymentHistory.filter((payment) => inPeriod(payment.datePaiement));
+    const cashflow = calculateNetCashflow([
+      ...clientPaymentsInPeriod.map((payment) => ({ ...payment, type: 'encaissement' })),
+      ...supplierPaymentsInPeriod.map((payment) => ({ ...payment, type: 'decaissement' })),
+    ]);
 
-    // Si CMV = 0, utiliser les achats (factures fournisseurs) comme estimation
-    if (cmv === 0 && depensesMois > 0) {
-      // Utiliser le total HT des achats comme approximation du CMV
-      cmv = depensesData.reduce((sum, f) => sum + parseFloat(f.totalHT || f.totalTTC * 0.82 || 0), 0);
-      cmvMethode = 'achats_periode';
-    }
+    const arOpening = outstandingBalanceAt(
+      salesHistory, clientPaymentHistory, period.start, SALES_STATUS_VALUES, false,
+    );
+    const arClosing = outstandingBalanceAt(
+      salesHistory, clientPaymentHistory, period.effectiveEnd, SALES_STATUS_VALUES, true,
+    );
+    const apOpening = outstandingBalanceAt(
+      purchasesHistory, supplierPaymentHistory, period.start, PURCHASE_STATUS_VALUES, false,
+    );
+    const apClosing = outstandingBalanceAt(
+      purchasesHistory, supplierPaymentHistory, period.effectiveEnd, PURCHASE_STATUS_VALUES, true,
+    );
+    const dso = calculateWorkingCapitalDays(arOpening, arClosing, sumMoney(ventesData, 'totalTTC'), period.days);
+    const dpo = calculateWorkingCapitalDays(apOpening, apClosing, sumMoney(achatsData, 'totalTTC'), period.days);
+    const inventoryValue = calculateCurrentInventoryValue(allProducts, valuationLayers);
 
-    // Marge brute = (Ventes HT - CMV) / Ventes HT × 100
-    const ventesHT = ventesData.reduce((sum, f) => sum + parseFloat(f.totalHT || f.totalTTC * 0.82 || 0), 0);
-    
-    // Calculer la marge brute (limiter entre 0 et 100% pour éviter les valeurs aberrantes)
-    let margeBrute = 0;
-    if (ventesHT > 0 && cmv > 0) {
-      margeBrute = Math.max(0, Math.min(100, ((ventesHT - cmv) / ventesHT * 100))).toFixed(2);
-    } else if (ventesHT > 0 && cmv === 0) {
-      // Pas de données CMV fiables - afficher N/A ou estimation
-      margeBrute = null; // Sera affiché comme "N/A" sur le frontend
-    }
-
-    // Cashflow = Ventes - Dépenses
-    const cashflow = ventesMois - depensesMois;
-
-    // =====================
-    // CALCUL DES KPIs CYCLE DE TRÉSORERIE
-    // =====================
-    
-    // DSO (Days Sales Outstanding) - Délai moyen de paiement clients
-    // Utilise la DERNIÈRE date de paiement pour les factures avec paiements multiples
-    const paiementsClients = await db.query.paiements.findMany({
-      where: eq(paiements.entrepriseId, eId)
-    });
-    
-    // Grouper les paiements par facture et prendre la dernière date
-    const dernierPaiementClient = {};
-    paiementsClients.forEach(p => {
-      if (p.factureId && p.datePaiement) {
-        const datePaiement = new Date(p.datePaiement);
-        if (!dernierPaiementClient[p.factureId] || datePaiement > dernierPaiementClient[p.factureId]) {
-          dernierPaiementClient[p.factureId] = datePaiement;
-        }
-      }
-    });
-    
-    let dsoTotal = 0, dsoCount = 0;
-    ventesData.forEach(f => {
-      const dernierePaiementDate = dernierPaiementClient[f.id];
-      if (dernierePaiementDate) {
-        const dateFacture = new Date(f.dateFacture || f.createdAt);
-        const delai = (dernierePaiementDate - dateFacture) / (1000 * 60 * 60 * 24);
-        if (delai > 0) { dsoTotal += delai; dsoCount++; }
-      }
-    });
-    const dso = dsoCount > 0 ? Math.round(dsoTotal / dsoCount) : 0;
-    
-    // DPO (Days Payable Outstanding) - Délai moyen de paiement fournisseurs
-    // Utilise la DERNIÈRE date de paiement pour les factures avec paiements multiples
-    const paiementsFourn = await db.query.paiementsFournisseurs.findMany({
-      where: eq(paiementsFournisseurs.entrepriseId, eId)
-    });
-    
-    // Grouper les paiements par facture et prendre la dernière date
-    const dernierPaiementFourn = {};
-    paiementsFourn.forEach(p => {
-      if (p.factureId && p.datePaiement) {
-        const datePaiement = new Date(p.datePaiement);
-        if (!dernierPaiementFourn[p.factureId] || datePaiement > dernierPaiementFourn[p.factureId]) {
-          dernierPaiementFourn[p.factureId] = datePaiement;
-        }
-      }
-    });
-    
-    let dpoTotal = 0, dpoCount = 0;
-    depensesData.forEach(f => {
-      const dernierePaiementDate = dernierPaiementFourn[f.id];
-      if (dernierePaiementDate) {
-        const dateFacture = new Date(f.dateFacture || f.createdAt);
-        const delai = (dernierePaiementDate - dateFacture) / (1000 * 60 * 60 * 24);
-        if (delai > 0) { dpoTotal += delai; dpoCount++; }
-      }
-    });
-    const dpo = dpoCount > 0 ? Math.round(dpoTotal / dpoCount) : 0;
-    
-    // DIO (Days Inventory Outstanding) - Rotation des stocks
-    // DIO = (Stock moyen / CMV) × nombre de jours de la période
-    const stockActuel = await db.query.produits.findMany({
-      where: eq(produits.entrepriseId, eId)
-    });
-    const valeurStockActuel = stockActuel.reduce((sum, p) => {
-      return sum + (parseFloat(p.quantite || 0) * parseFloat(p.prixAchat || 0));
-    }, 0);
-    const nombreJours = Math.ceil((dateEnd - dateStart) / (1000 * 60 * 60 * 24)) || 30;
-    const dio = cmv > 0 ? Math.round((valeurStockActuel / cmv) * nombreJours) : 0;
-    
-    // CCC (Cash Conversion Cycle) - Cycle de conversion de trésorerie
-    // CCC = DSO + DIO - DPO
-    const ccc = dso + dio - dpo;
+    // Il n'existe pas encore d'instantanés historiques permettant d'obtenir le stock moyen de la période.
+    const dio = null;
+    const ccc = calculateCashConversionCycle(dso, dio, dpo);
 
     res.json({
-      ventesMois: parseFloat(ventesMois).toFixed(2),
-      depensesMois: parseFloat(depensesMois).toFixed(2),
+      ventesMois: ventesMois.toFixed(2),
+      depensesMois: depensesMois.toFixed(2),
       facturesEnRetard: {
         nombre: facturesRetardTotal,
-        montant: parseFloat(montantRetard).toFixed(2)
+        montant: montantRetard.toFixed(2)
       },
       stockFaible: {
         nombre: produitsFaibles.length,
         produits: produitsFaibles.slice(0, 5)
       },
-      margeBrute: margeBrute !== null ? parseFloat(margeBrute) : null,
-      cmv: Math.round(cmv),
-      ventesHT: Math.round(ventesHT),
-      cashflow: parseFloat(cashflow).toFixed(2),
-      dateRange: { debut: dateStart, fin: dateEnd },
-      // KPIs du cycle de trésorerie
-      dso, // Délai paiement clients (jours)
-      dpo, // Délai paiement fournisseurs (jours)
-      dio, // Rotation stock (jours)
-      ccc, // Cycle de conversion trésorerie (jours)
-      valeurStock: Math.round(valeurStockActuel)
+      margeBrute: grossMargin.marginPercent,
+      cmv: grossMargin.cmv,
+      cmvDisponible: costOfSales.complete,
+      ventesHT: Math.round(ventesHT * 100) / 100,
+      cashflow: cashflow.toFixed(2),
+      cashflowDefinition: 'Paiements clients reçus moins paiements fournisseurs effectués',
+      dateRange: { debut: period.start, fin: period.end },
+      dso,
+      dpo,
+      dio,
+      ccc,
+      valeurStock: inventoryValue.value,
+      valeurStockDisponible: inventoryValue.complete,
+      dioIndisponibleRaison: 'L’application ne conserve pas encore de valorisations historiques du stock.',
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -264,38 +301,34 @@ router.get('/ventes-mensuelles', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
-    
-    const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
-    const periodStart = dateDebut ? new Date(dateDebut) : defaultDebut;
-    const periodEnd = dateFin ? new Date(dateFin) : defaultFin;
+    const period = await getDashboardPeriod(req, eId);
+    const periodStart = new Date(`${period.start}T00:00:00.000Z`);
+    const periodEnd = new Date(`${period.effectiveEnd}T00:00:00.000Z`);
     
     const data = [];
-    const current = new Date(periodStart.getFullYear(), periodStart.getMonth(), 1);
+    const current = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), 1));
     
     while (current <= periodEnd) {
-      const debut = new Date(current.getFullYear(), current.getMonth(), 1);
-      const fin = new Date(current.getFullYear(), current.getMonth() + 1, 0);
-      
-      if (fin > periodEnd) {
-        fin.setTime(periodEnd.getTime());
-      }
+      const monthStart = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), 1)).toISOString().slice(0, 10);
+      const monthEnd = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+      const start = monthStart < period.start ? period.start : monthStart;
+      const end = monthEnd > period.effectiveEnd ? period.effectiveEnd : monthEnd;
 
       const ventes = await db.query.factures.findMany({
         where: and(
           eq(factures.entrepriseId, eId),
-          gte(factures.createdAt, debut),
-          lte(factures.createdAt, fin)
+          gte(factures.dateFacture, start),
+          lte(factures.dateFacture, end),
+          inArray(factures.statut, SALES_STATUS_VALUES),
         )
       });
 
-      const total = ventes.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
+      const total = sumMoney(ventes, 'totalTTC');
       data.push({
-        mois: debut.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
-        ventes: parseFloat(total).toFixed(2)
+        mois: current.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
+        ventes: total.toFixed(2),
       });
-      
-      current.setMonth(current.getMonth() + 1);
+      current.setUTCMonth(current.getUTCMonth() + 1);
     }
 
     res.json(data);
@@ -309,35 +342,48 @@ router.get('/depenses-categories', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
-    
-    const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
-    const periodStart = dateDebut ? new Date(dateDebut) : defaultDebut;
-    const periodEnd = dateFin ? new Date(dateFin) : defaultFin;
+    const period = await getDashboardPeriod(req, eId);
+    const [purchaseBills, expenseClaims] = await Promise.all([
+      db.query.facturesAchat.findMany({
+        where: and(
+          eq(facturesAchat.entrepriseId, eId),
+          gte(facturesAchat.dateFacture, period.start),
+          lte(facturesAchat.dateFacture, period.effectiveEnd),
+          inArray(facturesAchat.statut, PURCHASE_STATUS_VALUES),
+        ),
+        with: { fournisseur: true },
+      }),
+      db.select({
+        montant: depensesTable.montant,
+        montantApprouve: depensesTable.montantApprouve,
+        categorie: categoriesDepenses.nom,
+      }).from(depensesTable)
+        .leftJoin(categoriesDepenses, eq(categoriesDepenses.id, depensesTable.categorieId))
+        .where(and(
+          eq(depensesTable.entrepriseId, eId),
+          eq(depensesTable.statut, 'approuvée'),
+          gte(depensesTable.dateDepense, period.start),
+          lte(depensesTable.dateDepense, period.effectiveEnd),
+        )),
+    ]);
 
-    const depenses = await db.query.facturesAchat.findMany({
-      where: and(
-        eq(facturesAchat.entrepriseId, eId),
-        gte(facturesAchat.createdAt, periodStart),
-        lte(facturesAchat.createdAt, periodEnd)
-      )
-    });
+    const byCategory = new Map();
+    for (const bill of purchaseBills) {
+      const category = bill.fournisseur?.nom || 'Achats fournisseurs';
+      byCategory.set(category, (byCategory.get(category) || 0) + Number(bill.totalTTC || 0));
+    }
+    for (const expense of expenseClaims) {
+      const category = expense.categorie || 'Autres dépenses approuvées';
+      byCategory.set(category, (byCategory.get(category) || 0) + Number(expense.montantApprouve || expense.montant || 0));
+    }
 
-    // Grouper par fournisseur (comme catégorie)
-    const byFournisseur = {};
-    depenses.forEach(d => {
-      const key = d.fournisseurId || 'Autre';
-      byFournisseur[key] = (byFournisseur[key] || 0) + parseFloat(d.totalTTC || 0);
-    });
-
-    const data = Object.entries(byFournisseur).map(([id, total]) => ({
-      fournisseurId: id,
-      total: parseFloat(total).toFixed(2)
-    }));
+    const data = [...byCategory.entries()]
+      .map(([categorie, montant]) => ({ categorie, montant: montant.toFixed(2) }))
+      .sort((a, b) => Number(b.montant) - Number(a.montant));
 
     res.json(data);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -407,28 +453,24 @@ router.get('/detail/ventes', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
-    
-    const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
-    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
-    const fin = dateFin ? new Date(dateFin) : defaultFin;
-    
+    const period = await getDashboardPeriod(req, eId);
     const ventesData = await db.query.factures.findMany({
       where: and(
         eq(factures.entrepriseId, eId),
-        gte(factures.createdAt, debut),
-        lte(factures.createdAt, fin)
+        gte(factures.dateFacture, period.start),
+        lte(factures.dateFacture, period.effectiveEnd),
+        inArray(factures.statut, SALES_STATUS_VALUES),
       ),
       with: { client: true },
-      orderBy: [desc(factures.createdAt)]
+      orderBy: [desc(factures.dateFacture)]
     });
     
     const result = ventesData.map(f => ({
       id: f.id,
-      numero: f.numero,
-      dateFacture: f.dateFacture || f.createdAt,
+      numero: f.numeroFacture,
+      dateFacture: f.dateFacture,
       clientNom: f.client?.nom || f.client?.raisonSociale || 'Client inconnu',
-      montantTTC: parseFloat(f.totalTTC || f.montantTTC || 0),
+      montantTTC: Number(f.totalTTC || 0),
       statut: f.statut
     }));
     
@@ -443,29 +485,48 @@ router.get('/detail/depenses', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
-    
-    const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
-    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
-    const fin = dateFin ? new Date(dateFin) : defaultFin;
-    
-    const depensesData = await db.query.facturesAchat.findMany({
-      where: and(
-        eq(facturesAchat.entrepriseId, eId),
-        gte(facturesAchat.createdAt, debut),
-        lte(facturesAchat.createdAt, fin)
-      ),
-      with: { fournisseur: true },
-      orderBy: [desc(facturesAchat.createdAt)]
-    });
-    
-    const result = depensesData.map(f => ({
+    const period = await getDashboardPeriod(req, eId);
+    const [purchaseBills, expenseClaims] = await Promise.all([
+      db.query.facturesAchat.findMany({
+        where: and(
+          eq(facturesAchat.entrepriseId, eId),
+          gte(facturesAchat.dateFacture, period.start),
+          lte(facturesAchat.dateFacture, period.effectiveEnd),
+          inArray(facturesAchat.statut, PURCHASE_STATUS_VALUES),
+        ),
+        with: { fournisseur: true },
+        orderBy: [desc(facturesAchat.dateFacture)]
+      }),
+      db.select({
+        id: depensesTable.id,
+        date: depensesTable.dateDepense,
+        description: depensesTable.description,
+        montant: depensesTable.montant,
+        montantApprouve: depensesTable.montantApprouve,
+        categorie: categoriesDepenses.nom,
+      }).from(depensesTable)
+        .leftJoin(categoriesDepenses, eq(categoriesDepenses.id, depensesTable.categorieId))
+        .where(and(
+          eq(depensesTable.entrepriseId, eId),
+          eq(depensesTable.statut, 'approuvée'),
+          gte(depensesTable.dateDepense, period.start),
+          lte(depensesTable.dateDepense, period.effectiveEnd),
+        )),
+    ]);
+
+    const result = purchaseBills.map(f => ({
       id: f.id,
-      date: f.dateFacture || f.createdAt,
+      date: f.dateFacture,
       description: f.numero || `Facture #${f.id}`,
-      categorie: f.fournisseur?.nom || 'Fournisseur',
-      montant: parseFloat(f.totalTTC || 0)
-    }));
+      categorie: f.fournisseur?.nom || 'Achats fournisseurs',
+      montant: Number(f.totalTTC || 0)
+    })).concat(expenseClaims.map((expense) => ({
+      id: `depense-${expense.id}`,
+      date: expense.date,
+      description: expense.description || `Dépense #${expense.id}`,
+      categorie: expense.categorie || 'Autres dépenses approuvées',
+      montant: Number(expense.montantApprouve || expense.montant || 0),
+    }))).sort((a, b) => new Date(b.date) - new Date(a.date));
     
     res.json(result);
   } catch (error) {
@@ -478,19 +539,15 @@ router.get('/detail/factures-retard', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
-    
-    const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
-    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
-    const fin = dateFin ? new Date(dateFin) : defaultFin;
+    const period = await getDashboardPeriod(req, eId);
     const now = new Date();
     
     const facturesRetard = await db.query.factures.findMany({
       where: and(
         eq(factures.entrepriseId, eId),
         eq(factures.statut, 'retard'),
-        gte(factures.createdAt, debut),
-        lte(factures.createdAt, fin)
+        gte(factures.dateFacture, period.start),
+        lte(factures.dateFacture, period.effectiveEnd),
       ),
       with: { client: true },
       orderBy: [desc(factures.dateEcheance)]
@@ -501,8 +558,8 @@ router.get('/detail/factures-retard', async (req, res) => {
       const joursRetard = Math.max(0, Math.floor((now - echeance) / (1000 * 60 * 60 * 24)));
       return {
         id: f.id,
-        numero: f.numero,
-        dateFacture: f.dateFacture || f.createdAt,
+        numero: f.numeroFacture,
+        dateFacture: f.dateFacture,
         clientNom: f.client?.nom || f.client?.raisonSociale || 'Client inconnu',
         dateEcheance: f.dateEcheance,
         joursRetard,
@@ -557,18 +614,14 @@ router.get('/detail/cashflow', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
-    
-    const { dateDebut, dateFin } = req.query;
-    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
-    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
-    const fin = dateFin ? new Date(dateFin) : defaultFin;
+    const period = await getDashboardPeriod(req, eId);
     
     // Récupérer paiements clients (entrées)
     const paiementsClients = await db.query.paiements.findMany({
       where: and(
         eq(paiements.entrepriseId, eId),
-        gte(paiements.datePaiement, debut),
-        lte(paiements.datePaiement, fin)
+        gte(paiements.datePaiement, period.start),
+        lte(paiements.datePaiement, period.effectiveEnd)
       ),
       orderBy: [desc(paiements.datePaiement)]
     });
@@ -577,8 +630,8 @@ router.get('/detail/cashflow', async (req, res) => {
     const paiementsFourn = await db.query.paiementsFournisseurs.findMany({
       where: and(
         eq(paiementsFournisseurs.entrepriseId, eId),
-        gte(paiementsFournisseurs.datePaiement, debut),
-        lte(paiementsFournisseurs.datePaiement, fin)
+        gte(paiementsFournisseurs.datePaiement, period.start),
+        lte(paiementsFournisseurs.datePaiement, period.effectiveEnd)
       ),
       orderBy: [desc(paiementsFournisseurs.datePaiement)]
     });
@@ -621,38 +674,37 @@ router.get('/detail/marge', async (req, res) => {
   try {
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
-    const { debut, fin } = getMonthDates();
-    
-    // Ventes du mois
+    const period = await getDashboardPeriod(req, eId);
     const ventesData = await db.query.factures.findMany({
       where: and(
         eq(factures.entrepriseId, eId),
-        gte(factures.createdAt, debut),
-        lte(factures.createdAt, fin)
-      )
+        gte(factures.dateFacture, period.start),
+        lte(factures.dateFacture, period.effectiveEnd),
+        inArray(factures.statut, SALES_STATUS_VALUES),
+      ),
     });
-    const ventesMois = ventesData.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
+    const salesHT = sumMoney(ventesData, 'totalHT');
+    const costOfSales = await getCostOfSalesForInvoices(eId, ventesData);
+    const grossMargin = calculateGrossMargin(salesHT, costOfSales.cmv, costOfSales.complete);
+    const marginAmount = grossMargin.cmv == null ? null : Math.round((salesHT - grossMargin.cmv) * 100) / 100;
 
-    // Dépenses du mois
-    const depensesData = await db.query.facturesAchat.findMany({
-      where: and(
-        eq(facturesAchat.entrepriseId, eId),
-        gte(facturesAchat.createdAt, debut),
-        lte(facturesAchat.createdAt, fin)
-      )
-    });
-    const depensesMois = depensesData.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
-    
-    const marge = ventesMois - depensesMois;
-    const margePercent = ventesMois > 0 ? ((marge / ventesMois) * 100).toFixed(2) : 0;
-    
     res.json([
-      { type: 'Chiffre d\'affaires', description: `Total des ventes du mois (${ventesData.length} factures)`, montant: ventesMois, impact: '+' },
-      { type: 'Coût des ventes', description: `Achats fournisseurs (${depensesData.length} factures)`, montant: -depensesMois, impact: '-' },
-      { type: 'Marge brute', description: `Résultat: ${margePercent}% de marge`, montant: marge, impact: '=' }
+      { type: 'Chiffre d’affaires HT', description: `Factures comptabilisées sur la période (${ventesData.length})`, montant: salesHT, impact: '+' },
+      {
+        type: 'CMV',
+        description: costOfSales.complete ? 'Coût enregistré au moment des ventes' : 'Coût manquant pour au moins une vente de produits',
+        montant: grossMargin.cmv == null ? null : -grossMargin.cmv,
+        impact: '-',
+      },
+      {
+        type: 'Marge brute',
+        description: grossMargin.marginPercent == null ? 'Non calculable avec les données de coût disponibles' : `Taux de marge : ${grossMargin.marginPercent}%`,
+        montant: marginAmount,
+        impact: '=',
+      },
     ]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -662,6 +714,7 @@ router.get('/detail/ventes-mois', async (req, res) => {
     const { mois, dateDebut, dateFin } = req.query;
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
+    const period = await getDashboardPeriod(req, eId);
     
     // Parser le mois (format: "janv. 24")
     const moisMap = {
@@ -682,28 +735,19 @@ router.get('/detail/ventes-mois', async (req, res) => {
       targetYear = now.getFullYear();
     }
     
-    // Bornes du mois cliqué
-    let debut = new Date(targetYear, targetMonth, 1);
-    let fin = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
-    
-    // Contraindre aux bornes de la période sélectionnée si fournies
-    if (dateDebut) {
-      const periodStart = new Date(dateDebut);
-      if (periodStart > debut) debut = periodStart;
-    }
-    if (dateFin) {
-      const periodEnd = new Date(dateFin);
-      periodEnd.setHours(23, 59, 59);
-      if (periodEnd < fin) fin = periodEnd;
-    }
+    const monthStart = new Date(Date.UTC(targetYear, targetMonth, 1)).toISOString().slice(0, 10);
+    const monthEnd = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).toISOString().slice(0, 10);
+    const debut = monthStart < period.start ? period.start : monthStart;
+    const fin = monthEnd > period.effectiveEnd ? period.effectiveEnd : monthEnd;
     
     const ventesData = await db.query.factures.findMany({
       where: and(
         eq(factures.entrepriseId, eId),
-        gte(factures.createdAt, debut),
-        lte(factures.createdAt, fin)
+        gte(factures.dateFacture, debut),
+        lte(factures.dateFacture, fin),
+        inArray(factures.statut, SALES_STATUS_VALUES),
       ),
-      orderBy: [desc(factures.createdAt)]
+      orderBy: [desc(factures.dateFacture)]
     });
     
     // Récupérer les noms des clients
@@ -716,8 +760,8 @@ router.get('/detail/ventes-mois', async (req, res) => {
     
     const result = ventesData.map(f => ({
       id: f.id,
-      numero: f.numero,
-      dateFacture: f.dateFacture || f.createdAt,
+      numero: f.numeroFacture,
+      dateFacture: f.dateFacture,
       clientNom: clientMap[f.clientId] || 'Client inconnu',
       montantTTC: parseFloat(f.totalTTC || 0),
       statut: f.statut
@@ -732,51 +776,59 @@ router.get('/detail/ventes-mois', async (req, res) => {
 // Drill-down: Dépenses par catégorie
 router.get('/detail/depenses-categorie', async (req, res) => {
   try {
-    const { categorie, dateDebut, dateFin } = req.query;
+    const { categorie } = req.query;
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
-    
-    const { debut: defaultDebut, fin: defaultFin } = await getFiscalYearDatesForEntreprise(eId);
-    const debut = dateDebut ? new Date(dateDebut) : defaultDebut;
-    const fin = dateFin ? new Date(dateFin) : defaultFin;
-    
-    let whereCondition = and(
-      eq(facturesAchat.entrepriseId, eId),
-      gte(facturesAchat.createdAt, debut),
-      lte(facturesAchat.createdAt, fin)
-    );
-    
-    // Si une catégorie est spécifiée, filtrer par catégorie
-    if (categorie && categorie !== 'Autre') {
-      whereCondition = and(
-        whereCondition,
-        eq(facturesAchat.categorie, categorie)
-      );
-    } else if (categorie === 'Autre') {
-      // Catégorie null ou vide
-    }
-    
-    const depensesData = await db.query.facturesAchat.findMany({
-      where: whereCondition,
-      orderBy: [desc(facturesAchat.createdAt)]
-    });
-    
-    // Récupérer les noms des fournisseurs
-    const { fournisseurs } = await import('../schema.js');
-    const fournisseursData = await db.query.fournisseurs.findMany({
-      where: eq(fournisseurs.entrepriseId, eId)
-    });
-    const fournisseurMap = {};
-    fournisseursData.forEach(f => fournisseurMap[f.id] = f.nom);
-    
-    const result = depensesData.map(f => ({
-      id: f.id,
-      date: f.dateFacture || f.createdAt,
-      description: f.description || `Facture ${f.numero || f.id}`,
-      categorie: f.categorie || 'Autre',
-      fournisseur: fournisseurMap[f.fournisseurId] || 'Fournisseur inconnu',
-      montant: parseFloat(f.totalTTC || 0)
-    }));
+    const period = await getDashboardPeriod(req, eId);
+    const [purchaseBills, expenseClaims] = await Promise.all([
+      db.query.facturesAchat.findMany({
+        where: and(
+          eq(facturesAchat.entrepriseId, eId),
+          gte(facturesAchat.dateFacture, period.start),
+          lte(facturesAchat.dateFacture, period.effectiveEnd),
+          inArray(facturesAchat.statut, PURCHASE_STATUS_VALUES),
+        ),
+        with: { fournisseur: true },
+        orderBy: [desc(facturesAchat.dateFacture)],
+      }),
+      db.select({
+        id: depensesTable.id,
+        date: depensesTable.dateDepense,
+        description: depensesTable.description,
+        montant: depensesTable.montant,
+        montantApprouve: depensesTable.montantApprouve,
+        categorie: categoriesDepenses.nom,
+      }).from(depensesTable)
+        .leftJoin(categoriesDepenses, eq(categoriesDepenses.id, depensesTable.categorieId))
+        .where(and(
+          eq(depensesTable.entrepriseId, eId),
+          eq(depensesTable.statut, 'approuvée'),
+          gte(depensesTable.dateDepense, period.start),
+          lte(depensesTable.dateDepense, period.effectiveEnd),
+        )),
+    ]);
+
+    const purchaseRows = purchaseBills
+      .filter((bill) => !categorie || (bill.fournisseur?.nom || 'Achats fournisseurs') === categorie)
+      .map((bill) => ({
+        id: bill.id,
+        date: bill.dateFacture,
+        description: bill.description || `Facture ${bill.numero || bill.id}`,
+        categorie: bill.fournisseur?.nom || 'Achats fournisseurs',
+        fournisseur: bill.fournisseur?.nom || 'Fournisseur inconnu',
+        montant: Number(bill.totalTTC || 0),
+      }));
+    const expenseRows = expenseClaims
+      .filter((expense) => !categorie || (expense.categorie || 'Autres dépenses approuvées') === categorie)
+      .map((expense) => ({
+        id: `depense-${expense.id}`,
+        date: expense.date,
+        description: expense.description || `Dépense #${expense.id}`,
+        categorie: expense.categorie || 'Autres dépenses approuvées',
+        fournisseur: 'Dépense approuvée',
+        montant: Number(expense.montantApprouve || expense.montant || 0),
+      }));
+    const result = [...purchaseRows, ...expenseRows].sort((a, b) => new Date(b.date) - new Date(a.date));
     
     res.json(result);
   } catch (error) {

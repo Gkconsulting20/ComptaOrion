@@ -127,6 +127,6 @@ export function calculateCurrentInventoryValue(products, valuationLayers) {
 }
 
 export function calculateCashConversionCycle(dso, dio, dpo) {
-  if (![dso, dio, dpo].every((value) => Number.isFinite(Number(value)))) return null;
+  if ([dso, dio, dpo].some((value) => value == null || !Number.isFinite(Number(value)))) return null;
   return Number(dso) + Number(dio) - Number(dpo);
 }

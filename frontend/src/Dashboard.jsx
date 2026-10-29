@@ -10,6 +10,16 @@ function formatMoney(value) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(value || 0);
 }
 
+function formatKpiMoney(value) {
+  return value === null || value === undefined ? 'N/D' : formatMoney(value);
+}
+
+function formatDays(value) {
+  return value === null || value === undefined || !Number.isFinite(Number(value))
+    ? 'N/D'
+    : `${value} jours`;
+}
+
 function formatDate(date) {
   if (!date) return '-';
   return new Date(date).toLocaleDateString('fr-FR');
@@ -207,7 +217,7 @@ export function DashboardView({ entrepriseName }) {
             <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
               <td style={{ padding: '10px' }}>{item.type}</td>
               <td style={{ padding: '10px' }}>{item.description}</td>
-              <td style={{ padding: '10px', fontWeight: 'bold', color: item.montant >= 0 ? '#28a745' : '#dc3545' }}>{formatMoney(item.montant)}</td>
+              <td style={{ padding: '10px', fontWeight: 'bold', color: item.montant == null ? '#6c757d' : item.montant >= 0 ? '#28a745' : '#dc3545' }}>{item.montant == null ? 'N/D' : formatMoney(item.montant)}</td>
               <td style={{ padding: '10px' }}>{item.impact}</td>
             </tr>
           )
@@ -317,7 +327,7 @@ export function DashboardView({ entrepriseName }) {
       <div className="dashboard-kpi-grid">
         <KpiCard 
           title="Ventes"
-          value={formatMoney(kpis?.ventesMois)} 
+          value={formatKpiMoney(kpis?.ventesMois)}
           color="#28a745"
           icon="trend-up"
           subtitle={getDynamicPeriodeLabel()}
@@ -325,7 +335,7 @@ export function DashboardView({ entrepriseName }) {
         />
         <KpiCard 
           title="Dépenses"
-          value={formatMoney(kpis?.depensesMois)} 
+          value={formatKpiMoney(kpis?.depensesMois)}
           color="#dc3545"
           icon="trend-down"
           subtitle={getDynamicPeriodeLabel()}
@@ -333,17 +343,18 @@ export function DashboardView({ entrepriseName }) {
         />
         <KpiCard 
           title="Marge brute" 
-          value={kpis?.margeBrute !== null && kpis?.margeBrute !== undefined ? `${kpis.margeBrute}%` : 'N/A'} 
+          value={kpis?.margeBrute !== null && kpis?.margeBrute !== undefined ? `${kpis.margeBrute}%` : 'N/D'}
           color="#17a2b8"
           icon="chart"
-          subtitle={kpis?.ventesHT ? `CA: ${formatMoney(kpis.ventesHT)} | CMV: ${formatMoney(kpis.cmv)}` : null}
+          subtitle={kpis?.ventesHT ? `CA HT: ${formatMoney(kpis.ventesHT)} | ${kpis.cmv != null ? `CMV: ${formatMoney(kpis.cmv)}` : 'CMV non disponible'}` : null}
           onClick={() => openDrillDown('marge', 'Détail de la marge brute')}
         />
         <KpiCard 
-          title="Cashflow" 
-          value={formatMoney(kpis?.cashflow)} 
-          color={parseFloat(kpis?.cashflow) >= 0 ? '#28a745' : '#dc3545'}
+          title="Cash-flow opérationnel"
+          value={formatKpiMoney(kpis?.cashflow)}
+          color={kpis?.cashflow == null ? '#6c757d' : parseFloat(kpis.cashflow) >= 0 ? '#28a745' : '#dc3545'}
           icon="wallet"
+          subtitle={kpis?.cashflowDefinition || 'Paiements clients − fournisseurs'}
           onClick={() => openDrillDown('cashflow', 'Détail du cashflow')}
         />
         <KpiCard 
@@ -368,44 +379,48 @@ export function DashboardView({ entrepriseName }) {
         <div className="dashboard-cycle-grid">
           <KpiCard 
             title="Délai paiement clients (DSO)" 
-            value={`${kpis?.dso || 0} jours`} 
+            value={formatDays(kpis?.dso)}
             color="#6f42c1"
             icon="calendar"
             small
           />
           <KpiCard 
             title="Délai paiement fournisseurs (DPO)" 
-            value={`${kpis?.dpo || 0} jours`} 
+            value={formatDays(kpis?.dpo)}
             color="#20c997"
             icon="supplier"
             small
           />
           <KpiCard 
             title="Rotation stock (DIO)" 
-            value={`${kpis?.dio || 0} jours`} 
+            value={formatDays(kpis?.dio)}
             color="#fd7e14"
             icon="stock"
+            subtitle={kpis?.dio == null ? 'Historique de stock insuffisant' : null}
             small
           />
           <KpiCard 
             title="Cycle conversion tréso (CCC)" 
-            value={`${kpis?.ccc || 0} jours`} 
-            color={kpis?.ccc > 60 ? '#dc3545' : kpis?.ccc > 30 ? '#ffc107' : '#28a745'}
+            value={formatDays(kpis?.ccc)}
+            color={kpis?.ccc == null ? '#6c757d' : kpis.ccc > 60 ? '#dc3545' : kpis.ccc > 30 ? '#ffc107' : '#28a745'}
             icon="rotation"
+            subtitle={kpis?.ccc == null ? 'DIO non disponible' : null}
             small
           />
           <KpiCard 
             title="Valeur stock" 
-            value={formatMoney(kpis?.valeurStock)} 
+            value={formatKpiMoney(kpis?.valeurStock)}
             color="#17a2b8"
             icon="inventory"
+            subtitle={kpis?.valeurStockDisponible === false ? 'Coût moyen manquant sur certains produits' : null}
             small
           />
           <KpiCard 
             title="CMV (Coût Marchandises)" 
-            value={formatMoney(kpis?.cmv)} 
+            value={formatKpiMoney(kpis?.cmv)}
             color="#6c757d"
             icon="cost"
+            subtitle={kpis?.cmv == null ? 'Coût manquant pour certaines ventes' : 'Coût enregistré à la vente'}
             small
           />
         </div>
