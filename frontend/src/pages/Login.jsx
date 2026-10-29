@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import api from '../api';
-import OrionBrandMark from '../components/OrionBrandMark';
+import OrionLogo from '../components/OrionLogo';
 
 export function Login({ onLoginSuccess }) {
   const [mode, setMode] = useState('login');
@@ -162,20 +162,13 @@ export function Login({ onLoginSuccess }) {
         zIndex: 1
       }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '72px',
-            height: '72px',
-            marginBottom: '18px'
-          }}>
-            <OrionBrandMark size={72} />
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '18px' }}>
+            <OrionLogo variant="full" className="login-brand-logo" />
           </div>
           <h1 style={{ 
             margin: '0 0 10px 0', 
             color: '#1a202c', 
-            fontSize: '38px',
+            fontSize: '36px',
             fontWeight: '700',
             letterSpacing: '-0.5px'
           }}>ComptaOrion</h1>

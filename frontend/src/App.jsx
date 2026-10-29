@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useState, useEffect } from 'react';
 import './app.css';
 import api from './api';
 import OrionIcon from './components/OrionIcon';
-import OrionBrandMark from './components/OrionBrandMark';
+import OrionLogo from './components/OrionLogo';
 
 const loadNamed = (loader, exportName) => lazy(() =>
   loader().then(module => ({ default: module[exportName] }))
@@ -203,7 +203,7 @@ export default function App() {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
-            <OrionBrandMark size={64} />
+            <OrionLogo variant="full" className="loading-brand-logo" />
           </div>
           <h2>ComptaOrion</h2>
           <p>Chargement...</p>
@@ -260,10 +260,12 @@ export default function App() {
         aria-label="Navigation principale"
       >
         <div className="app-sidebar-brand">
-          <OrionBrandMark size={54} className="app-brand-mark" />
+          <OrionLogo
+            variant={sidebarOpen ? 'full' : 'symbol'}
+            className="app-brand-logo"
+          />
           {sidebarOpen && (
             <div className="app-sidebar-brand-copy">
-              <strong>ComptaOrion</strong>
               <span>Gestion financière</span>
             </div>
           )}
