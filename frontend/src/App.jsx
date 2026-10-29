@@ -1,6 +1,8 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react';
 import './app.css';
 import api from './api';
+import OrionIcon from './components/OrionIcon';
+import OrionBrandMark from './components/OrionBrandMark';
 
 const loadNamed = (loader, exportName) => lazy(() =>
   loader().then(module => ({ default: module[exportName] }))
@@ -39,22 +41,44 @@ function LazyModuleFallback() {
 const AI_ENABLED = import.meta.env.VITE_AI_ENABLED === 'true';
 
 const ALL_MODULES = [
-  { id: 'dashboard', label: 'Tableau de Bord', icon: '📊', requiresSuperAdmin: false },
-  { id: 'saas-admin', label: 'Admin SaaS', icon: '🎯', requiresSuperAdmin: true, requiresAdmin: true },
-  { id: 'clients', label: 'Clients', icon: '👥', requiresSuperAdmin: false },
-  { id: 'fournisseurs', label: 'Fournisseurs', icon: '🏭', requiresSuperAdmin: false },
-  { id: 'tresorerie', label: 'Trésorerie', icon: '💰', requiresSuperAdmin: false },
-  { id: 'stock', label: 'Stock', icon: '📦', requiresSuperAdmin: false },
-  { id: 'comptabilite', label: 'Comptabilité', icon: '📖', requiresSuperAdmin: false },
-  { id: 'associations', label: 'Comptabilité associations', icon: '🤝', requiresAssociationAccess: true },
-  { id: 'impots', label: 'Impôts (en préparation)', icon: '🏛️', requiresSuperAdmin: false },
-  { id: 'integrations', label: 'Intégrations', icon: '🔗', requiresSuperAdmin: false, requiresAdmin: true },
+  { id: 'dashboard', label: 'Tableau de Bord', requiresSuperAdmin: false },
+  { id: 'saas-admin', label: 'Admin SaaS', requiresSuperAdmin: true, requiresAdmin: true },
+  { id: 'clients', label: 'Clients', requiresSuperAdmin: false },
+  { id: 'fournisseurs', label: 'Fournisseurs', requiresSuperAdmin: false },
+  { id: 'tresorerie', label: 'Trésorerie', requiresSuperAdmin: false },
+  { id: 'stock', label: 'Stock', requiresSuperAdmin: false },
+  { id: 'comptabilite', label: 'Comptabilité', requiresSuperAdmin: false },
+  { id: 'associations', label: 'Comptabilité associations', requiresAssociationAccess: true },
+  { id: 'impots', label: 'Impôts (en préparation)', requiresSuperAdmin: false },
+  { id: 'integrations', label: 'Intégrations', requiresSuperAdmin: false, requiresAdmin: true },
   ...(AI_ENABLED
-    ? [{ id: 'ia-assistant', label: 'Assistant IA', icon: '🤖', requiresSuperAdmin: false }]
+    ? [{ id: 'ia-assistant', label: 'Assistant IA', requiresSuperAdmin: false }]
     : []),
-  { id: 'authentication', label: 'Authentification & sécurité', icon: '🔐', requiresSuperAdmin: true, requiresAdmin: true },
-  { id: 'parametres', label: 'Paramètres', icon: '⚙️', requiresSuperAdmin: false }
+  { id: 'authentication', label: 'Authentification & sécurité', requiresSuperAdmin: true, requiresAdmin: true },
+  { id: 'parametres', label: 'Paramètres', requiresSuperAdmin: false }
 ];
+
+const NAVIGATION_GROUPS = [
+  { title: 'Pilotage', moduleIds: ['dashboard'] },
+  { title: 'Tiers', moduleIds: ['clients', 'fournisseurs'] },
+  { title: 'Opérations', moduleIds: ['tresorerie', 'stock'] },
+  { title: 'Comptabilité', moduleIds: ['comptabilite', 'associations', 'impots'] },
+  { title: 'Configuration', moduleIds: ['integrations', 'parametres'] },
+  { title: 'Administration', moduleIds: ['saas-admin', 'authentication'] },
+  { title: 'Outils', moduleIds: ['ia-assistant'] }
+];
+
+function NavigationToggleIcon({ open }) {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      {open ? <path d="m6 6 12 12M18 6 6 18" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3" /><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" /></svg>;
+}
 
 
 export default function App() {
@@ -135,6 +159,17 @@ export default function App() {
     (!m.requiresAssociationAccess || associationAccess)
   );
   const activeModule = MODULES.find(module => module.id === currentView);
+  const visibleModuleGroups = NAVIGATION_GROUPS
+    .map(group => ({
+      title: group.title,
+      modules: group.moduleIds.map(id => MODULES.find(module => module.id === id)).filter(Boolean)
+    }))
+    .filter(group => group.modules.length > 0);
+  const groupedModuleIds = new Set(NAVIGATION_GROUPS.flatMap(group => group.moduleIds));
+  const ungroupedModules = MODULES.filter(module => !groupedModuleIds.has(module.id));
+  if (ungroupedModules.length > 0) {
+    visibleModuleGroups.push({ title: 'Autres', modules: ungroupedModules });
+  }
 
   const handleModuleSelect = (moduleId) => {
     setCurrentView(moduleId);
@@ -167,11 +202,9 @@ export default function App() {
         backgroundColor: '#f5f5f5'
       }}>
         <div style={{ textAlign: 'center' }}>
-          <img 
-            src="/logo-comptaorion.png" 
-            alt="ComptaOrion" 
-            style={{ width: '120px', height: '120px', marginBottom: '15px' }}
-          />
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
+            <OrionBrandMark size={64} />
+          </div>
           <h2>ComptaOrion</h2>
           <p>Chargement...</p>
         </div>
@@ -193,7 +226,7 @@ export default function App() {
 
   const renderView = () => {
     switch (currentView) {
-      case 'dashboard': return <DashboardView />;
+      case 'dashboard': return <DashboardView entrepriseName={entreprise?.nom} />;
       case 'saas-admin': return <SaaSAdminModule />;
       case 'clients': return <ClientsModule />;
       case 'fournisseurs': return <GestionFournisseurs />;
@@ -203,7 +236,7 @@ export default function App() {
       case 'associations': return <AssociationAccountingModule />;
       case 'impots': return <ImpotsModule />;
       case 'integrations': return <IntegrationsModule />;
-      case 'ia-assistant': return AI_ENABLED ? <IAAssistantModule /> : <DashboardView />;
+      case 'ia-assistant': return AI_ENABLED ? <IAAssistantModule /> : <DashboardView entrepriseName={entreprise?.nom} />;
       case 'authentication': return <AuthenticationModule />;
       case 'parametres': return <ParametresModule />;
       default: return <DashboardView />;
@@ -216,7 +249,7 @@ export default function App() {
         <button
           type="button"
           className="app-sidebar-backdrop"
-          aria-label="Fermer le menu"
+          aria-label="Fermer la navigation"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -227,7 +260,7 @@ export default function App() {
         aria-label="Navigation principale"
       >
         <div className="app-sidebar-brand">
-          <img src="/logo-comptaorion.png" alt="" />
+          <OrionBrandMark size={54} className="app-brand-mark" />
           {sidebarOpen && (
             <div className="app-sidebar-brand-copy">
               <strong>ComptaOrion</strong>
@@ -236,21 +269,32 @@ export default function App() {
           )}
         </div>
 
-        <nav className="app-sidebar-nav">
-          {MODULES.map(module => (
-            <button
-              type="button"
-              key={module.id}
-              className={`app-nav-item ${currentView === module.id ? 'is-active' : ''}`}
-              onClick={() => handleModuleSelect(module.id)}
-              aria-current={currentView === module.id ? 'page' : undefined}
-              title={`${module.icon} ${module.label}`}
-            >
-              <span className="app-nav-icon" aria-hidden="true">{module.icon}</span>
-              {sidebarOpen && <span className="app-nav-label">{module.label}</span>}
-            </button>
+        <nav className="app-sidebar-nav" aria-label="Modules">
+          {visibleModuleGroups.map(group => (
+            <section className="app-nav-group" key={group.title} aria-label={group.title}>
+              {sidebarOpen && <h2 className="app-nav-group-title">{group.title}</h2>}
+              {group.modules.map(module => (
+                <button
+                  type="button"
+                  key={module.id}
+                  className={`app-nav-item ${currentView === module.id ? 'is-active' : ''}`}
+                  onClick={() => handleModuleSelect(module.id)}
+                  aria-current={currentView === module.id ? 'page' : undefined}
+                  aria-label={module.label}
+                  title={module.label}
+                >
+                  <span className="app-nav-icon"><OrionIcon name={module.id} /></span>
+                  {sidebarOpen && <span className="app-nav-label">{module.label}</span>}
+                </button>
+              ))}
+            </section>
           ))}
         </nav>
+        {sidebarOpen && (
+          <div className="app-sidebar-foot">
+            {entreprise?.nom ? `${entreprise.nom} · Espace de gestion` : 'Espace de gestion'}
+          </div>
+        )}
       </aside>
 
       <div className="app-main">
@@ -260,15 +304,18 @@ export default function App() {
               type="button"
               className="app-menu-toggle"
               onClick={() => setSidebarOpen(open => !open)}
-              aria-label={sidebarOpen ? 'Réduire le menu' : 'Ouvrir le menu'}
+              aria-label={sidebarOpen ? 'Réduire la navigation' : 'Ouvrir la navigation'}
               aria-expanded={sidebarOpen}
               aria-controls="app-navigation"
             >
-              <span className="app-menu-glyph" aria-hidden="true">☰</span>
+              <NavigationToggleIcon open={sidebarOpen} />
             </button>
             <div className="app-page-heading">
               <h1>{activeModule?.label || 'Tableau de bord'}</h1>
-              <p>Entreprise · {entreprise?.nom || 'ComptaOrion ERP'}</p>
+              <span className="app-company-chip" title={`Entreprise : ${entreprise?.nom || 'ComptaOrion ERP'}`}>
+                <i className="app-company-mark" aria-hidden="true" />
+                {entreprise?.nom || 'ComptaOrion ERP'}
+              </span>
             </div>
           </div>
 
@@ -280,14 +327,14 @@ export default function App() {
               <span className="app-user-name">{user?.nom || user?.username || 'Utilisateur'}</span>
             </div>
             <button type="button" className="app-logout-button" onClick={handleLogout}>
-              <span aria-hidden="true">↪</span>
+              <LogoutIcon />
               <span>Déconnexion</span>
             </button>
           </div>
         </header>
 
         <main className="app-content-scroll">
-          <div className="app-view-container">
+          <div className={`app-view-container${currentView === 'dashboard' ? ' is-dashboard-view' : ''}`}>
             <Suspense fallback={<LazyModuleFallback />}>
               {renderView()}
             </Suspense>

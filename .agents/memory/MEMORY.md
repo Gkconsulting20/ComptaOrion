@@ -8,4 +8,5 @@
 - [Coût de revient fournisseurs](supplier-costing.md) — répartir les frais au poids converti; calculer le prix de vente par majoration du CMV courant.
 - [Pause du module Paie & RH](payroll-paused.md) — garder Paie & RH masqué pendant la préparation du lancement initial de l’application.
 - [Espace commercial](saas-commercial-portal.md) — le portail commercial sert à gérer la commercialisation de ComptaOrion, avec des comptes distincts de l’ERP.
+- [Interface ComptaOrion](comptaorion-interface.md) — garder la navigation regroupée et la barre latérale sombre, avec ComptaOrion distinct de l’entreprise NERU.
 - [Piste d’audit](audit-trail-policy.md) — les traces de création, modification et suppression sont une exigence de sécurité pour les clients.

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api from './api';
-import PeriodFilter, { getPeriodeDates, formatPeriodeDisplay, getPeriodeLabel } from './components/PeriodFilter';
+import PeriodFilter, { getPeriodeDates, getPeriodeLabel } from './components/PeriodFilter';
+import OrionIcon from './components/OrionIcon';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+const COLORS = ['#39769a', '#c79a43', '#5a9a8e', '#a8b4bc', '#8b76a8'];
 
 function formatMoney(value) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF', maximumFractionDigits: 0 }).format(value || 0);
@@ -66,7 +67,7 @@ function DrillDownModal({ isOpen, onClose, title, loading, data, columns, render
   );
 }
 
-export function DashboardView() {
+export function DashboardView({ entrepriseName }) {
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState(null);
   const [ventesMensuelles, setVentesMensuelles] = useState([]);
@@ -288,11 +289,15 @@ export function DashboardView() {
   }
 
   const config = getDrillDownConfig();
+  const totalDepenses = depensesCategories.reduce((sum, entry) => sum + Number(entry.montant || 0), 0);
 
   return (
     <div className="dashboard-page">
       <div className="dashboard-page-header">
         <div>
+          <p className="dashboard-page-eyebrow">
+            Tableau de bord{entrepriseName ? ` · ${entrepriseName}` : ''}
+          </p>
           <h1 className="dashboard-page-title">Vue d’ensemble</h1>
           <p className="dashboard-page-subtitle">Votre activité financière sur la période sélectionnée</p>
         </div>
@@ -311,24 +316,26 @@ export function DashboardView() {
 
       <div className="dashboard-kpi-grid">
         <KpiCard 
-          title={`Ventes ${getDynamicPeriodeLabel()}`}
+          title="Ventes"
           value={formatMoney(kpis?.ventesMois)} 
           color="#28a745"
-          icon="📈"
+          icon="trend-up"
+          subtitle={getDynamicPeriodeLabel()}
           onClick={() => openDrillDown('ventes', `Détail des ventes ${getDynamicPeriodeLabel()}`)}
         />
         <KpiCard 
-          title={`Dépenses ${getDynamicPeriodeLabel()}`}
+          title="Dépenses"
           value={formatMoney(kpis?.depensesMois)} 
           color="#dc3545"
-          icon="📉"
+          icon="trend-down"
+          subtitle={getDynamicPeriodeLabel()}
           onClick={() => openDrillDown('depenses', `Détail des dépenses ${getDynamicPeriodeLabel()}`)}
         />
         <KpiCard 
           title="Marge brute" 
           value={kpis?.margeBrute !== null && kpis?.margeBrute !== undefined ? `${kpis.margeBrute}%` : 'N/A'} 
           color="#17a2b8"
-          icon="💹"
+          icon="chart"
           subtitle={kpis?.ventesHT ? `CA: ${formatMoney(kpis.ventesHT)} | CMV: ${formatMoney(kpis.cmv)}` : null}
           onClick={() => openDrillDown('marge', 'Détail de la marge brute')}
         />
@@ -336,7 +343,7 @@ export function DashboardView() {
           title="Cashflow" 
           value={formatMoney(kpis?.cashflow)} 
           color={parseFloat(kpis?.cashflow) >= 0 ? '#28a745' : '#dc3545'}
-          icon="💰"
+          icon="wallet"
           onClick={() => openDrillDown('cashflow', 'Détail du cashflow')}
         />
         <KpiCard 
@@ -344,14 +351,14 @@ export function DashboardView() {
           value={`${kpis?.facturesEnRetard?.nombre || 0}`} 
           subtitle={formatMoney(kpis?.facturesEnRetard?.montant)}
           color="#ffc107"
-          icon="⚠️"
+          icon="invoice"
           onClick={() => openDrillDown('factures-retard', 'Factures en retard de paiement')}
         />
         <KpiCard 
           title="Stock faible" 
           value={`${kpis?.stockFaible?.nombre || 0} produits`} 
           color="#6c757d"
-          icon="📦"
+          icon="stock"
           onClick={() => openDrillDown('stock-faible', 'Produits en stock faible')}
         />
       </div>
@@ -363,42 +370,42 @@ export function DashboardView() {
             title="Délai paiement clients (DSO)" 
             value={`${kpis?.dso || 0} jours`} 
             color="#6f42c1"
-            icon="📅"
+            icon="calendar"
             small
           />
           <KpiCard 
             title="Délai paiement fournisseurs (DPO)" 
             value={`${kpis?.dpo || 0} jours`} 
             color="#20c997"
-            icon="🏭"
+            icon="supplier"
             small
           />
           <KpiCard 
             title="Rotation stock (DIO)" 
             value={`${kpis?.dio || 0} jours`} 
             color="#fd7e14"
-            icon="📦"
+            icon="stock"
             small
           />
           <KpiCard 
             title="Cycle conversion tréso (CCC)" 
             value={`${kpis?.ccc || 0} jours`} 
             color={kpis?.ccc > 60 ? '#dc3545' : kpis?.ccc > 30 ? '#ffc107' : '#28a745'}
-            icon="🔄"
+            icon="rotation"
             small
           />
           <KpiCard 
             title="Valeur stock" 
             value={formatMoney(kpis?.valeurStock)} 
             color="#17a2b8"
-            icon="📊"
+            icon="inventory"
             small
           />
           <KpiCard 
             title="CMV (Coût Marchandises)" 
             value={formatMoney(kpis?.cmv)} 
             color="#6c757d"
-            icon="💵"
+            icon="cost"
             small
           />
         </div>
@@ -410,13 +417,13 @@ export function DashboardView() {
             Évolution des ventes (12 mois)
             <span className="dashboard-chart-hint">Cliquer sur une barre pour les détails</span>
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={226}>
             <BarChart data={ventesMensuelles} onClick={handleBarClick} style={{ cursor: 'pointer' }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="mois" fontSize={12} />
-              <YAxis fontSize={12} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v) => formatMoney(v)} />
-              <Bar dataKey="ventes" fill="#007bff" radius={[4, 4, 0, 0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#edf0ef" />
+              <XAxis dataKey="mois" axisLine={false} tickLine={false} tick={{ fill: '#84919a', fontSize: 10 }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#84919a', fontSize: 9 }} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+              <Tooltip contentStyle={{ border: '1px solid #e3e9e8', borderRadius: 7, fontSize: 10 }} formatter={(v) => formatMoney(v)} />
+              <Bar dataKey="ventes" fill="#39769a" radius={[4, 4, 0, 0]} maxBarSize={34} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -427,16 +434,16 @@ export function DashboardView() {
             <span className="dashboard-chart-hint">Cliquer sur une tranche pour les détails</span>
           </h3>
           {depensesCategories.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={226}>
               <PieChart>
                 <Pie
                   data={depensesCategories}
                   cx="50%"
                   cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                  outerRadius={100}
-                  fill="#8884d8"
+                  innerRadius={53}
+                  outerRadius={82}
+                  paddingAngle={3}
+                  stroke="none"
                   dataKey="montant"
                   nameKey="categorie"
                   onClick={handlePieClick}
@@ -446,12 +453,25 @@ export function DashboardView() {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v) => formatMoney(v)} />
+                <Tooltip contentStyle={{ border: '1px solid #e3e9e8', borderRadius: 7, fontSize: 10 }} formatter={(v) => formatMoney(v)} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+            <div className="dashboard-chart-empty">
               Aucune donnée disponible
+            </div>
+          )}
+          {depensesCategories.length > 0 && (
+            <div className="dashboard-chart-legend" aria-label="Légende des dépenses">
+              {depensesCategories.map((item, index) => {
+                const percentage = totalDepenses > 0 ? Math.round(Number(item.montant || 0) / totalDepenses * 100) : 0;
+                return (
+                  <span className="dashboard-chart-legend-item" key={`${item.categorie}-${index}`}>
+                    <i style={{ background: COLORS[index % COLORS.length] }} aria-hidden="true" />
+                    {item.categorie} {percentage}%
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>
@@ -507,7 +527,7 @@ function KpiCard({ title, value, subtitle, color, icon, onClick, small }) {
   return (
     <div
       className={`dashboard-kpi-card${small ? ' is-small' : ''}${onClick ? ' is-clickable' : ''}`}
-      style={{ '--kpi-accent': color }}
+      style={{ '--kpi-accent': color, '--kpi-soft': `${color}14` }}
       onClick={onClick}
       onKeyDown={handleKeyDown}
       role={onClick ? 'button' : undefined}
@@ -520,7 +540,7 @@ function KpiCard({ title, value, subtitle, color, icon, onClick, small }) {
           <strong className="dashboard-kpi-value">{value}</strong>
           {subtitle && <span className="dashboard-kpi-subtitle">{subtitle}</span>}
         </div>
-        <span className="dashboard-kpi-icon" aria-hidden="true">{icon}</span>
+        <span className="dashboard-kpi-icon"><OrionIcon name={icon} size={16} /></span>
       </div>
       {onClick && !small && <span className="dashboard-kpi-subtitle">Cliquer pour voir le détail</span>}
     </div>
