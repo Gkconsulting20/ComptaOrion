@@ -11,8 +11,6 @@ import {
   mouvementsStock,
   factureItems,
   entreprises,
-  depenses as depensesTable,
-  categoriesDepenses,
   ecritures,
   lignesEcritures,
   comptesComptables,
@@ -170,6 +168,46 @@ async function getAccountedExpensesByAccount(entrepriseId, period) {
   return rows.map((row) => ({ ...row, montant: Number(row.montant || 0) }));
 }
 
+async function getAccountedExpenseDetails(entrepriseId, period, numeroCompte = null) {
+  const conditions = [
+    eq(ecritures.entrepriseId, Number(entrepriseId)),
+    eq(ecritures.valide, true),
+    eq(lignesEcritures.entrepriseId, Number(entrepriseId)),
+    eq(comptesComptables.entrepriseId, Number(entrepriseId)),
+    gte(ecritures.dateEcriture, period.start),
+    lte(ecritures.dateEcriture, period.effectiveEnd),
+    like(comptesComptables.numero, '6%'),
+  ];
+  if (numeroCompte) conditions.push(eq(comptesComptables.numero, String(numeroCompte)));
+
+  const rows = await db.select({
+    id: lignesEcritures.id,
+    ecritureId: ecritures.id,
+    date: ecritures.dateEcriture,
+    reference: ecritures.numeroPiece,
+    description: lignesEcritures.libelle,
+    numeroCompte: comptesComptables.numero,
+    nomCompte: comptesComptables.nom,
+    montant: sql`${lignesEcritures.debit} - ${lignesEcritures.credit}`,
+  }).from(ecritures)
+    .innerJoin(lignesEcritures, and(
+      eq(lignesEcritures.ecritureId, ecritures.id),
+      eq(lignesEcritures.entrepriseId, ecritures.entrepriseId),
+    ))
+    .innerJoin(comptesComptables, and(
+      eq(comptesComptables.id, lignesEcritures.compteComptableId),
+      eq(comptesComptables.entrepriseId, lignesEcritures.entrepriseId),
+    ))
+    .where(and(...conditions))
+    .orderBy(desc(ecritures.dateEcriture), desc(ecritures.id));
+
+  return rows.map((row) => ({
+    ...row,
+    categorie: `${row.numeroCompte} — ${row.nomCompte}`,
+    montant: Number(row.montant || 0),
+  }));
+}
+
 // Dashboard global - tous les KPIs
 router.get('/global', async (req, res) => {
   try {
@@ -247,20 +285,9 @@ router.get('/global', async (req, res) => {
     };
     const ventesData = salesHistory.filter((invoice) => inPeriod(invoice.dateFacture));
     const achatsData = purchasesHistory.filter((invoice) => inPeriod(invoice.dateFacture));
-    const approvedExpenseRows = await db.select({
-      montant: depensesTable.montant,
-      montantApprouve: depensesTable.montantApprouve,
-    }).from(depensesTable).where(and(
-      eq(depensesTable.entrepriseId, eId),
-      eq(depensesTable.statut, 'approuvée'),
-      dateFilter(depensesTable.dateDepense),
-    ));
-    const approvedExpenseTotal = approvedExpenseRows.reduce(
-      (sum, expense) => sum + Number(expense.montantApprouve || expense.montant || 0),
-      0,
-    );
+    const expenseAccounts = await getAccountedExpensesByAccount(eId, period);
     const ventesMois = sumMoney(ventesData, 'totalTTC');
-    const depensesMois = sumMoney(achatsData, 'totalTTC') + approvedExpenseTotal;
+    const depensesMois = expenseAccounts.reduce((sum, account) => sum + account.montant, 0);
     const ventesHT = sumMoney(ventesData, 'totalHT');
 
     // Factures en retard (statut = 'retard') - dans la période sélectionnée
@@ -362,51 +389,12 @@ router.get('/depenses-categories', async (req, res) => {
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const period = await getDashboardPeriod(req, eId);
-    const [purchaseBills, expenseClaims] = await Promise.all([
-      db.select({
-        totalTTC: facturesAchat.totalTTC,
-        fournisseurNom: fournisseurs.raisonSociale,
-      }).from(facturesAchat).leftJoin(fournisseurs, and(
-        eq(fournisseurs.id, facturesAchat.fournisseurId),
-        eq(fournisseurs.entrepriseId, eId),
-      )).where(and(
-          eq(facturesAchat.entrepriseId, eId),
-          gte(facturesAchat.dateFacture, period.start),
-          lte(facturesAchat.dateFacture, period.effectiveEnd),
-          inArray(facturesAchat.statut, PURCHASE_STATUS_VALUES),
-        )),
-      db.select({
-        montant: depensesTable.montant,
-        montantApprouve: depensesTable.montantApprouve,
-        categorie: categoriesDepenses.nom,
-      }).from(depensesTable)
-        .leftJoin(categoriesDepenses, and(
-          eq(categoriesDepenses.id, depensesTable.categorieId),
-          eq(categoriesDepenses.entrepriseId, eId),
-        ))
-        .where(and(
-          eq(depensesTable.entrepriseId, eId),
-          eq(depensesTable.statut, 'approuvée'),
-          gte(depensesTable.dateDepense, period.start),
-          lte(depensesTable.dateDepense, period.effectiveEnd),
-        )),
-    ]);
-
-    const byCategory = new Map();
-    for (const bill of purchaseBills) {
-      const category = bill.fournisseurNom || 'Achats fournisseurs';
-      byCategory.set(category, (byCategory.get(category) || 0) + Number(bill.totalTTC || 0));
-    }
-    for (const expense of expenseClaims) {
-      const category = expense.categorie || 'Autres dépenses approuvées';
-      byCategory.set(category, (byCategory.get(category) || 0) + Number(expense.montantApprouve || expense.montant || 0));
-    }
-
-    const data = [...byCategory.entries()]
-      .map(([categorie, montant]) => ({ categorie, montant: montant.toFixed(2) }))
-      .sort((a, b) => Number(b.montant) - Number(a.montant));
-
-    res.json(data);
+    const accounts = await getAccountedExpensesByAccount(eId, period);
+    res.json(accounts.map((account) => ({
+      categorie: `${account.numeroCompte} — ${account.nomCompte}`,
+      numeroCompte: account.numeroCompte,
+      montant: account.montant.toFixed(2),
+    })));
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message });
   }
@@ -491,49 +479,7 @@ router.get('/detail/depenses', async (req, res) => {
     const eId = req.entrepriseId;
     if (!eId || isNaN(eId)) return res.status(400).json({ error: 'entrepriseId requis' });
     const period = await getDashboardPeriod(req, eId);
-    const [purchaseBills, expenseClaims] = await Promise.all([
-      db.query.facturesAchat.findMany({
-        where: and(
-          eq(facturesAchat.entrepriseId, eId),
-          gte(facturesAchat.dateFacture, period.start),
-          lte(facturesAchat.dateFacture, period.effectiveEnd),
-          inArray(facturesAchat.statut, PURCHASE_STATUS_VALUES),
-        ),
-        with: { fournisseur: true },
-        orderBy: [desc(facturesAchat.dateFacture)]
-      }),
-      db.select({
-        id: depensesTable.id,
-        date: depensesTable.dateDepense,
-        description: depensesTable.description,
-        montant: depensesTable.montant,
-        montantApprouve: depensesTable.montantApprouve,
-        categorie: categoriesDepenses.nom,
-      }).from(depensesTable)
-        .leftJoin(categoriesDepenses, eq(categoriesDepenses.id, depensesTable.categorieId))
-        .where(and(
-          eq(depensesTable.entrepriseId, eId),
-          eq(depensesTable.statut, 'approuvée'),
-          gte(depensesTable.dateDepense, period.start),
-          lte(depensesTable.dateDepense, period.effectiveEnd),
-        )),
-    ]);
-
-    const result = purchaseBills.map(f => ({
-      id: f.id,
-      date: f.dateFacture,
-      description: f.numero || `Facture #${f.id}`,
-      categorie: f.fournisseur?.nom || 'Achats fournisseurs',
-      montant: Number(f.totalTTC || 0)
-    })).concat(expenseClaims.map((expense) => ({
-      id: `depense-${expense.id}`,
-      date: expense.date,
-      description: expense.description || `Dépense #${expense.id}`,
-      categorie: expense.categorie || 'Autres dépenses approuvées',
-      montant: Number(expense.montantApprouve || expense.montant || 0),
-    }))).sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    res.json(result);
+    res.json(await getAccountedExpenseDetails(eId, period));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -781,61 +727,11 @@ router.get('/detail/ventes-mois', async (req, res) => {
 // Drill-down: Dépenses par catégorie
 router.get('/detail/depenses-categorie', async (req, res) => {
   try {
-    const { categorie } = req.query;
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const period = await getDashboardPeriod(req, eId);
-    const [purchaseBills, expenseClaims] = await Promise.all([
-      db.query.facturesAchat.findMany({
-        where: and(
-          eq(facturesAchat.entrepriseId, eId),
-          gte(facturesAchat.dateFacture, period.start),
-          lte(facturesAchat.dateFacture, period.effectiveEnd),
-          inArray(facturesAchat.statut, PURCHASE_STATUS_VALUES),
-        ),
-        with: { fournisseur: true },
-        orderBy: [desc(facturesAchat.dateFacture)],
-      }),
-      db.select({
-        id: depensesTable.id,
-        date: depensesTable.dateDepense,
-        description: depensesTable.description,
-        montant: depensesTable.montant,
-        montantApprouve: depensesTable.montantApprouve,
-        categorie: categoriesDepenses.nom,
-      }).from(depensesTable)
-        .leftJoin(categoriesDepenses, eq(categoriesDepenses.id, depensesTable.categorieId))
-        .where(and(
-          eq(depensesTable.entrepriseId, eId),
-          eq(depensesTable.statut, 'approuvée'),
-          gte(depensesTable.dateDepense, period.start),
-          lte(depensesTable.dateDepense, period.effectiveEnd),
-        )),
-    ]);
-
-    const purchaseRows = purchaseBills
-      .filter((bill) => !categorie || (bill.fournisseur?.nom || 'Achats fournisseurs') === categorie)
-      .map((bill) => ({
-        id: bill.id,
-        date: bill.dateFacture,
-        description: bill.description || `Facture ${bill.numero || bill.id}`,
-        categorie: bill.fournisseur?.nom || 'Achats fournisseurs',
-        fournisseur: bill.fournisseur?.nom || 'Fournisseur inconnu',
-        montant: Number(bill.totalTTC || 0),
-      }));
-    const expenseRows = expenseClaims
-      .filter((expense) => !categorie || (expense.categorie || 'Autres dépenses approuvées') === categorie)
-      .map((expense) => ({
-        id: `depense-${expense.id}`,
-        date: expense.date,
-        description: expense.description || `Dépense #${expense.id}`,
-        categorie: expense.categorie || 'Autres dépenses approuvées',
-        fournisseur: 'Dépense approuvée',
-        montant: Number(expense.montantApprouve || expense.montant || 0),
-      }));
-    const result = [...purchaseRows, ...expenseRows].sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    res.json(result);
+    const numeroCompte = String(req.query.compte || '').trim();
+    res.json(await getAccountedExpenseDetails(eId, period, numeroCompte || null));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

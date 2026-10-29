@@ -10,6 +10,7 @@ import api from '../api';
 export function DepensesModule() {
   const [depenses, setDepenses] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [comptesCharges, setComptesCharges] = useState([]);
   const [employes, setEmployes] = useState([]);
   const [projetsAssociatifs, setProjetsAssociatifs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +37,7 @@ export function DepensesModule() {
     nom: '',
     description: '',
     limiteApproval: 0,
+    compteComptableId: '',
   });
 
   useEffect(() => {
@@ -45,16 +47,20 @@ export function DepensesModule() {
   const loadData = async () => {
     try {
       const params = `?dateDebut=${dateDebut}&dateFin=${dateFin}`;
-      const [depensesRes, categoriesRes, employesRes, projectsRes] = await Promise.all([
+      const [depensesRes, categoriesRes, employesRes, projectsRes, accountsRes] = await Promise.all([
         api.get(`/depenses/list${params}`),
         api.get('/depenses/categories'),
         api.get('/employes/list'),
-        api.get('/depenses/projects-options')
+        api.get('/depenses/projects-options'),
+        api.get('/comptabilite/comptes'),
       ]);
       setDepenses(depensesRes || []);
       setCategories(categoriesRes || []);
       setEmployes(employesRes || []);
       setProjetsAssociatifs(projectsRes || []);
+      setComptesCharges((accountsRes || []).filter((account) =>
+        account.actif && String(account.numero || '').startsWith('6')
+      ));
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -84,8 +90,19 @@ export function DepensesModule() {
     try {
       await api.post('/depenses/categories', categoryFormData);
       setShowCategoryModal(false);
-      setCategoryFormData({ nom: '', description: '', limiteApproval: 0 });
+      setCategoryFormData({ nom: '', description: '', limiteApproval: 0, compteComptableId: '' });
       loadData();
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleCategoryAccountSave = async (e, category) => {
+    e.preventDefault();
+    const compteComptableId = new FormData(e.currentTarget).get('compteComptableId');
+    try {
+      await api.put(`/depenses/categories/${category.id}`, { compteComptableId });
+      await loadData();
     } catch (error) {
       alert('Erreur: ' + error.message);
     }
@@ -287,7 +304,7 @@ export function DepensesModule() {
       <Modal
         isOpen={showCategoryModal}
         onClose={() => setShowCategoryModal(false)}
-        title="Nouvelle Catégorie"
+        title="Catégories de dépenses"
         size="medium"
       >
         <form onSubmit={handleCategorySubmit}>
@@ -309,6 +326,20 @@ export function DepensesModule() {
             value={categoryFormData.limiteApproval}
             onChange={(e) => setCategoryFormData({ ...categoryFormData, limiteApproval: parseFloat(e.target.value) })}
           />
+          <FormField
+            label="Compte de charge"
+            type="select"
+            value={categoryFormData.compteComptableId}
+            onChange={(e) => setCategoryFormData({ ...categoryFormData, compteComptableId: e.target.value })}
+            options={[
+              { value: '', label: 'Choisir un compte de charge' },
+              ...comptesCharges.map((account) => ({
+                value: String(account.id),
+                label: `${account.numero} — ${account.nom}`,
+              })),
+            ]}
+            required
+          />
           <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <Button type="button" variant="secondary" onClick={() => setShowCategoryModal(false)}>
               Annuler
@@ -318,6 +349,35 @@ export function DepensesModule() {
             </Button>
           </div>
         </form>
+        <section style={{ marginTop: '24px', borderTop: '1px solid #e5e7eb', paddingTop: '18px' }}>
+          <h3 style={{ margin: '0 0 12px' }}>Comptes des catégories existantes</h3>
+          {categories.map((category) => (
+            <form
+              key={category.id}
+              onSubmit={(e) => handleCategoryAccountSave(e, category)}
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr auto', gap: '10px', alignItems: 'end', marginBottom: '12px' }}
+            >
+              <strong>{category.nom}</strong>
+              <label style={{ display: 'grid', gap: '5px', fontSize: '13px' }}>
+                Compte de charge
+                <select
+                  name="compteComptableId"
+                  defaultValue={category.compteComptableId || ''}
+                  required
+                  style={{ minHeight: '38px', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 8px', background: '#fff' }}
+                >
+                  <option value="">Choisir un compte</option>
+                  {comptesCharges.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.numero} — {account.nom}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button type="submit" variant="secondary">Enregistrer</Button>
+            </form>
+          ))}
+        </section>
       </Modal>
 
       <Modal

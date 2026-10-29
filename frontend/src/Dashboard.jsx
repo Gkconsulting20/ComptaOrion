@@ -277,7 +277,7 @@ export function DashboardView({ entrepriseName }) {
     if (data && data.categorie) {
       setDrillDown({ open: true, type: 'depenses-categorie', title: `Dépenses - ${data.categorie}`, data: [], loading: true });
       try {
-        const params = `?categorie=${encodeURIComponent(data.categorie)}&dateDebut=${dateDebut}&dateFin=${dateFin}`;
+        const params = `?compte=${encodeURIComponent(data.numeroCompte)}&dateDebut=${dateDebut}&dateFin=${dateFin}`;
         const result = await api.get(`/dashboard/detail/depenses-categorie${params}`);
         setDrillDown(prev => ({ ...prev, data: result || [], loading: false }));
       } catch (error) {
@@ -338,7 +338,7 @@ export function DashboardView({ entrepriseName }) {
           value={formatKpiMoney(kpis?.depensesMois)}
           color="#dc3545"
           icon="trend-down"
-          subtitle={getDynamicPeriodeLabel()}
+          subtitle={`Charges comptabilisées · ${getDynamicPeriodeLabel()}`}
           onClick={() => openDrillDown('depenses', `Détail des dépenses ${getDynamicPeriodeLabel()}`)}
         />
         <KpiCard 
@@ -445,7 +445,7 @@ export function DashboardView({ entrepriseName }) {
 
         <div className="dashboard-chart-card">
           <h3>
-            Répartition des dépenses
+            Charges comptabilisées par compte
             <span className="dashboard-chart-hint">Cliquer sur une tranche pour les détails</span>
           </h3>
           {depensesCategories.length > 0 ? (
