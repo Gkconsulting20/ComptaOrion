@@ -37,6 +37,45 @@ export function countInclusiveDays(start, end) {
   return Math.floor((endUtc - startUtc) / 86400000) + 1;
 }
 
+export function calculateWeightedPaymentDelay(invoices, payments) {
+  const invoicesById = new Map(invoices.map((invoice) => [String(invoice.id), invoice]));
+  const paymentsByInvoice = new Map();
+
+  for (const payment of payments) {
+    const invoiceId = String(payment.factureId);
+    const invoice = invoicesById.get(invoiceId);
+    const paymentDate = dateOnly(payment.datePaiement);
+    const invoiceDate = dateOnly(invoice?.dateFacture);
+    const amount = Math.max(0, toNumber(payment.montant));
+    if (!invoice || !invoiceDate || !paymentDate || amount <= 0) continue;
+    if (!paymentsByInvoice.has(invoiceId)) paymentsByInvoice.set(invoiceId, []);
+    paymentsByInvoice.get(invoiceId).push({ date: paymentDate, amount });
+  }
+
+  let weightedDays = 0;
+  let totalPaid = 0;
+  for (const [invoiceId, invoicePayments] of paymentsByInvoice) {
+    const invoice = invoicesById.get(invoiceId);
+    const invoiceDate = dateOnly(invoice?.dateFacture);
+    if (!invoiceDate) continue;
+
+    const invoiceTotal = Math.max(0, toNumber(invoice.totalTTC));
+    let remaining = invoiceTotal > 0 ? invoiceTotal : Infinity;
+    invoicePayments.sort((a, b) => a.date.localeCompare(b.date));
+
+    for (const payment of invoicePayments) {
+      if (remaining <= 0) break;
+      const amount = Math.min(payment.amount, remaining);
+      const days = Math.max(0, countInclusiveDays(invoiceDate, payment.date) - 1);
+      weightedDays += days * amount;
+      totalPaid += amount;
+      remaining -= amount;
+    }
+  }
+
+  return totalPaid > 0 ? Math.round(weightedDays / totalPaid) : 0;
+}
+
 export function outstandingBalanceAt(invoices, payments, cutoff, statuses, inclusive = true) {
   const cutoffDate = dateOnly(cutoff);
   if (!cutoffDate) return null;

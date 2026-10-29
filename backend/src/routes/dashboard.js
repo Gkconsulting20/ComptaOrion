@@ -5,6 +5,7 @@ import {
   paiements,
   facturesAchat,
   paiementsFournisseurs,
+  fournisseurs,
   stockParEntrepot,
   produits,
   mouvementsStock,
@@ -16,16 +17,17 @@ import {
   lignesEcritures,
   comptesComptables,
   valorisationsStock,
+  transactionsTresorerie,
 } from '../schema.js';
 import { eq, and, gte, lte, desc, sql, inArray, like } from 'drizzle-orm';
 import {
   VALID_SALES_STATUSES,
   VALID_PURCHASE_STATUSES,
+  calculateWeightedPaymentDelay,
   calculateCashConversionCycle,
   calculateCurrentInventoryValue,
   calculateGrossMargin,
   calculateNetCashflow,
-  calculateWorkingCapitalDays,
   countInclusiveDays,
   dateOnly,
   outstandingBalanceAt,
@@ -155,7 +157,7 @@ router.get('/global', async (req, res) => {
       gte(column, period.start),
       lte(column, period.effectiveEnd),
     );
-    const [salesHistory, purchasesHistory, clientPaymentHistory, supplierPaymentHistory, allProducts, valuationLayers] = await Promise.all([
+    const [salesHistory, purchasesHistory, clientPaymentHistory, supplierPaymentHistory, treasuryMovementHistory, allProducts, valuationLayers] = await Promise.all([
       db.select({
         id: factures.id,
         numeroFacture: factures.numeroFacture,
@@ -196,6 +198,14 @@ router.get('/global', async (req, res) => {
       }).from(paiementsFournisseurs).where(and(
         eq(paiementsFournisseurs.entrepriseId, eId),
         lte(paiementsFournisseurs.datePaiement, period.effectiveEnd),
+      )),
+      db.select({
+        type: transactionsTresorerie.type,
+        montant: transactionsTresorerie.montant,
+      }).from(transactionsTresorerie).where(and(
+        eq(transactionsTresorerie.entrepriseId, eId),
+        gte(transactionsTresorerie.dateTransaction, period.start),
+        lte(transactionsTresorerie.dateTransaction, period.effectiveEnd),
       )),
       db.query.produits.findMany({ where: eq(produits.entrepriseId, eId) }),
       db.select({
@@ -238,27 +248,9 @@ router.get('/global', async (req, res) => {
 
     const costOfSales = await getCostOfSalesForInvoices(eId, ventesData);
     const grossMargin = calculateGrossMargin(ventesHT, costOfSales.cmv, costOfSales.complete);
-    const clientPaymentsInPeriod = clientPaymentHistory.filter((payment) => inPeriod(payment.datePaiement));
-    const supplierPaymentsInPeriod = supplierPaymentHistory.filter((payment) => inPeriod(payment.datePaiement));
-    const cashflow = calculateNetCashflow([
-      ...clientPaymentsInPeriod.map((payment) => ({ ...payment, type: 'encaissement' })),
-      ...supplierPaymentsInPeriod.map((payment) => ({ ...payment, type: 'decaissement' })),
-    ]);
-
-    const arOpening = outstandingBalanceAt(
-      salesHistory, clientPaymentHistory, period.start, SALES_STATUS_VALUES, false,
-    );
-    const arClosing = outstandingBalanceAt(
-      salesHistory, clientPaymentHistory, period.effectiveEnd, SALES_STATUS_VALUES, true,
-    );
-    const apOpening = outstandingBalanceAt(
-      purchasesHistory, supplierPaymentHistory, period.start, PURCHASE_STATUS_VALUES, false,
-    );
-    const apClosing = outstandingBalanceAt(
-      purchasesHistory, supplierPaymentHistory, period.effectiveEnd, PURCHASE_STATUS_VALUES, true,
-    );
-    const dso = calculateWorkingCapitalDays(arOpening, arClosing, sumMoney(ventesData, 'totalTTC'), period.days);
-    const dpo = calculateWorkingCapitalDays(apOpening, apClosing, sumMoney(achatsData, 'totalTTC'), period.days);
+    const cashflow = calculateNetCashflow(treasuryMovementHistory);
+    const dso = calculateWeightedPaymentDelay(salesHistory, clientPaymentHistory);
+    const dpo = calculateWeightedPaymentDelay(purchasesHistory, supplierPaymentHistory);
     const inventoryValue = calculateCurrentInventoryValue(allProducts, valuationLayers);
 
     // Il n'existe pas encore d'instantanés historiques permettant d'obtenir le stock moyen de la période.
@@ -281,7 +273,7 @@ router.get('/global', async (req, res) => {
       cmvDisponible: costOfSales.complete,
       ventesHT: Math.round(ventesHT * 100) / 100,
       cashflow: cashflow.toFixed(2),
-      cashflowDefinition: 'Paiements clients reçus moins paiements fournisseurs effectués',
+      cashflowDefinition: 'Encaissements moins décaissements enregistrés en trésorerie sur la période',
       dateRange: { debut: period.start, fin: period.end },
       dso,
       dpo,
@@ -344,21 +336,27 @@ router.get('/depenses-categories', async (req, res) => {
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const period = await getDashboardPeriod(req, eId);
     const [purchaseBills, expenseClaims] = await Promise.all([
-      db.query.facturesAchat.findMany({
-        where: and(
+      db.select({
+        totalTTC: facturesAchat.totalTTC,
+        fournisseurNom: fournisseurs.raisonSociale,
+      }).from(facturesAchat).leftJoin(fournisseurs, and(
+        eq(fournisseurs.id, facturesAchat.fournisseurId),
+        eq(fournisseurs.entrepriseId, eId),
+      )).where(and(
           eq(facturesAchat.entrepriseId, eId),
           gte(facturesAchat.dateFacture, period.start),
           lte(facturesAchat.dateFacture, period.effectiveEnd),
           inArray(facturesAchat.statut, PURCHASE_STATUS_VALUES),
-        ),
-        with: { fournisseur: true },
-      }),
+        )),
       db.select({
         montant: depensesTable.montant,
         montantApprouve: depensesTable.montantApprouve,
         categorie: categoriesDepenses.nom,
       }).from(depensesTable)
-        .leftJoin(categoriesDepenses, eq(categoriesDepenses.id, depensesTable.categorieId))
+        .leftJoin(categoriesDepenses, and(
+          eq(categoriesDepenses.id, depensesTable.categorieId),
+          eq(categoriesDepenses.entrepriseId, eId),
+        ))
         .where(and(
           eq(depensesTable.entrepriseId, eId),
           eq(depensesTable.statut, 'approuvée'),
@@ -369,7 +367,7 @@ router.get('/depenses-categories', async (req, res) => {
 
     const byCategory = new Map();
     for (const bill of purchaseBills) {
-      const category = bill.fournisseur?.nom || 'Achats fournisseurs';
+      const category = bill.fournisseurNom || 'Achats fournisseurs';
       byCategory.set(category, (byCategory.get(category) || 0) + Number(bill.totalTTC || 0));
     }
     for (const expense of expenseClaims) {
@@ -401,17 +399,7 @@ router.get('/kpis', async (req, res) => {
       where: eq(paiements.entrepriseId, eId)
     });
 
-    let delaiClientTotal = 0;
-    let delaiClientCount = 0;
-    factulesClients.forEach(f => {
-      const paiement = paiementsClients.find(p => p.factureId === f.id);
-      if (paiement) {
-        const delai = (new Date(paiement.datePaiement) - new Date(f.createdAt)) / (1000 * 60 * 60 * 24);
-        delaiClientTotal += delai;
-        delaiClientCount++;
-      }
-    });
-    const delaiPaiementClient = delaiClientCount > 0 ? (delaiClientTotal / delaiClientCount).toFixed(0) : 0;
+    const delaiPaiementClient = calculateWeightedPaymentDelay(factulesClients, paiementsClients);
 
     // Délai paiement fournisseur
     const facturesFournisseurs = await db.query.facturesAchat.findMany({
@@ -421,21 +409,11 @@ router.get('/kpis', async (req, res) => {
       where: eq(paiementsFournisseurs.entrepriseId, eId)
     });
 
-    let delaiFournisseurTotal = 0;
-    let delaiCount = 0;
-    facturesFournisseurs.forEach(f => {
-      const paiement = paiementsFournisseurs_data.find(p => p.factureId === f.id);
-      if (paiement) {
-        const delai = (new Date(paiement.datePaiement) - new Date(f.createdAt)) / (1000 * 60 * 60 * 24);
-        delaiFournisseurTotal += delai;
-        delaiCount++;
-      }
-    });
-    const delaiPaiementFournisseur = delaiCount > 0 ? (delaiFournisseurTotal / delaiCount).toFixed(0) : 0;
+    const delaiPaiementFournisseur = calculateWeightedPaymentDelay(facturesFournisseurs, paiementsFournisseurs_data);
 
     res.json({
-      delaiPaiementClient: parseInt(delaiPaiementClient),
-      delaiPaiementFournisseur: parseInt(delaiPaiementFournisseur),
+      delaiPaiementClient,
+      delaiPaiementFournisseur,
       nombreFacturesEnCours: factulesClients.filter(f => f.statut !== 'payee').length,
       nombreFacturesRetard: factulesClients.filter(f => f.statut === 'retard').length
     });

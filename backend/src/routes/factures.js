@@ -605,7 +605,7 @@ router.post('/:id/paiement', async (req, res) => {
         categorie: 'Vente',
         description: `Paiement facture ${factureData.numeroFacture}`,
         tiersNom: null,
-        numeroPiece: factureData.numeroFacture,
+        numeroPiece: reference || `PAI-${newPaiement.id}`,
         userId: req.user.id,
       });
 

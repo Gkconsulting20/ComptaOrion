@@ -670,7 +670,7 @@ router.post('/factures/:id/paiement', async (req, res) => {
           categorie: 'Achat',
           description: `Paiement facture ${factureData.numeroFacture}`,
           tiersNom: fournisseurInfo.raisonSociale || fournisseurInfo.nom || null,
-          numeroPiece: factureData.numeroFacture,
+          numeroPiece: reference || `PAI-F-${paiement.id}`,
           modePaiement: modePaiement || null,
           userId: req.user.id,
         }).returning();

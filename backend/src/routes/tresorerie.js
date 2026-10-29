@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, employes, comptesComptables, rapprochementsBancaires } from '../schema.js';
 import { eq, and, like, inArray, or, ne, notInArray, between, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { synchroniserTransactionDepuisEcriture } from '../services/treasuryJournalSync.js';
 
 const router = Router();
 
@@ -290,6 +291,31 @@ router.post('/comptes/create', async (req, res) => {
   } catch (err) {
     console.error('Erreur création compte bancaire:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/transactions/synchroniser-ecriture/:ecritureId', async (req, res) => {
+  try {
+    const ecritureId = Number(req.params.ecritureId);
+    if (!Number.isSafeInteger(ecritureId) || ecritureId <= 0) {
+      return res.status(400).json({ error: 'Identifiant d’écriture invalide.' });
+    }
+
+    const result = await db.transaction((tx) => synchroniserTransactionDepuisEcriture({
+      entrepriseId: req.entrepriseId,
+      ecritureId,
+      auditInfo: extractAuditInfo(req),
+      executor: tx,
+    }));
+
+    if (result.skipped) return res.status(409).json({ error: result.skipped });
+    return res.status(result.created ? 201 : 200).json({
+      transaction: result.transaction,
+      alreadySynchronized: Boolean(result.alreadySynchronized),
+    });
+  } catch (err) {
+    console.error('Erreur de synchronisation trésorerie/comptabilité:', err);
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 

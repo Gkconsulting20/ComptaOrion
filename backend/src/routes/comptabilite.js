@@ -6,6 +6,7 @@ import {
 } from '../schema.js';
 import { eq, and, desc, gte, lte, sum, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { synchroniserTransactionDepuisEcriture } from '../services/treasuryJournalSync.js';
 
 const router = express.Router();
 
@@ -1851,14 +1852,21 @@ router.post('/ecritures/:id/valider', async (req, res) => {
         executor: tx,
         required: true
       });
-      return { ecriture: updated, totalDebit, totalCredit };
+      const treasurySync = await synchroniserTransactionDepuisEcriture({
+        entrepriseId: Number(entrepriseId),
+        ecritureId: updated.id,
+        auditInfo: extractAuditInfo(req),
+        executor: tx,
+      });
+      return { ecriture: updated, totalDebit, totalCredit, treasurySync };
     });
 
     res.json({ 
       message: 'Écriture validée avec succès',
       ecriture: validation.ecriture,
       totalDebit: validation.totalDebit,
-      totalCredit: validation.totalCredit
+      totalCredit: validation.totalCredit,
+      treasurySync: validation.treasurySync,
     });
   } catch (error) {
     res.status(error.status || 500).json({

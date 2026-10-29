@@ -6,9 +6,11 @@ import { pool } from '../src/db.js';
 const apply = process.argv.includes('--apply');
 const scopeArg = process.argv.find(arg => arg.startsWith('--scope='));
 const scope = scopeArg?.slice('--scope='.length);
-const scopedTables = scope === 'stock-units'
-  ? new Set(['produits', 'lignes_reception', 'facture_achat_items'])
-  : null;
+const migrationScopes = new Map([
+  ['stock-units', new Set(['produits', 'lignes_reception', 'facture_achat_items'])],
+  ['expense-tracking', new Set(['projets_associatifs', 'depenses'])],
+]);
+const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
 const source = execFileSync(process.execPath, [
   'node_modules/drizzle-kit/bin.cjs', 'export', '--dialect=postgresql', '--schema=./src/schema.js',
@@ -40,7 +42,9 @@ try {
     const [, name, body] = table;
     if (scopedTables && !scopedTables.has(name)) continue;
     if (!present.has(name)) {
-      if (scopedTables) throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
+      if (scopedTables && scope !== 'expense-tracking') {
+        throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
+      }
       actions.push(statement);
       added.add(name);
     } else {
@@ -60,6 +64,26 @@ try {
         actions.push(`ALTER TABLE ${quote(name)} ADD COLUMN ${definition}`);
         added.add(`${name}.${column[1]}`);
       }
+    }
+  }
+  if (scope === 'expense-tracking') {
+    const { rows: [statusColumn] } = await client.query(
+      "SELECT udt_name FROM information_schema.columns WHERE table_schema='public' AND table_name='depenses' AND column_name='statut'",
+    );
+    if (statusColumn?.udt_name === 'expense_status') {
+      actions.push(`
+        ALTER TABLE "depenses" ALTER COLUMN "statut" DROP DEFAULT;
+        ALTER TABLE "depenses" ALTER COLUMN "statut" TYPE varchar(50)
+          USING CASE statut::text
+            WHEN 'brouillon' THEN 'en_attente'
+            WHEN 'soumise' THEN 'en_attente'
+            WHEN 'approuvee' THEN 'approuvée'
+            WHEN 'rejetee' THEN 'rejetée'
+            WHEN 'remboursee' THEN 'remboursée'
+            ELSE statut::text
+          END;
+        ALTER TABLE "depenses" ALTER COLUMN "statut" SET DEFAULT 'en_attente';
+      `);
     }
   }
   console.log(`${actions.length} ajouts de tables, colonnes ou types (${apply ? 'application' : 'simulation'}).`);
@@ -130,12 +154,15 @@ try {
     'paiements_depenses_projets_piece_unique',
     'paiements_depenses_projets_ecriture_unique',
   ]);
+  const permittedIndexes = scopedTables
+    ? new Set(scope === 'expense-tracking' ? ['projets_associatifs_entreprise_code_idx'] : [])
+    : associationIndexes;
   const existingIndexes = new Set((await client.query(
     "SELECT indexname FROM pg_indexes WHERE schemaname='public'",
   )).rows.map((row) => row.indexname));
   for (const statement of source.split(/;\s*(?:--> statement-breakpoint)?\s*/)) {
     const index = statement.match(/^CREATE UNIQUE INDEX "([^"]+)"/);
-    if (scopedTables || !index || !associationIndexes.has(index[1]) || existingIndexes.has(index[1])) continue;
+    if (!index || !permittedIndexes.has(index[1]) || existingIndexes.has(index[1])) continue;
     console.log(`INDEX ${index[1]} (${apply ? 'application' : 'simulation'})`);
     if (apply) await client.query(statement);
   }

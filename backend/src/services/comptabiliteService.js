@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { journaux, ecritures, lignesEcritures, comptesComptables, parametresComptables } from '../schema.js';
+import { journaux, ecritures, lignesEcritures, comptesComptables, comptesBancaires, parametresComptables } from '../schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 
 const JOURNAL_CODES = {
@@ -64,6 +64,39 @@ export async function getCompteById(compteId, executor = db) {
   const [compte] = await executor.select().from(comptesComptables)
     .where(eq(comptesComptables.id, compteId));
   return compte;
+}
+
+async function getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor = db) {
+  if (modePaiement === 'especes') {
+    return getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE, executor);
+  }
+
+  if (!compteBancaireId) {
+    return getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE, executor);
+  }
+
+  const [bankAccount] = await executor.select({
+    compteComptableId: comptesBancaires.compteComptableId,
+  }).from(comptesBancaires).where(and(
+    eq(comptesBancaires.id, Number(compteBancaireId)),
+    eq(comptesBancaires.entrepriseId, Number(entrepriseId)),
+    eq(comptesBancaires.actif, true),
+  )).limit(1);
+
+  if (!bankAccount?.compteComptableId) {
+    throw new Error('Le compte de trésorerie sélectionné ne possède pas de compte comptable associé.');
+  }
+
+  const [account] = await executor.select().from(comptesComptables).where(and(
+    eq(comptesComptables.id, bankAccount.compteComptableId),
+    eq(comptesComptables.entrepriseId, Number(entrepriseId)),
+  )).limit(1);
+
+  if (!account) {
+    throw new Error('Le compte comptable du compte de trésorerie est introuvable pour cette entreprise.');
+  }
+
+  return account;
 }
 
 export async function generateNumeroEcriture(entrepriseId, journalCode, executor = db) {
@@ -218,7 +251,7 @@ export async function createEcritureFactureAchat(params) {
   const compte408 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS_FACTURES_NON_PARVENUES, executor);
   const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor);
   const compteEcarts = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ECARTS_PRIX, executor);
-  const compteAchats = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_MARCHANDISES, executor);
+  const compteAchatsServices = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_SERVICES, executor);
   const compteStock = Number(montantValorisationStock) !== 0 || Number(montantStockDirect) > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES, executor)
     : null;
@@ -288,11 +321,14 @@ export async function createEcritureFactureAchat(params) {
     }
   }
 
-  if (montantPending === 0 && compteAchats) {
+  if (Number(montantPending) <= 0) {
     const expenseAmount = Math.max(0, Number(totalHT) - directStockAmount);
     if (expenseAmount > 0) {
+      if (!compteAchatsServices) {
+        throw new Error('Le compte comptable des services extérieurs (61) est requis pour les achats non stockés.');
+      }
       ecrituresLignes.push({
-        compteComptableId: compteAchats.id,
+        compteComptableId: compteAchatsServices.id,
         debit: expenseAmount,
         credit: 0,
         libelle: `Achats non stockés - ${numeroFacture}`
@@ -470,9 +506,7 @@ export async function createEcriturePaiementFournisseur(params) {
   const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
   
   const compte401 = fournisseurCompteId ? await getCompteById(fournisseurCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS, executor);
-  const compteTresorerie = modePaiement === 'especes' 
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE, executor)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE, executor);
+  const compteTresorerie = await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
 
   const ecrituresLignes = [];
 
@@ -530,9 +564,7 @@ export async function createEcriturePaiementClient(params) {
   const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
 
   const compte411 = clientCompteId ? await getCompteById(clientCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
-  const compteTresorerie = modePaiement === 'especes' 
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE, executor)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE, executor);
+  const compteTresorerie = await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
 
   const ecrituresLignes = [];
 
