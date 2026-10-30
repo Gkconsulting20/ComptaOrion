@@ -1,5 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
+import { withTenantTransaction } from '../utils/rlsPolicies.js';
 import { entreprises, users, plansAbonnement, abonnements, saasClients, saasVentes, saasCommerciaux, inscriptionsEnAttente } from '../schema.js';
 import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
@@ -571,15 +572,17 @@ router.post('/webhook/fedapay', async (req, res) => {
       const dateExpiration = new Date(dateDebut);
       dateExpiration.setMonth(dateExpiration.getMonth() + inscriptionEnAttente.dureeEnMois);
 
-      const [abonnement] = await db.insert(abonnements).values({
-        entrepriseId: newEntreprise.id,
-        planId: inscriptionEnAttente.planId,
-        statut: 'actif',
-        dateDebut,
-        dateExpiration,
-        prochainRenouvellement: dateExpiration,
-        montantMensuel: inscriptionEnAttente.montantTotal / inscriptionEnAttente.dureeEnMois
-      }).returning();
+      const [abonnement] = await withTenantTransaction(newEntreprise.id, () =>
+        db.insert(abonnements).values({
+          entrepriseId: newEntreprise.id,
+          planId: inscriptionEnAttente.planId,
+          statut: 'actif',
+          dateDebut,
+          dateExpiration,
+          prochainRenouvellement: dateExpiration,
+          montantMensuel: inscriptionEnAttente.montantTotal / inscriptionEnAttente.dureeEnMois
+        }).returning(),
+      );
 
       // Calculer la commission si parrainage
       const commissionAmount = commercialData 

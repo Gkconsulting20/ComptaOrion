@@ -9,6 +9,12 @@ L’Espace commercial sert à gérer la commercialisation du logiciel ComptaOrio
 
 **How to apply:** traiter le portail commercial comme un espace de gestion des ventes de ComptaOrion et conserver son authentification séparée de celle de l’ERP.
 
+Chaque entreprise cliente doit gérer ses propres utilisateurs et leurs niveaux d’accès dans l’ERP. Le propriétaire de ComptaOrion conserve séparément l’espace commercial pour gérer les commerciaux du logiciel.
+
+**Why:** l’utilisateur a distingué les administrateurs des entreprises clientes du propriétaire de la plateforme et de ses commerciaux.
+
+**How to apply:** cloisonner la gestion des membres par entreprise; ne jamais donner aux administrateurs clients l’accès aux fonctions SaaS globales ni aux commerciaux ComptaOrion.
+
 Trois utilisateurs est une capacité fréquente à considérer pour un forfait, mais l’offre commerciale complète reste à revoir.
 
 **Why:** l’utilisateur a indiqué que le nombre d’utilisateurs est souvent de trois et qu’il souhaite revenir sur l’offre commerciale plus tard.

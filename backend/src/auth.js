@@ -161,19 +161,51 @@ export function requireRole(...roles) {
  * Middleware pour isoler les données par entreprise (Row Level Security)
  */
 export function entrepriseIsolation(req, res, next) {
-  if (!req.user || !req.user.entrepriseId) {
+  const tenantId = Number(req.user?.entrepriseId);
+  if (!Number.isSafeInteger(tenantId) || tenantId <= 0) {
     return res.status(401).json({ error: 'Entreprise non identifiée' });
   }
-  
-  // Ajouter l'entrepriseId et userId aux données pour toutes les requêtes
-  req.entrepriseId = req.user.entrepriseId;
+
+  // Le tenant vient uniquement du jeton signé. Normaliser l'ID évite les
+  // comparaisons ambiguës entre nombres et chaînes dans les filtres Drizzle.
+  req.entrepriseId = tenantId;
   req.userId = req.user.id;
-  // Legacy handlers still read these fields. The tenant always comes from the
-  // signed session, never from a client-supplied query/body.
-  if (req.query) req.query.entrepriseId = req.entrepriseId;
-  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
-    req.body.entrepriseId = req.entrepriseId;
-    req.body.userId = req.userId;
+
+  // Certains anciens handlers lisent encore les champs de tenant dans les
+  // entrées. Les remplacer aussi dans les objets imbriqués évite qu'un payload
+  // de lot transporte l'identifiant d'une autre entreprise.
+  const overwriteTenantFields = (value, setRootTenant = false) => {
+    if (!value || typeof value !== 'object') return;
+    const visited = new WeakSet();
+    const stack = [value];
+    while (stack.length) {
+      const current = stack.pop();
+      if (!current || typeof current !== 'object' || visited.has(current)) continue;
+      visited.add(current);
+      if (Array.isArray(current)) {
+        stack.push(...current);
+        continue;
+      }
+      const prototype = Object.getPrototypeOf(current);
+      if (prototype !== Object.prototype && prototype !== null) continue;
+      if (setRootTenant || Object.hasOwn(current, 'entrepriseId')) {
+        current.entrepriseId = tenantId;
+      }
+      stack.push(...Object.values(current));
+    }
+  };
+
+  if (req.query && typeof req.query === 'object') {
+    overwriteTenantFields(req.query, true);
+  }
+  if (req.body && typeof req.body === 'object') {
+    const bodyIsObject = !Array.isArray(req.body);
+    if (bodyIsObject) req.body.userId = req.userId;
+    overwriteTenantFields(req.body, bodyIsObject);
+  }
+  if (req.params && typeof req.params === 'object') {
+    if (Object.hasOwn(req.params, 'entrepriseId')) req.params.entrepriseId = tenantId;
+    if (Object.hasOwn(req.params, 'userId')) req.params.userId = req.userId;
   }
   next();
 }

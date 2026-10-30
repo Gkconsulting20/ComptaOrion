@@ -3,6 +3,7 @@ import './app.css';
 import api from './api';
 import OrionIcon from './components/OrionIcon';
 import OrionLogo from './components/OrionLogo';
+import { roleCanAccessModule } from '@shared/access-policy.js';
 
 const loadNamed = (loader, exportName) => lazy(() =>
   loader().then(module => ({ default: module[exportName] }))
@@ -163,7 +164,8 @@ export default function App() {
   const MODULES = ALL_MODULES.filter(m =>
     (!m.requiresSuperAdmin || isSuperAdmin) &&
     (!m.requiresAdmin || isAdmin) &&
-    (!m.requiresAssociationAccess || associationAccess)
+    (!m.requiresAssociationAccess || associationAccess) &&
+    roleCanAccessModule(user?.role, m.id)
   );
   const activeModule = MODULES.find(module => module.id === currentView);
   const visibleModuleGroups = NAVIGATION_GROUPS
@@ -249,7 +251,7 @@ export default function App() {
       case 'integrations': return <IntegrationsModule />;
       case 'ia-assistant': return AI_ENABLED ? <IAAssistantModule /> : <DashboardView entrepriseName={entreprise?.nom} />;
       case 'authentication': return <AuthenticationModule />;
-      case 'parametres': return <ParametresModule />;
+      case 'parametres': return <ParametresModule user={user} />;
       default: return <DashboardView />;
     }
   };

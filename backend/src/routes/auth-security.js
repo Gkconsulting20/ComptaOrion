@@ -7,6 +7,14 @@ import { eq, and, gt, isNull } from 'drizzle-orm';
 
 const router = express.Router();
 
+function getRequestIp(req) {
+  return req.get('cf-connecting-ip') ||
+    req.ip ||
+    req.socket?.remoteAddress ||
+    req.connection?.remoteAddress ||
+    'unknown';
+}
+
 // ==========================================
 // LOGIN + SESSION MANAGEMENT
 // ==========================================
@@ -14,7 +22,7 @@ const router = express.Router();
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const ipAddress = req.ip || req.connection.remoteAddress;
+    const ipAddress = getRequestIp(req);
     const userAgent = req.get('user-agent');
 
     // Chercher l'utilisateur par email (insensible à la casse)
@@ -34,6 +42,19 @@ router.post('/login', async (req, res) => {
         userAgent,
         statut: 'failed',
         raison: 'Email non trouvé'
+      });
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+    }
+
+    if (!user.actif) {
+      await db.insert(auditConnexions).values({
+        userId: user.id,
+        enterpriseId: user.entrepriseId,
+        type: 'failed_login',
+        ipAddress,
+        userAgent,
+        statut: 'failed',
+        raison: 'Compte désactivé'
       });
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
     }
@@ -101,7 +122,7 @@ router.post('/login', async (req, res) => {
 router.post('/logout', authMiddleware, async (req, res) => {
   try {
     const { sessionId } = req.body;
-    const ipAddress = req.ip || req.connection.remoteAddress;
+    const ipAddress = getRequestIp(req);
 
     if (!sessionId) {
       return res.status(400).json({ error: 'Session ID requis' });
@@ -197,7 +218,7 @@ router.post('/refresh', async (req, res) => {
       userId: user.id,
       enterpriseId: user.entrepriseId,
       type: 'token_refresh',
-      ipAddress: req.ip || req.connection.remoteAddress,
+      ipAddress: getRequestIp(req),
       userAgent: req.get('user-agent'),
       statut: 'success'
     });
@@ -205,7 +226,8 @@ router.post('/refresh', async (req, res) => {
     setAuthCookies(res, newToken, newRefreshToken);
     res.json({ message: 'Session rafraîchie' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Erreur lors du renouvellement de session:', error?.cause?.message || error?.message);
+    res.status(500).json({ error: 'Impossible de renouveler la session' });
   }
 });
 

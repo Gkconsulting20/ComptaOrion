@@ -3,8 +3,9 @@ import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import api from '../api';
+import { UserAccessPanel } from './UserAccessPanel';
 
-export function ParametresModule() {
+export function ParametresModule({ user }) {
   const [activeTab, setActiveTab] = useState('entreprise');
   const [data, setData] = useState({
     entreprise: null,
@@ -56,7 +57,10 @@ export function ParametresModule() {
     { id: 'tauxChange', label: '📈 Taux de Change', icon: '📈' },
     { id: 'pays', label: '🌍 Pays & Régions', icon: '🌍' },
     { id: 'taxes', label: '💰 Taxes (TVA)', icon: '💰' },
-    { id: 'audit', label: '📋 Historique Audit', icon: '📋' }
+    { id: 'audit', label: '📋 Historique Audit', icon: '📋' },
+    ...(user?.role === 'admin'
+      ? [{ id: 'utilisateurs', label: '👥 Utilisateurs & accès', icon: '👥' }]
+      : [])
   ];
 
   if (loading) return <p>Chargement des paramètres...</p>;
@@ -120,6 +124,10 @@ export function ParametresModule() {
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'utilisateurs' && user?.role === 'admin' && (
+        <UserAccessPanel currentUserId={user.id} />
       )}
 
       {activeTab === 'comptabilite' && (

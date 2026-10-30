@@ -33,8 +33,10 @@ import importRoutes from './routes/import.js';
 import devisesRoutes from './routes/devises.js';
 import associationAccountingRoutes from './routes/association-accounting.js';
 import { authMiddleware, entrepriseIsolation, saasAdminOnly, requireRole } from './auth.js';
-import { createTenantMiddleware } from './utils/rlsPolicies.js';
 import { idempotencyMiddleware } from './middleware/idempotency.js';
+import { tenantAccessControl } from './middleware/tenant-access.js';
+import { createTenantMiddleware } from './utils/rlsPolicies.js';
+import userManagementRoutes from './routes/user-management.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -86,10 +88,13 @@ app.get('/api/health', (req, res) => {
 // ===============================================
 // Note: SaaS Admin routes sont montées AVANT entrepriseIsolation car elles
 // gèrent des données globales (tous clients, tous commerciaux) et non isolées par entreprise
-app.use('/api/saas-admin', authMiddleware, saasAdminOnly, saasAdminRoutes);
+app.use('/api/saas-admin', authMiddleware, saasAdminOnly,
+  createTenantMiddleware({ platformAdmin: true }), saasAdminRoutes);
 
-// ✅ AUTHENTIFICATION ACTIVÉE - TOUTES LES ROUTES PROTÉGÉES
-app.use('/api', authMiddleware, entrepriseIsolation, createTenantMiddleware(), idempotencyMiddleware);
+// L'isolation RLS est optionnelle : lorsqu'elle est activée, le contexte
+// tenant est fixé dans une transaction qui couvre toute la requête protégée.
+app.use('/api', authMiddleware, entrepriseIsolation, createTenantMiddleware(), tenantAccessControl, idempotencyMiddleware);
+app.use('/api/user-management', userManagementRoutes);
 app.use('/api/associations', associationAccountingRoutes);
 
 // ===============================================

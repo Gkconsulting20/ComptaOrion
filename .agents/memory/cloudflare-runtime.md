@@ -66,3 +66,9 @@ Un build Workers qui s’arrête avant l’installation avec le message de jeton
 **Why:** Cloudflare peut conserver un ancien jeton API sélectionné pour un Worker alors que l’ancienne version du Worker continue de fonctionner.
 
 **How to apply:** Dans les paramètres Build du Worker, sélectionner ou créer un jeton API valide puis relancer le build; ne jamais copier sa valeur dans le dépôt ou le chat.
+
+Le runtime Express sur Cloudflare Workers ne garantit pas `req.connection.remoteAddress`.
+
+**Why:** Le test fonctionnel Worker a échoué lors de l’écriture de l’audit de session, car l’adresse IP était absente alors que la colonne PostgreSQL est obligatoire.
+
+**How to apply:** Pour l’audit d’IP, lire les en-têtes Cloudflare et les propriétés Express/Node de manière optionnelle, puis fournir une valeur non nulle; valider connexion et renouvellement de session dans le Worker simulé.

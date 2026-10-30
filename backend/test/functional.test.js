@@ -4,14 +4,21 @@ import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import * as databaseSchema from '../src/schema.js';
 
 test('parcours ERP dans un schéma jetable sans accès aux données existantes', {
   skip: process.env.ERP_FUNCTIONAL_TEST !== '1',
   timeout: 120000,
 }, async () => {
   const schema = `erp_test_${randomUUID().replaceAll('-', '')}`;
-  const admin = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  let server, pool, worker;
+  const adminConnectionString = process.env.DATABASE_URL;
+  const previousTenantRls = process.env.TENANT_RLS_ENABLED;
+  const admin = new pg.Pool({ connectionString: adminConnectionString });
+  const rlsRole = `erp_rls_${randomUUID().replaceAll('-', '')}`;
+  const rlsPassword = randomUUID().replaceAll('-', '');
+  let roleCreated = false;
+  let server, pool, worker, adminSchemaPool;
   try {
     const ddl = execFileSync(process.execPath, [
       'backend/node_modules/drizzle-kit/bin.cjs', 'export',
@@ -23,9 +30,48 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       await client.query(`SET search_path TO "${schema}"`);
       await client.query(ddl);
     } finally { client.release(); }
+
+    const adminUrl = new URL(adminConnectionString);
+    const databaseName = decodeURIComponent(adminUrl.pathname.slice(1));
+    const quotedRole = `"${rlsRole}"`;
+    await admin.query(`CREATE ROLE ${quotedRole} LOGIN PASSWORD '${rlsPassword}' NOSUPERUSER NOBYPASSRLS`);
+    roleCreated = true;
+    await admin.query(`GRANT CONNECT ON DATABASE "${databaseName.replaceAll('"', '""')}" TO ${quotedRole}`);
+    await admin.query(`GRANT USAGE, CREATE ON SCHEMA "${schema}" TO ${quotedRole}`);
+    await admin.query(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "${schema}" TO ${quotedRole}`);
+    await admin.query(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "${schema}" TO ${quotedRole}`);
+    await admin.query(`ALTER TABLE "${schema}"."lite_idempotency" OWNER TO ${quotedRole}`);
+
+    const roleStatus = await admin.query(
+      'SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1',
+      [rlsRole],
+    );
+    assert.deepEqual(roleStatus.rows[0], { rolsuper: false, rolbypassrls: false },
+      'Le rôle de test ne doit pas contourner RLS');
+
+    const adminSchemaUrl = new URL(adminConnectionString);
+    adminSchemaUrl.searchParams.set('options', `-c search_path=${schema}`);
+    adminSchemaPool = new pg.Pool({ connectionString: adminSchemaUrl.toString() });
+    const adminSchemaDb = drizzle({ client: adminSchemaPool, schema: databaseSchema });
+    const appUrl = new URL(adminConnectionString);
+    appUrl.username = rlsRole;
+    appUrl.password = rlsPassword;
+    appUrl.searchParams.set('options', `-c search_path=${schema}`);
+    process.env.DATABASE_URL = appUrl.toString();
+    process.env.TENANT_RLS_ENABLED = 'true';
+
+    const { enableRLS, checkRLSStatus, MULTI_TENANT_TABLES } =
+      await import('../src/utils/rlsPolicies.js');
+    const enabledTables = await enableRLS(adminSchemaDb);
+    for (const requiredTable of ['clients', 'factures', 'produits', 'comptes_comptables', 'lignes_ecriture']) {
+      assert.ok(enabledTables.includes(requiredTable), `RLS doit couvrir ${requiredTable}`);
+    }
+    const rlsStatus = await checkRLSStatus();
+    assert.equal(rlsStatus.length, MULTI_TENANT_TABLES.length);
+    assert.ok(rlsStatus.every((status) => status.rlsEnabled && status.forceRls),
+      'Toutes les tables métier découvertes doivent appliquer et forcer RLS');
+
     const url = new URL(process.env.DATABASE_URL);
-    url.searchParams.set('options', `-c search_path=${schema}`);
-    process.env.DATABASE_URL = url.toString();
     // No outbound email/payment/AI in a functional test.
     delete process.env.SENDGRID_API_KEY;
     delete process.env.FEDAPAY_SECRET_KEY;
@@ -37,7 +83,8 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
         workers: [{
         modules:true,scriptPath:'generated-artifacts/worker/worker.js',
         compatibilityDate:'2026-02-01',compatibilityFlags:['nodejs_compat'],
-        bindings:{NODE_ENV:'production',RUNTIME_CLOUDFLARE:'true',AI_ENABLED:'false',
+          bindings:{NODE_ENV:'production',RUNTIME_CLOUDFLARE:'true',AI_ENABLED:'false',
+            TENANT_RLS_ENABLED:'true',
           DATABASE_URL:process.env.DATABASE_URL,JWT_SECRET:randomUUID(),JWT_REFRESH_SECRET:randomUUID()},
         r2Buckets:['UPLOADS'],
         }],
@@ -90,6 +137,27 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       assert.equal(res.status,expected,`${method} ${path}: ${JSON.stringify(json).slice(0,400)}`);
       return json;
     }
+    async function queryAsTenant(tenantId, query, params = []) {
+      const client = await pool.connect();
+      let transactionOpen = false;
+      try {
+        await client.query('BEGIN');
+        transactionOpen = true;
+        await client.query(
+          "SELECT set_config('app.current_tenant', $1, true)",
+          [String(tenantId)],
+        );
+        const result = await client.query(query, params);
+        await client.query('COMMIT');
+        transactionOpen = false;
+        return result;
+      } catch (error) {
+        if (transactionOpen) await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
     const password=randomUUID()+'Aa9!';
     const signup=await api('/auth/register','POST',{
       username:'recette',email:'recette@example.invalid',password,entrepriseNom:'Entreprise de recette isolée',
@@ -105,6 +173,9 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.ok(refreshBeforeRotation && refreshAfterRotation && refreshBeforeRotation !== refreshAfterRotation,
       'Le refresh token doit tourner sans être exposé dans le JSON');
     await api('/auth-security/session');
+    const platformSubscriptions = await api('/saas-admin/abonnements');
+    assert.ok(Array.isArray(platformSubscriptions),
+      'Le rôle admin plateforme conserve l’accès SaaS via le contexte RLS privilégié');
     for(const path of ['/auth/me','/dashboard/global','/stock/receptions','/stock/alertes',
       '/stock/produits','/stock/rapports/valorisation','/depenses/list','/depenses/categories',
       '/immobilisations/list','/immobilisations/categories','/immobilisations/registre',
@@ -113,6 +184,8 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     }
     const clientRecord=await api('/clients','POST',{nom:'Client recette'},201);
     const clientId=clientRecord.data.id;
+    const unscopedClients=await pool.query('SELECT id FROM clients');
+    assert.equal(unscopedClients.rowCount,0,'Sans contexte tenant, RLS doit masquer toutes les lignes');
     const productRecord=await api('/produits','POST',{reference:'TEST-ERP',nom:'Produit recette',
       quantite:10,prixVente:1000,prixAchat:500},201);
     const productId=productRecord.data.id;
@@ -137,13 +210,19 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       worker.dispatchFetch(paymentUrl,paymentRequest) : fetch(paymentUrl,paymentRequest)));
     assert.deepEqual(results.map(r=>r.status).sort(),[201,400],'Deux paiements concurrents ne doivent pas dépasser le solde');
     await Promise.all(results.map(r=>r.arrayBuffer()));
-    const { rows:[balance] }=await pool.query('SELECT COALESCE(SUM(debit),0) AS debit,COALESCE(SUM(credit),0) AS credit,COUNT(*)::int AS n FROM lignes_ecriture');
+    const { rows:[balance] }=await queryAsTenant(signup.user.entrepriseId,
+      'SELECT COALESCE(SUM(debit),0) AS debit,COALESCE(SUM(credit),0) AS credit,COUNT(*)::int AS n FROM lignes_ecriture');
     assert.ok(balance.n>0,'Des lignes comptables doivent avoir été créées');
     assert.equal(Number(balance.debit),Number(balance.credit),'Écritures équilibrées');
     const category=await api('/immobilisations/categories','POST',{nom:'Matériel',dureeVie:5,methodeAmortissement:'lineaire'});
     await api('/immobilisations/create','POST',{reference:'IMMO-TEST',description:'Matériel recette',
       categorieId:category.id,dateAcquisition:'2026-10-16',valeurAcquisition:100000});
-    const expenseCategory=await api('/depenses/categories','POST',{nom:'Transport'},201);
+    const expenseAccounts=await api('/comptabilite/comptes');
+    const expenseAccount=expenseAccounts.find(account=>String(account.numero).startsWith('6') && account.actif);
+    assert.ok(expenseAccount,'Un compte de charge SYSCOHADA doit être disponible pour le test');
+    const expenseCategory=await api('/depenses/categories','POST',{
+      nom:'Transport',compteComptableId:expenseAccount.id,
+    },201);
     const associationProject=await api('/associations/projects','POST',{
       code:'ASSO-RECETTE',nom:'Projet associatif de recette',dateDebut:'2026-10-16',
       dateFin:'2026-12-31',budgetTotal:5000,devise:'FCFA',
@@ -168,7 +247,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       compteProduitId:associationAccounts.grants[0].id,
     },201);
     assert.ok(receipt.accountingEntry.id,'Le versement crée une écriture comptable');
-    const { rows:[receiptBalance] }=await pool.query(
+    const { rows:[receiptBalance] }=await queryAsTenant(signup.user.entrepriseId,
       'SELECT COALESCE(SUM(debit),0) AS debit,COALESCE(SUM(credit),0) AS credit FROM lignes_ecriture WHERE ecriture_id=$1',
       [receipt.accountingEntry.id],
     );
@@ -200,7 +279,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const payment=await api(paymentPath,'POST',paymentBody,201,{'X-Idempotency-Key':paymentKey});
     assert.equal(Number(payment.montantPaye),600);
     assert.equal(Number(payment.soldeAPayer),400);
-    const { rows:[paymentBalance] }=await pool.query(
+    const { rows:[paymentBalance] }=await queryAsTenant(signup.user.entrepriseId,
       'SELECT COALESCE(SUM(debit),0) AS debit,COALESCE(SUM(credit),0) AS credit FROM lignes_ecriture WHERE ecriture_id=$1',
       [payment.accountingEntry.id],
     );
@@ -241,14 +320,33 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       password,entrepriseNom:'Autre entreprise isolée'},201);
     const secondLogin=await api('/auth-security/login','POST',{email:'second@example.invalid',password});
     assert.ok(secondLogin.session?.id);
-    const secondClient=await api('/clients','POST',{nom:'Autre client'},201);
+    const secondClient=await api('/clients','POST',{
+      nom:'Autre client',entrepriseId:signup.user.entrepriseId,userId:signup.user.id,
+    },201);
+    assert.notEqual(Number(secondClient.data.entrepriseId),Number(signup.user.entrepriseId),
+      'La création doit ignorer le tenant fourni par le client');
+    const tenantBClients=await api('/clients');
+    assert.deepEqual(tenantBClients.data.map(client=>client.id),[secondClient.data.id],
+      'La liste client ne doit retourner que les données du tenant connecté');
+    const secondProduct=await api('/produits','POST',{
+      reference:'TEST-TENANT-B',nom:'Produit autre entreprise',quantite:1,
+      prixVente:100,prixAchat:50,entrepriseId:signup.user.entrepriseId,
+    },201);
+    assert.notEqual(Number(secondProduct.data.entrepriseId),Number(signup.user.entrepriseId),
+      'La création produit doit ignorer le tenant fourni par le client');
+    await api(`/produits/${productId}`,'GET',null,404);
+    await api(`/produits/${productId}`,'PUT',{nom:'Modification interdite'},404);
+    const tenantBProducts=await api('/produits');
+    assert.deepEqual(tenantBProducts.data.map(product=>product.id),[secondProduct.data.id],
+      'La liste produit ne doit retourner que les données du tenant connecté');
     await api('/factures','POST',{clientId:secondClient.data.id,items:[{description:'Service',quantite:1,prixUnitaire:500}]},201);
     const isolatedAssociationProjects=await api('/associations/projects');
     assert.deepEqual(isolatedAssociationProjects,[],'Les projets associatifs sont isolés par entreprise');
     await api(`/associations/projects/${associationProject.id}/report`,'GET',null,404);
     await api(`/factures/${f.id}`,'GET',null,404);
     const forged=await api(`/stock/produits?entrepriseId=${signup.user.entrepriseId}`);
-    assert.equal(forged.length,0,'Le paramètre entreprise ne doit pas donner accès aux produits tiers');
+    assert.deepEqual(forged.map(product=>product.id),[secondProduct.data.id],
+      'Un paramètre entreprise falsifié ne doit retourner que les produits du tenant connecté');
     cookieJar = firstCookieJar;
     await api('/ia/chat','POST',{message:'ne pas envoyer'},404);
     await api('/auth-security/logout','POST',{sessionId:login.session.id});
@@ -258,7 +356,16 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     if(server) await new Promise(r=>server.close(r));
     if(worker) await worker.dispose();
     if(pool) await pool.end();
+    if(adminSchemaPool) await adminSchemaPool.end();
     await admin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+    if(roleCreated) {
+      await admin.query(`DROP OWNED BY "${rlsRole}"`);
+      await admin.query(`DROP ROLE "${rlsRole}"`);
+    }
     await admin.end();
+    if(adminConnectionString === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = adminConnectionString;
+    if(previousTenantRls === undefined) delete process.env.TENANT_RLS_ENABLED;
+    else process.env.TENANT_RLS_ENABLED = previousTenantRls;
   }
 });

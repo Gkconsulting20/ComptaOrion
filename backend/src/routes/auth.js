@@ -16,6 +16,7 @@ import {
   authMiddleware,
 } from '../auth.js';
 import { initializeSyscohadaForEnterprise } from '../services/syscohadaService.js';
+import { withTenantTransaction } from '../utils/rlsPolicies.js';
 
 const router = express.Router();
 
@@ -84,7 +85,10 @@ router.post('/register', async (req, res) => {
 
     // Initialiser automatiquement le plan comptable SYSCOHADA
     try {
-      const syscohadaResult = await initializeSyscohadaForEnterprise(newEntreprise.id);
+      const syscohadaResult = await withTenantTransaction(
+        newEntreprise.id,
+        () => initializeSyscohadaForEnterprise(newEntreprise.id),
+      );
       console.log(`Plan comptable SYSCOHADA initialisé pour entreprise ${newEntreprise.id}:`, syscohadaResult);
     } catch (syscohadaError) {
       console.error('Erreur initialisation SYSCOHADA:', syscohadaError.message);
