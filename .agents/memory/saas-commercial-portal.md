@@ -15,11 +15,11 @@ Chaque entreprise cliente doit gérer ses propres utilisateurs et leurs niveaux 
 
 **How to apply:** cloisonner la gestion des membres par entreprise; ne jamais donner aux administrateurs clients l’accès aux fonctions SaaS globales ni aux commerciaux ComptaOrion.
 
-Les administrateurs clients doivent pouvoir régler séparément, pour chaque utilisateur et chaque module ERP, la consultation, la modification et la gestion incluant la suppression.
+Les administrateurs clients doivent pouvoir régler séparément, pour chaque utilisateur et chaque module ERP, la consultation, la modification et la gestion incluant la suppression. Le middleware de tenant injecte l’identifiant d’entreprise dans les objets JSON imbriqués : le vérifier puis l’exclure des droits persistés.
 
-**Why:** l’utilisateur a précisé que les niveaux d’accès par module sont essentiels pour limiter les accès de son équipe.
+**Why:** l’utilisateur a précisé que les niveaux d’accès par module sont essentiels pour limiter les accès de son équipe; un test API a révélé que les métadonnées de tenant sont ajoutées aux objets JSON imbriqués.
 
-**How to apply:** les profils servent de valeurs de départ; les droits effectifs restent configurables par utilisateur et vérifiés côté serveur dans le tenant de son entreprise.
+**How to apply:** les profils servent de valeurs de départ; les droits effectifs restent configurables par utilisateur et vérifiés côté serveur dans le tenant de son entreprise. Pour les objets de droits imbriqués, valider l’identifiant ajouté par le middleware avant de le retirer du contenu métier.
 
 Trois utilisateurs est une capacité fréquente à considérer pour un forfait, mais l’offre commerciale complète reste à revoir.
 

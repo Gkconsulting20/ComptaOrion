@@ -45,17 +45,24 @@ function toSafeUser(user) {
   };
 }
 
-function normalizeModulePermissions(role, modulePermissions) {
+function normalizeModulePermissions(role, modulePermissions, entrepriseId) {
   if (modulePermissions !== undefined &&
       (!modulePermissions || typeof modulePermissions !== 'object' || Array.isArray(modulePermissions))) {
     throw new Error('INVALID_MODULE_PERMISSIONS');
   }
-  for (const [moduleId, level] of Object.entries(modulePermissions || {})) {
+  const values = { ...(modulePermissions || {}) };
+  if (Object.hasOwn(values, 'entrepriseId')) {
+    if (Number(values.entrepriseId) !== Number(entrepriseId)) {
+      throw new Error('INVALID_MODULE_PERMISSIONS_TENANT');
+    }
+    delete values.entrepriseId;
+  }
+  for (const [moduleId, level] of Object.entries(values)) {
     if (!VALID_PERMISSION_MODULES.has(moduleId) || !VALID_PERMISSION_LEVELS.has(level)) {
       throw new Error('INVALID_MODULE_PERMISSIONS');
     }
   }
-  return resolveModulePermissions(role, modulePermissions);
+  return resolveModulePermissions(role, values);
 }
 
 async function getUserLimit(executor, entrepriseId) {
@@ -152,17 +159,8 @@ router.post('/', async (req, res) => {
   }
   let modulePermissions;
   try {
-    modulePermissions = normalizeModulePermissions(role, req.body?.modulePermissions);
-  } catch (error) {
-    console.warn('Droits par module refusés à la validation:', {
-      reason: error.message,
-      keys: req.body?.modulePermissions && typeof req.body.modulePermissions === 'object'
-        ? Object.keys(req.body.modulePermissions)
-        : [],
-      values: req.body?.modulePermissions && typeof req.body.modulePermissions === 'object'
-        ? Object.values(req.body.modulePermissions)
-        : [],
-    });
+    modulePermissions = normalizeModulePermissions(role, req.body?.modulePermissions, req.entrepriseId);
+  } catch {
     return res.status(400).json({ error: 'Les droits par module transmis ne sont pas valides.' });
   }
 
@@ -280,9 +278,9 @@ router.put('/:userId', async (req, res) => {
       let nextModulePermissions;
       try {
         nextModulePermissions = req.body?.modulePermissions !== undefined
-          ? normalizeModulePermissions(nextRole, req.body.modulePermissions)
+          ? normalizeModulePermissions(nextRole, req.body.modulePermissions, req.entrepriseId)
           : nextRole !== current.role
-            ? normalizeModulePermissions(nextRole)
+            ? normalizeModulePermissions(nextRole, undefined, req.entrepriseId)
             : resolveModulePermissions(current.role, current.modulePermissions);
       } catch {
         return { invalidModulePermissions: true };
