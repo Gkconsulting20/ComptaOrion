@@ -2,10 +2,16 @@ import React, { useState } from 'react';
 
 const DEMO_SECTIONS = [
   { id: 'dashboard', label: 'Vue d’ensemble', icon: '▦' },
-  { id: 'clients', label: 'Clients', icon: '♙' },
-  { id: 'fournisseurs', label: 'Fournisseurs', icon: '⇄' },
+  { id: 'clients', label: 'Clients & factures', icon: '♙' },
+  { id: 'fournisseurs', label: 'Fournisseurs & achats', icon: '⇄' },
+  { id: 'tresorerie', label: 'Trésorerie', icon: '◉' },
   { id: 'stock', label: 'Stock', icon: '▣' },
-  { id: 'fiscalite', label: 'Fiscalité', icon: '▤' }
+  { id: 'comptabilite', label: 'Comptabilité', icon: '▤' },
+  { id: 'associations', label: 'Comptabilité associations', icon: '◇' },
+  { id: 'impots', label: 'Impôts', icon: '▧' },
+  { id: 'integrations', label: 'Intégrations', icon: '↗' },
+  { id: 'security', label: 'Sécurité', icon: '⬡' },
+  { id: 'settings', label: 'Paramètres', icon: '⚙' }
 ];
 
 const DEMO_SALES = [
@@ -23,10 +29,52 @@ const DEMO_CLIENTS = [
   { name: 'Établissements Améyo', city: 'Lomé', balance: '95 000', status: 'En règle' }
 ];
 
+const DEMO_INVOICES = [
+  { reference: 'FV-2026-018', client: 'Coopérative Agri-Sud', date: '12 oct. 2026', amount: '425 000', status: 'Payée' },
+  { reference: 'FV-2026-021', client: 'Ferme des Plateaux', date: '18 oct. 2026', amount: '180 000', status: 'Partiellement payée' },
+  { reference: 'FV-2026-024', client: 'Établissements Améyo', date: '21 oct. 2026', amount: '95 000', status: 'À payer' }
+];
+
 const DEMO_SUPPLIERS = [
   { name: 'AgroParts Import', country: 'Chine', due: '1 850 000', term: 'Échéance dans 62 jours' },
   { name: 'Transport Horizon', country: 'Togo', due: '240 000', term: 'Échéance dans 14 jours' },
   { name: 'Emballages du Golfe', country: 'Togo', due: '85 000', term: 'Payé' }
+];
+
+const DEMO_CASH_MOVEMENTS = [
+  { date: '21 oct. 2026', label: 'Encaissement FV-2026-018', account: 'Banque principale', amount: '+425 000' },
+  { date: '20 oct. 2026', label: 'Loyer boutique', account: 'Banque principale', amount: '−180 000' },
+  { date: '18 oct. 2026', label: 'Vente comptoir', account: 'Caisse', amount: '+95 000' }
+];
+
+const DEMO_ENTRIES = [
+  { date: '21 oct. 2026', journal: 'Ventes', number: 'VE-2026-00000018', label: 'Facture FV-2026-018', debit: '425 000', credit: '425 000' },
+  { date: '20 oct. 2026', journal: 'Achats', number: 'AC-2026-000023', label: 'Réception marchandises', debit: '750 000', credit: '750 000' },
+  { date: '20 oct. 2026', journal: 'Banque', number: 'BQ-2026-000041', label: 'Paiement du loyer', debit: '180 000', credit: '180 000' }
+];
+
+const DEMO_ASSOCIATION_PROJECTS = [
+  { name: 'Jardin scolaire de Kévé', funder: 'Fonds de solidarité agricole', budget: '3 000 000', spent: '1 250 000', remaining: '1 750 000' },
+  { name: 'Formation des coopératives', funder: 'Programme local de développement', budget: '1 800 000', spent: '740 000', remaining: '1 060 000' }
+];
+
+const DEMO_INTEGRATIONS = [
+  { name: 'Paiements en ligne', detail: 'Traitement des encaissements', status: 'Exemple fictif' },
+  { name: 'Notifications e-mail', detail: 'Envoi de factures et rappels', status: 'Exemple fictif' },
+  { name: 'Documents et pièces', detail: 'Stockage privé des justificatifs', status: 'Exemple fictif' }
+];
+
+const DEMO_USERS = [
+  { name: 'Administrateur', scope: 'Gestion des accès et paramètres' },
+  { name: 'Comptable', scope: 'Journaux, écritures et états' },
+  { name: 'Commercial', scope: 'Clients, devis et factures' }
+];
+
+const DEMO_SETTINGS = [
+  { label: 'Entreprise', value: 'AgroNova Démo' },
+  { label: 'Devise principale', value: 'FCFA' },
+  { label: 'Unité de stock illustrée', value: 'Kilogramme (kg)' },
+  { label: 'Période comptable', value: 'Exercice annuel' }
 ];
 
 const DEMO_PRODUCTS = [
@@ -42,24 +90,45 @@ function formatAmount(value) {
 function DemoPanel({ section }) {
   if (section === 'clients') {
     return (
-      <section className="prospect-demo-panel">
-        <div className="prospect-demo-section-heading">
-          <div><span className="prospect-demo-eyebrow">RELATIONS CLIENTS</span><h2>Suivi des clients</h2></div>
-          <span className="prospect-demo-count">3 exemples</span>
-        </div>
-        <div className="prospect-demo-table-wrap">
-          <table className="prospect-demo-table">
-            <thead><tr><th>Client</th><th>Ville</th><th>Solde dû</th><th>Situation</th></tr></thead>
-            <tbody>{DEMO_CLIENTS.map((client) => (
-              <tr key={client.name}>
-                <td><strong>{client.name}</strong></td><td>{client.city}</td>
-                <td>{client.balance} FCFA</td>
-                <td><span className={`prospect-demo-status${client.status === 'À relancer' ? ' is-warning' : ''}`}>{client.status}</span></td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      </section>
+      <>
+        <section className="prospect-demo-panel">
+          <div className="prospect-demo-section-heading">
+            <div><span className="prospect-demo-eyebrow">RELATIONS CLIENTS</span><h2>Suivi des clients</h2></div>
+            <span className="prospect-demo-count">3 exemples</span>
+          </div>
+          <div className="prospect-demo-table-wrap">
+            <table className="prospect-demo-table">
+              <thead><tr><th>Client</th><th>Ville</th><th>Solde dû</th><th>Situation</th></tr></thead>
+              <tbody>{DEMO_CLIENTS.map((client) => (
+                <tr key={client.name}>
+                  <td><strong>{client.name}</strong></td><td>{client.city}</td>
+                  <td>{client.balance} FCFA</td>
+                  <td><span className={`prospect-demo-status${client.status === 'À relancer' ? ' is-warning' : ''}`}>{client.status}</span></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </section>
+        <section className="prospect-demo-panel">
+          <div className="prospect-demo-section-heading">
+            <div><span className="prospect-demo-eyebrow">VENTES</span><h2>Factures clients</h2></div>
+            <span className="prospect-demo-count">3 exemples</span>
+          </div>
+          <div className="prospect-demo-table-wrap">
+            <table className="prospect-demo-table">
+              <thead><tr><th>Référence</th><th>Client</th><th>Date</th><th>Montant</th><th>Statut</th></tr></thead>
+              <tbody>{DEMO_INVOICES.map((invoice) => (
+                <tr key={invoice.reference}>
+                  <td><strong>{invoice.reference}</strong></td><td>{invoice.client}</td><td>{invoice.date}</td>
+                  <td>{invoice.amount} FCFA</td>
+                  <td><span className={`prospect-demo-status${invoice.status === 'À payer' ? ' is-warning' : ''}`}>{invoice.status}</span></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <p className="prospect-demo-note">Les factures, devis, paiements et soldes clients sont regroupés dans le module Clients.</p>
+        </section>
+      </>
     );
   }
 
@@ -106,7 +175,182 @@ function DemoPanel({ section }) {
     );
   }
 
-  if (section === 'fiscalite') {
+  if (section === 'tresorerie') {
+    return (
+      <>
+        <section className="prospect-demo-kpis" aria-label="Indicateurs de trésorerie fictifs">
+          {[
+            { label: 'Banque principale', value: 1_430_000, detail: 'solde disponible', color: 'blue', icon: '▣' },
+            { label: 'Caisse', value: 120_000, detail: 'solde disponible', color: 'green', icon: '◉' },
+            { label: 'Encaissements du mois', value: 890_000, detail: 'paiements reçus', color: 'purple', icon: '↗' },
+            { label: 'Décaissements du mois', value: 540_000, detail: 'paiements effectués', color: 'orange', icon: '↘' }
+          ].map((card) => (
+            <article className={`prospect-demo-kpi is-${card.color}`} key={card.label}>
+              <div className="prospect-demo-kpi-top"><span>{card.label}</span><i aria-hidden="true">{card.icon}</i></div>
+              <strong>{formatAmount(card.value)}</strong><small>{card.detail}</small>
+            </article>
+          ))}
+        </section>
+        <section className="prospect-demo-panel">
+          <div className="prospect-demo-section-heading">
+            <div><span className="prospect-demo-eyebrow">MOUVEMENTS</span><h2>Dernières opérations de trésorerie</h2></div>
+            <span className="prospect-demo-count">Exemples fictifs</span>
+          </div>
+          <div className="prospect-demo-table-wrap">
+            <table className="prospect-demo-table">
+              <thead><tr><th>Date</th><th>Libellé</th><th>Compte</th><th>Montant</th></tr></thead>
+              <tbody>{DEMO_CASH_MOVEMENTS.map((movement) => (
+                <tr key={movement.label}>
+                  <td>{movement.date}</td><td><strong>{movement.label}</strong></td>
+                  <td>{movement.account}</td><td>{movement.amount} FCFA</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <p className="prospect-demo-note">Suivi des comptes bancaires et de caisse, des encaissements, des paiements et des rapprochements.</p>
+        </section>
+      </>
+    );
+  }
+
+  if (section === 'comptabilite') {
+    return (
+      <>
+        <section className="prospect-demo-kpis" aria-label="Indicateurs comptables fictifs">
+          {[
+            { label: 'Écritures validées', value: '128', detail: 'sur la période', color: 'blue', icon: '▤', raw: true },
+            { label: 'Débits', value: 1_355_000, detail: 'journaux confondus', color: 'green', icon: '↘' },
+            { label: 'Crédits', value: 1_355_000, detail: 'journaux confondus', color: 'purple', icon: '↗' },
+            { label: 'Écart de balance', value: 0, detail: 'débits = crédits', color: 'orange', icon: '✓' }
+          ].map((card) => (
+            <article className={`prospect-demo-kpi is-${card.color}`} key={card.label}>
+              <div className="prospect-demo-kpi-top"><span>{card.label}</span><i aria-hidden="true">{card.icon}</i></div>
+              <strong>{card.raw ? card.value : formatAmount(card.value)}</strong><small>{card.detail}</small>
+            </article>
+          ))}
+        </section>
+        <section className="prospect-demo-panel">
+          <div className="prospect-demo-section-heading">
+            <div><span className="prospect-demo-eyebrow">JOURNAUX & ÉCRITURES</span><h2>Opérations comptables</h2></div>
+            <span className="prospect-demo-count">Exemples équilibrés</span>
+          </div>
+          <div className="prospect-demo-table-wrap">
+            <table className="prospect-demo-table">
+              <thead><tr><th>Date</th><th>Journal</th><th>N° d’écriture</th><th>Libellé</th><th>Débit</th><th>Crédit</th></tr></thead>
+              <tbody>{DEMO_ENTRIES.map((entry) => (
+                <tr key={entry.number}>
+                  <td>{entry.date}</td><td>{entry.journal}</td><td><strong>{entry.number}</strong></td>
+                  <td>{entry.label}</td><td>{entry.debit} FCFA</td><td>{entry.credit} FCFA</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <p className="prospect-demo-note">La comptabilité centralise les écritures et permet de consulter les journaux, la balance et les états financiers. La piste d’audit conserve les modifications importantes.</p>
+        </section>
+      </>
+    );
+  }
+
+  if (section === 'associations') {
+    return (
+      <>
+        <section className="prospect-demo-panel">
+          <div className="prospect-demo-section-heading">
+            <div><span className="prospect-demo-eyebrow">SUIVI PAR PROJET</span><h2>Comptabilité des associations</h2></div>
+            <span className="prospect-demo-count">2 projets fictifs</span>
+          </div>
+          <div className="prospect-demo-table-wrap">
+            <table className="prospect-demo-table">
+              <thead><tr><th>Projet</th><th>Financement</th><th>Budget</th><th>Dépenses</th><th>Disponible</th></tr></thead>
+              <tbody>{DEMO_ASSOCIATION_PROJECTS.map((project) => (
+                <tr key={project.name}>
+                  <td><strong>{project.name}</strong></td><td>{project.funder}</td>
+                  <td>{project.budget} FCFA</td><td>{project.spent} FCFA</td><td>{project.remaining} FCFA</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </section>
+        <div className="prospect-demo-lower-grid">
+          <section className="prospect-demo-panel">
+            <div className="prospect-demo-section-heading">
+              <div><span className="prospect-demo-eyebrow">CONTRÔLE BUDGÉTAIRE</span><h2>Suivi des fonds</h2></div>
+            </div>
+            <div className="prospect-demo-summary-row"><span>Financements reçus</span><strong>4 800 000 FCFA</strong></div>
+            <div className="prospect-demo-summary-row"><span>Dépenses affectées aux projets</span><strong>1 990 000 FCFA</strong></div>
+            <div className="prospect-demo-summary-row"><span>Solde des financements</span><strong>2 810 000 FCFA</strong></div>
+          </section>
+          <section className="prospect-demo-panel">
+            <div className="prospect-demo-section-heading">
+              <div><span className="prospect-demo-eyebrow">COMPTABILITÉ</span><h2>Traçabilité</h2></div>
+            </div>
+            <p className="prospect-demo-note">Les recettes et dépenses d’un projet peuvent être suivies avec leur budget, leur financement et leurs justificatifs. Ces exemples ne sont pas reliés à une association réelle.</p>
+          </section>
+        </div>
+      </>
+    );
+  }
+
+  if (section === 'integrations') {
+    return (
+      <section className="prospect-demo-panel">
+        <div className="prospect-demo-section-heading">
+          <div><span className="prospect-demo-eyebrow">CONNEXIONS</span><h2>Intégrations disponibles</h2></div>
+          <span className="prospect-demo-badge">Accès administrateur</span>
+        </div>
+        <div className="prospect-demo-list">
+          {DEMO_INTEGRATIONS.map((integration) => (
+            <article className="prospect-demo-list-row" key={integration.name}>
+              <div><strong>{integration.name}</strong><span>{integration.detail}</span></div>
+              <b>{integration.status}</b>
+            </article>
+          ))}
+        </div>
+        <p className="prospect-demo-note">Cette page montre des exemples d’intégrations. Aucune connexion réelle n’est activée depuis la démo publique.</p>
+      </section>
+    );
+  }
+
+  if (section === 'security') {
+    return (
+      <section className="prospect-demo-panel">
+        <div className="prospect-demo-section-heading">
+          <div><span className="prospect-demo-eyebrow">ACCÈS & TRAÇABILITÉ</span><h2>Rôles des utilisateurs</h2></div>
+          <span className="prospect-demo-badge">Accès administrateur</span>
+        </div>
+        <div className="prospect-demo-list">
+          {DEMO_USERS.map((user) => (
+            <article className="prospect-demo-list-row" key={user.name}>
+              <div><strong>{user.name}</strong><span>{user.scope}</span></div>
+              <b>Accès limité par rôle</b>
+            </article>
+          ))}
+        </div>
+        <p className="prospect-demo-note">Les exemples illustrent une séparation des rôles et une piste d’audit. Ils ne correspondent pas à des comptes réels.</p>
+      </section>
+    );
+  }
+
+  if (section === 'settings') {
+    return (
+      <section className="prospect-demo-panel">
+        <div className="prospect-demo-section-heading">
+          <div><span className="prospect-demo-eyebrow">CONFIGURATION</span><h2>Paramètres de l’entreprise</h2></div>
+          <span className="prospect-demo-badge">Données fictives</span>
+        </div>
+        <div className="prospect-demo-list">
+          {DEMO_SETTINGS.map((setting) => (
+            <article className="prospect-demo-list-row" key={setting.label}>
+              <div><strong>{setting.label}</strong></div><b>{setting.value}</b>
+            </article>
+          ))}
+        </div>
+        <p className="prospect-demo-note">Les paramètres réels sont propres à chaque entreprise et ne sont pas modifiables dans cette démonstration.</p>
+      </section>
+    );
+  }
+
+  if (section === 'impots') {
     return (
       <section className="prospect-demo-panel">
         <div className="prospect-demo-section-heading">
@@ -173,6 +417,19 @@ function DemoPanel({ section }) {
 export function ProspectDemo() {
   const [section, setSection] = useState('dashboard');
   const activeSection = DEMO_SECTIONS.find((item) => item.id === section);
+  const sectionDescriptions = {
+    dashboard: 'Vue synthétique des indicateurs de l’entreprise.',
+    clients: 'Clients, devis, factures et règlements.',
+    fournisseurs: 'Achats, dettes fournisseurs et échéances.',
+    tresorerie: 'Comptes de banque et de caisse et mouvements.',
+    stock: 'Articles, quantités, coût de revient et prix de vente.',
+    comptabilite: 'Journaux, écritures comptables et contrôles.',
+    associations: 'Budgets, financements et dépenses par projet.',
+    impots: 'Suivi indicatif des taxes et de la TVA.',
+    integrations: 'Connexions facultatives accessibles aux administrateurs.',
+    security: 'Gestion des rôles et traçabilité des opérations.',
+    settings: 'Paramètres comptables et informations de l’entreprise.'
+  };
 
   return (
     <div className="prospect-demo">
@@ -191,6 +448,7 @@ export function ProspectDemo() {
         .prospect-demo-nav:hover,.prospect-demo-nav.is-active { color:#fff; background:#36566e; }
         .prospect-demo-nav.is-active { box-shadow:inset 3px 0 #6fd0b4; }
         .prospect-demo-nav-icon { width:19px; font-size:17px; text-align:center; color:#acd0d7; }
+        .prospect-demo-mobile-nav-hint { display:none; }
         .prospect-demo-side-foot { margin-top:auto; padding:14px 10px 0; color:#b5c5cf; border-top:1px solid rgba(255,255,255,.14); font-size:11px; line-height:1.5; }
         .prospect-demo-main { min-width:0; }
         .prospect-demo-topbar { min-height:70px; display:flex; justify-content:space-between; align-items:center; gap:20px; padding:12px 32px; background:#fff; border-bottom:1px solid #e2e8eb; }
@@ -244,7 +502,7 @@ export function ProspectDemo() {
         .prospect-demo-footer { display:flex; justify-content:space-between; gap:14px; align-items:center; padding:18px 0 0; color:#89959c; font-size:11px; }
         .prospect-demo-footer a { color:#2a7187; font-weight:700; text-decoration:none; }
         @media (max-width: 960px) { .prospect-demo-shell { grid-template-columns:205px minmax(0,1fr); }.prospect-demo-content { padding:23px 20px 32px; }.prospect-demo-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }.prospect-demo-lower-grid { grid-template-columns:1fr; } }
-        @media (max-width: 640px) { .prospect-demo-shell { display:block; }.prospect-demo-sidebar { padding:12px; }.prospect-demo-brand { padding:4px 7px 12px; margin-bottom:12px; }.prospect-demo-nav-label,.prospect-demo-side-foot { display:none; }.prospect-demo-nav-list { display:flex; flex-direction:row; overflow-x:auto; gap:5px; }.prospect-demo-nav { flex:0 0 auto; padding:9px 10px; font-size:11px; }.prospect-demo-nav-icon { display:none; }.prospect-demo-topbar { padding:12px 16px; min-height:58px; }.prospect-demo-top-actions span { display:none; }.prospect-demo-content { padding:18px 13px 28px; }.prospect-demo-heading { align-items:flex-start; flex-direction:column; }.prospect-demo-heading h1 { font-size:21px; }.prospect-demo-kpis { gap:9px; }.prospect-demo-kpi { padding:13px; }.prospect-demo-kpi strong { font-size:15px; }.prospect-demo-panel { padding:15px; }.prospect-demo-tax-grid { grid-template-columns:1fr; }.prospect-demo-footer { align-items:flex-start; flex-direction:column; } }
+        @media (max-width: 640px) { .prospect-demo-shell { display:block; }.prospect-demo-sidebar { padding:12px; }.prospect-demo-brand { padding:4px 7px 12px; margin-bottom:12px; }.prospect-demo-nav-label,.prospect-demo-side-foot { display:none; }.prospect-demo-nav-list { display:flex; flex-direction:row; overflow-x:auto; gap:5px; }.prospect-demo-nav { flex:0 0 auto; padding:9px 10px; font-size:11px; }.prospect-demo-nav-icon { display:none; }.prospect-demo-mobile-nav-hint { display:block; padding:5px 4px 0; color:#b5c5cf; text-align:right; font-size:10px; }.prospect-demo-topbar { flex-wrap:wrap; gap:8px; padding:12px 16px; min-height:58px; }.prospect-demo-top-title { min-width:0; flex:1; font-size:12px; }.prospect-demo-company { display:none; }.prospect-demo-top-actions span { display:none; }.prospect-demo-content { padding:18px 13px 28px; }.prospect-demo-heading { align-items:flex-start; flex-direction:column; }.prospect-demo-heading h1 { font-size:21px; }.prospect-demo-kpis { gap:9px; }.prospect-demo-kpi { padding:13px; }.prospect-demo-kpi strong { font-size:15px; }.prospect-demo-panel { padding:15px; }.prospect-demo-tax-grid { grid-template-columns:1fr; }.prospect-demo-footer { align-items:flex-start; flex-direction:column; } }
       `}</style>
       <div className="prospect-demo-shell">
         <aside className="prospect-demo-sidebar" aria-label="Navigation de démonstration">
@@ -267,6 +525,7 @@ export function ProspectDemo() {
               </button>
             ))}
           </nav>
+          <div className="prospect-demo-mobile-nav-hint">Faites défiler pour afficher tous les modules →</div>
           <div className="prospect-demo-side-foot">Entreprise fictive<br />Données de démonstration uniquement</div>
         </aside>
         <div className="prospect-demo-main">
@@ -284,9 +543,9 @@ export function ProspectDemo() {
             </div>
             <div className="prospect-demo-heading">
               <div>
-                <span className="prospect-demo-eyebrow">TABLEAU DE BORD · AGRONOVA DÉMO</span>
+                <span className="prospect-demo-eyebrow">{activeSection?.label.toUpperCase()} · AGRONOVA DÉMO</span>
                 <h1>{activeSection?.label || 'Vue d’ensemble'}</h1>
-                <p>Exemple de suivi financier pour une entreprise de matériel agricole.</p>
+                <p>{sectionDescriptions[section] || 'Exemple de suivi financier pour une entreprise de matériel agricole.'}</p>
               </div>
               <span className="prospect-demo-readonly">● Consultation uniquement</span>
             </div>

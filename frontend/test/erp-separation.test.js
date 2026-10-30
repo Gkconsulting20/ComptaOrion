@@ -36,6 +36,17 @@ test('les fonctions comptables centrales restent dans la navigation', async () =
   assert.doesNotMatch(source, /id: 'paie'/);
 });
 
+test('la démo commerciale présente les modules essentiels sans paie ni IA', async () => {
+  const demo = await read('../src/pages/ProspectDemo.jsx');
+  for (const moduleId of ['clients', 'fournisseurs', 'tresorerie', 'stock', 'comptabilite', 'associations', 'impots', 'integrations', 'security', 'settings']) {
+    assert.match(demo, new RegExp(`id: '${moduleId}'`));
+  }
+  assert.match(demo, /Factures clients/);
+  assert.match(demo, /Opérations comptables/);
+  assert.match(demo, /Comptabilité des associations/);
+  assert.doesNotMatch(demo, /\bPaie(?:\s*&\s*RH)?\b|Assistant IA|IAAssistant/);
+});
+
 test('les fonctions avancées sont filtrées selon les rôles', async () => {
   const source = await read('../src/App.jsx');
   assert.match(source, /requiresSuperAdmin: true, requiresAdmin: true/);

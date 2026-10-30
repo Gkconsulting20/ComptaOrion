@@ -14,3 +14,9 @@ Trois utilisateurs est une capacité fréquente à considérer pour un forfait, 
 **Why:** l’utilisateur a indiqué que le nombre d’utilisateurs est souvent de trois et qu’il souhaite revenir sur l’offre commerciale plus tard.
 
 **How to apply:** considérer trois utilisateurs comme une référence provisoire pour les nouveaux forfaits, sans modifier les offres existantes ni figer la tarification avant la revue commerciale.
+
+La démo destinée aux prospects doit montrer les modules métiers importants de ComptaOrion, dont la comptabilité générale, la trésorerie et la comptabilité des associations. Paie & RH et l’Assistant IA restent masqués et exclus de l’offre commercialisée.
+
+**Why:** l’utilisateur a précisé que tous les modules métiers sont importants pour la démo et l’offre, à l’exception de la paie et de l’IA.
+
+**How to apply:** présenter les fonctionnalités métiers avec des données fictives; ne pas ajouter Paie & RH ni Assistant IA au menu public de démonstration ou à la liste des fonctionnalités vendues.
