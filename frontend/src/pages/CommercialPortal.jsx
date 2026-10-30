@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import CommercialOffers from './CommercialOffers.jsx';
 
 const API_BASE = '';
 
@@ -161,6 +162,8 @@ export function CommercialPortal() {
       </div>
 
       <div style={{ padding: '30px', maxWidth: '1200px', margin: '0 auto' }}>
+        <CommercialOffers />
+
         <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '25px', marginBottom: '25px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
           <h2 style={{ margin: '0 0 15px 0', color: '#9b59b6' }}>Votre Lien de Parrainage</h2>
           <p style={{ color: '#666', marginBottom: '15px' }}>Partagez ce lien avec vos prospects. Chaque inscription via ce lien vous sera automatiquement attribuee.</p>
