@@ -153,7 +153,16 @@ router.post('/', async (req, res) => {
   let modulePermissions;
   try {
     modulePermissions = normalizeModulePermissions(role, req.body?.modulePermissions);
-  } catch {
+  } catch (error) {
+    console.warn('Droits par module refusés à la validation:', {
+      reason: error.message,
+      keys: req.body?.modulePermissions && typeof req.body.modulePermissions === 'object'
+        ? Object.keys(req.body.modulePermissions)
+        : [],
+      values: req.body?.modulePermissions && typeof req.body.modulePermissions === 'object'
+        ? Object.values(req.body.modulePermissions)
+        : [],
+    });
     return res.status(400).json({ error: 'Les droits par module transmis ne sont pas valides.' });
   }
 
