@@ -286,14 +286,15 @@ try {
           updated_at = NOW()
         RETURNING derniere_sequence INTO next_sequence;
 
-        IF next_sequence > CASE WHEN digit_width = 8 THEN 99999999 ELSE 999999 END THEN
+        IF (digit_width = 8 AND next_sequence > 99999999)
+          OR (digit_width = 6 AND next_sequence > 999999) THEN
           RAISE EXCEPTION 'Capacité de numérotation atteinte pour le journal %', journal_code;
         END IF;
 
         NEW.numero_ecriture := UPPER(journal_code) || '-' || exercise::text || '-' ||
           lpad(next_sequence::text, digit_width, '0');
         RETURN NEW;
-      END
+      END;
       $$;
 
       DROP TRIGGER IF EXISTS orion_assign_journal_entry_number_trigger ON ecritures;
