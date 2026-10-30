@@ -1,12 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { pool } from '../src/db.js';
+import { buildAuthAuditNullabilityStatements } from './auth-audit-migration.js';
 
 // Additive upgrade only. Never use drizzle-kit push against an older ERP database.
 const apply = process.argv.includes('--apply');
 const scopeArg = process.argv.find(arg => arg.startsWith('--scope='));
 const scope = scopeArg?.slice('--scope='.length);
 const migrationScopes = new Map([
+  ['auth-audit', new Set(['audit_connexions'])],
   ['stock-units', new Set(['produits', 'lignes_reception', 'facture_achat_items'])],
   ['expense-tracking', new Set(['projets_associatifs', 'categories_depenses', 'depenses'])],
 ]);
@@ -22,7 +24,7 @@ try {
   await client.query("SET LOCAL lock_timeout = '10s'");
   await client.query("SELECT pg_advisory_xact_lock(hashtext('comptaorion-schema-upgrade'))");
   const { rows: columns } = await client.query(
-    "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public'",
+    "SELECT table_name,column_name,is_nullable FROM information_schema.columns WHERE table_schema='public'",
   );
   const present = new Map();
   for (const c of columns) {
@@ -34,6 +36,9 @@ try {
   )).rows.map(t => t.typname));
   const actions = [];
   const added = new Set();
+  if (scope === 'auth-audit') {
+    actions.push(...buildAuthAuditNullabilityStatements(columns));
+  }
   for (const statement of source.split(/;\s*(?:--> statement-breakpoint)?\s*/)) {
     const type = statement.match(/^CREATE TYPE "public"\."([^"]+)"/);
     if (!scopedTables && type && !types.has(type[1])) actions.push(statement);
@@ -86,7 +91,7 @@ try {
       `);
     }
   }
-  console.log(`${actions.length} ajouts de tables, colonnes ou types (${apply ? 'application' : 'simulation'}).`);
+  console.log(`${actions.length} ajouts ou ajustements de schéma (${apply ? 'application' : 'simulation'}).`);
   for (const sql of actions) {
     console.log(sql.split('\n')[0].slice(0, 150));
     if (apply) await client.query(sql);

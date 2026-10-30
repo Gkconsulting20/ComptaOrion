@@ -932,8 +932,10 @@ export const sessions = pgTable('sessions', {
 // Audit des connexions
 export const auditConnexions = pgTable('audit_connexions', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id).notNull(),
-  enterpriseId: integer('enterprise_id').references(() => entreprises.id).notNull(),
+  // Unknown-email login attempts have no matching user or enterprise, but
+  // must still be auditable without being attributed to another tenant.
+  userId: integer('user_id').references(() => users.id),
+  enterpriseId: integer('enterprise_id').references(() => entreprises.id),
   type: varchar('type', { length: 50 }).notNull(), // login, logout, failed_login, token_refresh
   ipAddress: varchar('ip_address', { length: 45 }).notNull(),
   userAgent: text('user_agent'),
