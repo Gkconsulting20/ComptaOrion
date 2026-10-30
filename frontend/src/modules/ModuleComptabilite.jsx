@@ -520,7 +520,6 @@ export function ModuleComptabilite() {
     comptes: [],
     journaux: [],
     ecritures: [],
-    immobilisations: [],
     ecrituresRecurrentes: [],
     parametresComptables: null
   });
@@ -554,11 +553,10 @@ export function ModuleComptabilite() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [comptesRes, journauxRes, ecrituresRes, immosRes, recurrentesRes, parametresRes] = await Promise.allSettled([
+      const [comptesRes, journauxRes, ecrituresRes, recurrentesRes, parametresRes] = await Promise.allSettled([
         api.get('/comptabilite/comptes'),
         api.get('/comptabilite/journaux'),
         api.get('/comptabilite/ecritures'),
-        api.get('/immobilisations/list'),
         api.get('/ecritures-recurrentes'),
         api.get('/ecritures-recurrentes/parametres/comptables')
       ]);
@@ -567,7 +565,6 @@ export function ModuleComptabilite() {
         comptes: comptesRes.status === 'fulfilled' ? (Array.isArray(comptesRes.value) ? comptesRes.value : []) : [],
         journaux: journauxRes.status === 'fulfilled' ? (Array.isArray(journauxRes.value) ? journauxRes.value : []) : [],
         ecritures: ecrituresRes.status === 'fulfilled' ? (Array.isArray(ecrituresRes.value) ? ecrituresRes.value : []) : [],
-        immobilisations: immosRes.status === 'fulfilled' ? (Array.isArray(immosRes.value) ? immosRes.value : []) : [],
         ecrituresRecurrentes: recurrentesRes.status === 'fulfilled' ? (Array.isArray(recurrentesRes.value) ? recurrentesRes.value : []) : [],
         parametresComptables: parametresRes.status === 'fulfilled' ? parametresRes.value : null
       });
@@ -721,12 +718,6 @@ export function ModuleComptabilite() {
         ],
         actif: true
       });
-    } else if (type === 'immobilisation') {
-      setForm(item || {
-        reference: '', description: '', categorieId: '',
-        dateAcquisition: new Date().toISOString().split('T')[0],
-        valeurAcquisition: 0
-      });
     }
   };
 
@@ -797,12 +788,6 @@ export function ModuleComptabilite() {
         } else {
           await api.post('/ecritures-recurrentes', form);
         }
-      } else if (type === 'immobilisation') {
-        await api.post('/immobilisations/create', { 
-          ...form, 
-          userId: 1, 
-          ipAddress: '127.0.0.1' 
-        });
       }
       closeModal();
       loadAllData();
@@ -843,7 +828,6 @@ export function ModuleComptabilite() {
     { id: 'recurrentes', label: '🔄 Écritures Récurrentes', icon: '🔄' },
     { id: 'grandlivre', label: '📖 Grand Livre', icon: '📖' },
     { id: 'balance', label: '⚖️ Balance', icon: '⚖️' },
-    { id: 'immobilisations', label: '🏢 Immobilisations', icon: '🏢' },
     { id: 'rapports', label: '📊 Rapports', icon: '📊' },
     { id: 'parametres', label: '⚙️ Paramètres', icon: '⚙️' }
   ];
@@ -1301,37 +1285,6 @@ export function ModuleComptabilite() {
         </div>
       )}
 
-      {activeTab === 'immobilisations' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3>🏢 Gestion des Immobilisations</h3>
-            <Button onClick={() => openModal('immobilisation')}>+ Nouvelle Immobilisation</Button>
-          </div>
-          {data.immobilisations.length > 0 ? (
-            <Table
-              columns={[
-                { key: 'reference', label: 'Référence' },
-                { key: 'description', label: 'Description' },
-                { key: 'dateAcquisition', label: 'Date Acquisition', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
-                { key: 'valeurAcquisition', label: 'Valeur Acquisition', render: (val) => `${parseFloat(val).toLocaleString('fr-FR')} FCFA` },
-                { key: 'amortissementCumule', label: 'Amort. Cumulé', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
-                { key: 'valeurNetteComptable', label: 'VNC', render: (val) => `${parseFloat(val).toLocaleString('fr-FR')} FCFA` },
-                { key: 'statut', label: 'Statut', render: (val) => {
-                  const colors = { actif: '#4caf50', 'cédée': '#ff9800', amortie: '#9e9e9e' };
-                  return <span style={{ color: colors[val] || '#666', fontWeight: 'bold' }}>{val?.toUpperCase()}</span>;
-                }}
-              ]}
-              data={data.immobilisations}
-              actions={false}
-            />
-          ) : (
-            <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
-              <p style={{ color: '#7f8c8d', margin: 0 }}>Aucune immobilisation enregistrée</p>
-            </div>
-          )}
-        </div>
-      )}
-
       {activeTab === 'rapports' && (
         <div>
           <h3>📊 Rapports Financiers</h3>
@@ -1744,8 +1697,7 @@ export function ModuleComptabilite() {
           modal.type === 'journal' ? (modal.item ? 'Modifier Journal' : 'Nouveau Journal') :
           modal.type === 'ecriture' ? 'Nouvelle Écriture Comptable' :
           modal.type === 'details_ecriture' ? `Détails Écriture - ${modal.item?.reference || ''}` :
-          modal.type === 'recurrente' ? (modal.item ? 'Modifier Écriture Récurrente' : 'Nouvelle Écriture Récurrente') :
-          modal.type === 'immobilisation' ? (modal.item ? 'Modifier Immobilisation' : 'Nouvelle Immobilisation') : ''
+          modal.type === 'recurrente' ? (modal.item ? 'Modifier Écriture Récurrente' : 'Nouvelle Écriture Récurrente') : ''
         }
         size={modal.type === 'ecriture' || modal.type === 'recurrente' || modal.type === 'details_ecriture' ? 'xlarge' : 'large'}
       >
@@ -2021,33 +1973,6 @@ export function ModuleComptabilite() {
                 <Button type="submit" variant="success" disabled={calculateTotaux().difference !== 0}>
                   Enregistrer l'Écriture
                 </Button>
-              </div>
-            </>
-          )}
-
-          {modal.type === 'immobilisation' && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <FormField label="Référence" name="reference" value={form.reference}
-                  onChange={(e) => setForm({...form, reference: e.target.value})} required />
-                <FormField label="Description" name="description" value={form.description}
-                  onChange={(e) => setForm({...form, description: e.target.value})} required />
-                <FormField label="Catégorie ID (temporaire)" name="categorieId" type="number" value={form.categorieId}
-                  onChange={(e) => setForm({...form, categorieId: parseInt(e.target.value)})} required
-                  placeholder="1" />
-                <FormField label="Date d'Acquisition" name="dateAcquisition" type="date" value={form.dateAcquisition}
-                  onChange={(e) => setForm({...form, dateAcquisition: e.target.value})} required />
-                <FormField label="Valeur d'Acquisition (FCFA)" name="valeurAcquisition" type="number" value={form.valeurAcquisition}
-                  onChange={(e) => setForm({...form, valeurAcquisition: parseFloat(e.target.value)})} required />
-              </div>
-              <div style={{ marginTop: '20px', padding: '15px', background: '#fff3cd', borderRadius: '8px' }}>
-                <p style={{ margin: 0, fontSize: '13px', color: '#856404' }}>
-                  💡 <strong>Note:</strong> Les catégories et calcul d'amortissement automatique seront ajoutés prochainement.
-                </p>
-              </div>
-              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-                <Button type="submit" variant="success">{modal.item ? 'Mettre à jour' : 'Créer'}</Button>
               </div>
             </>
           )}

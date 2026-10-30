@@ -15,8 +15,6 @@ import dashboardRoutes from './routes/dashboard.js';
 import authSecurityRoutes from './routes/auth-security.js';
 import saasAdminRoutes from './routes/saas-admin.js';
 import dépensesRoutes from './routes/dépenses.js';
-import immobilisationsRoutes from './routes/immobilisations.js';
-import exportAssetsRoutes from './routes/export-assets.js';
 import comptabiliteRoutes from './routes/comptabilite.js';
 import tresorerieRoutes from './routes/tresorerie.js';
 import auditLogsRoutes from './routes/audit-logs.js';
@@ -127,10 +125,6 @@ app.use('/api/parametres', parametresRoutes);
 app.use('/api/upload', uploadRoutes);
 
 // Dashboard
-
-// Module Immobilisations
-app.use('/api/immobilisations', immobilisationsRoutes);
-app.use('/api/export-assets', exportAssetsRoutes);
 
 // Module Dépenses
 app.use('/api/depenses', dépensesRoutes);

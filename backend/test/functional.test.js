@@ -178,7 +178,6 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       'Le rôle admin plateforme conserve l’accès SaaS via le contexte RLS privilégié');
     for(const path of ['/auth/me','/dashboard/global','/stock/receptions','/stock/alertes',
       '/stock/produits','/stock/rapports/valorisation','/depenses/list','/depenses/categories',
-      '/immobilisations/list','/immobilisations/categories','/immobilisations/registre',
       '/comptabilite/plans','/comptabilite/comptes','/comptabilite/balance']) {
       await api(path);
     }
@@ -214,9 +213,6 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       'SELECT COALESCE(SUM(debit),0) AS debit,COALESCE(SUM(credit),0) AS credit,COUNT(*)::int AS n FROM lignes_ecriture');
     assert.ok(balance.n>0,'Des lignes comptables doivent avoir été créées');
     assert.equal(Number(balance.debit),Number(balance.credit),'Écritures équilibrées');
-    const category=await api('/immobilisations/categories','POST',{nom:'Matériel',dureeVie:5,methodeAmortissement:'lineaire'});
-    await api('/immobilisations/create','POST',{reference:'IMMO-TEST',description:'Matériel recette',
-      categorieId:category.id,dateAcquisition:'2026-10-16',valeurAcquisition:100000});
     const expenseAccounts=await api('/comptabilite/comptes');
     const expenseAccount=expenseAccounts.find(account=>String(account.numero).startsWith('6') && account.actif);
     assert.ok(expenseAccount,'Un compte de charge SYSCOHADA doit être disponible pour le test');

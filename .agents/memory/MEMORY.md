@@ -14,3 +14,4 @@
 - [Séquences comptables](accounting-sequences.md) — compteurs par journal, 6 chiffres pour achats et 8 pour ventes, sans réutilisation après suppression.
 - [Priorité fiscale Togo](togo-tax-priority.md) — commencer par les déclarations togolaises et ne pas prétendre qu’un brouillon est un dépôt officiel.
 - [Tests PostgreSQL RLS](postgres-rls-testing.md) — tester avec un rôle qui ne contourne pas RLS, jamais uniquement avec un superutilisateur.
+- [Immobilisations en pause](immobilisations-paused.md) — garder le registre caché tant qu’il ne suit pas les emplacements et ne génère pas d’écritures comptables.
