@@ -20,3 +20,9 @@ Le preview Replit et le Worker Cloudflare utilisent des bases distinctes : le pr
 **Why:** Le même compte administrateur existait dans les deux environnements avec des mots de passe différents ; une connexion réussie dans l’un ne validait pas l’autre.
 
 **How to apply:** Avant toute modification de compte ou de données, identifier la base réellement utilisée par l’environnement ciblé et vérifier ce dernier directement après l’opération.
+
+Pour les opérations de base de données et de Cloudflare, l’utilisateur préfère que l’agent réalise les étapes possibles et lui donne des instructions simples uniquement pour les actions qui exigent son intervention.
+
+**Why:** L’utilisateur a indiqué ne pas pouvoir créer lui-même les bases de données et a demandé de l’aide pour ces opérations.
+
+**How to apply:** Privilégier les procédures que l’agent peut effectuer avec les outils connectés; demander uniquement les validations ou actions qui ne sont pas accessibles à l’agent.

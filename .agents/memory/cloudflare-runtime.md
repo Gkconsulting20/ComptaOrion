@@ -24,6 +24,12 @@ automatiquement la base PostgreSQL externe destinée à Cloudflare.
 **How to apply:** Sauvegarder et contrôler explicitement la base cible avant la
 bascule. Ajouter et reprendre les anciens champs sans effacer les données historiques.
 
+Le plan Render gratuit observé pour l’ERP ne fournit pas le rétablissement PITR; une sauvegarde vérifiée doit précéder chaque migration.
+
+**Why:** Le panneau Recovery de Render réservait le PITR aux plans payants; un dump logique complet a donc été vérifié avant la migration autorisée.
+
+**How to apply:** Utiliser un client `pg_dump` compatible avec la version majeure du serveur, vérifier l’archive avant migration et garder la sauvegarde hors Git et des fichiers publiés.
+
 Les tests d’une base locale sans TLS ne valident pas une connexion PostgreSQL
 de production sur Render.
 
