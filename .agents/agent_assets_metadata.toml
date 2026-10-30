@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "buet6yIbcsSEDYBUGT85p"
+uri = "file://generated-artifacts/Exercice-comptable-KOMLANVI-2026.pdf"
+type = "pdf"
+title = "Exercice comptable KOMLANVI 2026"
+description = "Cahier imprimable de 5 pages avec les données de l’entreprise, l’import et les frais répartis au poids, les factures d’achat et de vente, les paiements, les salaires et les résultats de contrôle."
+logical_id = "326a9e81-997b-4bf7-8bdb-db55f74a08e5"
+content_hash = "sha256:3c15b40a6ed02d79dc677e3346037d9d7505c8f6ce1635fc1a6c634d754aef03"
+size = 176385
+mtime_ms = 1793318549394
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:89086feb-6d2b-4b89-9a46-d43298dad57c/326a9e81-997b-4bf7-8bdb-db55f74a08e5/92b57a39-6f2f-4e94-b2f2-09dd99ff5274"
+storage_version_token = "1793318577550402"
+content_type = "application/pdf"
