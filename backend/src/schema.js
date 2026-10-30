@@ -1,5 +1,5 @@
 import { pgTable, serial, text, varchar, integer, decimal, boolean, timestamp, date, pgEnum, jsonb, primaryKey, uniqueIndex } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 // ==========================================
 // ENUMS
@@ -1135,7 +1135,10 @@ export const journaux = pgTable('journaux', {
   type: varchar('type', { length: 50 }), // Achats, Ventes, Banque, Caisse, OD
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  entrepriseCodeUnique: uniqueIndex('journaux_entreprise_code_unique')
+    .on(table.entrepriseId, sql`upper(${table.code})`),
+}));
 
 // Écritures comptables
 export const ecritures = pgTable('ecritures', {
@@ -1150,7 +1153,24 @@ export const ecritures = pgTable('ecritures', {
   userId: integer('user_id'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  entrepriseNumeroUnique: uniqueIndex('ecritures_entreprise_numero_unique')
+    .on(table.entrepriseId, table.numeroEcriture)
+    .where(sql`${table.numeroEcriture} IS NOT NULL`),
+}));
+
+// Persists the latest issued sequence even if a numbered entry is later deleted.
+export const ecritureSequences = pgTable('ecriture_sequences', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  journalId: integer('journal_id').references(() => journaux.id).notNull(),
+  exercice: integer('exercice').notNull(),
+  derniereSequence: integer('derniere_sequence').notNull().default(0),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  scopeUnique: uniqueIndex('ecriture_sequences_scope_unique')
+    .on(table.entrepriseId, table.journalId, table.exercice),
+}));
 
 // Lignes d'écritures (débit/crédit)
 export const lignesEcritures = pgTable('lignes_ecriture', {

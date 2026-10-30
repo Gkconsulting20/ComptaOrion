@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { produits, categoriesStock, entrepots, stockParEntrepot, mouvementsStock, alertesStock, inventairesTournants, bonsReception, lignesReception, fournisseurs, ecritures, lignesEcritures, comptesComptables, journaux } from '../schema.js';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { generateNumeroEcriture } from '../services/comptabiliteService.js';
 import {
   allocateLogisticsByWeight,
   consumeStockValuation,
@@ -771,17 +772,21 @@ router.post('/receptions/:id/valider', async (req, res) => {
     // 2. Créer l'écriture comptable (Stock au Débit / Stock non facturé au Crédit)
     // Trouver le journal des achats
     const journalResult = await db.execute(sql`
-      SELECT id FROM journaux WHERE entreprise_id = ${req.entrepriseId} AND type = 'achats' LIMIT 1
+      SELECT id, code, type FROM journaux WHERE entreprise_id = ${req.entrepriseId} AND type = 'achats' LIMIT 1
     `);
     
-    let journalId = journalResult.rows?.[0]?.id;
+    let journal = journalResult.rows?.[0];
+    let journalId = journal?.id;
     
     // Créer un journal achats si n'existe pas
     if (!journalId) {
       const newJournal = await db.execute(sql`
-        INSERT INTO journaux (entreprise_id, code, nom, type) VALUES (${req.entrepriseId}, 'AC', 'Journal des Achats', 'achats') RETURNING id
+        INSERT INTO journaux (entreprise_id, code, nom, type)
+        VALUES (${req.entrepriseId}, 'AC', 'Journal des Achats', 'achats')
+        RETURNING id, code, type
       `);
-      journalId = newJournal.rows[0].id;
+      journal = newJournal.rows[0];
+      journalId = journal.id;
     }
 
     // Trouver les comptes comptables (31x Stock marchandises et 408 Fournisseurs factures non parvenues)
@@ -813,35 +818,37 @@ router.post('/receptions/:id/valider', async (req, res) => {
       comptePontId = newCompte.rows[0].id;
     }
 
-    // Générer numéro d'écriture
-    const ecritureNumResult = await db.execute(sql`
-      SELECT COALESCE(MAX(CAST(SUBSTRING(numero_piece FROM '[0-9]+') AS INTEGER)), 0) + 1 as next_num
-      FROM ecritures WHERE entreprise_id = ${req.entrepriseId}
-    `);
-    const nextNum = ecritureNumResult.rows?.[0]?.next_num || 1;
-    const numeroPiece = `EC-${new Date().getFullYear()}-${String(nextNum).padStart(5, '0')}`;
-
-    // Créer l'écriture comptable
-    const ecritureResult = await db.execute(sql`
-      INSERT INTO ecritures (entreprise_id, journal_id, numero_piece, date_ecriture, libelle, statut)
-      VALUES (${req.entrepriseId}, ${journalId}, ${numeroPiece}, ${bon.date_reception}, ${'Réception marchandises ' + bon.numero}, 'brouillon')
-      RETURNING id
-    `);
-    
-    const ecritureId = ecritureResult.rows[0].id;
-
-    // Ligne débit Stock
+    const numeroPiece = `RECEPTION-${bon.numero || bonId}`;
     const montantReceptionEstime = Number(bon.total_ht || 0) + totalLogistiqueEstimee;
-    await db.execute(sql`
-      INSERT INTO lignes_ecriture (entreprise_id, ecriture_id, compte_comptable_id, libelle, debit, credit)
-      VALUES (${req.entrepriseId}, ${ecritureId}, ${compteStockId}, ${'Entrée stock ' + bon.numero}, ${montantReceptionEstime}, 0)
-    `);
+    const ecritureId = await db.transaction(async (tx) => {
+      const numeroEcriture = await generateNumeroEcriture(
+        req.entrepriseId,
+        journal,
+        bon.date_reception,
+        tx
+      );
+      const ecritureResult = await tx.execute(sql`
+        INSERT INTO ecritures
+          (entreprise_id, journal_id, numero_ecriture, numero_piece, date_ecriture, libelle, statut)
+        VALUES
+          (${req.entrepriseId}, ${journalId}, ${numeroEcriture}, ${numeroPiece}, ${bon.date_reception},
+           ${'Réception marchandises ' + bon.numero}, 'brouillon')
+        RETURNING id
+      `);
+      const createdId = ecritureResult.rows[0].id;
 
-    // Ligne crédit Fournisseurs factures non parvenues
-    await db.execute(sql`
-      INSERT INTO lignes_ecriture (entreprise_id, ecriture_id, compte_comptable_id, libelle, debit, credit)
-      VALUES (${req.entrepriseId}, ${ecritureId}, ${comptePontId}, ${'Stock non facturé ' + bon.numero}, 0, ${montantReceptionEstime})
-    `);
+      await tx.execute(sql`
+        INSERT INTO lignes_ecriture (entreprise_id, ecriture_id, compte_comptable_id, libelle, debit, credit)
+        VALUES (${req.entrepriseId}, ${createdId}, ${compteStockId}, ${'Entrée stock ' + bon.numero},
+          ${montantReceptionEstime}, 0)
+      `);
+      await tx.execute(sql`
+        INSERT INTO lignes_ecriture (entreprise_id, ecriture_id, compte_comptable_id, libelle, debit, credit)
+        VALUES (${req.entrepriseId}, ${createdId}, ${comptePontId}, ${'Stock non facturé ' + bon.numero},
+          0, ${montantReceptionEstime})
+      `);
+      return createdId;
+    });
 
     // 4. Créer les enregistrements stock_pending pour chaque ligne
     for (const ligne of lignes) {

@@ -7,6 +7,7 @@ import {
 import { eq, and, desc, gte, lte, sum, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { synchroniserTransactionDepuisEcriture } from '../services/treasuryJournalSync.js';
+import { generateNumeroEcriture } from '../services/comptabiliteService.js';
 
 const router = express.Router();
 
@@ -1616,12 +1617,23 @@ router.post('/journaux', async (req, res) => {
     if (!code || !nom) {
       return res.status(400).json({ error: 'code et nom sont obligatoires' });
     }
+    const normalizedCode = String(code).trim().toUpperCase();
+    if (!/^[A-Z0-9_-]{1,20}$/.test(normalizedCode)) {
+      return res.status(400).json({ error: 'Le code doit contenir 1 à 20 lettres, chiffres, tirets ou soulignés.' });
+    }
+    const [existingJournal] = await db.select({ id: journaux.id }).from(journaux).where(and(
+      eq(journaux.entrepriseId, entrepriseId),
+      sql`upper(${journaux.code}) = ${normalizedCode}`
+    )).limit(1);
+    if (existingJournal) {
+      return res.status(409).json({ error: `Le code de journal ${normalizedCode} existe déjà pour cette entreprise.` });
+    }
 
     const journal = await db.insert(journaux).values({
       entrepriseId,
-      code,
+      code: normalizedCode,
       nom,
-      type: type || 'OD',
+      type: String(type || 'OD').toLowerCase(),
       actif: true
     }).returning();
     res.status(201).json(journal[0]);
@@ -1689,9 +1701,16 @@ router.post('/ecritures', async (req, res) => {
     }
 
     const ecriture = await db.transaction(async (tx) => {
+      const numeroEcriture = await generateNumeroEcriture(
+        Number(entrepriseId),
+        journal,
+        new Date(dateEcriture),
+        tx
+      );
       const [created] = await tx.insert(ecritures).values({
         entrepriseId: Number(entrepriseId),
         journalId: parseInt(journalId),
+        numeroEcriture,
         dateEcriture: new Date(dateEcriture),
         numeroPiece: reference || null,
         libelle: description || null,
@@ -1785,6 +1804,152 @@ router.get('/ecritures', async (req, res) => {
   }
 });
 
+router.get('/controles-integrite', async (req, res) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        e.id,
+        e.numero_ecriture AS "numeroEcriture",
+        e.date_ecriture AS "dateEcriture",
+        j.code AS "journalCode",
+        j.nom AS "journalNom",
+        j.type AS "journalType",
+        COUNT(le.id)::int AS "nombreLignes",
+        COALESCE(SUM(le.debit), 0)::numeric AS "totalDebit",
+        COALESCE(SUM(le.credit), 0)::numeric AS "totalCredit"
+      FROM ecritures e
+      JOIN journaux j ON j.id = e.journal_id AND j.entreprise_id = e.entreprise_id
+      LEFT JOIN lignes_ecriture le
+        ON le.ecriture_id = e.id
+        AND (le.entreprise_id = e.entreprise_id OR le.entreprise_id IS NULL)
+      WHERE e.entreprise_id = ${req.entrepriseId}
+      GROUP BY e.id, j.code, j.nom, j.type
+      ORDER BY e.date_ecriture, e.id
+    `);
+    const entries = result.rows || result || [];
+    const numberCounts = new Map();
+    const sequences = new Map();
+    const journalSummaries = new Map();
+    const issues = { sansNumero: [], nonEquilibrees: [], sansLignes: [], doublons: [], sequencesManquantes: [] };
+    let historicalFormatCount = 0;
+
+    const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    for (const entry of entries) {
+      const number = String(entry.numeroEcriture || '').trim();
+      const journalCode = String(entry.journalCode || '').trim().toUpperCase();
+      const journalType = String(entry.journalType || '').toLowerCase();
+      const journalKey = `${journalCode}`;
+      const summary = journalSummaries.get(journalKey) || {
+        code: journalCode,
+        nom: entry.journalNom,
+        type: journalType,
+        nombreEcritures: 0,
+        formatHistorique: 0,
+        sequencesVerifiees: 0,
+        lacunes: 0
+      };
+      summary.nombreEcritures += 1;
+      journalSummaries.set(journalKey, summary);
+
+      if (!number) {
+        issues.sansNumero.push({ id: entry.id, date: entry.dateEcriture, journal: journalCode });
+      } else {
+        numberCounts.set(number, [...(numberCounts.get(number) || []), entry]);
+        const width = journalType === 'ventes' ? 8 : 6;
+        const canonicalPattern = new RegExp(`^${escapeRegExp(journalCode)}-(20\\d{2})-(\\d{${width}})$`);
+        const match = number.match(canonicalPattern);
+        if (match) {
+          const sequenceKey = `${journalCode}:${match[1]}`;
+          const sequence = Number(match[2]);
+          sequences.set(sequenceKey, [...(sequences.get(sequenceKey) || []), sequence]);
+          summary.sequencesVerifiees += 1;
+        } else {
+          summary.formatHistorique += 1;
+          historicalFormatCount += 1;
+        }
+      }
+
+      const debit = Number(entry.totalDebit || 0);
+      const credit = Number(entry.totalCredit || 0);
+      if (Number(entry.nombreLignes || 0) === 0) {
+        issues.sansLignes.push({ id: entry.id, number: number || null, journal: journalCode });
+      }
+      if (Math.abs(debit - credit) > 0.01) {
+        issues.nonEquilibrees.push({
+          id: entry.id,
+          number: number || null,
+          journal: journalCode,
+          debit,
+          credit,
+          ecart: debit - credit
+        });
+      }
+    }
+
+    for (const [number, matchingEntries] of numberCounts) {
+      if (matchingEntries.length > 1) {
+        issues.doublons.push({
+          numeroEcriture: number,
+          ids: matchingEntries.map((entry) => entry.id),
+          journal: matchingEntries.map((entry) => entry.journalCode)
+        });
+      }
+    }
+
+    let totalGaps = 0;
+    for (const [key, values] of sequences) {
+      const ordered = [...new Set(values)].sort((a, b) => a - b);
+      const [journal, year] = key.split(':');
+      for (let index = 1; index < ordered.length; index += 1) {
+        const missing = ordered[index] - ordered[index - 1] - 1;
+        if (missing > 0) {
+          totalGaps += missing;
+          const summary = journalSummaries.get(journal);
+          if (summary) summary.lacunes += missing;
+          issues.sequencesManquantes.push({
+            journal,
+            exercice: Number(year),
+            apres: ordered[index - 1],
+            avant: ordered[index],
+            numerosManquants: missing
+          });
+        }
+      }
+    }
+
+    const totals = {
+      ecritures: entries.length,
+      sansNumero: issues.sansNumero.length,
+      doublons: issues.doublons.length,
+      nonEquilibrees: issues.nonEquilibrees.length,
+      sansLignes: issues.sansLignes.length,
+      sequencesManquantes: totalGaps,
+      formatsHistoriques: historicalFormatCount
+    };
+    const conforme = totals.sansNumero === 0
+      && totals.doublons === 0
+      && totals.nonEquilibrees === 0
+      && totals.sansLignes === 0
+      && totals.sequencesManquantes === 0;
+
+    return res.json({
+      success: true,
+      conforme,
+      controle: 'Numéros, doublons, équilibre et continuité des séquences récentes',
+      verifieLe: new Date().toISOString(),
+      totals,
+      journaux: [...journalSummaries.values()],
+      anomalies: Object.fromEntries(Object.entries(issues).map(([key, values]) => [key, values.slice(0, 100)]))
+    });
+  } catch (error) {
+    console.error('Erreur GET /api/comptabilite/controles-integrite:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Impossible de vérifier l’intégrité des écritures comptables.'
+    });
+  }
+});
+
 // Valider une écriture (passer de brouillon à validée)
 router.post('/ecritures/:id/valider', async (req, res) => {
   try {
@@ -1822,16 +1987,13 @@ router.post('/ecritures/:id/valider', async (req, res) => {
         eq(journaux.id, ecriture.journalId),
         eq(journaux.entrepriseId, Number(entrepriseId))
       )).limit(1);
-      const year = new Date().getFullYear();
-      const month = String(new Date().getMonth() + 1).padStart(2, '0');
-      const countResult = await tx.execute(sql`
-        SELECT COUNT(*) as count FROM ecritures
-        WHERE entreprise_id = ${entrepriseId}
-          AND valide = true
-          AND EXTRACT(YEAR FROM date_ecriture) = ${year}
-      `);
-      const count = parseInt(countResult.rows[0]?.count || 0) + 1;
-      const numeroEcriture = `${journal?.code || 'EC'}-${year}${month}-${String(count).padStart(5, '0')}`;
+      if (!journal) throw Object.assign(new Error('Journal de l’écriture introuvable'), { status: 400 });
+      const numeroEcriture = ecriture.numeroEcriture || await generateNumeroEcriture(
+        Number(entrepriseId),
+        journal,
+        ecriture.dateEcriture,
+        tx
+      );
       const [updated] = await tx.update(ecritures).set({
         valide: true,
         numeroEcriture,
@@ -2931,17 +3093,24 @@ router.post('/cloture-exercice', async (req, res) => {
     // ==========================================
     // 1. ÉCRITURE DE CLÔTURE DES COMPTES DE RÉSULTAT
     // ==========================================
-    const numeroEcritureCloture = `CLO-${annee}-001`;
-    
-    const [ecritureCloture] = await db.insert(ecritures).values({
-      entrepriseId,
-      journalId: journalOD.id,
-      numeroEcriture: numeroEcritureCloture,
-      dateEcriture: new Date(dateClotureStr),
-      libelle: `Clôture des comptes de résultat exercice ${annee}`,
-      numeroPiece: `CLOTURE-${annee}`,
-      valide: true
-    }).returning();
+    const { ecritureCloture, numeroEcritureCloture } = await db.transaction(async (tx) => {
+      const numeroEcriture = await generateNumeroEcriture(
+        entrepriseId,
+        journalOD,
+        new Date(dateClotureStr),
+        tx
+      );
+      const [entry] = await tx.insert(ecritures).values({
+        entrepriseId,
+        journalId: journalOD.id,
+        numeroEcriture,
+        dateEcriture: new Date(dateClotureStr),
+        libelle: `Clôture des comptes de résultat exercice ${annee}`,
+        numeroPiece: `CLOTURE-${annee}`,
+        valide: true
+      }).returning();
+      return { ecritureCloture: entry, numeroEcritureCloture: numeroEcriture };
+    });
 
     const lignesCloture = [];
     let totalDebitCloture = 0;
@@ -3014,8 +3183,6 @@ router.post('/cloture-exercice', async (req, res) => {
     // ==========================================
     // 2. ÉCRITURE D'OUVERTURE DU NOUVEL EXERCICE
     // ==========================================
-    const numeroEcritureOuverture = `AN-${parseInt(annee) + 1}-001`;
-
     // Calculer les nouveaux soldes de bilan (incluant le résultat)
     const soldesBilanFinaux = {};
     comptesBilan.forEach(({ compte, solde }) => {
@@ -3045,15 +3212,24 @@ router.post('/cloture-exercice', async (req, res) => {
       soldesBilanFinaux[compteResultat.id].solde += differenceResultat;
     }
 
-    const [ecritureOuverture] = await db.insert(ecritures).values({
-      entrepriseId,
-      journalId: journalAN.id,
-      numeroEcriture: numeroEcritureOuverture,
-      dateEcriture: new Date(dateOuvertureStr),
-      libelle: `Bilan d'ouverture exercice ${parseInt(annee) + 1}`,
-      numeroPiece: `OUVERTURE-${parseInt(annee) + 1}`,
-      valide: true
-    }).returning();
+    const { ecritureOuverture, numeroEcritureOuverture } = await db.transaction(async (tx) => {
+      const numeroEcriture = await generateNumeroEcriture(
+        entrepriseId,
+        journalAN,
+        new Date(dateOuvertureStr),
+        tx
+      );
+      const [entry] = await tx.insert(ecritures).values({
+        entrepriseId,
+        journalId: journalAN.id,
+        numeroEcriture,
+        dateEcriture: new Date(dateOuvertureStr),
+        libelle: `Bilan d'ouverture exercice ${parseInt(annee) + 1}`,
+        numeroPiece: `OUVERTURE-${parseInt(annee) + 1}`,
+        valide: true
+      }).returning();
+      return { ecritureOuverture: entry, numeroEcritureOuverture: numeroEcriture };
+    });
 
     const lignesOuverture = [];
     let totalDebitOuverture = 0;

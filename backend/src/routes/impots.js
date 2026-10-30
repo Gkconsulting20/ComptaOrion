@@ -31,39 +31,96 @@ function isValidISODate(value) {
 }
 
 async function calculerTva(entrepriseId, dateDebut, dateFin) {
-  const tvaCollecteeData = await db.execute(sql`
-    SELECT COALESCE(SUM(le.credit), 0) - COALESCE(SUM(le.debit), 0) as montant
+  const [collecteeData, deductibleData] = await Promise.all([
+    db.execute(sql`
+    SELECT cc.numero AS "numero", cc.nom AS "nom",
+      COALESCE(SUM(le.credit), 0) - COALESCE(SUM(le.debit), 0) AS "montant",
+      COUNT(DISTINCT e.id)::int AS "nombreEcritures"
     FROM lignes_ecriture le
     JOIN ecritures e ON le.ecriture_id = e.id
     JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
     WHERE e.entreprise_id = ${entrepriseId}
       AND e.valide = true
-      AND cc.numero LIKE '4431%'
+      AND cc.numero LIKE '443%'
+      AND cc.numero NOT LIKE '4434%'
       ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
       ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
-  `);
-  const tvaDeductibleData = await db.execute(sql`
-    SELECT COALESCE(SUM(le.debit), 0) - COALESCE(SUM(le.credit), 0) as montant
+    GROUP BY cc.numero, cc.nom
+    ORDER BY cc.numero
+  `),
+    db.execute(sql`
+    SELECT cc.numero AS "numero", cc.nom AS "nom",
+      COALESCE(SUM(le.debit), 0) - COALESCE(SUM(le.credit), 0) AS "montant",
+      COUNT(DISTINCT e.id)::int AS "nombreEcritures"
     FROM lignes_ecriture le
     JOIN ecritures e ON le.ecriture_id = e.id
     JOIN comptes_comptables cc ON le.compte_comptable_id = cc.id
     WHERE e.entreprise_id = ${entrepriseId}
       AND e.valide = true
-      AND cc.numero LIKE '4452%'
+      AND cc.numero LIKE '445%'
       ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
       ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
-  `);
+    GROUP BY cc.numero, cc.nom
+    ORDER BY cc.numero
+  `)
+  ]);
 
-  const rowsCollectee = tvaCollecteeData.rows || tvaCollecteeData || [];
-  const rowsDeductible = tvaDeductibleData.rows || tvaDeductibleData || [];
-  const tvaCollectee = Number(rowsCollectee[0]?.montant || 0);
-  const tvaDeductible = Number(rowsDeductible[0]?.montant || 0);
+  const comptesCollectee = collecteeData.rows || collecteeData || [];
+  const comptesDeductible = deductibleData.rows || deductibleData || [];
+  const tvaCollectee = comptesCollectee.reduce((sum, account) => sum + Number(account.montant || 0), 0);
+  const tvaDeductible = comptesDeductible.reduce((sum, account) => sum + Number(account.montant || 0), 0);
 
   return {
     tvaCollectee,
     tvaDeductible,
     tvaADecaisser: tvaCollectee - tvaDeductible,
-    creditTVA: Math.max(0, tvaDeductible - tvaCollectee)
+    creditTVA: Math.max(0, tvaDeductible - tvaCollectee),
+    comptesCollectee,
+    comptesDeductible
+  };
+}
+
+async function getTvaMovements(entrepriseId, type, dateDebut, dateFin) {
+  const collected = type === 'collectee';
+  const accountFilter = collected
+    ? sql`cc.numero LIKE '443%' AND cc.numero NOT LIKE '4434%'`
+    : sql`cc.numero LIKE '445%'`;
+  const result = await db.execute(sql`
+    SELECT e.id AS "ecritureId", e.date_ecriture AS "date", j.code AS "journal",
+      COALESCE(e.numero_piece, e.numero_ecriture) AS "reference", e.libelle AS "libelle",
+      cc.numero AS "compteNumero", cc.nom AS "compteNom",
+      le.debit AS "debit", le.credit AS "credit"
+    FROM lignes_ecriture le
+    JOIN ecritures e ON le.ecriture_id = e.id
+    JOIN journaux j ON j.id = e.journal_id AND j.entreprise_id = e.entreprise_id
+    JOIN comptes_comptables cc ON cc.id = le.compte_comptable_id
+      AND cc.entreprise_id = e.entreprise_id
+    WHERE e.entreprise_id = ${entrepriseId}
+      AND e.valide = true
+      AND ${accountFilter}
+      ${dateDebut ? sql`AND e.date_ecriture >= ${dateDebut}` : sql``}
+      ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+    ORDER BY e.date_ecriture, e.id, le.id
+  `);
+  const rows = result.rows || result || [];
+  let soldeCumule = 0;
+  let totalDebit = 0;
+  let totalCredit = 0;
+  const mouvements = rows.map((row) => {
+    const debit = Number(row.debit || 0);
+    const credit = Number(row.credit || 0);
+    totalDebit += debit;
+    totalCredit += credit;
+    soldeCumule += collected ? credit - debit : debit - credit;
+    return { ...row, debit, credit, soldeCumule };
+  });
+  return {
+    mouvements,
+    totaux: {
+      totalDebit,
+      totalCredit,
+      solde: soldeCumule
+    }
   };
 }
 
@@ -91,6 +148,26 @@ router.get('/tva/resume', async (req, res) => {
       message: 'Erreur lors du calcul de la TVA',
       error: error.message
     });
+  }
+});
+
+router.get('/tva/mouvements', async (req, res) => {
+  try {
+    const { type, dateDebut, dateFin } = req.query;
+    if (!['collectee', 'deductible'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'Le type doit être collectee ou deductible.' });
+    }
+    if ((dateDebut && !isValidISODate(dateDebut)) || (dateFin && !isValidISODate(dateFin))) {
+      return res.status(400).json({ success: false, message: 'Les dates doivent être au format AAAA-MM-JJ.' });
+    }
+    if (dateDebut && dateFin && dateDebut > dateFin) {
+      return res.status(400).json({ success: false, message: 'La date de début doit précéder la date de fin.' });
+    }
+    const data = await getTvaMovements(req.entrepriseId, type, dateDebut, dateFin);
+    return res.json({ success: true, periode: { dateDebut, dateFin }, ...data });
+  } catch (error) {
+    console.error('Erreur GET /api/impots/tva/mouvements:', error);
+    return res.status(500).json({ success: false, message: 'Impossible de charger le détail des mouvements TVA.' });
   }
 });
 
@@ -323,13 +400,18 @@ router.post('/declarations/tva', async (req, res) => {
       pays: 'togo',
       dateDebut,
       dateFin,
-      source: 'écritures comptables',
-      comptes: ['4431* (TVA collectée)', '4452* (TVA déductible)'],
+      source: 'écritures comptables validées',
+      comptes: {
+        tvaCollectee: '443* hors 4434 (TVA facturée)',
+        tvaDeductible: '445* (TVA récupérable)',
+        detailCollectee: totals.comptesCollectee,
+        detailDeductible: totals.comptesDeductible
+      },
       tvaCollectee: totals.tvaCollectee,
       tvaDeductible: totals.tvaDeductible,
       tvaADecaisser: totals.tvaADecaisser,
       creditTVA: totals.creditTVA,
-      avertissement: 'Brouillon préparatoire uniquement; vérifier les comptes et le régime fiscal avant tout dépôt.'
+      avertissement: 'Dossier préparatoire uniquement; vérifier le régime, les pièces, les comptes et les règles OTR applicables avant tout dépôt.'
     });
     const draft = await db.transaction(async (tx) => {
       const [created] = await tx.insert(declarationsFiscales).values({

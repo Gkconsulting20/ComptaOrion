@@ -525,6 +525,9 @@ export function ModuleComptabilite() {
     parametresComptables: null
   });
   const [loading, setLoading] = useState(true);
+  const [auditReport, setAuditReport] = useState(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState('');
   const [modal, setModal] = useState({ open: false, type: null, item: null });
   const [form, setForm] = useState({});
   const [periode, setPeriode] = useState({
@@ -572,6 +575,20 @@ export function ModuleComptabilite() {
       console.error('Erreur chargement:', error?.message || error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAuditReport = async () => {
+    setAuditLoading(true);
+    setAuditError('');
+    try {
+      const response = await api.get('/comptabilite/controles-integrite');
+      setAuditReport(response);
+    } catch (error) {
+      setAuditReport(null);
+      setAuditError(error.message || 'Le contrôle d’intégrité n’a pas pu être chargé.');
+    } finally {
+      setAuditLoading(false);
     }
   };
 
@@ -822,6 +839,7 @@ export function ModuleComptabilite() {
   const tabs = [
     { id: 'plan', label: '📋 Plan Comptable', icon: '📋' },
     { id: 'ecritures', label: '✍️ Écritures', icon: '✍️' },
+    { id: 'integrite', label: '🛡️ Contrôle d’audit', icon: '🛡️' },
     { id: 'recurrentes', label: '🔄 Écritures Récurrentes', icon: '🔄' },
     { id: 'grandlivre', label: '📖 Grand Livre', icon: '📖' },
     { id: 'balance', label: '⚖️ Balance', icon: '⚖️' },
@@ -848,7 +866,10 @@ export function ModuleComptabilite() {
         {tabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              if (tab.id === 'integrite') loadAuditReport();
+            }}
             style={{
               padding: '12px 20px',
               border: 'none',
@@ -906,6 +927,92 @@ export function ModuleComptabilite() {
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'integrite' && (
+        <section aria-labelledby="integrite-title">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+            <div>
+              <h3 id="integrite-title" style={{ margin: '0 0 6px' }}>Contrôle d’intégrité des écritures</h3>
+              <p style={{ margin: 0, color: '#667085', fontSize: 13 }}>
+                Vérifie les numéros absents ou en doublon, l’équilibre débit/crédit, les lignes et les trous des séquences récentes.
+              </p>
+            </div>
+            <Button onClick={loadAuditReport} disabled={auditLoading}>
+              {auditLoading ? 'Vérification…' : 'Relancer le contrôle'}
+            </Button>
+          </div>
+          <div style={{ background: '#f4f8fa', border: '1px solid #dce5ea', borderRadius: 8, padding: 13, color: '#52616b', fontSize: 12, marginBottom: 18 }}>
+            Les numéros historiques ne sont pas renumérotés. Les formats anciens sont comptés séparément afin de préserver les pièces déjà enregistrées.
+            Les achats utilisent 6 chiffres, les ventes 8 chiffres et les autres journaux 6 chiffres, avec un compteur par journal et par exercice.
+          </div>
+          {auditError && <div role="alert" style={{ padding: 12, marginBottom: 16, color: '#842029', background: '#f8d7da', borderRadius: 6 }}>{auditError}</div>}
+          {!auditReport && !auditLoading && !auditError && (
+            <div style={{ padding: 24, background: '#f8f9fa', borderRadius: 8, color: '#667085' }}>Lance le contrôle pour vérifier les écritures de l’entreprise.</div>
+          )}
+          {auditReport && (
+            <>
+              <div role={auditReport.conforme ? 'status' : 'alert'} style={{
+                padding: 14,
+                marginBottom: 16,
+                borderRadius: 8,
+                background: auditReport.conforme ? '#e9f7ef' : '#fff3cd',
+                color: auditReport.conforme ? '#276749' : '#735515'
+              }}>
+                <strong>{auditReport.conforme ? 'Contrôle réussi' : 'Anomalies à examiner'}</strong>
+                <span style={{ marginLeft: 8, fontSize: 12 }}>
+                  Vérifié le {auditReport.verifieLe ? new Date(auditReport.verifieLe).toLocaleString('fr-FR') : '—'}.
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 10, marginBottom: 18 }}>
+                {[
+                  ['Écritures', auditReport.totals?.ecritures],
+                  ['Sans numéro', auditReport.totals?.sansNumero],
+                  ['Doublons', auditReport.totals?.doublons],
+                  ['Non équilibrées', auditReport.totals?.nonEquilibrees],
+                  ['Sans lignes', auditReport.totals?.sansLignes],
+                  ['Numéros manquants', auditReport.totals?.sequencesManquantes],
+                  ['Formats historiques', auditReport.totals?.formatsHistoriques]
+                ].map(([label, value]) => (
+                  <div key={label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 13 }}>
+                    <div style={{ color: '#667085', fontSize: 11 }}>{label}</div>
+                    <strong style={{ display: 'block', marginTop: 6, fontSize: 18, color: Number(value || 0) > 0 && label !== 'Écritures' && label !== 'Formats historiques' ? '#b42318' : '#344054' }}>
+                      {Number(value || 0).toLocaleString('fr-FR')}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+              <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 580 }}>
+                  <thead><tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                    <th style={{ padding: 11 }}>Journal</th><th style={{ padding: 11 }}>Écritures</th>
+                    <th style={{ padding: 11 }}>Format récent</th><th style={{ padding: 11 }}>Ancien format</th>
+                    <th style={{ padding: 11 }}>Trous internes</th>
+                  </tr></thead>
+                  <tbody>{(auditReport.journaux || []).map((journal) => (
+                    <tr key={`${journal.code}-${journal.nom}`} style={{ borderTop: '1px solid #edf0f2' }}>
+                      <td style={{ padding: 11 }}><strong>{journal.code}</strong> · {journal.nom}</td>
+                      <td style={{ padding: 11 }}>{journal.nombreEcritures}</td>
+                      <td style={{ padding: 11 }}>{journal.sequencesVerifiees}</td>
+                      <td style={{ padding: 11 }}>{journal.formatHistorique}</td>
+                      <td style={{ padding: 11, color: journal.lacunes ? '#b42318' : '#344054' }}>{journal.lacunes}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              {auditReport.anomalies?.sansNumero?.length > 0 && (
+                <div role="alert" style={{ marginTop: 14, padding: 12, borderRadius: 8, background: '#fff5f5', color: '#842029', fontSize: 12 }}>
+                  Écritures sans numéro : {auditReport.anomalies.sansNumero.map((entry) => `#${entry.id} (${entry.journal})`).join(', ')}
+                </div>
+              )}
+              {auditReport.anomalies?.sequencesManquantes?.length > 0 && (
+                <div role="alert" style={{ marginTop: 10, padding: 12, borderRadius: 8, background: '#fff5f5', color: '#842029', fontSize: 12 }}>
+                  Trous détectés : {auditReport.anomalies.sequencesManquantes.map((gap) => `${gap.journal} ${gap.exercice} (${gap.numerosManquants} après ${gap.apres})`).join(', ')}
+                </div>
+              )}
+            </>
+          )}
+        </section>
       )}
 
       {activeTab === 'grandlivre' && (

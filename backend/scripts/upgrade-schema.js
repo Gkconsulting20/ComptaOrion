@@ -145,26 +145,165 @@ try {
         (!added.has(fk[1]) && !added.has(`${fk[1]}.${fk[3]}`))) continue;
     if (apply) await client.query(statement);
   }
-  // Only add indexes introduced by the association module. Rebuilding every
-  // historical ERP index could fail on old duplicate data and is not required
-  // to install this additive feature.
-  const associationIndexes = new Set([
+  // Add only explicitly reviewed indexes. Historical data is preflighted
+  // before unique accounting constraints are installed.
+  const permittedIndexes = new Set([
     'projets_associatifs_entreprise_code_idx',
     'budgets_projets_associatifs_poste_idx',
     'paiements_depenses_projets_piece_unique',
     'paiements_depenses_projets_ecriture_unique',
+    'ecritures_entreprise_numero_unique',
+    'ecriture_sequences_scope_unique',
+    'journaux_entreprise_code_unique',
   ]);
-  const permittedIndexes = scopedTables
+  const indexesForScope = scopedTables
     ? new Set(scope === 'expense-tracking' ? ['projets_associatifs_entreprise_code_idx'] : [])
-    : associationIndexes;
+    : permittedIndexes;
   const existingIndexes = new Set((await client.query(
     "SELECT indexname FROM pg_indexes WHERE schemaname='public'",
   )).rows.map((row) => row.indexname));
   for (const statement of source.split(/;\s*(?:--> statement-breakpoint)?\s*/)) {
     const index = statement.match(/^CREATE UNIQUE INDEX "([^"]+)"/);
-    if (!index || !permittedIndexes.has(index[1]) || existingIndexes.has(index[1])) continue;
+    if (!index || !indexesForScope.has(index[1]) || existingIndexes.has(index[1])) continue;
+    if (index[1] === 'ecritures_entreprise_numero_unique') {
+      if (present.has('ecritures')) {
+        const { rows: [duplicates] } = await client.query(`
+          SELECT COUNT(*)::int AS count FROM (
+            SELECT entreprise_id, numero_ecriture
+            FROM ecritures
+            WHERE numero_ecriture IS NOT NULL
+            GROUP BY entreprise_id, numero_ecriture
+            HAVING COUNT(*) > 1
+          ) duplicate_numbers
+        `);
+        if (duplicates.count > 0) {
+          throw new Error(
+            `Migration annulée : ${duplicates.count} numéro(s) d’écriture en doublon. ` +
+            'Aucun numéro historique ne sera modifié; corrigez ces cas avant de créer l’index unique.'
+          );
+        }
+      }
+    }
+    if (index[1] === 'journaux_entreprise_code_unique' && present.has('journaux')) {
+      const { rows: [duplicates] } = await client.query(`
+        SELECT COUNT(*)::int AS count FROM (
+          SELECT entreprise_id, UPPER(code) AS normalized_code
+          FROM journaux
+          GROUP BY entreprise_id, UPPER(code)
+          HAVING COUNT(*) > 1
+        ) duplicate_codes
+      `);
+      if (duplicates.count > 0) {
+        throw new Error(
+          `Migration annulée : ${duplicates.count} code(s) de journal en doublon, sans distinction majuscule/minuscule. ` +
+          'Aucun journal ne sera supprimé; corrigez ces codes avant la création de l’index.'
+        );
+      }
+    }
     console.log(`INDEX ${index[1]} (${apply ? 'application' : 'simulation'})`);
     if (apply) await client.query(statement);
+  }
+  if (!scopedTables) {
+    if (present.has('ecritures')) {
+      const seedSequences = `
+      INSERT INTO ecriture_sequences
+        (entreprise_id, journal_id, exercice, derniere_sequence, updated_at)
+      SELECT
+        entreprise_id,
+        journal_id,
+        EXTRACT(YEAR FROM date_ecriture)::integer,
+        COALESCE(MAX((regexp_match(numero_ecriture, '-([0-9]+)$'))[1]::integer), 0),
+        NOW()
+      FROM ecritures
+      WHERE numero_ecriture ~ '-[0-9]+$'
+      GROUP BY entreprise_id, journal_id, EXTRACT(YEAR FROM date_ecriture)
+      ON CONFLICT (entreprise_id, journal_id, exercice)
+      DO UPDATE SET
+        derniere_sequence = GREATEST(ecriture_sequences.derniere_sequence, EXCLUDED.derniere_sequence),
+        updated_at = NOW()
+    `;
+      console.log(`Initialisation des compteurs à partir des écritures existantes (${apply ? 'application' : 'simulation'})`);
+      if (apply) await client.query(seedSequences);
+    }
+
+    const sequenceTrigger = `
+      CREATE OR REPLACE FUNCTION orion_assign_journal_entry_number()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      DECLARE
+        journal_code text;
+        journal_type text;
+        exercise integer;
+        next_sequence bigint;
+        digit_width integer;
+        explicit_sequence bigint;
+      BEGIN
+        SELECT UPPER(code), LOWER(COALESCE(type, ''))
+          INTO journal_code, journal_type
+          FROM journaux
+          WHERE id = NEW.journal_id AND entreprise_id = NEW.entreprise_id;
+        IF journal_code IS NULL THEN
+          RAISE EXCEPTION 'Journal introuvable pour la numérotation de l’écriture';
+        END IF;
+
+        exercise := EXTRACT(YEAR FROM NEW.date_ecriture)::integer;
+        digit_width := CASE WHEN journal_type = 'ventes' THEN 8 ELSE 6 END;
+        PERFORM pg_advisory_xact_lock(hashtextextended(
+          'comptaorion:ecritures:' || NEW.entreprise_id || ':' || NEW.journal_id || ':' || exercise,
+          0
+        ));
+
+        IF NULLIF(BTRIM(NEW.numero_ecriture), '') IS NOT NULL THEN
+          IF NEW.numero_ecriture ~ '-[0-9]+$' THEN
+            explicit_sequence := (regexp_match(NEW.numero_ecriture, '-([0-9]+)$'))[1]::bigint;
+            INSERT INTO ecriture_sequences
+              (entreprise_id, journal_id, exercice, derniere_sequence, updated_at)
+            VALUES (NEW.entreprise_id, NEW.journal_id, exercise, explicit_sequence, NOW())
+            ON CONFLICT (entreprise_id, journal_id, exercice)
+            DO UPDATE SET
+              derniere_sequence = GREATEST(ecriture_sequences.derniere_sequence, EXCLUDED.derniere_sequence),
+              updated_at = NOW();
+          END IF;
+          RETURN NEW;
+        END IF;
+
+        SELECT COALESCE(MAX((regexp_match(numero_ecriture, '-([0-9]+)$'))[1]::bigint), 0) + 1
+          INTO next_sequence
+          FROM ecritures
+          WHERE entreprise_id = NEW.entreprise_id
+            AND journal_id = NEW.journal_id
+            AND date_ecriture >= make_date(exercise, 1, 1)
+            AND date_ecriture < make_date(exercise + 1, 1, 1)
+            AND numero_ecriture ~ '-[0-9]+$';
+
+        INSERT INTO ecriture_sequences
+          (entreprise_id, journal_id, exercice, derniere_sequence, updated_at)
+        VALUES (NEW.entreprise_id, NEW.journal_id, exercise, next_sequence, NOW())
+        ON CONFLICT (entreprise_id, journal_id, exercice)
+        DO UPDATE SET
+          derniere_sequence = GREATEST(ecriture_sequences.derniere_sequence, EXCLUDED.derniere_sequence - 1) + 1,
+          updated_at = NOW()
+        RETURNING derniere_sequence INTO next_sequence;
+
+        IF next_sequence > CASE WHEN digit_width = 8 THEN 99999999 ELSE 999999 END THEN
+          RAISE EXCEPTION 'Capacité de numérotation atteinte pour le journal %', journal_code;
+        END IF;
+
+        NEW.numero_ecriture := UPPER(journal_code) || '-' || exercise::text || '-' ||
+          lpad(next_sequence::text, digit_width, '0');
+        RETURN NEW;
+      END
+      $$;
+
+      DROP TRIGGER IF EXISTS orion_assign_journal_entry_number_trigger ON ecritures;
+      CREATE TRIGGER orion_assign_journal_entry_number_trigger
+        BEFORE INSERT ON ecritures
+        FOR EACH ROW
+        EXECUTE FUNCTION orion_assign_journal_entry_number();
+    `;
+    console.log(`TRIGGER orion_assign_journal_entry_number_trigger (${apply ? 'application' : 'simulation'})`);
+    if (apply) await client.query(sequenceTrigger);
   }
   await client.query(apply ? 'COMMIT' : 'ROLLBACK');
   console.log(apply ? 'Mise à niveau additive terminée.' : 'Aucune modification. Utiliser --apply après sauvegarde pour appliquer.');

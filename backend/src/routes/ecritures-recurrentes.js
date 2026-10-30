@@ -11,6 +11,7 @@ import {
 } from '../schema.js';
 import { eq, and, sql, gte, lte } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { generateNumeroEcriture } from '../services/comptabiliteService.js';
 
 const router = express.Router();
 
@@ -328,9 +329,21 @@ router.post('/:id/generer', async (req, res) => {
       if (!lockedRecurrence || !lockedRecurrence.actif) {
         throw Object.assign(new Error('Écriture récurrente introuvable ou inactive'), { status: 409 });
       }
+      const [journal] = await tx.select().from(journaux).where(and(
+        eq(journaux.id, lockedRecurrence.journalId),
+        eq(journaux.entrepriseId, req.entrepriseId)
+      )).limit(1);
+      if (!journal) throw Object.assign(new Error('Journal récurrent introuvable'), { status: 400 });
+      const numeroEcriture = await generateNumeroEcriture(
+        req.entrepriseId,
+        journal,
+        dateGeneration,
+        tx
+      );
       const [nouvelleEcriture] = await tx.insert(ecritures).values({
         entrepriseId: req.entrepriseId,
         journalId: lockedRecurrence.journalId,
+        numeroEcriture,
         dateEcriture: dateGeneration,
         reference: `REC-${lockedRecurrence.id}-${Date.now()}`,
         description: `${lockedRecurrence.nom} - ${lockedRecurrence.description || ''}`,

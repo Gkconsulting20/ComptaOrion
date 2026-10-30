@@ -11,3 +11,5 @@
 - [Espace commercial](saas-commercial-portal.md) — le portail commercial sert à gérer la commercialisation de ComptaOrion, avec des comptes distincts de l’ERP.
 - [Interface ComptaOrion](comptaorion-interface.md) — garder la navigation regroupée et la barre latérale sombre, avec ComptaOrion distinct de l’entreprise NERU.
 - [Piste d’audit](audit-trail-policy.md) — les traces de création, modification et suppression sont une exigence de sécurité pour les clients.
+- [Séquences comptables](accounting-sequences.md) — compteurs par journal, 6 chiffres pour achats et 8 pour ventes, sans réutilisation après suppression.
+- [Priorité fiscale Togo](togo-tax-priority.md) — commencer par les déclarations togolaises et ne pas prétendre qu’un brouillon est un dépôt officiel.

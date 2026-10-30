@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { journaux, ecritures, lignesEcritures, comptesComptables, comptesBancaires, parametresComptables } from '../schema.js';
 import { eq, and, sql } from 'drizzle-orm';
+import { formatJournalEntryNumber } from './sequentialNumbering.js';
 
 const JOURNAL_CODES = {
   ACHATS: 'AC',
@@ -99,26 +100,74 @@ async function getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId,
   return account;
 }
 
-export async function generateNumeroEcriture(entrepriseId, journalCode, executor = db) {
-  const params = await executor.select().from(parametresComptables)
-    .where(eq(parametresComptables.entrepriseId, entrepriseId))
-    .limit(1);
-  
-  const prefix = params[0]?.prefixeEcritures || 'EC';
-  const year = new Date().getFullYear();
-  
-  const count = await executor.select({ count: sql`COUNT(*)` })
-    .from(ecritures)
-    .where(and(
-      eq(ecritures.entrepriseId, entrepriseId),
-      sql`EXTRACT(YEAR FROM ${ecritures.dateEcriture}) = ${year}`
-    ));
-  
-  const nextNum = (parseInt(count[0]?.count || 0) + 1).toString().padStart(5, '0');
-  return `${journalCode}-${year}-${nextNum}`;
+export async function generateNumeroEcriture(entrepriseId, journal, dateEcriture, executor) {
+  if (!executor) {
+    throw new Error('La numérotation des écritures doit être exécutée dans une transaction.');
+  }
+
+  const journalInfo = typeof journal === 'string'
+    ? (await executor.select().from(journaux).where(and(
+        eq(journaux.entrepriseId, entrepriseId),
+        eq(journaux.code, journal)
+      )).limit(1))[0]
+    : journal;
+  if (!journalInfo?.id || !journalInfo.code) {
+    throw new Error('Journal introuvable pour attribuer un numéro d’écriture.');
+  }
+
+  const rawDate = dateEcriture instanceof Date
+    ? dateEcriture.toISOString()
+    : String(dateEcriture || '');
+  const dateValue = rawDate.slice(0, 10);
+  const year = Number(dateValue.slice(0, 4));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue) || !Number.isInteger(year)) {
+    throw new Error('Une date d’écriture valide est requise pour la numérotation.');
+  }
+
+  // The lock is scoped to tenant + journal + fiscal year and lives until the
+  // surrounding transaction commits or rolls back.
+  const lockKey = `comptaorion:ecritures:${entrepriseId}:${journalInfo.id}:${year}`;
+  await executor.execute(sql`
+    SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+  `);
+
+  const sequenceResult = await executor.execute(sql`
+    INSERT INTO ecriture_sequences
+      (entreprise_id, journal_id, exercice, derniere_sequence, updated_at)
+    SELECT
+      ${entrepriseId},
+      ${journalInfo.id},
+      ${year},
+      COALESCE(MAX((regexp_match(numero_ecriture, '-([0-9]+)$'))[1]::integer), 0) + 1,
+      NOW()
+    FROM ecritures
+    WHERE entreprise_id = ${entrepriseId}
+      AND journal_id = ${journalInfo.id}
+      AND date_ecriture >= ${`${year}-01-01`}
+      AND date_ecriture < ${`${year + 1}-01-01`}
+      AND numero_ecriture ~ '-[0-9]+$'
+    ON CONFLICT (entreprise_id, journal_id, exercice)
+    DO UPDATE SET
+      derniere_sequence = GREATEST(
+        ecriture_sequences.derniere_sequence,
+        EXCLUDED.derniere_sequence - 1
+      ) + 1,
+      updated_at = NOW()
+    RETURNING derniere_sequence
+  `);
+  const nextSequence = Number(sequenceResult.rows?.[0]?.derniere_sequence);
+  if (!Number.isSafeInteger(nextSequence) || nextSequence <= 0) {
+    throw new Error('La séquence comptable n’a pas pu être réservée.');
+  }
+  return formatJournalEntryNumber(journalInfo.code, year, nextSequence, journalInfo.type);
 }
 
 export async function createEcritureComptable(params) {
+  const requestedExecutor = params.executor;
+  if (!requestedExecutor || requestedExecutor === db) {
+    return db.transaction((tx) => createEcritureComptable({ ...params, executor: tx }));
+  }
+
   const {
     entrepriseId,
     journalCode,
@@ -131,11 +180,11 @@ export async function createEcritureComptable(params) {
     valide = false,
     sourceType = null,
     sourceId = null,
-    executor = db
+    executor = requestedExecutor
   } = params;
 
   const journal = await getOrCreateJournal(entrepriseId, journalCode, journalNom, journalType, executor);
-  const numeroEcriture = await generateNumeroEcriture(entrepriseId, journalCode, executor);
+  const numeroEcriture = await generateNumeroEcriture(entrepriseId, journal, dateEcriture, executor);
 
   const totalDebit = lignes.reduce((sum, l) => sum + parseFloat(l.debit || 0), 0);
   const totalCredit = lignes.reduce((sum, l) => sum + parseFloat(l.credit || 0), 0);

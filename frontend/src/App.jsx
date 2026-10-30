@@ -22,6 +22,7 @@ const IntegrationsModule = lazy(() => import('./modules/IntegrationsModule'));
 const Login = loadNamed(() => import('./pages/Login'), 'Login');
 const Inscription = loadNamed(() => import('./pages/Inscription'), 'Inscription');
 const CommercialPortal = loadNamed(() => import('./pages/CommercialPortal'), 'CommercialPortal');
+const ProspectDemo = loadNamed(() => import('./pages/ProspectDemo'), 'ProspectDemo');
 const DashboardView = loadNamed(() => import('./Dashboard'), 'DashboardView');
 const AssociationAccountingModule = loadNamed(
   () => import('./modules/AssociationAccountingModule'),
@@ -92,6 +93,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [showInscription, setShowInscription] = useState(false);
   const [showCommercialPortal, setShowCommercialPortal] = useState(false);
+  const [showProspectDemo, setShowProspectDemo] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +106,11 @@ export default function App() {
       }
       if (urlPath === '/commercial' || urlPath.startsWith('/commercial')) {
         setShowCommercialPortal(true);
+        setLoading(false);
+        return;
+      }
+      if (urlPath === '/demo' || urlPath.startsWith('/demo/')) {
+        setShowProspectDemo(true);
         setLoading(false);
         return;
       }
@@ -218,6 +225,10 @@ export default function App() {
 
   if (showCommercialPortal) {
     return <Suspense fallback={<LazyModuleFallback />}><CommercialPortal /></Suspense>;
+  }
+
+  if (showProspectDemo) {
+    return <Suspense fallback={<LazyModuleFallback />}><ProspectDemo /></Suspense>;
   }
 
   if (!isAuthenticated) {

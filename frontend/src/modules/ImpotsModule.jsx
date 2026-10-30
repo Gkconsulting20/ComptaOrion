@@ -17,7 +17,14 @@ export function ImpotsModule() {
     apiIdentifiant: '',
     apiCleSecrete: ''
   });
-  const [tvaResume, setTvaResume] = useState({ tvaCollectee: 0, tvaDeductible: 0, tvaADecaisser: 0, creditTVA: 0 });
+  const [tvaResume, setTvaResume] = useState({
+    tvaCollectee: 0,
+    tvaDeductible: 0,
+    tvaADecaisser: 0,
+    creditTVA: 0,
+    comptesCollectee: [],
+    comptesDeductible: []
+  });
   const [resultatIS, setResultatIS] = useState({ produits: 0, charges: 0, resultatComptable: 0 });
   const [taxFeedback, setTaxFeedback] = useState({ type: '', message: '' });
   const [periodeTVA, setPeriodeTVA] = useState({
@@ -26,20 +33,21 @@ export function ImpotsModule() {
   });
   const [drillModal, setDrillModal] = useState({ open: false, title: '', data: [], totaux: null, loading: false, compte: '' });
 
-  const loadDrillDown = async (numeroCompte, nomCompte) => {
-    setDrillModal({ open: true, title: `${numeroCompte} - ${nomCompte}`, data: [], totaux: null, loading: true, compte: numeroCompte });
+  const loadDrillDown = async (type, title) => {
+    setDrillModal({ open: true, title, data: [], totaux: null, loading: true, compte: type });
     try {
-      const response = await api.get(`/comptabilite/compte-mouvements/${numeroCompte}`, {
+      const response = await api.get('/impots/tva/mouvements', {
+        type,
         dateDebut: periodeTVA.dateDebut,
         dateFin: periodeTVA.dateFin
       });
       setDrillModal({
         open: true,
-        title: `${response.compte.numero} - ${response.compte.nom}`,
+        title,
         data: response.mouvements || [],
-        totaux: response.totaux,
+        totaux: response.totaux || null,
         loading: false,
-        compte: numeroCompte
+        compte: type
       });
     } catch (err) {
       alert('Erreur: ' + err.message);
@@ -50,9 +58,9 @@ export function ImpotsModule() {
   const exportDrillDownCSV = () => {
     if (!drillModal.data.length) return;
     let csv = `Compte: ${drillModal.title}\nPériode: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}\n\n`;
-    csv += 'Date;Journal;Référence;Libellé;Débit;Crédit;Solde Cumulé\n';
+    csv += 'Date;Journal;Référence;Compte;Libellé;Débit;Crédit;Solde Cumulé\n';
     drillModal.data.forEach(m => {
-      csv += `${m.date};${m.journal};${m.reference};${m.libelle};${Math.round(m.debit || 0)};${Math.round(m.credit || 0)};${Math.round(m.soldeCumule || 0)}\n`;
+      csv += `${m.date};${m.journal};${m.reference};${m.compteNumero} ${m.compteNom || ''};${m.libelle};${Math.round(m.debit || 0)};${Math.round(m.credit || 0)};${Math.round(m.soldeCumule || 0)}\n`;
     });
     if (drillModal.totaux) {
       csv += `\nTOTAUX;;;${Math.round(drillModal.totaux.totalDebit || 0)};${Math.round(drillModal.totaux.totalCredit || 0)};${Math.round(drillModal.totaux.solde || 0)}\n`;
@@ -61,7 +69,7 @@ export function ImpotsModule() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Detail_${drillModal.compte}_${periodeTVA.dateDebut}_${periodeTVA.dateFin}.csv`;
+      a.download = `Detail_TVA_${drillModal.compte}_${periodeTVA.dateDebut}_${periodeTVA.dateFin}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -88,7 +96,9 @@ export function ImpotsModule() {
         tvaCollectee: res.tvaCollectee || 0,
         tvaDeductible: res.tvaDeductible || 0,
         tvaADecaisser: res.tvaADecaisser || 0,
-        creditTVA: res.creditTVA || 0
+        creditTVA: res.creditTVA || 0,
+        comptesCollectee: res.comptesCollectee || [],
+        comptesDeductible: res.comptesDeductible || []
       });
     } catch (error) {
       console.error('Erreur chargement TVA:', error);
@@ -313,8 +323,8 @@ export function ImpotsModule() {
                     <p>Période: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}</p>
                     <table>
                       <tr><th>Type</th><th>Montant</th></tr>
-                      <tr><td>TVA Collectée (compte 4431)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</td></tr>
-                      <tr><td>TVA Déductible (compte 4452)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</td></tr>
+                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</td></tr>
+                      <tr><td>TVA récupérable (comptes 445*)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</td></tr>
                       <tr class="total"><td>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</td><td>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} FCFA</td></tr>
                     </table>
                     <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
@@ -342,8 +352,8 @@ export function ImpotsModule() {
                     <p>Période: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}</p>
                     <table>
                       <tr><th>Type</th><th>Montant</th></tr>
-                      <tr><td>TVA Collectée</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</td></tr>
-                      <tr><td>TVA Déductible</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</td></tr>
+                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</td></tr>
+                      <tr><td>TVA récupérable (comptes 445*)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</td></tr>
                       <tr><td><strong>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</strong></td><td><strong>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} FCFA</strong></td></tr>
                     </table>
                   </body>
@@ -365,25 +375,31 @@ export function ImpotsModule() {
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
           <div 
-            onClick={() => loadDrillDown('4431', 'TVA Collectée')}
+            onClick={() => loadDrillDown('collectee', 'Mouvements de TVA facturée')}
             style={{ padding: '20px', backgroundColor: '#3498db', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
             onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)'; }}
           >
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Collectée</div>
             <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur ventes (compte 4431) - Cliquez pour détails</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Comptes 443* hors 4434 · Voir les lignes</div>
+            <div style={{ fontSize: '11px', opacity: 0.8, marginTop: 7 }}>
+              Comptes retenus : {tvaResume.comptesCollectee.length ? tvaResume.comptesCollectee.map((account) => account.numero).join(', ') : 'aucun compte mouvementé'}
+            </div>
           </div>
 
           <div 
-            onClick={() => loadDrillDown('4452', 'TVA Déductible')}
+            onClick={() => loadDrillDown('deductible', 'Mouvements de TVA récupérable')}
             style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
             onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)'; }}
           >
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Déductible</div>
             <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>Sur achats (compte 4452) - Cliquez pour détails</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>Comptes 445* · Voir les lignes</div>
+            <div style={{ fontSize: '11px', opacity: 0.8, marginTop: 7 }}>
+              Comptes retenus : {tvaResume.comptesDeductible.length ? tvaResume.comptesDeductible.map((account) => account.numero).join(', ') : 'aucun compte mouvementé'}
+            </div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: tvaResume.tvaADecaisser >= 0 ? '#27ae60' : '#9b59b6', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
@@ -396,11 +412,15 @@ export function ImpotsModule() {
         <div role="status" style={{ backgroundColor: '#fff3cd', padding: '20px', borderRadius: '8px', marginTop: '20px', color: '#735515' }}>
           <h4 style={{ marginTop: 0 }}>Préparation disponible — dépôt manuel uniquement</h4>
           <p style={{ marginBottom: 0 }}>
-            Le brouillon reprend les écritures des comptes 4431* et 4452* pour la période choisie. Vérifiez le régime, les pièces et les comptes avec votre comptable avant de le déposer vous-même sur le portail de l’OTR.
+            Le dossier reprend les écritures validées des comptes 443* (hors 4434) et 445* pour la période choisie. Vérifiez les comptes, les pièces et le régime fiscal avec votre comptable avant tout dépôt sur le portail de l’OTR.
           </p>
           <p style={{ margin: '10px 0 0' }}>
-            <a href="https://www.otr.tg/index.php/fr/impots/reglementations-fiscales/code-general-des-impots/628-cahier-fiscal-2026.html" target="_blank" rel="noreferrer">
-              Consulter le Cahier fiscal 2026 de l’OTR
+            <a href="https://new.otr.tg/documentation#fiscalite" target="_blank" rel="noreferrer">
+              Consulter les documents fiscaux de l’OTR
+            </a>
+            {' · '}
+            <a href="https://new.otr.tg/impots" target="_blank" rel="noreferrer">
+              Accéder aux démarches fiscales OTR
             </a>
           </p>
         </div>
@@ -442,8 +462,8 @@ export function ImpotsModule() {
         </p>
       </div>
       <p style={{ marginTop: 12 }}>
-        <a href="https://www.otr.tg/index.php/fr/impots/reglementations-fiscales/code-general-des-impots/628-cahier-fiscal-2026.html" target="_blank" rel="noreferrer">
-          Référence officielle OTR — Cahier fiscal 2026
+          <a href="https://new.otr.tg/documentation#fiscalite" target="_blank" rel="noreferrer">
+            Documents fiscaux officiels de l’OTR
         </a>
       </p>
     </div>
@@ -659,6 +679,7 @@ export function ImpotsModule() {
                         <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th>
                         <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Journal</th>
                         <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Réf.</th>
+                        <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Compte</th>
                         <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Libellé</th>
                         <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>Débit</th>
                         <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>Crédit</th>
@@ -671,6 +692,7 @@ export function ImpotsModule() {
                           <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.date}</td>
                           <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.journal}</td>
                           <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.reference}</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.compteNumero} {m.compteNom}</td>
                           <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.libelle}</td>
                           <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{m.debit > 0 ? `${Math.round(m.debit).toLocaleString('fr-FR')} FCFA` : '-'}</td>
                           <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{m.credit > 0 ? `${Math.round(m.credit).toLocaleString('fr-FR')} FCFA` : '-'}</td>
@@ -679,7 +701,7 @@ export function ImpotsModule() {
                       ))}
                       {drillModal.totaux && (
                         <tr style={{ backgroundColor: '#e8f4f8', fontWeight: 'bold' }}>
-                          <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>TOTAUX</td>
+                          <td colSpan="5" style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>TOTAUX</td>
                           <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.totalDebit).toLocaleString('fr-FR')} FCFA</td>
                           <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.totalCredit).toLocaleString('fr-FR')} FCFA</td>
                           <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.solde).toLocaleString('fr-FR')} FCFA</td>
