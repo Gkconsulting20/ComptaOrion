@@ -2946,8 +2946,8 @@ router.get('/cloture-exercice/preview', async (req, res) => {
       compteResultat: resultatNet >= 0 ? '120' : '129',
       comptesBilan: comptesBilan.sort((a, b) => a.numero.localeCompare(b.numero)),
       message: resultatNet >= 0 
-        ? `Bénéfice de ${resultatNet.toLocaleString('fr-FR')} XOF à reporter sur le compte 120`
-        : `Perte de ${Math.abs(resultatNet).toLocaleString('fr-FR')} XOF à reporter sur le compte 129`
+        ? `Bénéfice de ${Math.round(resultatNet).toLocaleString('fr-FR')} XOF à reporter sur le compte 120`
+        : `Perte de ${Math.round(Math.abs(resultatNet)).toLocaleString('fr-FR')} XOF à reporter sur le compte 129`
     });
   } catch (error) {
     console.error('Erreur preview clôture:', error);

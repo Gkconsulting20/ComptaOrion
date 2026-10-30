@@ -67,18 +67,18 @@ function NonFactureTab({ fournisseurs, produits }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '25px' }}>
         <div style={{ padding: '20px', background: '#fff3e0', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>STOCK EN ATTENTE</p>
-          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{stockPending.totaux?.valeur?.toLocaleString('fr-FR') || 0} XOF</h2>
+          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{Math.round(stockPending.totaux?.valeur || 0).toLocaleString('fr-FR')} XOF</h2>
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{stockPending.totaux?.lignes || 0} lignes</p>
         </div>
         <div style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>LOGISTIQUE EN ATTENTE</p>
-          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{logistiquePending.totaux?.montant?.toLocaleString('fr-FR') || 0} XOF</h2>
+          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{Math.round(logistiquePending.totaux?.montant || 0).toLocaleString('fr-FR')} XOF</h2>
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{logistiquePending.totaux?.lignes || 0} lignes</p>
         </div>
         <div style={{ padding: '20px', background: '#fce4ec', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL NON FACTURÉ</p>
           <h2 style={{ margin: '10px 0 0 0', color: '#c2185b' }}>
-            {((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString('fr-FR')} XOF
+            {Math.round((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString('fr-FR')} XOF
           </h2>
         </div>
       </div>
@@ -113,8 +113,8 @@ function NonFactureTab({ fournisseurs, produits }) {
                 { key: 'reception_numero', label: 'N° Réception' },
                 { key: 'produit_nom', label: 'Produit', render: (val, row) => `${row.produit_reference || ''} ${val || ''}` },
                 { key: 'quantite_pending', label: 'Qté', render: (val) => parseFloat(val).toFixed(0) },
-                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} XOF` },
-                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} XOF</strong> }
+                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF` },
+                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF</strong> }
               ]}
               data={stockPending.items || []}
             />
@@ -133,7 +133,7 @@ function NonFactureTab({ fournisseurs, produits }) {
               <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
                 {(logistiquePending.parType || []).map(t => (
                   <div key={t.type} style={{ padding: '10px 15px', background: '#f5f5f5', borderRadius: '8px' }}>
-                    <strong>{typeLabels[t.type] || t.type}:</strong> {t.montant.toLocaleString('fr-FR')} XOF ({t.lignes})
+                    <strong>{typeLabels[t.type] || t.type}:</strong> {Math.round(t.montant).toLocaleString('fr-FR')} XOF ({t.lignes})
                   </div>
                 ))}
               </div>
@@ -145,7 +145,7 @@ function NonFactureTab({ fournisseurs, produits }) {
                   { key: 'reception_numero', label: 'N° Réception' },
                   { key: 'type', label: 'Type', render: (val) => typeLabels[val] || val },
                   { key: 'description', label: 'Description' },
-                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} XOF</strong> }
+                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF</strong> }
                 ]}
                 data={logistiquePending.items || []}
               />
@@ -162,7 +162,7 @@ function NonFactureTab({ fournisseurs, produits }) {
               { key: 'nom', label: 'Fournisseur' },
               { key: 'lignes', label: 'Lignes' },
               { key: 'quantite', label: 'Quantité', render: (val) => parseFloat(val).toFixed(0) },
-              { key: 'valeur', label: 'Valeur Stock', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} XOF</strong> }
+              { key: 'valeur', label: 'Valeur Stock', render: (val) => <strong>{Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF</strong> }
             ]}
             data={stockPending.parFournisseur || []}
           />
@@ -172,7 +172,7 @@ function NonFactureTab({ fournisseurs, produits }) {
             columns={[
               { key: 'nom', label: 'Fournisseur' },
               { key: 'lignes', label: 'Lignes' },
-              { key: 'montant', label: 'Montant Total', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} XOF</strong> }
+              { key: 'montant', label: 'Montant Total', render: (val) => <strong>{Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF</strong> }
             ]}
             data={logistiquePending.parFournisseur || []}
           />
@@ -551,7 +551,7 @@ export function StockInventaire() {
                 { key: 'numeroCommande', label: 'N° Commande' },
                 { key: 'fournisseur', label: 'Fournisseur', render: (val, row) => row.fournisseur?.nom || val?.nom || '-' },
                 { key: 'dateCommande', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString('fr-FR') : '-' },
-                { key: 'totalHT', label: 'Total HT', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} XOF` },
+                { key: 'totalHT', label: 'Total HT', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF` },
                 { key: 'statut', label: 'Statut', render: (val) => {
                   const statut = val || 'brouillon';
                   const colors = { brouillon: '#95a5a6', validee: '#3498db', recue: '#27ae60', annulee: '#e74c3c' };
@@ -600,7 +600,7 @@ export function StockInventaire() {
                 { key: 'date_reception', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
                 { key: 'fournisseur_nom', label: 'Fournisseur' },
                 { key: 'entrepot_nom', label: 'Entrepôt', render: (val) => val || '-' },
-                { key: 'total_ht', label: 'Total HT', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} XOF` },
+                { key: 'total_ht', label: 'Total HT', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF` },
                 { key: 'nb_lignes', label: 'Lignes' },
                 { key: 'statut', label: 'Statut', render: (val) => (
                   <span style={{ 
@@ -818,7 +818,7 @@ export function StockInventaire() {
                 { key: 'valorisation', label: 'Valorisation Totale', render: (_, row) => {
                   const coutUnit = parseFloat(row.coutMoyen || row.prixAchat || 0);
                   const val = Math.round(parseFloat(row.quantite || 0) * coutUnit);
-                  return <strong style={{ color: '#388e3c' }}>{val.toLocaleString('fr-FR')} XOF</strong>;
+                  return <strong style={{ color: '#388e3c' }}>{Math.round(val).toLocaleString('fr-FR')} XOF</strong>;
                 }}
               ]}
               data={data.produits}
@@ -847,7 +847,7 @@ export function StockInventaire() {
                   const val = Math.round(data.produits
                     .filter(p => p.categorieId === row.id)
                     .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.coutMoyen || p.prixAchat || 0)), 0));
-                  return <strong style={{ color: '#388e3c' }}>{val.toLocaleString('fr-FR')} XOF</strong>;
+                  return <strong style={{ color: '#388e3c' }}>{Math.round(val).toLocaleString('fr-FR')} XOF</strong>;
                 }}
               ]}
               data={data.categories}
@@ -1098,7 +1098,7 @@ export function StockInventaire() {
                 
                 <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px', textAlign: 'right' }}>
                   <strong>Total HT estimé: </strong>
-                  {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantiteRecue || 0) * parseFloat(l.prixUnitaireEstime || 0)), 0).toLocaleString('fr-FR')} XOF
+                  {Math.round((form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantiteRecue || 0) * parseFloat(l.prixUnitaireEstime || 0)), 0)).toLocaleString('fr-FR')} XOF
                 </div>
               </div>
             </>
@@ -1191,7 +1191,7 @@ export function StockInventaire() {
                 
                 <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px', textAlign: 'right' }}>
                   <strong>Total HT: </strong>
-                  {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantite || 0) * parseFloat(l.prixUnitaire || 0)), 0).toLocaleString('fr-FR')} XOF
+                  {Math.round((form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantite || 0) * parseFloat(l.prixUnitaire || 0)), 0)).toLocaleString('fr-FR')} XOF
                 </div>
               </div>
             </>

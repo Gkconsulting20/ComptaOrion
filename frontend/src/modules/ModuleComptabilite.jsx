@@ -143,7 +143,7 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
               { key: 'nom', label: 'Nom du Compte' },
               { key: 'categorie', label: 'Catégorie' },
               { key: 'sousCategorie', label: 'Classe' },
-              { key: 'solde', label: 'Solde', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} XOF` }
+              { key: 'solde', label: 'Solde', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF` }
             ]}
             data={filteredComptes}
             onEdit={(item) => openModal('compte', item)}
@@ -237,7 +237,7 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
                               <td style={{ padding: '10px' }}>{compte.nom}</td>
                               <td style={{ padding: '10px', color: '#666' }}>{compte.categorie || '-'}</td>
                               <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold' }}>
-                                {parseFloat(compte.solde || 0).toLocaleString('fr-FR')} {compte.devise || 'XOF'}
+                                {parseFloat(compte.solde || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} {compte.devise || 'XOF'}
                               </td>
                             </tr>
                           ))}
@@ -892,8 +892,8 @@ export function ModuleComptabilite() {
                 { key: 'dateEcriture', label: 'Date', render: (val) => new Date(val).toLocaleDateString('fr-FR') },
                 { key: 'reference', label: 'Référence' },
                 { key: 'description', label: 'Description' },
-                { key: 'totalDebit', label: 'Débit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} XOF` },
-                { key: 'totalCredit', label: 'Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} XOF` },
+                { key: 'totalDebit', label: 'Débit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF` },
+                { key: 'totalCredit', label: 'Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF` },
                 { key: 'statut', label: 'Statut', render: (val) => {
                   const colors = { brouillon: '#ff9800', validée: '#4caf50' };
                   return <span style={{ color: colors[val] || '#666', fontWeight: 'bold' }}>{val?.toUpperCase()}</span>;
@@ -1116,7 +1116,7 @@ export function ModuleComptabilite() {
                   <div style={{ padding: '12px 15px', background: '#f5f5f5', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong style={{ fontSize: '15px' }}>{compte.numero} - {compte.nom}</strong>
                     <span style={{ color: compte.solde >= 0 ? '#388e3c' : '#d32f2f', fontWeight: 'bold' }}>
-                      Solde: {compte.solde.toLocaleString('fr-FR')} XOF
+                      Solde: {compte.solde.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF
                     </span>
                   </div>
                   <Table
@@ -1125,15 +1125,15 @@ export function ModuleComptabilite() {
                       { key: 'journal', label: 'Journal' },
                       { key: 'reference', label: 'Référence' },
                       { key: 'libelle', label: 'Libellé' },
-                      { key: 'debit', label: 'Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} XOF` : '-' },
-                      { key: 'credit', label: 'Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR')} XOF` : '-' }
+                      { key: 'debit', label: 'Débit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF` : '-' },
+                      { key: 'credit', label: 'Crédit', render: (val) => val > 0 ? `${parseFloat(val).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF` : '-' }
                     ]}
                     data={compte.lignes}
                     actions={false}
                   />
                   <div style={{ padding: '10px 15px', background: '#fafafa', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'flex-end', gap: '30px' }}>
-                    <span>Total Débit: <strong>{compte.totalDebit.toLocaleString('fr-FR')} XOF</strong></span>
-                    <span>Total Crédit: <strong>{compte.totalCredit.toLocaleString('fr-FR')} XOF</strong></span>
+                    <span>Total Débit: <strong>{compte.totalDebit.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</strong></span>
+                    <span>Total Crédit: <strong>{compte.totalCredit.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</strong></span>
                   </div>
                 </div>
               ))}
@@ -1141,8 +1141,8 @@ export function ModuleComptabilite() {
                 <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px', display: 'flex', justifyContent: 'space-between' }}>
                   <strong>TOTAUX GÉNÉRAUX</strong>
                   <div>
-                    <span style={{ marginRight: '30px' }}>Débit: <strong>{data.grandLivreTotaux.totalDebit.toLocaleString('fr-FR')} XOF</strong></span>
-                    <span>Crédit: <strong>{data.grandLivreTotaux.totalCredit.toLocaleString('fr-FR')} XOF</strong></span>
+                    <span style={{ marginRight: '30px' }}>Débit: <strong>{data.grandLivreTotaux.totalDebit.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</strong></span>
+                    <span>Crédit: <strong>{data.grandLivreTotaux.totalCredit.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</strong></span>
                   </div>
                 </div>
               )}
@@ -1268,7 +1268,7 @@ export function ModuleComptabilite() {
               {data.balanceTotaux && (
                 <div style={{ marginTop: '15px', padding: '15px', background: data.balanceEquilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <strong>TOTAUX:</strong> Débit: <strong>{parseFloat(data.balanceTotaux.totalDebit || 0).toLocaleString('fr-FR')} XOF</strong> | Crédit: <strong>{parseFloat(data.balanceTotaux.totalCredit || 0).toLocaleString('fr-FR')} XOF</strong>
+                    <strong>TOTAUX:</strong> Débit: <strong>{parseFloat(data.balanceTotaux.totalDebit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</strong> | Crédit: <strong>{parseFloat(data.balanceTotaux.totalCredit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</strong>
                   </div>
                   <div style={{ color: data.balanceEquilibre ? '#388e3c' : '#d32f2f', fontWeight: 'bold' }}>
                     {data.balanceEquilibre ? '✅ Balance équilibrée' : '❌ Balance non équilibrée'}
@@ -1863,16 +1863,16 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL DÉBIT</p>
-                        <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{totalDebit.toLocaleString('fr-FR')} XOF</h3>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{totalDebit.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</h3>
                       </div>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL CRÉDIT</p>
-                        <h3 style={{ margin: '5px 0 0 0', color: '#7b1fa2' }}>{totalCredit.toLocaleString('fr-FR')} XOF</h3>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#7b1fa2' }}>{totalCredit.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</h3>
                       </div>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>DIFFÉRENCE</p>
                         <h3 style={{ margin: '5px 0 0 0', color: difference === 0 ? '#388e3c' : '#d32f2f' }}>
-                          {difference.toLocaleString('fr-FR')} XOF {difference === 0 ? '✓' : '✗'}
+                          {difference.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF {difference === 0 ? '✓' : '✗'}
                         </h3>
                       </div>
                     </div>
@@ -1946,16 +1946,16 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL DÉBIT</p>
-                        <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{totalDebit.toLocaleString('fr-FR')} XOF</h3>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#1976d2' }}>{totalDebit.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</h3>
                       </div>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>TOTAL CRÉDIT</p>
-                        <h3 style={{ margin: '5px 0 0 0', color: '#7b1fa2' }}>{totalCredit.toLocaleString('fr-FR')} XOF</h3>
+                        <h3 style={{ margin: '5px 0 0 0', color: '#7b1fa2' }}>{totalCredit.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</h3>
                       </div>
                       <div>
                         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>DIFFÉRENCE</p>
                         <h3 style={{ margin: '5px 0 0 0', color: difference === 0 ? '#388e3c' : '#d32f2f' }}>
-                          {difference.toLocaleString('fr-FR')} XOF {difference === 0 ? '✓' : '✗'}
+                          {difference.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF {difference === 0 ? '✓' : '✗'}
                         </h3>
                       </div>
                     </div>
@@ -2002,10 +2002,10 @@ export function ModuleComptabilite() {
                 <div>
                   <h4 style={{ marginBottom: '15px', color: '#3498db' }}>Totaux</h4>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>Total Débit:</strong> {parseFloat(modal.item.totalDebit || 0).toLocaleString('fr-FR')} XOF
+                    <strong>Total Débit:</strong> {parseFloat(modal.item.totalDebit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF
                   </div>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>Total Crédit:</strong> {parseFloat(modal.item.totalCredit || 0).toLocaleString('fr-FR')} XOF
+                    <strong>Total Crédit:</strong> {parseFloat(modal.item.totalCredit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF
                   </div>
                   <div style={{ marginBottom: '10px' }}>
                     <strong>Équilibre:</strong> {
@@ -2037,10 +2037,10 @@ export function ModuleComptabilite() {
                           </td>
                           <td style={{ padding: '10px' }}>{ligne.description || '-'}</td>
                           <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2', fontWeight: 'bold' }}>
-                            {ligne.type === 'debit' ? `${parseFloat(ligne.montant).toLocaleString('fr-FR')} XOF` : '-'}
+                            {ligne.type === 'debit' ? `${parseFloat(ligne.montant).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF` : '-'}
                           </td>
                           <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2', fontWeight: 'bold' }}>
-                            {ligne.type === 'credit' ? `${parseFloat(ligne.montant).toLocaleString('fr-FR')} XOF` : '-'}
+                            {ligne.type === 'credit' ? `${parseFloat(ligne.montant).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF` : '-'}
                           </td>
                         </tr>
                       ))}
@@ -2151,7 +2151,7 @@ export function ModuleComptabilite() {
                           )}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
                             <span>Sous-total Immobilisations nettes</span>
-                            <span>{Math.round((rapportModal.data.actif?.immobilise || []).reduce((s,c) => s + (c.solde || 0), 0) - (rapportModal.data.actif?.amortissements || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} XOF</span>
+                            <span>{Math.round((rapportModal.data.actif?.immobilise || []).reduce((s,c) => s + (c.solde || 0), 0) - (rapportModal.data.actif?.amortissements || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</span>
                           </div>
                         </div>
 
@@ -2169,7 +2169,7 @@ export function ModuleComptabilite() {
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
                             <span>Sous-total Actif Circulant</span>
-                            <span>{Math.round((rapportModal.data.actif?.circulant || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} XOF</span>
+                            <span>{Math.round((rapportModal.data.actif?.circulant || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</span>
                           </div>
                         </div>
 
@@ -2187,14 +2187,14 @@ export function ModuleComptabilite() {
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#e3f2fd', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
                             <span>Sous-total Trésorerie</span>
-                            <span>{Math.round((rapportModal.data.actif?.tresorerie || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} XOF</span>
+                            <span>{Math.round((rapportModal.data.actif?.tresorerie || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</span>
                           </div>
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '15px', backgroundColor: '#1565c0', color: 'white', fontWeight: 'bold', fontSize: '15px' }}>
                         <span>TOTAL ACTIF</span>
-                        <span>{Math.round(rapportModal.data.actif?.total || 0).toLocaleString('fr-FR')} XOF</span>
+                        <span>{Math.round(rapportModal.data.actif?.total || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</span>
                       </div>
                     </div>
 
@@ -2226,7 +2226,7 @@ export function ModuleComptabilite() {
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
                             <span>Sous-total Capitaux Propres</span>
-                            <span>{Math.round((rapportModal.data.passif?.capitaux || []).reduce((s,c) => s + (c.isPerte ? -(c.solde || 0) : (c.solde || 0)), 0)).toLocaleString('fr-FR')} XOF</span>
+                            <span>{Math.round((rapportModal.data.passif?.capitaux || []).reduce((s,c) => s + (c.isPerte ? -(c.solde || 0) : (c.solde || 0)), 0)).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</span>
                           </div>
                         </div>
 
@@ -2244,14 +2244,14 @@ export function ModuleComptabilite() {
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e5f5', fontWeight: 'bold', marginTop: '8px', borderRadius: '4px', fontSize: '13px' }}>
                             <span>Sous-total Dettes</span>
-                            <span>{Math.round((rapportModal.data.passif?.dettes || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR')} XOF</span>
+                            <span>{Math.round((rapportModal.data.passif?.dettes || []).reduce((s,c) => s + (c.solde || 0), 0)).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</span>
                           </div>
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '15px', backgroundColor: '#6a1b9a', color: 'white', fontWeight: 'bold', fontSize: '15px' }}>
                         <span>TOTAL PASSIF</span>
-                        <span>{Math.round(rapportModal.data.passif?.total || 0).toLocaleString('fr-FR')} XOF</span>
+                        <span>{Math.round(rapportModal.data.passif?.total || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</span>
                       </div>
                     </div>
                   </div>
@@ -2260,20 +2260,20 @@ export function ModuleComptabilite() {
                   <div style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                     <div style={{ padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Total Actif</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{Math.round(rapportModal.data.actif?.total || 0).toLocaleString('fr-FR')} XOF</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{Math.round(rapportModal.data.actif?.total || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                     </div>
                     <div style={{ padding: '15px', backgroundColor: rapportModal.data.equilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                       {rapportModal.data.equilibre 
                         ? <div style={{ color: '#2e7d32', fontWeight: 'bold', fontSize: '16px' }}>✅ BILAN ÉQUILIBRÉ</div>
                         : <div>
                             <div style={{ color: '#c62828', fontWeight: 'bold' }}>⚠️ ÉCART</div>
-                            <div style={{ color: '#c62828', fontSize: '14px' }}>{Math.round(Math.abs(rapportModal.data.actif?.total - rapportModal.data.passif?.total)).toLocaleString('fr-FR')} XOF</div>
+                            <div style={{ color: '#c62828', fontSize: '14px' }}>{Math.round(Math.abs(rapportModal.data.actif?.total - rapportModal.data.passif?.total)).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                           </div>
                       }
                     </div>
                     <div style={{ padding: '15px', backgroundColor: '#f3e5f5', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Total Passif</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{Math.round(rapportModal.data.passif?.total || 0).toLocaleString('fr-FR')} XOF</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{Math.round(rapportModal.data.passif?.total || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                     </div>
                   </div>
 
@@ -2283,7 +2283,7 @@ export function ModuleComptabilite() {
                       <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>Résultat de l'exercice</div>
                       <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.resultatNet >= 0 ? '#2e7d32' : '#c62828' }}>
                         {rapportModal.data.resultatNet >= 0 ? 'BÉNÉFICE: ' : 'PERTE: '}
-                        {Math.round(Math.abs(rapportModal.data.resultatNet)).toLocaleString('fr-FR')} XOF
+                        {Math.round(Math.abs(rapportModal.data.resultatNet)).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF
                       </div>
                     </div>
                   )}
@@ -2469,11 +2469,11 @@ export function ModuleComptabilite() {
                     </div>
                     <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Total Débit</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString('fr-FR')} XOF</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                     </div>
                     <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Total Crédit</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString('fr-FR')} XOF</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                     </div>
                   </div>
                   
@@ -2504,16 +2504,16 @@ export function ModuleComptabilite() {
                               <td style={{ padding: '8px 10px', fontSize: '13px' }}>{e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-'}</td>
                               <td style={{ padding: '8px 10px', fontSize: '13px' }}>{e.reference || '-'}</td>
                               <td style={{ padding: '8px 10px', fontSize: '13px' }}>{e.libelle || '-'}</td>
-                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#1976d2' }}>{e.debit > 0 ? e.debit.toLocaleString('fr-FR') : '-'}</td>
-                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#7b1fa2' }}>{e.credit > 0 ? e.credit.toLocaleString('fr-FR') : '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#1976d2' }}>{e.debit > 0 ? e.debit.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) : '-'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#7b1fa2' }}>{e.credit > 0 ? e.credit.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) : '-'}</td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot>
                           <tr style={{ background: '#fff9e6', fontWeight: 'bold' }}>
                             <td colSpan="3" style={{ padding: '10px' }}>Total {journal.code}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2' }}>{(journal.debit || 0).toLocaleString('fr-FR')} XOF</td>
-                            <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2' }}>{(journal.credit || 0).toLocaleString('fr-FR')} XOF</td>
+                            <td style={{ padding: '10px', textAlign: 'right', color: '#1976d2' }}>{(journal.debit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</td>
+                            <td style={{ padding: '10px', textAlign: 'right', color: '#7b1fa2' }}>{(journal.credit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</td>
                           </tr>
                         </tfoot>
                       </table>
@@ -2536,15 +2536,15 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
                       <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Encaissements</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxExploitation?.encaissements || 0).toLocaleString('fr-FR')} XOF</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxExploitation?.encaissements || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                       </div>
                       <div style={{ padding: '20px', background: '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Décaissements</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxExploitation?.decaissements || 0).toLocaleString('fr-FR')} XOF</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxExploitation?.decaissements || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                       </div>
                       <div style={{ padding: '20px', background: rapportModal.data.fluxExploitation?.net >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Flux Net Exploitation</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxExploitation?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxExploitation?.net || 0).toLocaleString('fr-FR')} XOF</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxExploitation?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxExploitation?.net || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                       </div>
                     </div>
                   </div>
@@ -2555,15 +2555,15 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
                       <div style={{ padding: '20px', background: '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Acquisitions</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxInvestissement?.acquisitions || 0).toLocaleString('fr-FR')} XOF</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxInvestissement?.acquisitions || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                       </div>
                       <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Cessions</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxInvestissement?.cessions || 0).toLocaleString('fr-FR')} XOF</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxInvestissement?.cessions || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                       </div>
                       <div style={{ padding: '20px', background: rapportModal.data.fluxInvestissement?.net >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Flux Net Investissement</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxInvestissement?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxInvestissement?.net || 0).toLocaleString('fr-FR')} XOF</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxInvestissement?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxInvestissement?.net || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                       </div>
                     </div>
                     {(rapportModal.data.fluxInvestissement?.details || []).length > 0 && (
@@ -2596,15 +2596,15 @@ export function ModuleComptabilite() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
                       <div style={{ padding: '20px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Apports (Capital, Emprunts)</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxFinancement?.apports || 0).toLocaleString('fr-FR')} XOF</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>{(rapportModal.data.fluxFinancement?.apports || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                       </div>
                       <div style={{ padding: '20px', background: '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Remboursements</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxFinancement?.remboursements || 0).toLocaleString('fr-FR')} XOF</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#c62828' }}>{(rapportModal.data.fluxFinancement?.remboursements || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                       </div>
                       <div style={{ padding: '20px', background: rapportModal.data.fluxFinancement?.net >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#666' }}>Flux Net Financement</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxFinancement?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxFinancement?.net || 0).toLocaleString('fr-FR')} XOF</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: rapportModal.data.fluxFinancement?.net >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxFinancement?.net || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                       </div>
                     </div>
                     {(rapportModal.data.fluxFinancement?.details || []).length > 0 && (
@@ -2651,16 +2651,16 @@ export function ModuleComptabilite() {
                             <td style={{ padding: '8px 10px', fontSize: '13px' }}>{c.nom}</td>
                             <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#2e7d32' }}>{c.entrees > 0 ? c.entrees.toLocaleString('fr-FR') : '-'}</td>
                             <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', color: '#c62828' }}>{c.sorties > 0 ? c.sorties.toLocaleString('fr-FR') : '-'}</td>
-                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', fontWeight: 'bold', color: c.solde >= 0 ? '#2e7d32' : '#c62828' }}>{c.solde.toLocaleString('fr-FR')} XOF</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '13px', fontWeight: 'bold', color: c.solde >= 0 ? '#2e7d32' : '#c62828' }}>{c.solde.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr style={{ background: '#f3e5f5', fontWeight: 'bold' }}>
                           <td colSpan="2" style={{ padding: '10px' }}>TOTAL</td>
-                          <td style={{ padding: '10px', textAlign: 'right', color: '#2e7d32' }}>{(rapportModal.data.fluxTresorerie?.totalEntrees || 0).toLocaleString('fr-FR')} XOF</td>
-                          <td style={{ padding: '10px', textAlign: 'right', color: '#c62828' }}>{(rapportModal.data.fluxTresorerie?.totalSorties || 0).toLocaleString('fr-FR')} XOF</td>
-                          <td style={{ padding: '10px', textAlign: 'right', color: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString('fr-FR')} XOF</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: '#2e7d32' }}>{(rapportModal.data.fluxTresorerie?.totalEntrees || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: '#c62828' }}>{(rapportModal.data.fluxTresorerie?.totalSorties || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</td>
+                          <td style={{ padding: '10px', textAlign: 'right', color: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#2e7d32' : '#c62828' }}>{(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -2670,7 +2670,7 @@ export function ModuleComptabilite() {
                   <div style={{ padding: '20px', background: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                     <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>Variation Nette de Trésorerie</div>
                     <div style={{ fontSize: '28px', fontWeight: 'bold', color: (rapportModal.data.fluxTresorerie?.variationNette || 0) >= 0 ? '#2e7d32' : '#c62828' }}>
-                      {(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString('fr-FR')} XOF
+                      {(rapportModal.data.fluxTresorerie?.variationNette || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF
                     </div>
                   </div>
                 </div>
@@ -2684,11 +2684,11 @@ export function ModuleComptabilite() {
                     </div>
                     <div style={{ padding: '15px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Total Débit</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString('fr-FR')} XOF</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>{(rapportModal.data.totaux?.debit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                     </div>
                     <div style={{ padding: '15px', background: '#f3e5f5', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Total Crédit</div>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString('fr-FR')} XOF</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#7b1fa2' }}>{(rapportModal.data.totaux?.credit || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} XOF</div>
                     </div>
                     <div style={{ padding: '15px', background: rapportModal.data.totaux?.equilibre ? '#e8f5e9' : '#ffebee', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '12px', color: '#666' }}>Équilibre</div>

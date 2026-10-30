@@ -244,18 +244,18 @@ function FacturationTab({ fournisseurs }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '25px' }}>
         <div style={{ padding: '20px', background: '#fff3e0', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>STOCK EN ATTENTE</p>
-          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{stockPending.totaux?.valeur?.toLocaleString('fr-FR') || 0} XOF</h2>
+          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{Math.round(stockPending.totaux?.valeur || 0).toLocaleString('fr-FR')} XOF</h2>
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{stockPending.totaux?.lignes || 0} lignes</p>
         </div>
         <div style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>LOGISTIQUE EN ATTENTE</p>
-          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{logistiquePending.totaux?.montant?.toLocaleString('fr-FR') || 0} XOF</h2>
+          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{Math.round(logistiquePending.totaux?.montant || 0).toLocaleString('fr-FR')} XOF</h2>
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{logistiquePending.totaux?.lignes || 0} lignes</p>
         </div>
         <div style={{ padding: '20px', background: '#fce4ec', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL NON FACTURÉ</p>
           <h2 style={{ margin: '10px 0 0 0', color: '#c2185b' }}>
-            {((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString('fr-FR')} XOF
+            {Math.round((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString('fr-FR')} XOF
           </h2>
         </div>
       </div>
@@ -290,8 +290,8 @@ function FacturationTab({ fournisseurs }) {
                 { key: 'reception_numero', label: 'N° Réception' },
                 { key: 'produit_nom', label: 'Produit', render: (val, row) => `${row.produit_reference || ''} ${val || ''}` },
                 { key: 'quantite_pending', label: 'Qté', render: (val) => parseFloat(val).toFixed(0) },
-                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} XOF` },
-                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} XOF</strong> }
+                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF` },
+                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF</strong> }
               ]}
               data={stockPending.items || []}
             />
@@ -310,7 +310,7 @@ function FacturationTab({ fournisseurs }) {
               <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
                 {(logistiquePending.parType || []).map(t => (
                   <div key={t.type} style={{ padding: '10px 15px', background: '#f5f5f5', borderRadius: '8px' }}>
-                    <strong>{typeLabels[t.type] || t.type}:</strong> {t.montant.toLocaleString('fr-FR')} XOF ({t.lignes})
+                    <strong>{typeLabels[t.type] || t.type}:</strong> {Math.round(t.montant).toLocaleString('fr-FR')} XOF ({t.lignes})
                   </div>
                 ))}
               </div>
@@ -322,7 +322,7 @@ function FacturationTab({ fournisseurs }) {
                   { key: 'reception_numero', label: 'N° Réception' },
                   { key: 'type', label: 'Type', render: (val) => typeLabels[val] || val },
                   { key: 'description', label: 'Description' },
-                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} XOF</strong> }
+                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF</strong> }
                 ]}
                 data={logistiquePending.items || []}
               />
@@ -373,7 +373,7 @@ function FacturationTab({ fournisseurs }) {
                               <input type="checkbox" checked={selectedReceptions.includes(rec.id)} onChange={() => {}} style={{ marginRight: '10px' }} />
                               <strong>{rec.numero}</strong> - {new Date(rec.date_reception).toLocaleDateString('fr-FR')}
                             </div>
-                            <span style={{ fontWeight: 'bold', color: '#2196f3' }}>{parseFloat(rec.total_ht || 0).toLocaleString('fr-FR')} XOF</span>
+                            <span style={{ fontWeight: 'bold', color: '#2196f3' }}>{Math.round(parseFloat(rec.total_ht || 0)).toLocaleString('fr-FR')} XOF</span>
                           </div>
                           <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                             {(rec.lignes || []).length} article(s)
@@ -547,23 +547,23 @@ function FacturationTab({ fournisseurs }) {
               <div style={{ background: '#e8f5e9', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                   <span>Total Articles:</span>
-                  <strong>{totals.totalArticles.toLocaleString('fr-FR')} XOF</strong>
+                  <strong>{Math.round(totals.totalArticles).toLocaleString('fr-FR')} XOF</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                   <span>Total Logistique:</span>
-                  <strong>{totals.totalLogistique.toLocaleString('fr-FR')} XOF</strong>
+                  <strong>{Math.round(totals.totalLogistique).toLocaleString('fr-FR')} XOF</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #4caf50', paddingTop: '10px' }}>
                   <span style={{ fontSize: '18px' }}>Total HT:</span>
-                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{totals.totalHT.toLocaleString('fr-FR')} XOF</strong>
+                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{Math.round(totals.totalHT).toLocaleString('fr-FR')} XOF</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
                   <span>TVA facturée:</span>
-                  <strong>{(Number(factureForm.montantTVA) || 0).toLocaleString('fr-FR')} XOF</strong>
+                  <strong>{Math.round(Number(factureForm.montantTVA) || 0).toLocaleString('fr-FR')} XOF</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
                   <span style={{ fontSize: '18px' }}>Total TTC:</span>
-                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{totalTTC.toLocaleString('fr-FR')} XOF</strong>
+                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{Math.round(totalTTC).toLocaleString('fr-FR')} XOF</strong>
                 </div>
               </div>
 
@@ -939,7 +939,7 @@ export function GestionFournisseurs() {
           <div class="numero-cheque">N° ${chequeForm.numeroCheque || '________'}</div>
           
           <div class="montant-chiffres">
-            **${montant.toLocaleString('fr-FR')} XOF**
+            **${Math.round(montant).toLocaleString('fr-FR')} XOF**
           </div>
           
           <div style="margin-top: 20mm;">
@@ -1320,9 +1320,9 @@ export function GestionFournisseurs() {
                 { key: 'numeroFactureFournisseur', label: 'N° fournisseur' },
                 { key: 'fournisseur', label: 'Fournisseur', render: value => value?.nom || '—' },
                 { key: 'dateFacture', label: 'Date' },
-                { key: 'totalHT', label: 'HT', render: value => `${Number(value || 0).toLocaleString('fr-FR')} XOF` },
-                { key: 'totalTVA', label: 'TVA', render: value => `${Number(value || 0).toLocaleString('fr-FR')} XOF` },
-                { key: 'totalTTC', label: 'TTC', render: value => `${Number(value || 0).toLocaleString('fr-FR')} XOF` },
+                { key: 'totalHT', label: 'HT', render: value => `${Math.round(Number(value || 0)).toLocaleString('fr-FR')} XOF` },
+                { key: 'totalTVA', label: 'TVA', render: value => `${Math.round(Number(value || 0)).toLocaleString('fr-FR')} XOF` },
+                { key: 'totalTTC', label: 'TTC', render: value => `${Math.round(Number(value || 0)).toLocaleString('fr-FR')} XOF` },
                 { key: 'statut', label: 'Statut', render: value => value === 'brouillon' ? 'Brouillon — à vérifier' : value }
               ]}
               data={data.factures}
@@ -1465,7 +1465,7 @@ export function GestionFournisseurs() {
               onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
             >
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL ACHATS</p>
-              <h2 style={{ margin: '10px 0 0 0', color: '#f57c00' }}>{totalAchats.toLocaleString('fr-FR')} XOF</h2>
+              <h2 style={{ margin: '10px 0 0 0', color: '#f57c00' }}>{Math.round(totalAchats).toLocaleString('fr-FR')} XOF</h2>
               <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#999' }}>Cliquer pour détails</p>
             </div>
             <div 
@@ -1475,7 +1475,7 @@ export function GestionFournisseurs() {
               onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
             >
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL PAIEMENTS</p>
-              <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{totalPaiements.toLocaleString('fr-FR')} XOF</h2>
+              <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{Math.round(totalPaiements).toLocaleString('fr-FR')} XOF</h2>
               <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#999' }}>Cliquer pour détails</p>
             </div>
           </div>
@@ -1492,7 +1492,7 @@ export function GestionFournisseurs() {
                   const total = data.commandes
                     .filter(c => c.fournisseur?.id === row.id)
                     .reduce((sum, c) => sum + parseFloat(c.commande?.totalHT || 0), 0);
-                  return `${total.toLocaleString('fr-FR')} XOF`;
+                  return `${Math.round(total).toLocaleString('fr-FR')} XOF`;
                 }},
                 { key: 'evaluation', label: 'Évaluation', render: (val) => '⭐'.repeat(val || 3) }
               ]}
@@ -1586,9 +1586,9 @@ export function GestionFournisseurs() {
                   onChange={(e) => setForm({...form, coutsLogistiques: {...(form.coutsLogistiques || {}), autre: parseFloat(e.target.value) || 0}})} />
               </div>
               <div style={{ background: '#f8f9fa', padding: '10px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                <span>Total Articles: <strong>{(form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0).toLocaleString('fr-FR')} XOF</strong></span>
-                <span>Total Logistique: <strong>{Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0).toLocaleString('fr-FR')} XOF</strong></span>
-                <span>Total Commande: <strong>{((form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0) + Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0)).toLocaleString('fr-FR')} XOF</strong></span>
+                <span>Total Articles: <strong>{Math.round((form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0)).toLocaleString('fr-FR')} XOF</strong></span>
+                <span>Total Logistique: <strong>{Math.round(Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0)).toLocaleString('fr-FR')} XOF</strong></span>
+                <span>Total Commande: <strong>{Math.round((form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0) + Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0)).toLocaleString('fr-FR')} XOF</strong></span>
               </div>
               
               <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -1702,7 +1702,7 @@ export function GestionFournisseurs() {
                           const montantTotal = facturesImpayees.reduce((sum, fact) => sum + parseFloat(fact.montantTotal || fact.montantHT || 0), 0);
                           return { 
                             value: f.id, 
-                            label: `${f.nom} (${facturesImpayees.length} facture${facturesImpayees.length > 1 ? 's' : ''} - ${montantTotal.toLocaleString('fr-FR')} XOF)`
+                            label: `${f.nom} (${facturesImpayees.length} facture${facturesImpayees.length > 1 ? 's' : ''} - ${Math.round(montantTotal).toLocaleString('fr-FR')} XOF)`
                           };
                         })
                       ]} required />
@@ -1970,7 +1970,7 @@ export function GestionFournisseurs() {
                             <td style={{ padding: '10px' }}>{item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}</td>
                             <td style={{ padding: '10px' }}>{item.numero}</td>
                             <td style={{ padding: '10px' }}>{item.fournisseur || '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#f57c00' }}>{parseFloat(item.montant || 0).toLocaleString('fr-FR')} XOF</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#f57c00' }}>{Math.round(parseFloat(item.montant || 0)).toLocaleString('fr-FR')} XOF</td>
                             <td style={{ padding: '10px', textAlign: 'center' }}>{item.statut || '-'}</td>
                           </>
                         ) : (
@@ -1979,7 +1979,7 @@ export function GestionFournisseurs() {
                             <td style={{ padding: '10px' }}>{item.fournisseur || '-'}</td>
                             <td style={{ padding: '10px' }}>{item.modePaiement || '-'}</td>
                             <td style={{ padding: '10px' }}>{item.reference || '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#388e3c' }}>{parseFloat(item.montant || 0).toLocaleString('fr-FR')} XOF</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#388e3c' }}>{Math.round(parseFloat(item.montant || 0)).toLocaleString('fr-FR')} XOF</td>
                           </>
                         )}
                       </tr>
@@ -1990,7 +1990,7 @@ export function GestionFournisseurs() {
                       <tr style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
                         <td colSpan={3} style={{ padding: '12px' }}>TOTAL</td>
                         <td style={{ padding: '12px', textAlign: 'right' }}>
-                          {drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || 0), 0).toLocaleString('fr-FR')} XOF
+                          {Math.round(drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || 0), 0) || 0).toLocaleString('fr-FR')} XOF
                         </td>
                         <td></td>
                       </tr>
@@ -2329,19 +2329,19 @@ function EtatsCompteFournisseurTab() {
             <div style={{ padding: '15px', backgroundColor: '#e8f4f8', borderRadius: '8px' }}>
               <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Facturé</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#1976d2' }}>
-                {etatCompte.totalFacture?.toLocaleString('fr-FR') || 0} XOF
+                {Math.round(Number(etatCompte.totalFacture) || 0).toLocaleString('fr-FR')} XOF
               </p>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#e8f8f0', borderRadius: '8px' }}>
               <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Payé</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>
-                {etatCompte.totalPaye?.toLocaleString('fr-FR') || 0} XOF
+                {Math.round(Number(etatCompte.totalPaye) || 0).toLocaleString('fr-FR')} XOF
               </p>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
               <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Solde Dû</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: etatCompte.solde > 0 ? '#e74c3c' : '#27ae60' }}>
-                {etatCompte.solde?.toLocaleString('fr-FR') || 0} XOF
+                {Math.round(Number(etatCompte.solde) || 0).toLocaleString('fr-FR')} XOF
               </p>
             </div>
           </div>
@@ -2364,7 +2364,7 @@ function EtatsCompteFournisseurTab() {
                       <td style={{ padding: '12px' }}>{f.numeroFacture || 'N/A'}</td>
                       <td style={{ padding: '12px' }}>{new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
-                        {(f.montantTotal || f.montantHT || 0).toLocaleString('fr-FR')} XOF
+                        {Math.round(f.montantTotal || f.montantHT || 0).toLocaleString('fr-FR')} XOF
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         <InvoiceStatusBadge 
@@ -2401,7 +2401,7 @@ function EtatsCompteFournisseurTab() {
                       <td style={{ padding: '12px' }}>{p.reference || '-'}</td>
                       <td style={{ padding: '12px' }}>{p.modePaiement || '-'}</td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
-                        {(p.montant || 0).toLocaleString('fr-FR')} XOF
+                        {Math.round(p.montant || 0).toLocaleString('fr-FR')} XOF
                       </td>
                     </tr>
                   ))}

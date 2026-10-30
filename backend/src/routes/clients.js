@@ -631,7 +631,7 @@ router.post('/prix-produits', async (req, res) => {
     res.status(201).json({
       success: true,
       data: newPrix,
-      message: `Prix calculé: ${prixVenteCalcule.toFixed(2)} ${devise} (majoration ${marge}% du CMV)`
+      message: `Prix calculé: ${Number(prixVenteCalcule).toLocaleString('fr-FR', { maximumFractionDigits: devise === 'XOF' ? 0 : 2 })} ${devise} (majoration ${marge}% du CMV)`
     });
   } catch (error) {
     console.error('Erreur POST /api/clients/prix-produits:', error);
@@ -1389,7 +1389,7 @@ router.post('/etat-compte/email', async (req, res) => {
               <tr style="border-bottom: 1px solid #dee2e6;">
                 <td style="padding: 12px;">${f.numeroFacture}</td>
                 <td style="padding: 12px;">${new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
-                <td style="padding: 12px; text-align: right; font-weight: bold;">${(f.totalTTC || 0).toLocaleString('fr-FR')} XOF</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold;">${Math.round(f.totalTTC || 0).toLocaleString('fr-FR')} XOF</td>
                 <td style="padding: 12px; text-align: center;">
                   <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; background-color: ${f.statut === 'payee' ? '#d4edda' : '#fff3cd'}; color: ${f.statut === 'payee' ? '#155724' : '#856404'};">
                     ${f.statut === 'payee' ? '✅ Payée' : '⏳ En attente'}
@@ -1421,7 +1421,7 @@ router.post('/etat-compte/email', async (req, res) => {
                 <td style="padding: 12px;">${new Date(p.datePaiement).toLocaleDateString('fr-FR')}</td>
                 <td style="padding: 12px;">${p.reference || '-'}</td>
                 <td style="padding: 12px;">${p.modePaiement || '-'}</td>
-                <td style="padding: 12px; text-align: right; font-weight: bold; color: #27ae60;">${(p.montant || 0).toLocaleString('fr-FR')} XOF</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold; color: #27ae60;">${Math.round(p.montant || 0).toLocaleString('fr-FR')} XOF</td>
               </tr>
             `).join('')}
           </tbody>
@@ -1440,15 +1440,15 @@ router.post('/etat-compte/email', async (req, res) => {
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px;">
           <div style="padding: 15px; background-color: #e8f4f8; border-radius: 8px; text-align: center;">
             <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Total Facturé</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #3498db;">${totalFacture.toLocaleString('fr-FR')} XOF</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #3498db;">${Math.round(totalFacture).toLocaleString('fr-FR')} XOF</p>
           </div>
           <div style="padding: 15px; background-color: #e8f8f0; border-radius: 8px; text-align: center;">
             <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Total Payé</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #27ae60;">${totalPaye.toLocaleString('fr-FR')} XOF</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #27ae60;">${Math.round(totalPaye).toLocaleString('fr-FR')} XOF</p>
           </div>
           <div style="padding: 15px; background-color: #fff3e0; border-radius: 8px; text-align: center;">
             <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Solde Restant</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${solde > 0 ? '#e74c3c' : '#27ae60'};">${solde.toLocaleString('fr-FR')} XOF</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${solde > 0 ? '#e74c3c' : '#27ae60'};">${Math.round(solde).toLocaleString('fr-FR')} XOF</p>
           </div>
         </div>
 

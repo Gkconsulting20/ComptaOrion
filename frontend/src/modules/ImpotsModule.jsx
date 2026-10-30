@@ -257,8 +257,8 @@ export function ImpotsModule() {
               <td style={{ padding: '12px' }}>{String(declaration.type || '—').toUpperCase()}</td>
               <td style={{ padding: '12px' }}>
                 {Number(declaration.montant || 0) < 0
-                  ? `Crédit ${Math.abs(Number(declaration.montant)).toLocaleString('fr-FR')} XOF`
-                  : `${Number(declaration.montant || 0).toLocaleString('fr-FR')} XOF`}
+                  ? `Crédit ${Math.round(Math.abs(Number(declaration.montant))).toLocaleString('fr-FR')} XOF`
+                  : `${Math.round(Number(declaration.montant || 0)).toLocaleString('fr-FR')} XOF`}
               </td>
               <td style={{ padding: '12px' }}>{declaration.statut || '—'}</td>
               <td style={{ padding: '12px' }}>{declaration.numeroDeclaration || '—'}</td>
@@ -323,9 +323,9 @@ export function ImpotsModule() {
                     <p>Période: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}</p>
                     <table>
                       <tr><th>Type</th><th>Montant</th></tr>
-                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} XOF</td></tr>
-                      <tr><td>TVA récupérable (comptes 445*)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} XOF</td></tr>
-                      <tr class="total"><td>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</td><td>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} XOF</td></tr>
+                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${Math.round(tvaResume.tvaCollectee).toLocaleString('fr-FR')} XOF</td></tr>
+                      <tr><td>TVA récupérable (comptes 445*)</td><td>${Math.round(tvaResume.tvaDeductible).toLocaleString('fr-FR')} XOF</td></tr>
+                      <tr class="total"><td>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</td><td>${Math.round(Math.abs(tvaResume.tvaADecaisser)).toLocaleString('fr-FR')} XOF</td></tr>
                     </table>
                     <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
                       Document généré par ComptaOrion le ${new Date().toLocaleDateString('fr-FR')}
@@ -352,9 +352,9 @@ export function ImpotsModule() {
                     <p>Période: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}</p>
                     <table>
                       <tr><th>Type</th><th>Montant</th></tr>
-                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} XOF</td></tr>
-                      <tr><td>TVA récupérable (comptes 445*)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} XOF</td></tr>
-                      <tr><td><strong>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</strong></td><td><strong>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} XOF</strong></td></tr>
+                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${Math.round(tvaResume.tvaCollectee).toLocaleString('fr-FR')} XOF</td></tr>
+                      <tr><td>TVA récupérable (comptes 445*)</td><td>${Math.round(tvaResume.tvaDeductible).toLocaleString('fr-FR')} XOF</td></tr>
+                      <tr><td><strong>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</strong></td><td><strong>${Math.round(Math.abs(tvaResume.tvaADecaisser)).toLocaleString('fr-FR')} XOF</strong></td></tr>
                     </table>
                   </body>
                 </html>
@@ -381,7 +381,7 @@ export function ImpotsModule() {
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)'; }}
           >
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Collectée</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaCollectee.toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(tvaResume.tvaCollectee).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Comptes 443* hors 4434 · Voir les lignes</div>
             <div style={{ fontSize: '11px', opacity: 0.8, marginTop: 7 }}>
               Comptes retenus : {tvaResume.comptesCollectee.length ? tvaResume.comptesCollectee.map((account) => account.numero).join(', ') : 'aucun compte mouvementé'}
@@ -395,7 +395,7 @@ export function ImpotsModule() {
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)'; }}
           >
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Déductible</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaDeductible.toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(tvaResume.tvaDeductible).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Comptes 445* · Voir les lignes</div>
             <div style={{ fontSize: '11px', opacity: 0.8, marginTop: 7 }}>
               Comptes retenus : {tvaResume.comptesDeductible.length ? tvaResume.comptesDeductible.map((account) => account.numero).join(', ') : 'aucun compte mouvementé'}
@@ -404,7 +404,7 @@ export function ImpotsModule() {
 
           <div style={{ padding: '20px', backgroundColor: tvaResume.tvaADecaisser >= 0 ? '#27ae60' : '#9b59b6', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>{tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(Math.abs(tvaResume.tvaADecaisser)).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>{tvaResume.tvaADecaisser >= 0 ? 'Collectée - Déductible' : 'À reporter'}</div>
           </div>
         </div>
@@ -450,7 +450,7 @@ export function ImpotsModule() {
           <div key={card.title} style={{ padding: 18, borderRadius: 8, color: '#fff', background: card.color }}>
             <div style={{ fontSize: 13 }}>{card.title}</div>
             <strong style={{ display: 'block', marginTop: 8, fontSize: 22 }}>
-              {Number(card.value || 0).toLocaleString('fr-FR')} XOF
+              {Math.round(Number(card.value || 0)).toLocaleString('fr-FR')} XOF
             </strong>
           </div>
         ))}

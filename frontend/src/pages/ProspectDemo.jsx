@@ -84,7 +84,7 @@ const DEMO_PRODUCTS = [
 ];
 
 function formatAmount(value) {
-  return `${value.toLocaleString('fr-FR')} XOF`;
+  return `${Math.round(Number(value) || 0).toLocaleString('fr-FR')} XOF`;
 }
 
 function DemoPanel({ section }) {

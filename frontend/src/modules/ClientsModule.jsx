@@ -346,7 +346,7 @@ function DevisTab() {
                       { value: '', label: 'Ligne libre / service' },
                       ...produits.map((product) => ({
                         value: product.id,
-                        label: `${product.reference || ''} ${product.nom} — ${Number(product.prixVente || 0).toLocaleString('fr-FR')} XOF`,
+                        label: `${product.reference || ''} ${product.nom} — ${Math.round(Number(product.prixVente || 0)).toLocaleString('fr-FR')} XOF`,
                       }))
                     ]}
                   />
@@ -430,11 +430,11 @@ function DevisTab() {
             <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <strong>Total HT:</strong>
-                <span>{totals.totalHT.toFixed(2)} XOF</span>
+                <span>{Math.round(totals.totalHT).toLocaleString('fr-FR')} XOF</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <strong>TVA ({devisData.tauxTVA}%):</strong>
-                <span>{totals.montantTVA.toFixed(2)} XOF</span>
+                <span>{Math.round(totals.montantTVA).toLocaleString('fr-FR')} XOF</span>
               </div>
               <div style={{ 
                 display: 'flex', 
@@ -445,7 +445,7 @@ function DevisTab() {
                 borderTop: '2px solid #dee2e6' 
               }}>
                 <strong>Total TTC:</strong>
-                <span>{totals.totalTTC.toFixed(2)} XOF</span>
+                <span>{Math.round(totals.totalTTC).toLocaleString('fr-FR')} XOF</span>
               </div>
             </div>
 
@@ -507,7 +507,7 @@ function DevisTab() {
               { key: 'total', label: 'Total', align: 'right', render: (val, row) => {
                 const montant = row.quantite * row.prixUnitaire;
                 const remise = montant * (row.remise / 100);
-                return `${(montant - remise).toFixed(2)} XOF`;
+                return `${Math.round(montant - remise).toLocaleString('fr-FR')} XOF`;
               }}
             ],
             data: selectedDevis.items
@@ -664,7 +664,7 @@ function BonsLivraisonTab() {
                 .filter(f => f.statut === 'validee' || f.statut === 'en_attente')
                 .map(facture => (
                   <option key={facture.id} value={facture.id}>
-                    {facture.numeroFacture} - {facture.client?.nom} - {parseFloat(facture.totalTTC || 0).toLocaleString()} XOF
+                    {facture.numeroFacture} - {facture.client?.nom} - {Math.round(parseFloat(facture.totalTTC || 0)).toLocaleString('fr-FR')} XOF
                   </option>
                 ))}
             </select>
@@ -681,7 +681,7 @@ function BonsLivraisonTab() {
                 ✅ Facture sélectionnée: {selectedFacture.numeroFacture}
               </p>
               <p style={{ margin: '5px 0 0 0', fontSize: '14px' }}>
-                Client: {selectedFacture.client?.nom} | Montant: {parseFloat(selectedFacture.totalTTC || 0).toLocaleString()} XOF
+                Client: {selectedFacture.client?.nom} | Montant: {Math.round(parseFloat(selectedFacture.totalTTC || 0)).toLocaleString('fr-FR')} XOF
               </p>
             </div>
           )}
@@ -887,7 +887,7 @@ function FacturesClientTab() {
           { key: 'numeroFacture', label: 'N° Facture' },
           { key: 'client', label: 'Client', render: (_, row) => row.client?.nom || 'N/A' },
           { key: 'dateFacture', label: 'Date', render: (val) => new Date(val).toLocaleDateString() },
-          { key: 'totalTTC', label: 'Montant TTC', render: (val) => `${parseFloat(val).toLocaleString()} XOF` },
+          { key: 'totalTTC', label: 'Montant TTC', render: (val) => `${Math.round(parseFloat(val)).toLocaleString('fr-FR')} XOF` },
           { key: 'statut', label: 'Statut', render: (_, row) => (
             <InvoiceStatusBadge 
               statut={row.statut} 
@@ -983,7 +983,7 @@ function FacturesClientTab() {
                         { value: '', label: 'Ligne libre / service' },
                         ...produits.map((product) => ({
                           value: product.id,
-                          label: `${product.reference || ''} ${product.nom} — ${Number(product.prixVente || 0).toLocaleString('fr-FR')} XOF`,
+                          label: `${product.reference || ''} ${product.nom} — ${Math.round(Number(product.prixVente || 0)).toLocaleString('fr-FR')} XOF`,
                         }))
                       ]}
                     />
@@ -1055,23 +1055,23 @@ function FacturesClientTab() {
                 <strong>Client:</strong> {clients.find(c => c.id === factureData.clientId)?.nom}
               </div>
               <div style={{ marginBottom: '15px' }}>
-                <strong>Total HT:</strong> {factureData.items.reduce((sum, item) => 
+                <strong>Total HT:</strong> {Math.round(factureData.items.reduce((sum, item) =>
                   sum + item.quantite * item.prixUnitaire * (1 - item.remise / 100), 0
-                ).toLocaleString()} XOF
+                )).toLocaleString('fr-FR')} XOF
               </div>
               <div style={{ marginBottom: '15px' }}>
-                <strong>TVA ({factureData.tauxTVA}%):</strong> {(
-                  factureData.items.reduce((sum, item) => 
+                <strong>TVA ({factureData.tauxTVA}%):</strong> {Math.round(
+                  factureData.items.reduce((sum, item) =>
                     sum + item.quantite * item.prixUnitaire * (1 - item.remise / 100), 0
                   ) * factureData.tauxTVA / 100
-                ).toLocaleString()} XOF
+                ).toLocaleString('fr-FR')} XOF
               </div>
               <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                <strong>Total TTC:</strong> {(
+                <strong>Total TTC:</strong> {Math.round((
                   factureData.items.reduce((sum, item) => 
                     sum + item.quantite * item.prixUnitaire * (1 - item.remise / 100), 0
                   ) * (1 + factureData.tauxTVA / 100)
-                ).toLocaleString()} XOF
+                )).toLocaleString('fr-FR')} XOF
               </div>
             </div>
 
@@ -1125,11 +1125,11 @@ function FacturesClientTab() {
             {
               title: 'Montants',
               fields: [
-                { label: 'Total HT', value: `${parseFloat(selectedFacture.totalHT || 0).toLocaleString()} XOF` },
-                { label: 'TVA', value: `${parseFloat(selectedFacture.montantTVA || 0).toLocaleString()} XOF` },
-                { label: 'Total TTC', value: `${parseFloat(selectedFacture.totalTTC || 0).toLocaleString()} XOF`, highlight: true },
-                { label: 'Montant Payé', value: `${parseFloat(selectedFacture.montantPaye || 0).toLocaleString()} XOF` },
-                { label: 'Reste à Payer', value: `${parseFloat((selectedFacture.totalTTC || 0) - (selectedFacture.montantPaye || 0)).toLocaleString()} XOF` },
+                { label: 'Total HT', value: `${Math.round(parseFloat(selectedFacture.totalHT || 0)).toLocaleString('fr-FR')} XOF` },
+                { label: 'TVA', value: `${Math.round(parseFloat(selectedFacture.montantTVA || 0)).toLocaleString('fr-FR')} XOF` },
+                { label: 'Total TTC', value: `${Math.round(parseFloat(selectedFacture.totalTTC || 0)).toLocaleString('fr-FR')} XOF`, highlight: true },
+                { label: 'Montant Payé', value: `${Math.round(parseFloat(selectedFacture.montantPaye || 0)).toLocaleString('fr-FR')} XOF` },
+                { label: 'Reste à Payer', value: `${Math.round(parseFloat((selectedFacture.totalTTC || 0) - (selectedFacture.montantPaye || 0))).toLocaleString('fr-FR')} XOF` },
               ]
             }
           ]}
@@ -1138,8 +1138,8 @@ function FacturesClientTab() {
             columns: [
               { key: 'description', label: 'Description' },
               { key: 'quantite', label: 'Qté', render: (val) => val || 0 },
-              { key: 'prixUnitaire', label: 'Prix Unit.', render: (val) => `${parseFloat(val || 0).toLocaleString()} XOF` },
-              { key: 'montantHT', label: 'Montant HT', render: (val, row) => `${parseFloat((row.quantite || 0) * (row.prixUnitaire || 0)).toLocaleString()} XOF` }
+              { key: 'prixUnitaire', label: 'Prix Unit.', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF` },
+              { key: 'montantHT', label: 'Montant HT', render: (val, row) => `${Math.round(parseFloat((row.quantite || 0) * (row.prixUnitaire || 0))).toLocaleString('fr-FR')} XOF` }
             ],
             data: selectedFacture.items
           }] : []}
@@ -1389,7 +1389,7 @@ function RapportsTab() {
               onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}>
                 <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>CHIFFRE D'AFFAIRES</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {parseFloat(rapportPeriode.chiffreAffaires || 0).toLocaleString()} XOF
+                  {Math.round(parseFloat(rapportPeriode.chiffreAffaires || 0)).toLocaleString('fr-FR')} XOF
                 </div>
                 <div style={{ fontSize: '10px', marginTop: '8px', opacity: 0.7 }}>Cliquer pour détails</div>
               </div>
@@ -1427,7 +1427,7 @@ function RapportsTab() {
               onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}>
                 <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>PAIEMENTS REÇUS</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {parseFloat(rapportPeriode.paiementsRecus || 0).toLocaleString()} XOF
+                  {Math.round(parseFloat(rapportPeriode.paiementsRecus || 0)).toLocaleString('fr-FR')} XOF
                 </div>
                 <div style={{ fontSize: '10px', marginTop: '8px', opacity: 0.7 }}>Cliquer pour détails</div>
               </div>
@@ -1446,7 +1446,7 @@ function RapportsTab() {
               onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}>
                 <div style={{ fontSize: '12px', marginBottom: '5px', opacity: 0.9 }}>SOLDES IMPAYÉS</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {parseFloat(rapportPeriode.soldesImpayes || 0).toLocaleString()} XOF
+                  {Math.round(parseFloat(rapportPeriode.soldesImpayes || 0)).toLocaleString('fr-FR')} XOF
                 </div>
                 <div style={{ fontSize: '10px', marginTop: '8px', opacity: 0.7 }}>Cliquer pour détails</div>
               </div>
@@ -1512,7 +1512,7 @@ function RapportsTab() {
                   EN RETARD
                 </div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {parseFloat(creancesData.totaux?.enRetard || 0).toLocaleString()} XOF
+                  {Math.round(parseFloat(creancesData.totaux?.enRetard || 0)).toLocaleString('fr-FR')} XOF
                 </div>
                 <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
                   {creancesData.facturesParPeriode?.enRetard?.length || 0} facture(s)
@@ -1531,7 +1531,7 @@ function RapportsTab() {
                   0-30 JOURS
                 </div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {parseFloat(creancesData.totaux?.de0a30jours || 0).toLocaleString()} XOF
+                  {Math.round(parseFloat(creancesData.totaux?.de0a30jours || 0)).toLocaleString('fr-FR')} XOF
                 </div>
                 <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
                   {creancesData.facturesParPeriode?.de0a30jours?.length || 0} facture(s)
@@ -1550,7 +1550,7 @@ function RapportsTab() {
                   31-60 JOURS
                 </div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {parseFloat(creancesData.totaux?.de31a60jours || 0).toLocaleString()} XOF
+                  {Math.round(parseFloat(creancesData.totaux?.de31a60jours || 0)).toLocaleString('fr-FR')} XOF
                 </div>
                 <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
                   {creancesData.facturesParPeriode?.de31a60jours?.length || 0} facture(s)
@@ -1569,7 +1569,7 @@ function RapportsTab() {
                   61-90 JOURS
                 </div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {parseFloat(creancesData.totaux?.de61a90jours || 0).toLocaleString()} XOF
+                  {Math.round(parseFloat(creancesData.totaux?.de61a90jours || 0)).toLocaleString('fr-FR')} XOF
                 </div>
                 <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
                   {creancesData.facturesParPeriode?.de61a90jours?.length || 0} facture(s)
@@ -1588,7 +1588,7 @@ function RapportsTab() {
                   90+ JOURS
                 </div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-                  {parseFloat(creancesData.totaux?.plus90jours || 0).toLocaleString()} XOF
+                  {Math.round(parseFloat(creancesData.totaux?.plus90jours || 0)).toLocaleString('fr-FR')} XOF
                 </div>
                 <div style={{ fontSize: '11px', marginTop: '5px', opacity: 0.8 }}>
                   {creancesData.facturesParPeriode?.plus90jours?.length || 0} facture(s)
@@ -1605,7 +1605,7 @@ function RapportsTab() {
               fontWeight: 'bold',
               fontSize: '18px'
             }}>
-              TOTAL CRÉANCES: {parseFloat(creancesData.totaux?.total || 0).toLocaleString()} XOF
+              TOTAL CRÉANCES: {Math.round(parseFloat(creancesData.totaux?.total || 0)).toLocaleString('fr-FR')} XOF
             </div>
           </>
         )}
@@ -1619,7 +1619,7 @@ function RapportsTab() {
           <div className="metric-icon">💰</div>
           <div className="metric-info">
             <div className="metric-label">Chiffre d'Affaires Total</div>
-            <div className="metric-value">{parseFloat(chiffreAffaireTotal || 0).toLocaleString()} XOF</div>
+            <div className="metric-value">{Math.round(parseFloat(chiffreAffaireTotal || 0)).toLocaleString('fr-FR')} XOF</div>
           </div>
         </div>
 
@@ -1628,7 +1628,7 @@ function RapportsTab() {
           <div className="metric-info">
             <div className="metric-label">Échéances 7 jours</div>
             <div className="metric-value">{echeances.prochains7jours.count} factures</div>
-            <small>{parseFloat(echeances.prochains7jours.montant || 0).toLocaleString()} XOF</small>
+            <small>{Math.round(parseFloat(echeances.prochains7jours.montant || 0)).toLocaleString('fr-FR')} XOF</small>
           </div>
         </div>
 
@@ -1637,7 +1637,7 @@ function RapportsTab() {
           <div className="metric-info">
             <div className="metric-label">Échéances 30 jours</div>
             <div className="metric-value">{echeances.prochains30jours.count} factures</div>
-            <small>{parseFloat(echeances.prochains30jours.montant || 0).toLocaleString()} XOF</small>
+            <small>{Math.round(parseFloat(echeances.prochains30jours.montant || 0)).toLocaleString('fr-FR')} XOF</small>
           </div>
         </div>
 
@@ -1658,7 +1658,7 @@ function RapportsTab() {
               columns={[
                 { key: 'nom', label: 'Client' },
                 { key: 'nombreFactures', label: 'Factures', render: (val) => val || 0 },
-                { key: 'chiffreAffaires', label: 'CA', render: (val) => `${parseFloat(val || 0).toLocaleString()} XOF` }
+                { key: 'chiffreAffaires', label: 'CA', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF` }
               ]}
               data={topClients}
             />
@@ -1674,7 +1674,7 @@ function RapportsTab() {
               columns={[
                 { key: 'nom', label: 'Client' },
                 { key: 'nombreFactures', label: 'Factures', render: (val) => val || 0 },
-                { key: 'montantRetard', label: 'Montant', render: (val) => `${parseFloat(val || 0).toLocaleString()} XOF` }
+                { key: 'montantRetard', label: 'Montant', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF` }
               ]}
               data={clientsRetard}
             />
@@ -1691,7 +1691,7 @@ function RapportsTab() {
                 columns={[
                   { key: 'nom', label: 'Client' },
                   { key: 'nombrePaiements', label: 'Nb Paiements', render: (val) => val || 0 },
-                  { key: 'totalPaye', label: 'Total Payé', render: (val) => `${parseFloat(val || 0).toLocaleString()} XOF` }
+                  { key: 'totalPaye', label: 'Total Payé', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF` }
                 ]}
                 data={distributionPaiements}
               />
@@ -1766,7 +1766,7 @@ function RapportsTab() {
                             <td style={{ padding: '10px' }}>{item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}</td>
                             <td style={{ padding: '10px' }}>{item.numero}</td>
                             <td style={{ padding: '10px' }}>{item.client || '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#3498db' }}>{parseFloat(item.montant || 0).toLocaleString()} XOF</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#3498db' }}>{Math.round(parseFloat(item.montant || 0)).toLocaleString('fr-FR')} XOF</td>
                             <td style={{ padding: '10px', textAlign: 'center' }}>
                               <span style={{
                                 padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
@@ -1781,7 +1781,7 @@ function RapportsTab() {
                             <td style={{ padding: '10px' }}>{item.client || '-'}</td>
                             <td style={{ padding: '10px' }}>{item.modePaiement || '-'}</td>
                             <td style={{ padding: '10px' }}>{item.reference || '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>{parseFloat(item.montant || 0).toLocaleString()} XOF</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>{Math.round(parseFloat(item.montant || 0)).toLocaleString('fr-FR')} XOF</td>
                           </>
                         ) : (
                           <>
@@ -1789,7 +1789,7 @@ function RapportsTab() {
                             <td style={{ padding: '10px' }}>{item.numero}</td>
                             <td style={{ padding: '10px' }}>{item.client || '-'}</td>
                             <td style={{ padding: '10px', color: '#e74c3c' }}>{item.echeance ? new Date(item.echeance).toLocaleDateString('fr-FR') : '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#e74c3c' }}>{parseFloat(item.solde || 0).toLocaleString()} XOF</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#e74c3c' }}>{Math.round(parseFloat(item.solde || 0)).toLocaleString('fr-FR')} XOF</td>
                           </>
                         )}
                       </tr>
@@ -1799,7 +1799,7 @@ function RapportsTab() {
                     <tr style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
                       <td colSpan={drillModal.type === 'paiements' ? 4 : 3} style={{ padding: '12px' }}>TOTAL</td>
                       <td style={{ padding: '12px', textAlign: 'right', color: drillModal.type === 'impayes' ? '#e74c3c' : '#333' }}>
-                        {drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || item.solde || 0), 0).toLocaleString()} XOF
+                        {Math.round(drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || item.solde || 0), 0) || 0).toLocaleString('fr-FR')} XOF
                       </td>
                       {(drillModal.type === 'chiffre-affaires' || drillModal.type === 'factures') && <td></td>}
                     </tr>
@@ -3028,15 +3028,15 @@ function EtatsCompteTab() {
         <div class="summary">
           <div class="summary-box facture">
             <div class="label">Total Facturé</div>
-            <div class="value">${etatCompte.totalFacture?.toLocaleString('fr-FR') || 0} XOF</div>
+            <div class="value">${Math.round(Number(etatCompte.totalFacture) || 0).toLocaleString('fr-FR')} XOF</div>
           </div>
           <div class="summary-box paye">
             <div class="label">Total Payé</div>
-            <div class="value">${etatCompte.totalPaye?.toLocaleString('fr-FR') || 0} XOF</div>
+            <div class="value">${Math.round(Number(etatCompte.totalPaye) || 0).toLocaleString('fr-FR')} XOF</div>
           </div>
           <div class="summary-box solde">
             <div class="label">Solde Restant</div>
-            <div class="value">${etatCompte.solde?.toLocaleString('fr-FR') || 0} XOF</div>
+            <div class="value">${Math.round(Number(etatCompte.solde) || 0).toLocaleString('fr-FR')} XOF</div>
           </div>
         </div>
 
@@ -3188,19 +3188,19 @@ function EtatsCompteTab() {
             <div style={{ padding: '15px', backgroundColor: '#e8f4f8', borderRadius: '8px' }}>
               <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Facturé</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>
-                {etatCompte.totalFacture?.toLocaleString('fr-FR') || 0} XOF
+                {Math.round(Number(etatCompte.totalFacture) || 0).toLocaleString('fr-FR')} XOF
               </p>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#e8f8f0', borderRadius: '8px' }}>
               <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Payé</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>
-                {etatCompte.totalPaye?.toLocaleString('fr-FR') || 0} XOF
+                {Math.round(Number(etatCompte.totalPaye) || 0).toLocaleString('fr-FR')} XOF
               </p>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
               <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Solde Restant</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: etatCompte.solde > 0 ? '#e74c3c' : '#27ae60' }}>
-                {etatCompte.solde?.toLocaleString('fr-FR') || 0} XOF
+                {Math.round(Number(etatCompte.solde) || 0).toLocaleString('fr-FR')} XOF
               </p>
             </div>
           </div>
@@ -3420,10 +3420,10 @@ function TablePrixTab() {
           columns={[
             { key: 'produitNom', label: 'Produit' },
             { key: 'produitReference', label: 'Référence' },
-            { key: 'coutCMV', label: 'CMV actuel', render: (val, row) => `${parseFloat(val ?? row.coutAchat ?? 0).toLocaleString('fr-FR')} XOF` },
+            { key: 'coutCMV', label: 'CMV actuel', render: (val, row) => `${Math.round(parseFloat(val ?? row.coutAchat ?? 0)).toLocaleString('fr-FR')} XOF` },
             { key: 'margeBruteCible', label: 'Majoration CMV', render: (val) => `${val}%` },
-            { key: 'prixVenteCalcule', label: 'Prix Calculé', render: (val) => `${parseFloat(val).toLocaleString('fr-FR')} XOF` },
-            { key: 'prixVenteManuel', label: 'Prix Manuel', render: (val) => val ? `${parseFloat(val).toLocaleString('fr-FR')} XOF` : '-' },
+            { key: 'prixVenteCalcule', label: 'Prix Calculé', render: (val) => `${Math.round(parseFloat(val)).toLocaleString('fr-FR')} XOF` },
+            { key: 'prixVenteManuel', label: 'Prix Manuel', render: (val) => val ? `${Math.round(parseFloat(val)).toLocaleString('fr-FR')} XOF` : '-' },
             { key: 'categorieClient', label: 'Catégorie' },
             { key: 'actif', label: 'Actif', render: (val) => val ? '✅' : '❌' }
           ]}
@@ -3500,13 +3500,13 @@ function TablePrixTab() {
                 <div>
                   <span style={{ color: '#666', fontSize: '12px' }}>Prix de vente calculé:</span>
                   <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#155724' }}>
-                    {calculPreview.prixVenteCalcule?.toLocaleString('fr-FR')} XOF
+                    {Math.round(calculPreview.prixVenteCalcule || 0).toLocaleString('fr-FR')} XOF
                   </p>
                 </div>
                 <div>
                   <span style={{ color: '#666', fontSize: '12px' }}>Marge ajoutée:</span>
                   <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#28a745' }}>
-                    {calculPreview.beneficeBrut?.toLocaleString('fr-FR')} XOF
+                    {Math.round(calculPreview.beneficeBrut || 0).toLocaleString('fr-FR')} XOF
                   </p>
                 </div>
               </div>

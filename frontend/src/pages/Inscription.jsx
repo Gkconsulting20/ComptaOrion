@@ -333,7 +333,7 @@ export function Inscription() {
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <strong style={{ fontSize: '20px', color: '#667eea' }}>
-                          {parseFloat(plan.prix).toLocaleString()} {plan.devise || 'XOF'}
+                          {parseFloat(plan.prix).toLocaleString('fr-FR', { maximumFractionDigits: plan.devise === 'XOF' || !plan.devise ? 0 : 2 })} {plan.devise || 'XOF'}
                         </strong>
                         <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#999' }}>
                           /{plan.periode || 'mois'}
@@ -378,7 +378,7 @@ export function Inscription() {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
                     <span style={{ color: '#666' }}>Prix mensuel:</span>
-                    <strong>{parseFloat(selectedPlan.prix).toLocaleString()} {selectedPlan.devise || 'XOF'}</strong>
+                    <strong>{parseFloat(selectedPlan.prix).toLocaleString('fr-FR', { maximumFractionDigits: selectedPlan.devise === 'XOF' || !selectedPlan.devise ? 0 : 2 })} {selectedPlan.devise || 'XOF'}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
                     <span style={{ color: '#666' }}>Durée:</span>
@@ -393,7 +393,7 @@ export function Inscription() {
                   }}>
                     <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#2e7d32' }}>Total:</span>
                     <strong style={{ fontSize: '22px', color: '#2e7d32' }}>
-                      {montantTotal.toLocaleString()} {selectedPlan.devise || 'XOF'}
+                      {montantTotal.toLocaleString('fr-FR', { maximumFractionDigits: selectedPlan.devise === 'XOF' || !selectedPlan.devise ? 0 : 2 })} {selectedPlan.devise || 'XOF'}
                     </strong>
                   </div>
                 </div>
@@ -498,7 +498,7 @@ export function Inscription() {
                 transition: 'background-color 0.2s'
               }}
             >
-              {submitting ? 'Traitement en cours...' : `Procéder au Paiement (${montantTotal.toLocaleString()} ${selectedPlan?.devise || 'XOF'})`}
+              {submitting ? 'Traitement en cours...' : `Procéder au Paiement (${montantTotal.toLocaleString('fr-FR', { maximumFractionDigits: selectedPlan?.devise === 'XOF' || !selectedPlan?.devise ? 0 : 2 })} ${selectedPlan?.devise || 'XOF'})`}
             </button>
 
             <p style={{ marginTop: '20px', fontSize: '13px', color: '#999', textAlign: 'center' }}>

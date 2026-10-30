@@ -207,19 +207,19 @@ export function TresorerieModule() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
           <div style={{ padding: '20px', backgroundColor: '#667eea', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Solde Total</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{parseFloat(dashboardStats.solde_total || 0).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(parseFloat(dashboardStats.solde_total || 0)).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>{dashboardStats.nb_comptes_actifs || 0} comptes actifs</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: '#27ae60', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Solde Banques</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{parseFloat(dashboardStats.solde_banques || 0).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(parseFloat(dashboardStats.solde_banques || 0)).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Comptes bancaires</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: '#f39c12', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Solde Caisses</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{parseFloat(dashboardStats.solde_caisses || 0).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(parseFloat(dashboardStats.solde_caisses || 0)).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Liquidités</div>
           </div>
         </div>
@@ -252,7 +252,7 @@ export function TresorerieModule() {
                   </span>
                 </td>
                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: parseFloat(compte.soldeActuel) >= 0 ? '#27ae60' : '#e74c3c' }}>
-                  {parseFloat(compte.soldeActuel || 0).toLocaleString('fr-FR')} XOF
+                  {Math.round(parseFloat(compte.soldeActuel || 0)).toLocaleString('fr-FR')} XOF
                 </td>
               </tr>
             ))}
@@ -315,9 +315,9 @@ export function TresorerieModule() {
                     {compte.type || 'banque'}
                   </span>
                 </td>
-                <td style={{ padding: '12px', textAlign: 'right' }}>{parseFloat(compte.soldeInitial || 0).toLocaleString('fr-FR')} XOF</td>
+                <td style={{ padding: '12px', textAlign: 'right' }}>{Math.round(parseFloat(compte.soldeInitial || 0)).toLocaleString('fr-FR')} XOF</td>
                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: parseFloat(compte.soldeActuel) >= 0 ? '#27ae60' : '#e74c3c' }}>
-                  {parseFloat(compte.soldeActuel || 0).toLocaleString('fr-FR')} XOF
+                  {Math.round(parseFloat(compte.soldeActuel || 0)).toLocaleString('fr-FR')} XOF
                 </td>
                 <td style={{ padding: '12px', textAlign: 'center' }}>
                   <span style={{
@@ -443,7 +443,7 @@ export function TresorerieModule() {
                 <td style={{ padding: '12px' }}>{transaction.description || '-'}</td>
                 <td style={{ padding: '12px' }}>{transaction.categorie || '-'}</td>
                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: transaction.type === 'encaissement' ? '#27ae60' : '#e74c3c' }}>
-                  {transaction.type === 'encaissement' ? '+' : '-'}{parseFloat(transaction.montant || 0).toLocaleString('fr-FR')} XOF
+                  {transaction.type === 'encaissement' ? '+' : '-'}{Math.round(parseFloat(transaction.montant || 0)).toLocaleString('fr-FR')} XOF
                 </td>
               </tr>
             ))}
@@ -524,27 +524,27 @@ export function TresorerieModule() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '30px' }}>
           <div style={{ padding: '20px', backgroundColor: '#667eea', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Solde Actuel</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{parseFloat(previsions.soldeActuel || 0).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(parseFloat(previsions.soldeActuel || 0)).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Tous comptes confondus</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: '#27ae60', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Créances à Recevoir</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>+{parseFloat(previsions.creances?.total || 0).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>+{Math.round(parseFloat(previsions.creances?.total || 0)).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>{previsions.creances?.count || 0} facture(s) client</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Dettes à Payer</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>-{parseFloat(previsions.dettes?.total || 0).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>-{Math.round(parseFloat(previsions.dettes?.total || 0)).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>{previsions.dettes?.count || 0} facture(s) fournisseur</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: variationColor, color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Solde Prévu</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{parseFloat(previsions.soldePrevu || 0).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(parseFloat(previsions.soldePrevu || 0)).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>
-              {variation >= 0 ? '↗' : '↘'} {Math.abs(variation).toLocaleString('fr-FR')} XOF
+              {variation >= 0 ? '↗' : '↘'} {Math.round(Math.abs(variation)).toLocaleString('fr-FR')} XOF
             </div>
           </div>
         </div>
@@ -564,13 +564,13 @@ export function TresorerieModule() {
               <tr key={index} style={{ borderBottom: '1px solid #dee2e6' }}>
                 <td style={{ padding: '12px', fontWeight: 'bold' }}>{proj.periode}</td>
                 <td style={{ padding: '12px', textAlign: 'right', color: '#27ae60' }}>
-                  +{parseFloat(proj.encaissements || 0).toLocaleString('fr-FR')} XOF
+                  +{Math.round(parseFloat(proj.encaissements || 0)).toLocaleString('fr-FR')} XOF
                 </td>
                 <td style={{ padding: '12px', textAlign: 'right', color: '#e74c3c' }}>
-                  -{parseFloat(proj.decaissements || 0).toLocaleString('fr-FR')} XOF
+                  -{Math.round(parseFloat(proj.decaissements || 0)).toLocaleString('fr-FR')} XOF
                 </td>
                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: parseFloat(proj.soldePrevu) >= 0 ? '#27ae60' : '#e74c3c' }}>
-                  {parseFloat(proj.soldePrevu || 0).toLocaleString('fr-FR')} XOF
+                  {Math.round(parseFloat(proj.soldePrevu || 0)).toLocaleString('fr-FR')} XOF
                 </td>
               </tr>
             ))}
@@ -592,7 +592,7 @@ export function TresorerieModule() {
                   <tr key={facture.id} style={{ borderBottom: '1px solid #dee2e6' }}>
                     <td style={{ padding: '12px' }}>{facture.numero || `#${facture.id}`}</td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
-                      {parseFloat(facture.montant || 0).toLocaleString('fr-FR')} XOF
+                      {Math.round(parseFloat(facture.montant || 0)).toLocaleString('fr-FR')} XOF
                     </td>
                   </tr>
                 ))}
@@ -621,7 +621,7 @@ export function TresorerieModule() {
                   <tr key={facture.id} style={{ borderBottom: '1px solid #dee2e6' }}>
                     <td style={{ padding: '12px' }}>{facture.numero || `#${facture.id}`}</td>
                     <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: '#e74c3c' }}>
-                      {parseFloat(facture.montant || 0).toLocaleString('fr-FR')} XOF
+                      {Math.round(parseFloat(facture.montant || 0)).toLocaleString('fr-FR')} XOF
                     </td>
                   </tr>
                 ))}
@@ -707,7 +707,7 @@ export function TresorerieModule() {
                   {compteComptable ? `${compteComptable.numero} - ${compteComptable.nom}` : '-'}
                 </td>
                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
-                  {parseFloat(compte.soldeInitial || 0).toLocaleString('fr-FR')} XOF
+                  {Math.round(parseFloat(compte.soldeInitial || 0)).toLocaleString('fr-FR')} XOF
                 </td>
                 <td style={{ padding: '12px', textAlign: 'center' }}>
                   <span style={{
@@ -1088,19 +1088,19 @@ export function TresorerieModule() {
             <div style={{ padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
               <div style={{ fontSize: '12px', color: '#1976d2', marginBottom: '5px' }}>Solde Relevé</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
-                {parseFloat(rapprochement.soldeReleve || 0).toLocaleString('fr-FR')} XOF
+                {Math.round(parseFloat(rapprochement.soldeReleve || 0)).toLocaleString('fr-FR')} XOF
               </div>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#f3e5f5', borderRadius: '8px' }}>
               <div style={{ fontSize: '12px', color: '#7b1fa2', marginBottom: '5px' }}>Solde Comptable</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#7b1fa2' }}>
-                {parseFloat(rapprochement.soldeComptable || 0).toLocaleString('fr-FR')} XOF
+                {Math.round(parseFloat(rapprochement.soldeComptable || 0)).toLocaleString('fr-FR')} XOF
               </div>
             </div>
             <div style={{ padding: '15px', backgroundColor: parseFloat(rapprochement.ecart) === 0 ? '#e8f5e9' : '#fff3e0', borderRadius: '8px' }}>
               <div style={{ fontSize: '12px', color: parseFloat(rapprochement.ecart) === 0 ? '#388e3c' : '#f57c00', marginBottom: '5px' }}>Écart</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: parseFloat(rapprochement.ecart) === 0 ? '#388e3c' : '#f57c00' }}>
-                {parseFloat(rapprochement.ecart || 0).toLocaleString('fr-FR')} XOF
+                {Math.round(parseFloat(rapprochement.ecart || 0)).toLocaleString('fr-FR')} XOF
               </div>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#fce4ec', borderRadius: '8px' }}>
@@ -1189,7 +1189,7 @@ export function TresorerieModule() {
                   </td>
                   <td style={{ padding: '12px' }}>{t.description || '-'}</td>
                   <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
-                    {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString('fr-FR')} XOF
+                    {t.type === 'encaissement' ? '+' : '-'}{Math.round(parseFloat(t.montant || 0)).toLocaleString('fr-FR')} XOF
                   </td>
                 </tr>
               ))}
@@ -1285,7 +1285,7 @@ export function TresorerieModule() {
                   </td>
                   <td style={{ padding: '12px' }}>{t.description || '-'}</td>
                   <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
-                    {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString('fr-FR')} XOF
+                    {t.type === 'encaissement' ? '+' : '-'}{Math.round(parseFloat(t.montant || 0)).toLocaleString('fr-FR')} XOF
                   </td>
                 </tr>
               ))}
@@ -1366,10 +1366,10 @@ export function TresorerieModule() {
                 <td style={{ padding: '12px' }}>
                   {new Date(r.dateDebut).toLocaleDateString('fr-FR')} - {new Date(r.dateFin).toLocaleDateString('fr-FR')}
                 </td>
-                <td style={{ padding: '12px', textAlign: 'right' }}>{parseFloat(r.soldeReleve || 0).toLocaleString('fr-FR')} XOF</td>
-                <td style={{ padding: '12px', textAlign: 'right' }}>{parseFloat(r.soldeComptable || 0).toLocaleString('fr-FR')} XOF</td>
+                <td style={{ padding: '12px', textAlign: 'right' }}>{Math.round(parseFloat(r.soldeReleve || 0)).toLocaleString('fr-FR')} XOF</td>
+                <td style={{ padding: '12px', textAlign: 'right' }}>{Math.round(parseFloat(r.soldeComptable || 0)).toLocaleString('fr-FR')} XOF</td>
                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: parseFloat(r.ecart) === 0 ? '#27ae60' : '#e74c3c' }}>
-                  {parseFloat(r.ecart || 0).toLocaleString('fr-FR')} XOF
+                  {Math.round(parseFloat(r.ecart || 0)).toLocaleString('fr-FR')} XOF
                 </td>
                 <td style={{ padding: '12px', textAlign: 'center' }}>
                   <span style={{

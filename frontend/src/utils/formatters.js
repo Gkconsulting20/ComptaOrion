@@ -6,8 +6,8 @@ export function formatMontant(value, showDecimals = false) {
   return Math.round(num).toLocaleString('fr-FR');
 }
 
-export function formatMontantXOF(value, showDecimals = false) {
-  return `${formatMontant(value, showDecimals)} XOF`;
+export function formatMontantXOF(value) {
+  return `${formatMontant(value)} XOF`;
 }
 
 export function formatDate(dateString) {
