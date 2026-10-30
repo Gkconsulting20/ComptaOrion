@@ -13,9 +13,12 @@ const styles = {
 
 const emptyProject = () => ({
   code: '', nom: '', description: '', bailleur: '', referenceConvention: '',
-  dateDebut: today(), dateFin: '', budgetTotal: '', devise: 'FCFA',
+  dateDebut: today(), dateFin: '', budgetTotal: '', devise: 'XOF',
 });
-const cash = (value, currency = 'FCFA') => `${amount(value)} ${currency}`;
+const cash = (value, currency = 'XOF') => {
+  const code = String(currency || 'XOF').trim().toUpperCase();
+  return `${amount(value)} ${code === 'FCFA' ? 'XOF' : code}`;
+};
 const newPaymentRequestKey = () => `asso-payment-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
 const statusLabel = { actif: 'En cours', suspendu: 'Suspendu', termine: 'Terminé', archive: 'Archivé' };
 const statusColor = { actif: '#13734d', suspendu: '#a4530d', termine: '#526170', archive: '#657584' };
@@ -519,7 +522,7 @@ export function AssociationAccountingModule() {
             <Field label="Bailleur principal"><input style={styles.input} value={projectForm.bailleur} maxLength={255} onChange={(event) => setProjectForm({ ...projectForm, bailleur: event.target.value })} /></Field>
             <Field label="Convention"><input style={styles.input} value={projectForm.referenceConvention} maxLength={120} onChange={(event) => setProjectForm({ ...projectForm, referenceConvention: event.target.value })} /></Field>
             <Field label="Budget total approuvé"><input style={styles.input} type="number" min="0.01" step="0.01" value={projectForm.budgetTotal} onChange={(event) => setProjectForm({ ...projectForm, budgetTotal: event.target.value })} required /></Field>
-            <Field label="Devise"><select style={styles.input} value={projectForm.devise} onChange={(event) => setProjectForm({ ...projectForm, devise: event.target.value })}>{[['FCFA','FCFA (XOF)'],['XAF','FCFA (XAF)'],['EUR','Euro'],['USD','Dollar US'],['CDF','Franc congolais'],['GNF','Franc guinéen'],['NGN','Naira'],['GHS','Cedi'],['XOF','Franc CFA (UEMOA)']].map(([value,label]) => <option value={value} key={value}>{label}</option>)}</select></Field>
+            <Field label="Devise"><select style={styles.input} value={projectForm.devise} onChange={(event) => setProjectForm({ ...projectForm, devise: event.target.value })}>{[['XOF','XOF'],['XAF','XAF'],['EUR','EUR'],['USD','USD'],['CDF','CDF'],['GNF','GNF'],['NGN','NGN'],['GHS','GHS']].map(([value,label]) => <option value={value} key={value}>{label}</option>)}</select></Field>
             <Field label="Date de début"><input style={styles.input} type="date" value={projectForm.dateDebut} onChange={(event) => setProjectForm({ ...projectForm, dateDebut: event.target.value })} required /></Field>
             <Field label="Date de fin"><input style={styles.input} type="date" value={projectForm.dateFin} onChange={(event) => setProjectForm({ ...projectForm, dateFin: event.target.value })} /></Field>
             <div style={{ gridColumn: '1/-1' }}><Field label="Description / objectifs"><textarea style={{ ...styles.input, minHeight: 85, resize: 'vertical' }} value={projectForm.description} maxLength={4000} onChange={(event) => setProjectForm({ ...projectForm, description: event.target.value })} /></Field></div>

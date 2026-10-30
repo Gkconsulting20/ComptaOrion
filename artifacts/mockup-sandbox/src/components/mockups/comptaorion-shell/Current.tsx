@@ -77,11 +77,11 @@ export function Current() {
 
           <div className="current-demo-note">Données d’exemple</div>
           <section className="current-kpi-grid" aria-label="Indicateurs financiers">
-            <Kpi label="Ventes" value="3 200 000 FCFA" color="#28a745" note="Période en cours" />
-            <Kpi label="Dépenses" value="2 420 000 FCFA" color="#dc3545" note="Période en cours" />
+            <Kpi label="Ventes" value="3 200 000 XOF" color="#28a745" note="Période en cours" />
+            <Kpi label="Dépenses" value="2 420 000 XOF" color="#dc3545" note="Période en cours" />
             <Kpi label="Marge brute" value="24,4 %" color="#17a2b8" note="CA 3,2 M · CMV 2,42 M" />
-            <Kpi label="Cashflow" value="780 000 FCFA" color="#28a745" />
-            <Kpi label="Factures en retard" value="3" color="#d39e00" note="420 000 FCFA" />
+            <Kpi label="Cashflow" value="780 000 XOF" color="#28a745" />
+            <Kpi label="Factures en retard" value="3" color="#d39e00" note="420 000 XOF" />
             <Kpi label="Stock faible" value="2 produits" color="#6c757d" />
           </section>
 
@@ -92,8 +92,8 @@ export function Current() {
               <Kpi label="Délai paiement fournisseurs (DPO)" value="18 jours" color="#20c997" />
               <Kpi label="Rotation stock (DIO)" value="42 jours" color="#fd7e14" />
               <Kpi label="Cycle conversion trésorerie (CCC)" value="48 jours" color="#28a745" />
-              <Kpi label="Valeur stock" value="5 240 000 FCFA" color="#17a2b8" />
-              <Kpi label="CMV" value="2 420 000 FCFA" color="#6c757d" />
+              <Kpi label="Valeur stock" value="5 240 000 XOF" color="#17a2b8" />
+              <Kpi label="CMV" value="2 420 000 XOF" color="#6c757d" />
             </div>
           </section>
 

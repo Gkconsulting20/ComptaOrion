@@ -11,8 +11,8 @@ router.use(authMiddleware);
 router.use(entrepriseIsolation);
 
 const DEVISES_PREDEFINIES = [
-  { code: 'XOF', nom: 'Franc CFA BCEAO', symbole: 'FCFA', decimales: 0 },
-  { code: 'XAF', nom: 'Franc CFA BEAC', symbole: 'FCFA', decimales: 0 },
+  { code: 'XOF', nom: 'Franc CFA BCEAO', symbole: 'XOF', decimales: 0 },
+  { code: 'XAF', nom: 'Franc CFA BEAC', symbole: 'XAF', decimales: 0 },
   { code: 'EUR', nom: 'Euro', symbole: '€', decimales: 2 },
   { code: 'USD', nom: 'Dollar américain', symbole: '$', decimales: 2 },
   { code: 'GBP', nom: 'Livre sterling', symbole: '£', decimales: 2 },

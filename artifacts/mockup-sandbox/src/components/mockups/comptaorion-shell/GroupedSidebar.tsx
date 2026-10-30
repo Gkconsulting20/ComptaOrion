@@ -84,11 +84,11 @@ const groups = [
 ];
 
 const primaryKpis = [
-  { label: "Ventes", value: "3 200 000", unit: "FCFA", note: "Période en cours", tone: "positive", icon: ShoppingBag },
-  { label: "Dépenses", value: "2 420 000", unit: "FCFA", note: "Période en cours", tone: "negative", icon: Banknote },
+  { label: "Ventes", value: "3 200 000", unit: "XOF", note: "Période en cours", tone: "positive", icon: ShoppingBag },
+  { label: "Dépenses", value: "2 420 000", unit: "XOF", note: "Période en cours", tone: "negative", icon: Banknote },
   { label: "Marge brute", value: "24,4", unit: "%", note: "CA 3,2 M · CMV 2,42 M", tone: "blue", icon: ChartNoAxesCombined },
-  { label: "Cashflow", value: "780 000", unit: "FCFA", note: "", tone: "positive", icon: Landmark },
-  { label: "Factures en retard", value: "3", unit: "", note: "420 000 FCFA", tone: "gold", icon: FileText },
+  { label: "Cashflow", value: "780 000", unit: "XOF", note: "", tone: "positive", icon: Landmark },
+  { label: "Factures en retard", value: "3", unit: "", note: "420 000 XOF", tone: "gold", icon: FileText },
   { label: "Stock faible", value: "2 produits", unit: "", note: "", tone: "slate", icon: Package },
 ];
 
@@ -97,8 +97,8 @@ const cycleKpis = [
   { label: "Délai paiement fournisseurs (DPO)", value: "18 jours", tone: "teal" },
   { label: "Rotation stock (DIO)", value: "42 jours", tone: "orange" },
   { label: "Cycle conversion trésorerie (CCC)", value: "48 jours", tone: "positive" },
-  { label: "Valeur stock", value: "5 240 000 FCFA", tone: "blue" },
-  { label: "CMV", value: "2 420 000 FCFA", tone: "slate" },
+  { label: "Valeur stock", value: "5 240 000 XOF", tone: "blue" },
+  { label: "CMV", value: "2 420 000 XOF", tone: "slate" },
 ];
 
 function OrionMark() {
@@ -355,7 +355,7 @@ export function GroupedSidebar() {
           <section className="go-charts" aria-label="Graphiques financiers">
             <article className="go-chart-card">
               <h3 className="go-chart-title">Évolution des ventes (12 mois)</h3>
-              <p className="go-chart-subtitle">Ventes mensuelles · FCFA</p>
+              <p className="go-chart-subtitle">Ventes mensuelles · XOF</p>
               <div className="go-chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={sales} margin={{ top: 12, right: 8, left: -12, bottom: 0 }}>
@@ -364,7 +364,7 @@ export function GroupedSidebar() {
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: "#84919a", fontSize: 9 }} tickFormatter={(value) => `${Math.round(value / 1_000_000)}M`} />
                     <Tooltip
                       contentStyle={{ border: "1px solid #e3e9e8", borderRadius: 7, fontSize: 10 }}
-                      formatter={(value: number) => [`${value.toLocaleString("fr-FR")} FCFA`, "Ventes"]}
+                      formatter={(value: number) => [`${value.toLocaleString("fr-FR")} XOF`, "Ventes"]}
                     />
                     <Bar dataKey="value" fill="#39769a" radius={[4, 4, 0, 0]} maxBarSize={34} />
                   </BarChart>

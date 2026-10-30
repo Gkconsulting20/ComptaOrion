@@ -309,7 +309,7 @@ router.post('/avances', async (req, res) => {
       table: 'avances_salaire',
       recordId: newAvance.id,
       nouvelleValeur: newAvance,
-      description: `Avance sur salaire créée: ${newAvance.montant} FCFA`
+      description: `Avance sur salaire créée: ${newAvance.montant} XOF`
     });
 
     res.json({ success: true, message: 'Avance créée avec succès', data: newAvance });

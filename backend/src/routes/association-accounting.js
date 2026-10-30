@@ -96,7 +96,7 @@ router.get('/projects', async (req, res) => {
 });
 
 router.post('/projects', async (req, res) => {
-  const { code, nom, description, bailleur, referenceConvention, dateDebut, dateFin, budgetTotal, devise = 'FCFA' } = req.body;
+  const { code, nom, description, bailleur, referenceConvention, dateDebut, dateFin, budgetTotal, devise = 'XOF' } = req.body;
   const normalizedCode = String(code || '').trim().toUpperCase();
   if (!/^[A-Z0-9][A-Z0-9_-]{1,29}$/.test(normalizedCode) || !String(nom || '').trim() ||
       !positiveAmount(budgetTotal) || !isoDate(dateDebut) || (dateFin && (!isoDate(dateFin) || dateFin < dateDebut)) ||

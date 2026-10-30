@@ -323,9 +323,9 @@ export function ImpotsModule() {
                     <p>Période: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}</p>
                     <table>
                       <tr><th>Type</th><th>Montant</th></tr>
-                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</td></tr>
-                      <tr><td>TVA récupérable (comptes 445*)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</td></tr>
-                      <tr class="total"><td>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</td><td>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} FCFA</td></tr>
+                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} XOF</td></tr>
+                      <tr><td>TVA récupérable (comptes 445*)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} XOF</td></tr>
+                      <tr class="total"><td>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</td><td>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} XOF</td></tr>
                     </table>
                     <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
                       Document généré par ComptaOrion le ${new Date().toLocaleDateString('fr-FR')}
@@ -352,9 +352,9 @@ export function ImpotsModule() {
                     <p>Période: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}</p>
                     <table>
                       <tr><th>Type</th><th>Montant</th></tr>
-                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</td></tr>
-                      <tr><td>TVA récupérable (comptes 445*)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</td></tr>
-                      <tr><td><strong>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</strong></td><td><strong>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} FCFA</strong></td></tr>
+                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR')} XOF</td></tr>
+                      <tr><td>TVA récupérable (comptes 445*)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR')} XOF</td></tr>
+                      <tr><td><strong>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</strong></td><td><strong>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} XOF</strong></td></tr>
                     </table>
                   </body>
                 </html>
@@ -381,7 +381,7 @@ export function ImpotsModule() {
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)'; }}
           >
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Collectée</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaCollectee.toLocaleString('fr-FR')} FCFA</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaCollectee.toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Comptes 443* hors 4434 · Voir les lignes</div>
             <div style={{ fontSize: '11px', opacity: 0.8, marginTop: 7 }}>
               Comptes retenus : {tvaResume.comptesCollectee.length ? tvaResume.comptesCollectee.map((account) => account.numero).join(', ') : 'aucun compte mouvementé'}
@@ -395,7 +395,7 @@ export function ImpotsModule() {
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)'; }}
           >
             <div style={{ fontSize: '14px', opacity: 0.9 }}>TVA Déductible</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaDeductible.toLocaleString('fr-FR')} FCFA</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{tvaResume.tvaDeductible.toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Comptes 445* · Voir les lignes</div>
             <div style={{ fontSize: '11px', opacity: 0.8, marginTop: 7 }}>
               Comptes retenus : {tvaResume.comptesDeductible.length ? tvaResume.comptesDeductible.map((account) => account.numero).join(', ') : 'aucun compte mouvementé'}
@@ -404,7 +404,7 @@ export function ImpotsModule() {
 
           <div style={{ padding: '20px', backgroundColor: tvaResume.tvaADecaisser >= 0 ? '#27ae60' : '#9b59b6', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>{tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} FCFA</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', margin: '10px 0' }}>{Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR')} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>{tvaResume.tvaADecaisser >= 0 ? 'Collectée - Déductible' : 'À reporter'}</div>
           </div>
         </div>
@@ -694,17 +694,17 @@ export function ImpotsModule() {
                           <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.reference}</td>
                           <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.compteNumero} {m.compteNom}</td>
                           <td style={{ padding: '8px 10px', border: '1px solid #ddd' }}>{m.libelle}</td>
-                          <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{m.debit > 0 ? `${Math.round(m.debit).toLocaleString('fr-FR')} FCFA` : '-'}</td>
-                          <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{m.credit > 0 ? `${Math.round(m.credit).toLocaleString('fr-FR')} FCFA` : '-'}</td>
-                          <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right', fontWeight: '500' }}>{Math.round(m.soldeCumule).toLocaleString('fr-FR')} FCFA</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{m.debit > 0 ? `${Math.round(m.debit).toLocaleString('fr-FR')} XOF` : '-'}</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right' }}>{m.credit > 0 ? `${Math.round(m.credit).toLocaleString('fr-FR')} XOF` : '-'}</td>
+                          <td style={{ padding: '8px 10px', border: '1px solid #ddd', textAlign: 'right', fontWeight: '500' }}>{Math.round(m.soldeCumule).toLocaleString('fr-FR')} XOF</td>
                         </tr>
                       ))}
                       {drillModal.totaux && (
                         <tr style={{ backgroundColor: '#e8f4f8', fontWeight: 'bold' }}>
                           <td colSpan="5" style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>TOTAUX</td>
-                          <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.totalDebit).toLocaleString('fr-FR')} FCFA</td>
-                          <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.totalCredit).toLocaleString('fr-FR')} FCFA</td>
-                          <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.solde).toLocaleString('fr-FR')} FCFA</td>
+                          <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.totalDebit).toLocaleString('fr-FR')} XOF</td>
+                          <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.totalCredit).toLocaleString('fr-FR')} XOF</td>
+                          <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>{Math.round(drillModal.totaux.solde).toLocaleString('fr-FR')} XOF</td>
                         </tr>
                       )}
                     </tbody>

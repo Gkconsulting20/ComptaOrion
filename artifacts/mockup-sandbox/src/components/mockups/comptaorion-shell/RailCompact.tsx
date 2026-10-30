@@ -60,11 +60,11 @@ const expenses = [
 ];
 
 const primaryMetrics = [
-  { label: "Ventes", value: "3 200 000 FCFA", note: "Période en cours", color: "#34826a", Icon: ArrowUpRight },
-  { label: "Dépenses", value: "2 420 000 FCFA", note: "Période en cours", color: "#b45d56", Icon: ArrowDownRight },
+  { label: "Ventes", value: "3 200 000 XOF", note: "Période en cours", color: "#34826a", Icon: ArrowUpRight },
+  { label: "Dépenses", value: "2 420 000 XOF", note: "Période en cours", color: "#b45d56", Icon: ArrowDownRight },
   { label: "Marge brute", value: "24,4 %", note: "CA 3,2 M · CMV 2,42 M", color: "#3f7f9b", Icon: BarChart3 },
-  { label: "Cashflow", value: "780 000 FCFA", note: "", color: "#34826a", Icon: Wallet },
-  { label: "Factures en retard", value: "3", note: "420 000 FCFA", color: "#b88732", Icon: CalendarDays },
+  { label: "Cashflow", value: "780 000 XOF", note: "", color: "#34826a", Icon: Wallet },
+  { label: "Factures en retard", value: "3", note: "420 000 XOF", color: "#b88732", Icon: CalendarDays },
   { label: "Stock faible", value: "2 produits", note: "", color: "#718087", Icon: Package },
 ];
 
@@ -73,8 +73,8 @@ const cycleMetrics = [
   { label: "Délai paiement fournisseurs (DPO)", value: "18 jours", color: "#4e9785" },
   { label: "Rotation stock (DIO)", value: "42 jours", color: "#bd8149" },
   { label: "Cycle conversion trésorerie (CCC)", value: "48 jours", color: "#56856c" },
-  { label: "Valeur stock", value: "5 240 000 FCFA", color: "#4b8296" },
-  { label: "CMV", value: "2 420 000 FCFA", color: "#748187" },
+  { label: "Valeur stock", value: "5 240 000 XOF", color: "#4b8296" },
+  { label: "CMV", value: "2 420 000 XOF", color: "#748187" },
 ];
 
 function OrionMark() {
@@ -320,7 +320,7 @@ export function RailCompact() {
             <article className="rc-chart-card">
               <div className="rc-chart-head">
                 <h3>Évolution des ventes (12 mois)</h3>
-                <span className="rc-chart-caption">Montants en FCFA</span>
+                <span className="rc-chart-caption">Montants en XOF</span>
               </div>
               <div className="rc-chart">
                 <ResponsiveContainer width="100%" height="100%">
@@ -328,7 +328,7 @@ export function RailCompact() {
                     <CartesianGrid vertical={false} stroke="#edf0ed" />
                     <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#839095", fontSize: 10 }} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: "#879396", fontSize: 9 }} tickFormatter={money} />
-                    <Tooltip formatter={(value: number) => [`${value.toLocaleString("fr-FR")} FCFA`, "Ventes"]} contentStyle={{ border: "1px solid #e4e9e5", borderRadius: 8, fontSize: 11 }} />
+                    <Tooltip formatter={(value: number) => [`${value.toLocaleString("fr-FR")} XOF`, "Ventes"]} contentStyle={{ border: "1px solid #e4e9e5", borderRadius: 8, fontSize: 11 }} />
                     <Bar dataKey="value" fill="#397ca1" radius={[4, 4, 0, 0]} maxBarSize={34} />
                   </BarChart>
                 </ResponsiveContainer>

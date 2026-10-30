@@ -582,7 +582,7 @@ router.post('/etat-compte/email', async (req, res) => {
               <tr style="border-bottom: 1px solid #dee2e6;">
                 <td style="padding: 12px;">${f.numeroFacture || 'N/A'}</td>
                 <td style="padding: 12px;">${new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
-                <td style="padding: 12px; text-align: right; font-weight: bold;">${(f.montantTotal || f.montantHT || 0).toLocaleString('fr-FR')} FCFA</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold;">${(f.montantTotal || f.montantHT || 0).toLocaleString('fr-FR')} XOF</td>
                 <td style="padding: 12px; text-align: center;">
                   <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; background-color: ${f.statut === 'payee' ? '#d4edda' : '#fff3cd'}; color: ${f.statut === 'payee' ? '#155724' : '#856404'};">
                     ${f.statut === 'payee' ? '✅ Payée' : '⏳ En attente'}
@@ -614,7 +614,7 @@ router.post('/etat-compte/email', async (req, res) => {
                 <td style="padding: 12px;">${new Date(p.datePaiement).toLocaleDateString('fr-FR')}</td>
                 <td style="padding: 12px;">${p.reference || '-'}</td>
                 <td style="padding: 12px;">${p.modePaiement || '-'}</td>
-                <td style="padding: 12px; text-align: right; font-weight: bold; color: #27ae60;">${(p.montant || 0).toLocaleString('fr-FR')} FCFA</td>
+                <td style="padding: 12px; text-align: right; font-weight: bold; color: #27ae60;">${(p.montant || 0).toLocaleString('fr-FR')} XOF</td>
               </tr>
             `).join('')}
           </tbody>
@@ -633,15 +633,15 @@ router.post('/etat-compte/email', async (req, res) => {
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px;">
           <div style="padding: 15px; background-color: #e8f4f8; border-radius: 8px; text-align: center;">
             <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Total Facturé</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #1976d2;">${totalFacture.toLocaleString('fr-FR')} FCFA</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #1976d2;">${totalFacture.toLocaleString('fr-FR')} XOF</p>
           </div>
           <div style="padding: 15px; background-color: #e8f8f0; border-radius: 8px; text-align: center;">
             <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Total Payé</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #27ae60;">${totalPaye.toLocaleString('fr-FR')} FCFA</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #27ae60;">${totalPaye.toLocaleString('fr-FR')} XOF</p>
           </div>
           <div style="padding: 15px; background-color: #fff3e0; border-radius: 8px; text-align: center;">
             <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Solde Dû</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${solde > 0 ? '#e74c3c' : '#27ae60'};">${solde.toLocaleString('fr-FR')} FCFA</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${solde > 0 ? '#e74c3c' : '#27ae60'};">${solde.toLocaleString('fr-FR')} XOF</p>
           </div>
         </div>
 

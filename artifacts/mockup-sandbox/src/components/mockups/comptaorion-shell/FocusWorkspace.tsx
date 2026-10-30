@@ -38,11 +38,11 @@ const expenses = [
 ];
 
 const primaryMetrics = [
-  { label: "Ventes", value: "3 200 000", unit: "FCFA", note: "Période en cours", color: "teal", icon: ArrowUpRight },
-  { label: "Dépenses", value: "2 420 000", unit: "FCFA", note: "Période en cours", color: "rose", icon: ArrowDownRight },
+  { label: "Ventes", value: "3 200 000", unit: "XOF", note: "Période en cours", color: "teal", icon: ArrowUpRight },
+  { label: "Dépenses", value: "2 420 000", unit: "XOF", note: "Période en cours", color: "rose", icon: ArrowDownRight },
   { label: "Marge brute", value: "24,4", unit: "%", note: "CA 3,2 M · CMV 2,42 M", color: "blue", icon: ChartNoAxesCombined },
-  { label: "Cashflow", value: "780 000", unit: "FCFA", note: "", color: "teal", icon: CircleDollarSign },
-  { label: "Factures en retard", value: "3", unit: "", note: "420 000 FCFA", color: "gold", icon: FileText },
+  { label: "Cashflow", value: "780 000", unit: "XOF", note: "", color: "teal", icon: CircleDollarSign },
+  { label: "Factures en retard", value: "3", unit: "", note: "420 000 XOF", color: "gold", icon: FileText },
   { label: "Stock faible", value: "2 produits", unit: "", note: "", color: "slate", icon: Package },
 ];
 
@@ -51,8 +51,8 @@ const cycleMetrics = [
   { label: "Délai paiement fournisseurs (DPO)", value: "18 jours", color: "teal" },
   { label: "Rotation stock (DIO)", value: "42 jours", color: "gold" },
   { label: "Cycle conversion trésorerie (CCC)", value: "48 jours", color: "teal" },
-  { label: "Valeur stock", value: "5 240 000 FCFA", color: "blue" },
-  { label: "CMV", value: "2 420 000 FCFA", color: "slate" },
+  { label: "Valeur stock", value: "5 240 000 XOF", color: "blue" },
+  { label: "CMV", value: "2 420 000 XOF", color: "slate" },
 ];
 
 function MetricCard({ metric }) {
@@ -280,14 +280,14 @@ export function FocusWorkspace() {
 
         <section className="fw-charts" aria-label="Graphiques financiers">
           <article className="fw-chart-card">
-            <div className="fw-chart-title"><h3>Évolution des ventes (12 mois)</h3><span>Montants en FCFA</span></div>
+            <div className="fw-chart-title"><h3>Évolution des ventes (12 mois)</h3><span>Montants en XOF</span></div>
             <div className="fw-chart">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sales} margin={{ top: 14, right: 8, left: -14, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke="#edf0ee" />
                   <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#879397", fontSize: 10 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: "#879397", fontSize: 9 }} tickFormatter={(value) => `${Math.round(value / 1000000)}M`} />
-                  <Tooltip contentStyle={{ border: "1px solid #e1e8e5", borderRadius: 8, fontSize: 11 }} formatter={(value) => [`${Number(value).toLocaleString("fr-FR")} FCFA`, "Ventes"]} />
+                  <Tooltip contentStyle={{ border: "1px solid #e1e8e5", borderRadius: 8, fontSize: 11 }} formatter={(value) => [`${Number(value).toLocaleString("fr-FR")} XOF`, "Ventes"]} />
                   <Bar dataKey="value" fill="#3979a4" radius={[4, 4, 0, 0]} maxBarSize={30} />
                 </BarChart>
               </ResponsiveContainer>

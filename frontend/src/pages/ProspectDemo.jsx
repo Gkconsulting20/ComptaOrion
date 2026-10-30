@@ -72,7 +72,7 @@ const DEMO_USERS = [
 
 const DEMO_SETTINGS = [
   { label: 'Entreprise', value: 'AgroNova Démo' },
-  { label: 'Devise principale', value: 'FCFA' },
+  { label: 'Devise principale', value: 'XOF' },
   { label: 'Unité de stock illustrée', value: 'Kilogramme (kg)' },
   { label: 'Période comptable', value: 'Exercice annuel' }
 ];
@@ -84,7 +84,7 @@ const DEMO_PRODUCTS = [
 ];
 
 function formatAmount(value) {
-  return `${value.toLocaleString('fr-FR')} FCFA`;
+  return `${value.toLocaleString('fr-FR')} XOF`;
 }
 
 function DemoPanel({ section }) {
@@ -102,7 +102,7 @@ function DemoPanel({ section }) {
               <tbody>{DEMO_CLIENTS.map((client) => (
                 <tr key={client.name}>
                   <td><strong>{client.name}</strong></td><td>{client.city}</td>
-                  <td>{client.balance} FCFA</td>
+                  <td>{client.balance} XOF</td>
                   <td><span className={`prospect-demo-status${client.status === 'À relancer' ? ' is-warning' : ''}`}>{client.status}</span></td>
                 </tr>
               ))}</tbody>
@@ -120,7 +120,7 @@ function DemoPanel({ section }) {
               <tbody>{DEMO_INVOICES.map((invoice) => (
                 <tr key={invoice.reference}>
                   <td><strong>{invoice.reference}</strong></td><td>{invoice.client}</td><td>{invoice.date}</td>
-                  <td>{invoice.amount} FCFA</td>
+                  <td>{invoice.amount} XOF</td>
                   <td><span className={`prospect-demo-status${invoice.status === 'À payer' ? ' is-warning' : ''}`}>{invoice.status}</span></td>
                 </tr>
               ))}</tbody>
@@ -143,7 +143,7 @@ function DemoPanel({ section }) {
           {DEMO_SUPPLIERS.map((supplier) => (
             <article className="prospect-demo-list-row" key={supplier.name}>
               <div><strong>{supplier.name}</strong><span>{supplier.country} · {supplier.term}</span></div>
-              <b>{supplier.due} FCFA</b>
+              <b>{supplier.due} XOF</b>
             </article>
           ))}
         </div>
@@ -165,7 +165,7 @@ function DemoPanel({ section }) {
             <tbody>{DEMO_PRODUCTS.map((product) => (
               <tr key={product.sku}>
                 <td><strong>{product.name}</strong></td><td>{product.sku}</td><td>{product.quantity}</td>
-                <td>{product.cost} FCFA</td><td>{product.price} FCFA</td>
+                <td>{product.cost} XOF</td><td>{product.price} XOF</td>
               </tr>
             ))}</tbody>
           </table>
@@ -202,7 +202,7 @@ function DemoPanel({ section }) {
               <tbody>{DEMO_CASH_MOVEMENTS.map((movement) => (
                 <tr key={movement.label}>
                   <td>{movement.date}</td><td><strong>{movement.label}</strong></td>
-                  <td>{movement.account}</td><td>{movement.amount} FCFA</td>
+                  <td>{movement.account}</td><td>{movement.amount} XOF</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -240,7 +240,7 @@ function DemoPanel({ section }) {
               <tbody>{DEMO_ENTRIES.map((entry) => (
                 <tr key={entry.number}>
                   <td>{entry.date}</td><td>{entry.journal}</td><td><strong>{entry.number}</strong></td>
-                  <td>{entry.label}</td><td>{entry.debit} FCFA</td><td>{entry.credit} FCFA</td>
+                  <td>{entry.label}</td><td>{entry.debit} XOF</td><td>{entry.credit} XOF</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -265,7 +265,7 @@ function DemoPanel({ section }) {
               <tbody>{DEMO_ASSOCIATION_PROJECTS.map((project) => (
                 <tr key={project.name}>
                   <td><strong>{project.name}</strong></td><td>{project.funder}</td>
-                  <td>{project.budget} FCFA</td><td>{project.spent} FCFA</td><td>{project.remaining} FCFA</td>
+                  <td>{project.budget} XOF</td><td>{project.spent} XOF</td><td>{project.remaining} XOF</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -276,9 +276,9 @@ function DemoPanel({ section }) {
             <div className="prospect-demo-section-heading">
               <div><span className="prospect-demo-eyebrow">CONTRÔLE BUDGÉTAIRE</span><h2>Suivi des fonds</h2></div>
             </div>
-            <div className="prospect-demo-summary-row"><span>Financements reçus</span><strong>4 800 000 FCFA</strong></div>
-            <div className="prospect-demo-summary-row"><span>Dépenses affectées aux projets</span><strong>1 990 000 FCFA</strong></div>
-            <div className="prospect-demo-summary-row"><span>Solde des financements</span><strong>2 810 000 FCFA</strong></div>
+            <div className="prospect-demo-summary-row"><span>Financements reçus</span><strong>4 800 000 XOF</strong></div>
+            <div className="prospect-demo-summary-row"><span>Dépenses affectées aux projets</span><strong>1 990 000 XOF</strong></div>
+            <div className="prospect-demo-summary-row"><span>Solde des financements</span><strong>2 810 000 XOF</strong></div>
           </section>
           <section className="prospect-demo-panel">
             <div className="prospect-demo-section-heading">
@@ -358,9 +358,9 @@ function DemoPanel({ section }) {
           <span className="prospect-demo-badge">Exemple uniquement</span>
         </div>
         <div className="prospect-demo-tax-grid">
-          <article><span>TVA facturée</span><strong>486 000 FCFA</strong><small>Exemple fictif sur la période</small></article>
-          <article><span>TVA récupérable</span><strong>201 500 FCFA</strong><small>Exemple fictif sur la période</small></article>
-          <article><span>Solde indicatif</span><strong>284 500 FCFA</strong><small>À contrôler avant toute déclaration</small></article>
+          <article><span>TVA facturée</span><strong>486 000 XOF</strong><small>Exemple fictif sur la période</small></article>
+          <article><span>TVA récupérable</span><strong>201 500 XOF</strong><small>Exemple fictif sur la période</small></article>
+          <article><span>Solde indicatif</span><strong>284 500 XOF</strong><small>À contrôler avant toute déclaration</small></article>
         </div>
         <p className="prospect-demo-note">Les chiffres sont fictifs et ne constituent pas une déclaration fiscale validée ou transmise à l’OTR.</p>
       </section>
@@ -405,7 +405,7 @@ function DemoPanel({ section }) {
             <div><span className="prospect-demo-eyebrow">À SUIVRE</span><h2>Points d’attention</h2></div>
           </div>
           <div className="prospect-demo-summary-row"><span>Factures clients ouvertes</span><strong>4</strong></div>
-          <div className="prospect-demo-summary-row"><span>Dettes fournisseurs</span><strong>2 175 000 FCFA</strong></div>
+          <div className="prospect-demo-summary-row"><span>Dettes fournisseurs</span><strong>2 175 000 XOF</strong></div>
           <div className="prospect-demo-summary-row"><span>Produits à réapprovisionner</span><strong>2</strong></div>
           <p className="prospect-demo-note">Ces chiffres sont fictifs et servent uniquement à présenter l’interface.</p>
         </section>

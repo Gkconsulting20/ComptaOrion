@@ -262,35 +262,35 @@ function EmployesTab() {
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Salaire de base (FCFA) *</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Salaire de base (XOF) *</label>
                 <input type="number" value={formData.salaireBase}
                   onChange={(e) => setFormData({ ...formData, salaireBase: e.target.value })}
                   required style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Indemnité transport (FCFA)</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Indemnité transport (XOF)</label>
                 <input type="number" value={formData.indemnitesRegulieresTransport}
                   onChange={(e) => setFormData({ ...formData, indemnitesRegulieresTransport: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Indemnité logement (FCFA)</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Indemnité logement (XOF)</label>
                 <input type="number" value={formData.indemnitesRegulieresLogement}
                   onChange={(e) => setFormData({ ...formData, indemnitesRegulieresLogement: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Avantage nature logement (FCFA)</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Avantage nature logement (XOF)</label>
                 <input type="number" value={formData.avantagesNatureLogement}
                   onChange={(e) => setFormData({ ...formData, avantagesNatureLogement: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Avantage nature véhicule (FCFA)</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Avantage nature véhicule (XOF)</label>
                 <input type="number" value={formData.avantagesNatureVehicule}
                   onChange={(e) => setFormData({ ...formData, avantagesNatureVehicule: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
@@ -344,7 +344,7 @@ function EmployesTab() {
               <td style={{ padding: '10px' }}>{emp.prenom}</td>
               <td style={{ padding: '10px' }}>{emp.poste}</td>
               <td style={{ padding: '10px' }}>{emp.typeContrat}</td>
-              <td style={{ padding: '10px', textAlign: 'right' }}>{parseFloat(emp.salaireBase || 0).toLocaleString('fr-FR')} FCFA</td>
+              <td style={{ padding: '10px', textAlign: 'right' }}>{parseFloat(emp.salaireBase || 0).toLocaleString('fr-FR')} XOF</td>
               <td style={{ padding: '10px', textAlign: 'center' }}>
                 <button onClick={() => handleEdit(emp)} style={{
                   marginRight: '5px',
@@ -561,8 +561,8 @@ function FichesPaieTab() {
               backgroundColor: '#e8f5e9',
               borderRadius: '5px'
             }}>
-              <p><strong>Salaire Brut:</strong> {calculerSalaireBrut().toLocaleString('fr-FR')} FCFA</p>
-              <p><strong>Salaire Net:</strong> {calculerSalaireNet().toLocaleString('fr-FR')} FCFA</p>
+              <p><strong>Salaire Brut:</strong> {calculerSalaireBrut().toLocaleString('fr-FR')} XOF</p>
+              <p><strong>Salaire Net:</strong> {calculerSalaireNet().toLocaleString('fr-FR')} XOF</p>
             </div>
 
             <div style={{ marginTop: '15px' }}>
@@ -615,8 +615,8 @@ function FichesPaieTab() {
             <tr key={fiche.fiche.id} style={{ backgroundColor: idx % 2 === 0 ? '#f9f9f9' : 'white', borderBottom: '1px solid #ddd' }}>
               <td style={{ padding: '10px' }}>{fiche.fiche.mois}</td>
               <td style={{ padding: '10px' }}>{fiche.employe?.nom} {fiche.employe?.prenom}</td>
-              <td style={{ padding: '10px', textAlign: 'right' }}>{parseFloat(fiche.fiche.salaireBrut || 0).toLocaleString('fr-FR')} FCFA</td>
-              <td style={{ padding: '10px', textAlign: 'right' }}>{parseFloat(fiche.fiche.salaireNet || 0).toLocaleString('fr-FR')} FCFA</td>
+              <td style={{ padding: '10px', textAlign: 'right' }}>{parseFloat(fiche.fiche.salaireBrut || 0).toLocaleString('fr-FR')} XOF</td>
+              <td style={{ padding: '10px', textAlign: 'right' }}>{parseFloat(fiche.fiche.salaireNet || 0).toLocaleString('fr-FR')} XOF</td>
               <td style={{ padding: '10px', textAlign: 'center' }}>
                 <span style={{
                   padding: '4px 8px',

@@ -23,7 +23,7 @@ const DrillDownModal = ({
     if (value === null || value === undefined) return '-';
     
     if (column.type === 'currency') {
-      return `${parseFloat(value || 0).toLocaleString()} FCFA`;
+      return `${parseFloat(value || 0).toLocaleString()} XOF`;
     }
     if (column.type === 'date') {
       return value ? new Date(value).toLocaleDateString('fr-FR') : '-';
@@ -138,7 +138,7 @@ const DrillDownModal = ({
                         fontSize: '14px'
                       }}>
                         {col.key === totalField ? (
-                          <span style={{ color: '#2c3e50' }}>{total.toLocaleString()} FCFA</span>
+                          <span style={{ color: '#2c3e50' }}>{total.toLocaleString()} XOF</span>
                         ) : idx === 0 ? totalLabel : ''}
                       </td>
                     ))}

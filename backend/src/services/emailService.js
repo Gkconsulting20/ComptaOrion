@@ -159,8 +159,10 @@ class EmailService {
    */
   getInvoiceEmailTemplate(facture, client, entreprise) {
     const couleurPrincipale = entreprise.factureCouleurPrincipale || '#3498db';
-    const devise = entreprise.devise || 'FCFA';
-    const symboleDevise = entreprise.symboleDevise || devise;
+    const deviseBrute = String(entreprise.devise || 'XOF').toUpperCase();
+    const devise = deviseBrute === 'FCFA' ? 'XOF' : deviseBrute;
+    const symboleBrut = String(entreprise.symboleDevise || devise).toUpperCase();
+    const symboleDevise = symboleBrut === 'FCFA' ? (devise === 'XAF' ? 'XAF' : 'XOF') : symboleBrut;
     const montantTotal = facture.totalTTC || facture.montantTotal || 0;
     
     const montantFormate = `${new Intl.NumberFormat('fr-FR', {

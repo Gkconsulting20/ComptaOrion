@@ -1088,19 +1088,19 @@ export function TresorerieModule() {
             <div style={{ padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px' }}>
               <div style={{ fontSize: '12px', color: '#1976d2', marginBottom: '5px' }}>Solde Relevé</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
-                {parseFloat(rapprochement.soldeReleve || 0).toLocaleString('fr-FR')} FCFA
+                {parseFloat(rapprochement.soldeReleve || 0).toLocaleString('fr-FR')} XOF
               </div>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#f3e5f5', borderRadius: '8px' }}>
               <div style={{ fontSize: '12px', color: '#7b1fa2', marginBottom: '5px' }}>Solde Comptable</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#7b1fa2' }}>
-                {parseFloat(rapprochement.soldeComptable || 0).toLocaleString('fr-FR')} FCFA
+                {parseFloat(rapprochement.soldeComptable || 0).toLocaleString('fr-FR')} XOF
               </div>
             </div>
             <div style={{ padding: '15px', backgroundColor: parseFloat(rapprochement.ecart) === 0 ? '#e8f5e9' : '#fff3e0', borderRadius: '8px' }}>
               <div style={{ fontSize: '12px', color: parseFloat(rapprochement.ecart) === 0 ? '#388e3c' : '#f57c00', marginBottom: '5px' }}>Écart</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: parseFloat(rapprochement.ecart) === 0 ? '#388e3c' : '#f57c00' }}>
-                {parseFloat(rapprochement.ecart || 0).toLocaleString('fr-FR')} FCFA
+                {parseFloat(rapprochement.ecart || 0).toLocaleString('fr-FR')} XOF
               </div>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#fce4ec', borderRadius: '8px' }}>
@@ -1189,7 +1189,7 @@ export function TresorerieModule() {
                   </td>
                   <td style={{ padding: '12px' }}>{t.description || '-'}</td>
                   <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
-                    {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString('fr-FR')} FCFA
+                    {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString('fr-FR')} XOF
                   </td>
                 </tr>
               ))}
@@ -1285,7 +1285,7 @@ export function TresorerieModule() {
                   </td>
                   <td style={{ padding: '12px' }}>{t.description || '-'}</td>
                   <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
-                    {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString('fr-FR')} FCFA
+                    {t.type === 'encaissement' ? '+' : '-'}{parseFloat(t.montant || 0).toLocaleString('fr-FR')} XOF
                   </td>
                 </tr>
               ))}
@@ -1366,10 +1366,10 @@ export function TresorerieModule() {
                 <td style={{ padding: '12px' }}>
                   {new Date(r.dateDebut).toLocaleDateString('fr-FR')} - {new Date(r.dateFin).toLocaleDateString('fr-FR')}
                 </td>
-                <td style={{ padding: '12px', textAlign: 'right' }}>{parseFloat(r.soldeReleve || 0).toLocaleString('fr-FR')} FCFA</td>
-                <td style={{ padding: '12px', textAlign: 'right' }}>{parseFloat(r.soldeComptable || 0).toLocaleString('fr-FR')} FCFA</td>
+                <td style={{ padding: '12px', textAlign: 'right' }}>{parseFloat(r.soldeReleve || 0).toLocaleString('fr-FR')} XOF</td>
+                <td style={{ padding: '12px', textAlign: 'right' }}>{parseFloat(r.soldeComptable || 0).toLocaleString('fr-FR')} XOF</td>
                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: parseFloat(r.ecart) === 0 ? '#27ae60' : '#e74c3c' }}>
-                  {parseFloat(r.ecart || 0).toLocaleString('fr-FR')} FCFA
+                  {parseFloat(r.ecart || 0).toLocaleString('fr-FR')} XOF
                 </td>
                 <td style={{ padding: '12px', textAlign: 'center' }}>
                   <span style={{
@@ -1512,7 +1512,7 @@ export function TresorerieModule() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                     <strong>Solde comptable calculé:</strong>
                     <span style={{ fontWeight: 'bold', color: '#2c3e50' }}>
-                      {Math.round(parseFloat(rapprochementPreview.soldeComptable || 0)).toLocaleString('fr-FR')} FCFA
+                      {Math.round(parseFloat(rapprochementPreview.soldeComptable || 0)).toLocaleString('fr-FR')} XOF
                     </span>
                   </div>
                   <div style={{ marginBottom: '10px' }}>
@@ -1534,7 +1534,7 @@ export function TresorerieModule() {
                               <td style={{ padding: '6px' }}>{t.dateTransaction ? new Date(t.dateTransaction).toLocaleDateString('fr-FR') : '-'}</td>
                               <td style={{ padding: '6px' }}>{t.libelle || t.description || '-'}</td>
                               <td style={{ padding: '6px', textAlign: 'right', color: t.type === 'encaissement' ? '#27ae60' : '#e74c3c' }}>
-                                {t.type === 'encaissement' ? '+' : '-'}{Math.round(parseFloat(t.montant || 0)).toLocaleString('fr-FR')} FCFA
+                                {t.type === 'encaissement' ? '+' : '-'}{Math.round(parseFloat(t.montant || 0)).toLocaleString('fr-FR')} XOF
                               </td>
                             </tr>
                           ))}

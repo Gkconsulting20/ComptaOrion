@@ -9,8 +9,8 @@ const router = express.Router();
 // Liste des devises supportées avec symboles
 const DEVISES = [
   // Afrique
-  { code: 'XOF', nom: 'Franc CFA (BCEAO)', symbole: 'FCFA', pays: ['Bénin', 'Burkina Faso', 'Côte d\'Ivoire', 'Mali', 'Niger', 'Sénégal', 'Togo', 'Guinée-Bissau'] },
-  { code: 'XAF', nom: 'Franc CFA (BEAC)', symbole: 'FCFA', pays: ['Cameroun', 'Centrafrique', 'Congo', 'Gabon', 'Guinée équatoriale', 'Tchad'] },
+  { code: 'XOF', nom: 'Franc CFA (BCEAO)', symbole: 'XOF', pays: ['Bénin', 'Burkina Faso', 'Côte d\'Ivoire', 'Mali', 'Niger', 'Sénégal', 'Togo', 'Guinée-Bissau'] },
+  { code: 'XAF', nom: 'Franc CFA (BEAC)', symbole: 'XAF', pays: ['Cameroun', 'Centrafrique', 'Congo', 'Gabon', 'Guinée équatoriale', 'Tchad'] },
   { code: 'MAD', nom: 'Dirham marocain', symbole: 'DH', pays: ['Maroc'] },
   { code: 'TND', nom: 'Dinar tunisien', symbole: 'DT', pays: ['Tunisie'] },
   { code: 'DZD', nom: 'Dinar algérien', symbole: 'DA', pays: ['Algérie'] },

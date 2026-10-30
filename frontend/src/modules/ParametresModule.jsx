@@ -116,7 +116,7 @@ export function ParametresModule({ user }) {
               <InfoCard label="Pays" value={data.entreprise.pays} />
               <InfoCard label="Ville" value={data.entreprise.ville} />
               <InfoCard label="Adresse" value={data.entreprise.adresse} />
-              <InfoCard label="Devise" value={`${data.entreprise.devise} (${data.entreprise.symboleDevise})`} />
+              <InfoCard label="Devise" value={formatCompanyCurrency(data.entreprise.devise, data.entreprise.symboleDevise)} />
               <InfoCard label="Système Comptable" value={data.entreprise.systemeComptable} />
               <InfoCard label="Année Fiscale" value={`${data.entreprise.debutAnneeFiscale} → ${data.entreprise.finAnneeFiscale}`} />
               <InfoCard label="Forme Juridique" value={data.entreprise.formeJuridique} />
@@ -249,7 +249,16 @@ function InfoCard({ label, value }) {
   );
 }
 
+function formatCompanyCurrency(devise, symboleDevise) {
+  const code = String(devise || 'XOF').trim().toUpperCase();
+  const symbole = String(symboleDevise || '').trim().toUpperCase();
+  if (code === 'FCFA' || symbole === 'FCFA') return code === 'XAF' ? 'XAF' : 'XOF';
+  return symbole && symbole !== code ? `${code} (${symboleDevise})` : code;
+}
+
 function EntrepriseForm({ initialData, devises, systemes, pays, onSave, onCancel }) {
+  const initialCurrency = String(initialData?.devise || 'XOF').toUpperCase();
+  const initialSymbol = String(initialData?.symboleDevise || '').toUpperCase();
   const [formData, setFormData] = useState({
     nom: initialData?.nom || '',
     raisonSociale: initialData?.raisonSociale || '',
@@ -259,8 +268,8 @@ function EntrepriseForm({ initialData, devises, systemes, pays, onSave, onCancel
     pays: initialData?.pays || 'Sénégal',
     telephone: initialData?.telephone || '',
     email: initialData?.email || '',
-    devise: initialData?.devise || 'XOF',
-    symboleDevise: initialData?.symboleDevise || 'FCFA',
+    devise: initialCurrency === 'FCFA' ? 'XOF' : initialCurrency,
+    symboleDevise: initialSymbol === 'FCFA' ? (initialCurrency === 'XAF' ? 'XAF' : 'XOF') : (initialData?.symboleDevise || initialCurrency),
     tauxTva: initialData?.tauxTva || 18,
     systemeComptable: initialData?.systemeComptable || 'SYSCOHADA',
     debutAnneeFiscale: initialData?.debutAnneeFiscale || '2025-01-01',
@@ -431,7 +440,9 @@ function EntrepriseForm({ initialData, devises, systemes, pays, onSave, onCancel
               setFormData({ 
                 ...formData, 
                 devise: e.target.value,
-                symboleDevise: devise?.symbole || ''
+                symboleDevise: e.target.value === 'XOF' || e.target.value === 'XAF'
+                  ? e.target.value
+                  : devise?.symbole || ''
               });
             }}
             style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}

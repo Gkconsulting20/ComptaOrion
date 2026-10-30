@@ -239,7 +239,7 @@ router.post('/create', async (req, res) => {
       table: 'depenses',
       recordId: depense[0].id,
       nouvelleValeur: depense[0],
-      description: `Dépense créée: ${String(description).trim()} (${numericAmount} FCFA)`,
+      description: `Dépense créée: ${String(description).trim()} (${numericAmount} XOF)`,
       executor: tx,
       required: true
     });

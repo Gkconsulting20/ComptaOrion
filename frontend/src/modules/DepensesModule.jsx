@@ -171,7 +171,7 @@ export function DepensesModule() {
   const columns = [
     { key: 'id', label: 'ID' },
     { key: 'description', label: 'Description' },
-    { key: 'montant', label: 'Montant', render: (val) => `${val} FCFA` },
+    { key: 'montant', label: 'Montant', render: (val) => `${val} XOF` },
     { key: 'dateDepense', label: 'Date', render: (val) => val?.split('T')[0] || '-' },
     { 
       key: 'statut', 
@@ -267,7 +267,7 @@ export function DepensesModule() {
             }))]}
           />
           <FormField
-            label="Montant (FCFA)"
+            label="Montant (XOF)"
             name="montant"
             type="number"
             value={formData.montant}
@@ -321,7 +321,7 @@ export function DepensesModule() {
             onChange={(e) => setCategoryFormData({ ...categoryFormData, description: e.target.value })}
           />
           <FormField
-            label="Limite d'Approbation (FCFA)"
+            label="Limite d'Approbation (XOF)"
             type="number"
             value={categoryFormData.limiteApproval}
             onChange={(e) => setCategoryFormData({ ...categoryFormData, limiteApproval: parseFloat(e.target.value) })}
@@ -389,7 +389,7 @@ export function DepensesModule() {
         {selectedDepense && (
           <div>
             <p><strong>Description:</strong> {selectedDepense.description}</p>
-            <p><strong>Montant:</strong> {selectedDepense.montant} FCFA</p>
+            <p><strong>Montant:</strong> {selectedDepense.montant} XOF</p>
             <p><strong>Statut:</strong> {selectedDepense.statut}</p>
             
             <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
@@ -475,7 +475,7 @@ export function DepensesModule() {
               fields: [
                 { label: 'ID', value: selectedDepense.id },
                 { label: 'Description', value: selectedDepense.description || '-' },
-                { label: 'Montant', value: `${Math.round(parseFloat(selectedDepense.montant || 0)).toLocaleString('fr-FR')} FCFA` },
+                { label: 'Montant', value: `${Math.round(parseFloat(selectedDepense.montant || 0)).toLocaleString('fr-FR')} XOF` },
                 { label: 'Date', value: selectedDepense.dateDepense?.split('T')[0] || '-' },
                 { label: 'Statut', value: selectedDepense.statut?.replace('_', ' ') }
               ]

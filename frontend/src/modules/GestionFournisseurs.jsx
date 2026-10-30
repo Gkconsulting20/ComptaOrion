@@ -244,18 +244,18 @@ function FacturationTab({ fournisseurs }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '25px' }}>
         <div style={{ padding: '20px', background: '#fff3e0', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>STOCK EN ATTENTE</p>
-          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{stockPending.totaux?.valeur?.toLocaleString('fr-FR') || 0} FCFA</h2>
+          <h2 style={{ margin: '10px 0 0 0', color: '#e65100' }}>{stockPending.totaux?.valeur?.toLocaleString('fr-FR') || 0} XOF</h2>
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{stockPending.totaux?.lignes || 0} lignes</p>
         </div>
         <div style={{ padding: '20px', background: '#e3f2fd', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>LOGISTIQUE EN ATTENTE</p>
-          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{logistiquePending.totaux?.montant?.toLocaleString('fr-FR') || 0} FCFA</h2>
+          <h2 style={{ margin: '10px 0 0 0', color: '#1565c0' }}>{logistiquePending.totaux?.montant?.toLocaleString('fr-FR') || 0} XOF</h2>
           <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#999' }}>{logistiquePending.totaux?.lignes || 0} lignes</p>
         </div>
         <div style={{ padding: '20px', background: '#fce4ec', borderRadius: '8px' }}>
           <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL NON FACTURÉ</p>
           <h2 style={{ margin: '10px 0 0 0', color: '#c2185b' }}>
-            {((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString('fr-FR')} FCFA
+            {((stockPending.totaux?.valeur || 0) + (logistiquePending.totaux?.montant || 0)).toLocaleString('fr-FR')} XOF
           </h2>
         </div>
       </div>
@@ -290,8 +290,8 @@ function FacturationTab({ fournisseurs }) {
                 { key: 'reception_numero', label: 'N° Réception' },
                 { key: 'produit_nom', label: 'Produit', render: (val, row) => `${row.produit_reference || ''} ${val || ''}` },
                 { key: 'quantite_pending', label: 'Qté', render: (val) => parseFloat(val).toFixed(0) },
-                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} FCFA` },
-                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} FCFA</strong> }
+                { key: 'prix_estime', label: 'Prix Estimé', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR')} XOF` },
+                { key: 'valeur_estimee', label: 'Valeur', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} XOF</strong> }
               ]}
               data={stockPending.items || []}
             />
@@ -310,7 +310,7 @@ function FacturationTab({ fournisseurs }) {
               <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
                 {(logistiquePending.parType || []).map(t => (
                   <div key={t.type} style={{ padding: '10px 15px', background: '#f5f5f5', borderRadius: '8px' }}>
-                    <strong>{typeLabels[t.type] || t.type}:</strong> {t.montant.toLocaleString('fr-FR')} FCFA ({t.lignes})
+                    <strong>{typeLabels[t.type] || t.type}:</strong> {t.montant.toLocaleString('fr-FR')} XOF ({t.lignes})
                   </div>
                 ))}
               </div>
@@ -322,7 +322,7 @@ function FacturationTab({ fournisseurs }) {
                   { key: 'reception_numero', label: 'N° Réception' },
                   { key: 'type', label: 'Type', render: (val) => typeLabels[val] || val },
                   { key: 'description', label: 'Description' },
-                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} FCFA</strong> }
+                  { key: 'montant_estime', label: 'Montant', render: (val) => <strong>{parseFloat(val || 0).toLocaleString('fr-FR')} XOF</strong> }
                 ]}
                 data={logistiquePending.items || []}
               />
@@ -373,7 +373,7 @@ function FacturationTab({ fournisseurs }) {
                               <input type="checkbox" checked={selectedReceptions.includes(rec.id)} onChange={() => {}} style={{ marginRight: '10px' }} />
                               <strong>{rec.numero}</strong> - {new Date(rec.date_reception).toLocaleDateString('fr-FR')}
                             </div>
-                            <span style={{ fontWeight: 'bold', color: '#2196f3' }}>{parseFloat(rec.total_ht || 0).toLocaleString('fr-FR')} FCFA</span>
+                            <span style={{ fontWeight: 'bold', color: '#2196f3' }}>{parseFloat(rec.total_ht || 0).toLocaleString('fr-FR')} XOF</span>
                           </div>
                           <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                             {(rec.lignes || []).length} article(s)
@@ -547,23 +547,23 @@ function FacturationTab({ fournisseurs }) {
               <div style={{ background: '#e8f5e9', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                   <span>Total Articles:</span>
-                  <strong>{totals.totalArticles.toLocaleString('fr-FR')} FCFA</strong>
+                  <strong>{totals.totalArticles.toLocaleString('fr-FR')} XOF</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                   <span>Total Logistique:</span>
-                  <strong>{totals.totalLogistique.toLocaleString('fr-FR')} FCFA</strong>
+                  <strong>{totals.totalLogistique.toLocaleString('fr-FR')} XOF</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #4caf50', paddingTop: '10px' }}>
                   <span style={{ fontSize: '18px' }}>Total HT:</span>
-                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{totals.totalHT.toLocaleString('fr-FR')} FCFA</strong>
+                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{totals.totalHT.toLocaleString('fr-FR')} XOF</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
                   <span>TVA facturée:</span>
-                  <strong>{(Number(factureForm.montantTVA) || 0).toLocaleString('fr-FR')} FCFA</strong>
+                  <strong>{(Number(factureForm.montantTVA) || 0).toLocaleString('fr-FR')} XOF</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
                   <span style={{ fontSize: '18px' }}>Total TTC:</span>
-                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{totalTTC.toLocaleString('fr-FR')} FCFA</strong>
+                  <strong style={{ fontSize: '18px', color: '#2e7d32' }}>{totalTTC.toLocaleString('fr-FR')} XOF</strong>
                 </div>
               </div>
 
@@ -688,7 +688,7 @@ function RapportsClotureComptable({ periode, fournisseurs }) {
               </div>
               <div style={{ padding: '15px', background: '#ffebee', borderRadius: '8px' }}>
                 <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>MONTANT TOTAL NON FACTURÉ</p>
-                <h3 style={{ margin: '5px 0 0', color: '#d32f2f' }}>{Math.round(stockNonFacture.totaux?.valeur || 0).toLocaleString('fr-FR')} FCFA</h3>
+                <h3 style={{ margin: '5px 0 0', color: '#d32f2f' }}>{Math.round(stockNonFacture.totaux?.valeur || 0).toLocaleString('fr-FR')} XOF</h3>
               </div>
             </div>
             <Button variant="secondary" onClick={() => exportCSV('stock')}>📥 Exporter CSV</Button>
@@ -701,7 +701,7 @@ function RapportsClotureComptable({ periode, fournisseurs }) {
                 columns={[
                   { key: 'nom', label: 'Fournisseur' },
                   { key: 'lignes', label: 'Nb Articles' },
-                  { key: 'valeur', label: 'Montant Total', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString('fr-FR')} FCFA` }
+                  { key: 'valeur', label: 'Montant Total', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString('fr-FR')} XOF` }
                 ]}
                 data={stockNonFacture.parFournisseur}
                 actions={false}
@@ -717,7 +717,7 @@ function RapportsClotureComptable({ periode, fournisseurs }) {
               { key: 'produit_reference', label: 'Réf.' },
               { key: 'quantite_pending', label: 'Qté' },
               { key: 'prix_unitaire_estime', label: 'P.U.', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString('fr-FR')}` },
-              { key: 'valeur_estimee', label: 'Montant', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString('fr-FR')} FCFA` },
+              { key: 'valeur_estimee', label: 'Montant', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString('fr-FR')} XOF` },
               { key: 'date_reception', label: 'Date Réception' },
               { key: 'reception_numero', label: 'Réception N°' }
             ]}
@@ -735,7 +735,7 @@ function RapportsClotureComptable({ periode, fournisseurs }) {
               </div>
               <div style={{ padding: '15px', background: '#ffebee', borderRadius: '8px' }}>
                 <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>MONTANT TOTAL NON FACTURÉ</p>
-                <h3 style={{ margin: '5px 0 0', color: '#d32f2f' }}>{Math.round(logistiqueNonFacturee.totaux?.montant || 0).toLocaleString('fr-FR')} FCFA</h3>
+                <h3 style={{ margin: '5px 0 0', color: '#d32f2f' }}>{Math.round(logistiqueNonFacturee.totaux?.montant || 0).toLocaleString('fr-FR')} XOF</h3>
               </div>
             </div>
             <Button variant="secondary" onClick={() => exportCSV('logistique')}>📥 Exporter CSV</Button>
@@ -747,7 +747,7 @@ function RapportsClotureComptable({ periode, fournisseurs }) {
               <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
                 {logistiqueNonFacturee.parType.map(t => (
                   <div key={t.type} style={{ padding: '10px 15px', background: '#f5f5f5', borderRadius: '8px' }}>
-                    <span style={{ fontWeight: 'bold' }}>{typeLabels[t.type] || t.type}:</span> {Math.round(parseFloat(t.montant || 0)).toLocaleString('fr-FR')} FCFA
+                    <span style={{ fontWeight: 'bold' }}>{typeLabels[t.type] || t.type}:</span> {Math.round(parseFloat(t.montant || 0)).toLocaleString('fr-FR')} XOF
                   </div>
                 ))}
               </div>
@@ -761,7 +761,7 @@ function RapportsClotureComptable({ periode, fournisseurs }) {
                 columns={[
                   { key: 'nom', label: 'Fournisseur' },
                   { key: 'lignes', label: 'Nb Lignes' },
-                  { key: 'montant', label: 'Montant Total', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString('fr-FR')} FCFA` }
+                  { key: 'montant', label: 'Montant Total', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString('fr-FR')} XOF` }
                 ]}
                 data={logistiqueNonFacturee.parFournisseur}
                 actions={false}
@@ -774,7 +774,7 @@ function RapportsClotureComptable({ periode, fournisseurs }) {
             columns={[
               { key: 'fournisseur_nom', label: 'Fournisseur' },
               { key: 'type', label: 'Type', render: (v) => typeLabels[v] || v },
-              { key: 'montant_estime', label: 'Montant', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString('fr-FR')} FCFA` },
+              { key: 'montant_estime', label: 'Montant', render: (v) => `${Math.round(parseFloat(v || 0)).toLocaleString('fr-FR')} XOF` },
               { key: 'date_reception', label: 'Date Réception' },
               { key: 'reception_numero', label: 'Réception N°' },
               { key: 'commande_numero', label: 'Commande N°' }
@@ -939,7 +939,7 @@ export function GestionFournisseurs() {
           <div class="numero-cheque">N° ${chequeForm.numeroCheque || '________'}</div>
           
           <div class="montant-chiffres">
-            **${montant.toLocaleString('fr-FR')} FCFA**
+            **${montant.toLocaleString('fr-FR')} XOF**
           </div>
           
           <div style="margin-top: 20mm;">
@@ -1465,7 +1465,7 @@ export function GestionFournisseurs() {
               onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
             >
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL ACHATS</p>
-              <h2 style={{ margin: '10px 0 0 0', color: '#f57c00' }}>{totalAchats.toLocaleString('fr-FR')} FCFA</h2>
+              <h2 style={{ margin: '10px 0 0 0', color: '#f57c00' }}>{totalAchats.toLocaleString('fr-FR')} XOF</h2>
               <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#999' }}>Cliquer pour détails</p>
             </div>
             <div 
@@ -1475,7 +1475,7 @@ export function GestionFournisseurs() {
               onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
             >
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL PAIEMENTS</p>
-              <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{totalPaiements.toLocaleString('fr-FR')} FCFA</h2>
+              <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{totalPaiements.toLocaleString('fr-FR')} XOF</h2>
               <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#999' }}>Cliquer pour détails</p>
             </div>
           </div>
@@ -1492,7 +1492,7 @@ export function GestionFournisseurs() {
                   const total = data.commandes
                     .filter(c => c.fournisseur?.id === row.id)
                     .reduce((sum, c) => sum + parseFloat(c.commande?.totalHT || 0), 0);
-                  return `${total.toLocaleString('fr-FR')} FCFA`;
+                  return `${total.toLocaleString('fr-FR')} XOF`;
                 }},
                 { key: 'evaluation', label: 'Évaluation', render: (val) => '⭐'.repeat(val || 3) }
               ]}
@@ -1586,9 +1586,9 @@ export function GestionFournisseurs() {
                   onChange={(e) => setForm({...form, coutsLogistiques: {...(form.coutsLogistiques || {}), autre: parseFloat(e.target.value) || 0}})} />
               </div>
               <div style={{ background: '#f8f9fa', padding: '10px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                <span>Total Articles: <strong>{(form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0).toLocaleString('fr-FR')} FCFA</strong></span>
-                <span>Total Logistique: <strong>{Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0).toLocaleString('fr-FR')} FCFA</strong></span>
-                <span>Total Commande: <strong>{((form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0) + Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0)).toLocaleString('fr-FR')} FCFA</strong></span>
+                <span>Total Articles: <strong>{(form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0).toLocaleString('fr-FR')} XOF</strong></span>
+                <span>Total Logistique: <strong>{Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0).toLocaleString('fr-FR')} XOF</strong></span>
+                <span>Total Commande: <strong>{((form.items || []).reduce((sum, i) => sum + (parseFloat(i.quantite || 0) * parseFloat(i.prixUnitaire || 0)), 0) + Object.values(form.coutsLogistiques || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0)).toLocaleString('fr-FR')} XOF</strong></span>
               </div>
               
               <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -1702,7 +1702,7 @@ export function GestionFournisseurs() {
                           const montantTotal = facturesImpayees.reduce((sum, fact) => sum + parseFloat(fact.montantTotal || fact.montantHT || 0), 0);
                           return { 
                             value: f.id, 
-                            label: `${f.nom} (${facturesImpayees.length} facture${facturesImpayees.length > 1 ? 's' : ''} - ${montantTotal.toLocaleString('fr-FR')} FCFA)` 
+                            label: `${f.nom} (${facturesImpayees.length} facture${facturesImpayees.length > 1 ? 's' : ''} - ${montantTotal.toLocaleString('fr-FR')} XOF)`
                           };
                         })
                       ]} required />
@@ -1722,7 +1722,7 @@ export function GestionFournisseurs() {
                       .sort((a, b) => new Date(a.dateFacture) - new Date(b.dateFacture))
                       .map(f => ({ 
                         value: f.id, 
-                        label: `${f.numeroFacture || 'Facture'} - ${new Date(f.dateFacture).toLocaleDateString('fr-FR')} - ${f.montantTotal || f.montantHT || 0} FCFA` 
+                        label: `${f.numeroFacture || 'Facture'} - ${new Date(f.dateFacture).toLocaleDateString('fr-FR')} - ${f.montantTotal || f.montantHT || 0} XOF`
                       }))}
                     required />
                 )}
@@ -1857,9 +1857,9 @@ export function GestionFournisseurs() {
             {
               title: 'Totaux',
               fields: [
-                { label: 'Total HT', value: `${Math.round(parseFloat(selectedCommande.commande?.totalHT || 0)).toLocaleString('fr-FR')} FCFA` },
-                { label: 'TVA', value: `${Math.round(parseFloat(selectedCommande.commande?.montantTVA || 0)).toLocaleString('fr-FR')} FCFA` },
-                { label: 'Total TTC', value: `${Math.round(parseFloat(selectedCommande.commande?.totalTTC || 0)).toLocaleString('fr-FR')} FCFA` }
+                { label: 'Total HT', value: `${Math.round(parseFloat(selectedCommande.commande?.totalHT || 0)).toLocaleString('fr-FR')} XOF` },
+                { label: 'TVA', value: `${Math.round(parseFloat(selectedCommande.commande?.montantTVA || 0)).toLocaleString('fr-FR')} XOF` },
+                { label: 'Total TTC', value: `${Math.round(parseFloat(selectedCommande.commande?.totalTTC || 0)).toLocaleString('fr-FR')} XOF` }
               ]
             }
           ]}
@@ -1868,9 +1868,9 @@ export function GestionFournisseurs() {
             columns: [
               { key: 'description', label: 'Description' },
               { key: 'quantite', label: 'Qté', align: 'center' },
-              { key: 'prixUnitaire', label: 'P.U.', align: 'right', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} FCFA` },
+              { key: 'prixUnitaire', label: 'P.U.', align: 'right', render: (val) => `${Math.round(parseFloat(val || 0)).toLocaleString('fr-FR')} XOF` },
               { key: 'total', label: 'Total', align: 'right', render: (val, row) => 
-                `${Math.round((row.quantite || 0) * (row.prixUnitaire || 0)).toLocaleString('fr-FR')} FCFA` 
+                `${Math.round((row.quantite || 0) * (row.prixUnitaire || 0)).toLocaleString('fr-FR')} XOF`
               }
             ],
             data: selectedCommande.commande.items
@@ -1970,7 +1970,7 @@ export function GestionFournisseurs() {
                             <td style={{ padding: '10px' }}>{item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-'}</td>
                             <td style={{ padding: '10px' }}>{item.numero}</td>
                             <td style={{ padding: '10px' }}>{item.fournisseur || '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#f57c00' }}>{parseFloat(item.montant || 0).toLocaleString('fr-FR')} FCFA</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#f57c00' }}>{parseFloat(item.montant || 0).toLocaleString('fr-FR')} XOF</td>
                             <td style={{ padding: '10px', textAlign: 'center' }}>{item.statut || '-'}</td>
                           </>
                         ) : (
@@ -1979,7 +1979,7 @@ export function GestionFournisseurs() {
                             <td style={{ padding: '10px' }}>{item.fournisseur || '-'}</td>
                             <td style={{ padding: '10px' }}>{item.modePaiement || '-'}</td>
                             <td style={{ padding: '10px' }}>{item.reference || '-'}</td>
-                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#388e3c' }}>{parseFloat(item.montant || 0).toLocaleString('fr-FR')} FCFA</td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: 'bold', color: '#388e3c' }}>{parseFloat(item.montant || 0).toLocaleString('fr-FR')} XOF</td>
                           </>
                         )}
                       </tr>
@@ -1990,7 +1990,7 @@ export function GestionFournisseurs() {
                       <tr style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}>
                         <td colSpan={3} style={{ padding: '12px' }}>TOTAL</td>
                         <td style={{ padding: '12px', textAlign: 'right' }}>
-                          {drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || 0), 0).toLocaleString('fr-FR')} FCFA
+                          {drillModal.data?.reduce((sum, item) => sum + parseFloat(item.montant || 0), 0).toLocaleString('fr-FR')} XOF
                         </td>
                         <td></td>
                       </tr>
@@ -2045,7 +2045,7 @@ export function GestionFournisseurs() {
                 </select>
               </div>
               <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Montant (FCFA) *</label>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Montant (XOF) *</label>
                 <input
                   type="number"
                   value={chequeForm.montant}
@@ -2208,12 +2208,12 @@ function EtatsCompteFournisseurTab() {
     const facturesRows = (etatCompte.factures || []).map(f => {
       const statut = f.statut === 'payee' ? 'Payée' : f.statut === 'validee' ? 'Validée' : f.statut;
       const montant = Math.round(parseFloat(f.totalTTC || f.montantTotal || f.montantHT || 0)).toLocaleString('fr-FR');
-      return '<tr><td>' + (f.numeroFacture || 'N/A') + '</td><td>' + new Date(f.dateFacture).toLocaleDateString('fr-FR') + '</td><td class="text-right amount">' + montant + ' FCFA</td><td class="text-center"><span class="status status-' + f.statut + '">' + statut + '</span></td></tr>';
+      return '<tr><td>' + (f.numeroFacture || 'N/A') + '</td><td>' + new Date(f.dateFacture).toLocaleDateString('fr-FR') + '</td><td class="text-right amount">' + montant + ' XOF</td><td class="text-center"><span class="status status-' + f.statut + '">' + statut + '</span></td></tr>';
     }).join('');
 
     const paiementsRows = (etatCompte.paiements || []).map(p => {
       const montant = Math.round(parseFloat(p.montant || 0)).toLocaleString('fr-FR');
-      return '<tr><td>' + new Date(p.datePaiement).toLocaleDateString('fr-FR') + '</td><td>' + (p.reference || '-') + '</td><td>' + (p.modePaiement || '-') + '</td><td class="text-right amount" style="color: #388e3c;">' + montant + ' FCFA</td></tr>';
+      return '<tr><td>' + new Date(p.datePaiement).toLocaleDateString('fr-FR') + '</td><td>' + (p.reference || '-') + '</td><td>' + (p.modePaiement || '-') + '</td><td class="text-right amount" style="color: #388e3c;">' + montant + ' XOF</td></tr>';
     }).join('');
 
     const facturesTable = facturesRows ? '<table><thead><tr><th>N° Facture</th><th>Date</th><th class="text-right">Montant TTC</th><th class="text-center">Statut</th></tr></thead><tbody>' + facturesRows + '</tbody></table>' : '<div class="no-data">Aucune facture sur cette période</div>';
@@ -2228,9 +2228,9 @@ function EtatsCompteFournisseurTab() {
       (selectedFournisseur.email ? '<p><strong>Email:</strong> ' + selectedFournisseur.email + '</p>' : '') +
       (selectedFournisseur.telephone ? '<p><strong>Téléphone:</strong> ' + selectedFournisseur.telephone + '</p>' : '') +
       '<p class="periode"><strong>Période:</strong> ' + formatPeriodeFR(periode.dateDebut, periode.dateFin) + '</p></div>' +
-      '<div class="summary"><div class="summary-box facture"><div class="label">Total Facturé</div><div class="value">' + Math.round(etatCompte.totalFacture || 0).toLocaleString('fr-FR') + ' FCFA</div></div>' +
-      '<div class="summary-box paye"><div class="label">Total Payé</div><div class="value">' + Math.round(etatCompte.totalPaye || 0).toLocaleString('fr-FR') + ' FCFA</div></div>' +
-      '<div class="summary-box solde"><div class="label">Solde Dû</div><div class="value">' + Math.round(etatCompte.solde || 0).toLocaleString('fr-FR') + ' FCFA</div></div></div>' +
+      '<div class="summary"><div class="summary-box facture"><div class="label">Total Facturé</div><div class="value">' + Math.round(etatCompte.totalFacture || 0).toLocaleString('fr-FR') + ' XOF</div></div>' +
+      '<div class="summary-box paye"><div class="label">Total Payé</div><div class="value">' + Math.round(etatCompte.totalPaye || 0).toLocaleString('fr-FR') + ' XOF</div></div>' +
+      '<div class="summary-box solde"><div class="label">Solde Dû</div><div class="value">' + Math.round(etatCompte.solde || 0).toLocaleString('fr-FR') + ' XOF</div></div></div>' +
       '<div class="section"><h3>Factures</h3>' + facturesTable + '</div>' +
       '<div class="section"><h3>Paiements</h3>' + paiementsTable + '</div>' +
       '<div class="footer"><p>Document généré le ' + new Date().toLocaleDateString('fr-FR') + ' à ' + new Date().toLocaleTimeString('fr-FR') + '</p><p>ComptaOrion - Système de Gestion Comptable</p></div>' +
@@ -2329,19 +2329,19 @@ function EtatsCompteFournisseurTab() {
             <div style={{ padding: '15px', backgroundColor: '#e8f4f8', borderRadius: '8px' }}>
               <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Facturé</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#1976d2' }}>
-                {etatCompte.totalFacture?.toLocaleString('fr-FR') || 0} FCFA
+                {etatCompte.totalFacture?.toLocaleString('fr-FR') || 0} XOF
               </p>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#e8f8f0', borderRadius: '8px' }}>
               <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Payé</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>
-                {etatCompte.totalPaye?.toLocaleString('fr-FR') || 0} FCFA
+                {etatCompte.totalPaye?.toLocaleString('fr-FR') || 0} XOF
               </p>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
               <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Solde Dû</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: etatCompte.solde > 0 ? '#e74c3c' : '#27ae60' }}>
-                {etatCompte.solde?.toLocaleString('fr-FR') || 0} FCFA
+                {etatCompte.solde?.toLocaleString('fr-FR') || 0} XOF
               </p>
             </div>
           </div>
@@ -2364,7 +2364,7 @@ function EtatsCompteFournisseurTab() {
                       <td style={{ padding: '12px' }}>{f.numeroFacture || 'N/A'}</td>
                       <td style={{ padding: '12px' }}>{new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>
-                        {(f.montantTotal || f.montantHT || 0).toLocaleString('fr-FR')} FCFA
+                        {(f.montantTotal || f.montantHT || 0).toLocaleString('fr-FR')} XOF
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
                         <InvoiceStatusBadge 
@@ -2401,7 +2401,7 @@ function EtatsCompteFournisseurTab() {
                       <td style={{ padding: '12px' }}>{p.reference || '-'}</td>
                       <td style={{ padding: '12px' }}>{p.modePaiement || '-'}</td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
-                        {(p.montant || 0).toLocaleString('fr-FR')} FCFA
+                        {(p.montant || 0).toLocaleString('fr-FR')} XOF
                       </td>
                     </tr>
                   ))}
