@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db.js';
 import { users } from '../schema.js';
-import { moduleForApiPath, roleCanAccessModule, roleCanWriteModule } from '../../../shared/access-policy.js';
+import { moduleAllowsAction, moduleForApiPath } from '../../../shared/access-policy.js';
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -18,6 +18,7 @@ export async function tenantAccessControl(req, res, next) {
     const [currentUser] = await db.select({
       role: users.role,
       actif: users.actif,
+      modulePermissions: users.modulePermissions,
     }).from(users).where(and(
       eq(users.id, userId),
       eq(users.entrepriseId, entrepriseId),
@@ -36,12 +37,18 @@ export async function tenantAccessControl(req, res, next) {
     if (!moduleId && currentUser.role === 'admin') {
       return next();
     }
-    if (!moduleId || !roleCanAccessModule(currentUser.role, moduleId)) {
-      return res.status(403).json({ error: 'Votre rôle ne donne pas accès à ce module.' });
+    if (!moduleId || !moduleAllowsAction(currentUser.role, moduleId, 'read', currentUser.modulePermissions)) {
+      return res.status(403).json({ error: 'Votre compte ne dispose pas d’un accès à ce module.' });
     }
 
-    if (!READ_METHODS.has(req.method) && !roleCanWriteModule(currentUser.role, moduleId)) {
-      return res.status(403).json({ error: 'Votre rôle autorise uniquement la consultation de ce module.' });
+    const action = READ_METHODS.has(req.method)
+      ? 'read'
+      : req.method === 'POST' ? 'create'
+        : req.method === 'DELETE' ? 'delete'
+          : req.method === 'PUT' || req.method === 'PATCH' ? 'update'
+            : 'unknown';
+    if (!moduleAllowsAction(currentUser.role, moduleId, action, currentUser.modulePermissions)) {
+      return res.status(403).json({ error: 'Votre niveau d’accès ne permet pas cette opération dans ce module.' });
     }
 
     next();

@@ -4,10 +4,17 @@ import { db } from '../db.js';
 import { abonnements, plansAbonnement, sessions, users } from '../schema.js';
 import { requireRole, hashPassword } from '../auth.js';
 import { logAudit } from '../utils/auditLogger.js';
-import { ROLE_ACCESS_PROFILES } from '../../../shared/access-policy.js';
+import {
+  MODULE_PERMISSION_LEVELS,
+  ROLE_ACCESS_PROFILES,
+  USER_MANAGEABLE_MODULES,
+  resolveModulePermissions,
+} from '../../../shared/access-policy.js';
 
 const router = express.Router();
 const VALID_ROLES = new Set(Object.keys(ROLE_ACCESS_PROFILES));
+const VALID_PERMISSION_LEVELS = new Set(MODULE_PERMISSION_LEVELS.map(({ value }) => value));
+const VALID_PERMISSION_MODULES = new Set(USER_MANAGEABLE_MODULES.map(({ id }) => id));
 const DEFAULT_USER_LIMIT = 3;
 
 const safeUserFields = {
@@ -17,6 +24,7 @@ const safeUserFields = {
   nom: users.nom,
   prenom: users.prenom,
   role: users.role,
+  modulePermissions: users.modulePermissions,
   actif: users.actif,
   lastLogin: users.lastLogin,
   createdAt: users.createdAt,
@@ -30,10 +38,24 @@ function toSafeUser(user) {
     nom: user.nom,
     prenom: user.prenom,
     role: user.role,
+    modulePermissions: resolveModulePermissions(user.role, user.modulePermissions),
     actif: user.actif,
     lastLogin: user.lastLogin,
     createdAt: user.createdAt,
   };
+}
+
+function normalizeModulePermissions(role, modulePermissions) {
+  if (modulePermissions !== undefined &&
+      (!modulePermissions || typeof modulePermissions !== 'object' || Array.isArray(modulePermissions))) {
+    throw new Error('INVALID_MODULE_PERMISSIONS');
+  }
+  for (const [moduleId, level] of Object.entries(modulePermissions || {})) {
+    if (!VALID_PERMISSION_MODULES.has(moduleId) || !VALID_PERMISSION_LEVELS.has(level)) {
+      throw new Error('INVALID_MODULE_PERMISSIONS');
+    }
+  }
+  return resolveModulePermissions(role, modulePermissions);
 }
 
 async function getUserLimit(executor, entrepriseId) {
@@ -99,6 +121,8 @@ router.get('/', async (req, res) => {
         label: profile.label,
         description: profile.description,
       })),
+      modules: USER_MANAGEABLE_MODULES,
+      permissionLevels: MODULE_PERMISSION_LEVELS,
     });
   } catch (error) {
     console.error('Erreur de chargement des utilisateurs entreprise:', error);
@@ -126,6 +150,12 @@ router.post('/', async (req, res) => {
   if (!VALID_ROLES.has(role)) {
     return res.status(400).json({ error: 'Rôle utilisateur invalide.' });
   }
+  let modulePermissions;
+  try {
+    modulePermissions = normalizeModulePermissions(role, req.body?.modulePermissions);
+  } catch {
+    return res.status(400).json({ error: 'Les droits par module transmis ne sont pas valides.' });
+  }
 
   try {
     const passwordHash = await hashPassword(password);
@@ -146,6 +176,7 @@ router.post('/', async (req, res) => {
         nom,
         prenom,
         role,
+        modulePermissions,
         actif: true,
       }).returning(safeUserFields);
 
@@ -162,6 +193,7 @@ router.post('/', async (req, res) => {
           nom: created.nom,
           prenom: created.prenom,
           role: created.role,
+          modulePermissions,
           actif: created.actif,
         },
         description: `Création du compte utilisateur ${created.email}`,
@@ -236,6 +268,17 @@ router.put('/:userId', async (req, res) => {
         actif: nextActive,
         updatedAt: new Date(),
       };
+      let nextModulePermissions;
+      try {
+        nextModulePermissions = req.body?.modulePermissions !== undefined
+          ? normalizeModulePermissions(nextRole, req.body.modulePermissions)
+          : nextRole !== current.role
+            ? normalizeModulePermissions(nextRole)
+            : resolveModulePermissions(current.role, current.modulePermissions);
+      } catch {
+        return { invalidModulePermissions: true };
+      }
+      patch.modulePermissions = nextModulePermissions;
       if (req.body?.nom !== undefined) {
         patch.nom = String(req.body.nom || '').trim() || null;
         if (patch.nom?.length > 100) return { invalidName: true };
@@ -262,7 +305,9 @@ router.put('/:userId', async (req, res) => {
         eq(users.entrepriseId, req.entrepriseId),
       )).returning(safeUserFields);
 
-      if (current.role !== nextRole || current.actif !== nextActive) {
+      const permissionsChanged = JSON.stringify(resolveModulePermissions(current.role, current.modulePermissions)) !==
+        JSON.stringify(nextModulePermissions);
+      if (current.role !== nextRole || current.actif !== nextActive || permissionsChanged) {
         await tx.update(sessions).set({ logoutAt: new Date() }).where(and(
           eq(sessions.userId, userId),
           eq(sessions.enterpriseId, req.entrepriseId),
@@ -284,6 +329,7 @@ router.put('/:userId', async (req, res) => {
           nom: current.nom,
           prenom: current.prenom,
           role: current.role,
+          modulePermissions: resolveModulePermissions(current.role, current.modulePermissions),
           actif: current.actif,
         },
         nouvelleValeur: {
@@ -292,6 +338,7 @@ router.put('/:userId', async (req, res) => {
           nom: saved.nom,
           prenom: saved.prenom,
           role: saved.role,
+          modulePermissions: nextModulePermissions,
           actif: saved.actif,
         },
         description: `Modification des accès de ${saved.email}`,
@@ -303,6 +350,7 @@ router.put('/:userId', async (req, res) => {
     if (updated.selfLockout) return res.status(400).json({ error: 'Vous ne pouvez pas désactiver votre propre compte ni retirer votre rôle administrateur.' });
     if (updated.lastAdmin) return res.status(409).json({ error: 'L’entreprise doit conserver au moins un administrateur actif.' });
     if (updated.limitReached) return res.status(409).json({ error: 'La limite d’utilisateurs de votre forfait est atteinte.' });
+    if (updated.invalidModulePermissions) return res.status(400).json({ error: 'Les droits par module transmis ne sont pas valides.' });
     if (updated.invalidEmail) return res.status(400).json({ error: 'Adresse courriel invalide.' });
     if (updated.invalidUsername) return res.status(400).json({ error: 'Nom d’utilisateur invalide.' });
     if (updated.invalidName) return res.status(400).json({ error: 'Le prénom ou le nom dépasse 100 caractères.' });

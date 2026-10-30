@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { users, sessions, auditConnexions, passwordResetTokens, permissions, entreprises } from '../schema.js';
 import { generateToken, generateRefreshToken, verifyRefreshToken, hashPassword, comparePassword, authMiddleware, saasAdminOnly, readCookie, setAuthCookies, clearAuthCookies, REFRESH_TOKEN_COOKIE } from '../auth.js';
 import { eq, and, gt, isNull } from 'drizzle-orm';
+import { resolveModulePermissions } from '../../../shared/access-policy.js';
 
 const router = express.Router();
 
@@ -109,6 +110,7 @@ router.post('/login', async (req, res) => {
         nom: user.nom,
         prenom: user.prenom,
         role: user.role,
+        modulePermissions: resolveModulePermissions(user.role, user.modulePermissions),
         entrepriseId: user.entrepriseId
       },
       entreprise: entreprise || null,
@@ -240,6 +242,7 @@ router.get('/session', authMiddleware, async (req, res) => {
       nom: users.nom,
       prenom: users.prenom,
       role: users.role,
+      modulePermissions: users.modulePermissions,
       entrepriseId: users.entrepriseId,
       actif: users.actif
     }).from(users).where(and(
@@ -250,6 +253,7 @@ router.get('/session', authMiddleware, async (req, res) => {
       clearAuthCookies(res);
       return res.status(401).json({ error: 'Session expirée' });
     }
+    user.modulePermissions = resolveModulePermissions(user.role, user.modulePermissions);
     const [entreprise] = await db.select().from(entreprises)
       .where(eq(entreprises.id, user.entrepriseId)).limit(1);
     return res.json({ user, entreprise: entreprise || null });

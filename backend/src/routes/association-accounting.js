@@ -24,13 +24,6 @@ const isoDate = (value) => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
 
-router.use((req, res, next) => {
-  if (!['admin', 'accountant', 'manager'].includes(req.user?.role)) {
-    return res.status(403).json({ error: 'Accès réservé à la direction et à la comptabilité.' });
-  }
-  next();
-});
-
 async function findProject(id, entrepriseId, executor = db) {
   if (!safeId(id)) return null;
   const [project] = await executor.select().from(projetsAssociatifs)

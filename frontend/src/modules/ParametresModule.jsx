@@ -4,9 +4,12 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import api from '../api';
 import { UserAccessPanel } from './UserAccessPanel';
+import { roleCanAccessModule } from '@shared/access-policy.js';
 
 export function ParametresModule({ user }) {
-  const [activeTab, setActiveTab] = useState('entreprise');
+  const hasSettingsAccess = roleCanAccessModule(user?.role, 'parametres', user?.modulePermissions);
+  const hasAuditAccess = roleCanAccessModule(user?.role, 'audit', user?.modulePermissions);
+  const [activeTab, setActiveTab] = useState(hasSettingsAccess ? 'entreprise' : 'audit');
   const [data, setData] = useState({
     entreprise: null,
     devises: [],
@@ -18,8 +21,9 @@ export function ParametresModule({ user }) {
   const [modal, setModal] = useState({ open: false, type: null });
 
   useEffect(() => {
-    loadAllData();
-  }, []);
+    if (hasSettingsAccess) loadAllData();
+    else setLoading(false);
+  }, [hasSettingsAccess]);
 
   const loadAllData = async () => {
     try {
@@ -51,13 +55,15 @@ export function ParametresModule({ user }) {
   };
 
   const tabs = [
-    { id: 'entreprise', label: '🏢 Entreprise', icon: '🏢' },
-    { id: 'comptabilite', label: '📊 Système Comptable', icon: '📊' },
-    { id: 'devises', label: '💱 Devises', icon: '💱' },
-    { id: 'tauxChange', label: '📈 Taux de Change', icon: '📈' },
-    { id: 'pays', label: '🌍 Pays & Régions', icon: '🌍' },
-    { id: 'taxes', label: '💰 Taxes (TVA)', icon: '💰' },
-    { id: 'audit', label: '📋 Historique Audit', icon: '📋' },
+    ...(hasSettingsAccess ? [
+      { id: 'entreprise', label: '🏢 Entreprise', icon: '🏢' },
+      { id: 'comptabilite', label: '📊 Système Comptable', icon: '📊' },
+      { id: 'devises', label: '💱 Devises', icon: '💱' },
+      { id: 'tauxChange', label: '📈 Taux de Change', icon: '📈' },
+      { id: 'pays', label: '🌍 Pays & Régions', icon: '🌍' },
+      { id: 'taxes', label: '💰 Taxes (TVA)', icon: '💰' },
+    ] : []),
+    ...(hasAuditAccess ? [{ id: 'audit', label: '📋 Historique Audit', icon: '📋' }] : []),
     ...(user?.role === 'admin'
       ? [{ id: 'utilisateurs', label: '👥 Utilisateurs & accès', icon: '👥' }]
       : [])

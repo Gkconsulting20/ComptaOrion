@@ -15,6 +15,12 @@ Chaque entreprise cliente doit gérer ses propres utilisateurs et leurs niveaux 
 
 **How to apply:** cloisonner la gestion des membres par entreprise; ne jamais donner aux administrateurs clients l’accès aux fonctions SaaS globales ni aux commerciaux ComptaOrion.
 
+Les administrateurs clients doivent pouvoir régler séparément, pour chaque utilisateur et chaque module ERP, la consultation, la modification et la gestion incluant la suppression.
+
+**Why:** l’utilisateur a précisé que les niveaux d’accès par module sont essentiels pour limiter les accès de son équipe.
+
+**How to apply:** les profils servent de valeurs de départ; les droits effectifs restent configurables par utilisateur et vérifiés côté serveur dans le tenant de son entreprise.
+
 Trois utilisateurs est une capacité fréquente à considérer pour un forfait, mais l’offre commerciale complète reste à revoir.
 
 **Why:** l’utilisateur a indiqué que le nombre d’utilisateurs est souvent de trois et qu’il souhaite revenir sur l’offre commerciale plus tard.

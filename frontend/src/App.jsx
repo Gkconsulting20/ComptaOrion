@@ -50,7 +50,7 @@ const ALL_MODULES = [
   { id: 'tresorerie', label: 'Trésorerie', requiresSuperAdmin: false },
   { id: 'stock', label: 'Stock', requiresSuperAdmin: false },
   { id: 'comptabilite', label: 'Comptabilité', requiresSuperAdmin: false },
-  { id: 'associations', label: 'Comptabilité associations', requiresAssociationAccess: true },
+  { id: 'associations', label: 'Comptabilité associations' },
   { id: 'impots', label: 'Impôts', requiresSuperAdmin: false },
   { id: 'integrations', label: 'Intégrations', requiresSuperAdmin: false, requiresAdmin: true },
   ...(AI_ENABLED
@@ -160,12 +160,13 @@ export default function App() {
   // Super Admin = entrepriseId === 1 (ComptaOrion lui-même)
   const isAdmin = user?.role === 'admin';
   const isSuperAdmin = isAdmin && Number(user?.entrepriseId) === 1;
-  const associationAccess = ['admin', 'accountant', 'manager'].includes(user?.role);
   const MODULES = ALL_MODULES.filter(m =>
     (!m.requiresSuperAdmin || isSuperAdmin) &&
     (!m.requiresAdmin || isAdmin) &&
-    (!m.requiresAssociationAccess || associationAccess) &&
-    roleCanAccessModule(user?.role, m.id)
+    (m.id === 'parametres'
+      ? roleCanAccessModule(user?.role, 'parametres', user?.modulePermissions) ||
+        roleCanAccessModule(user?.role, 'audit', user?.modulePermissions)
+      : roleCanAccessModule(user?.role, m.id, user?.modulePermissions))
   );
   const activeModule = MODULES.find(module => module.id === currentView);
   const visibleModuleGroups = NAVIGATION_GROUPS

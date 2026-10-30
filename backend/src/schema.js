@@ -104,6 +104,7 @@ export const users = pgTable('users', {
   nom: varchar('nom', { length: 100 }),
   prenom: varchar('prenom', { length: 100 }),
   role: userRoleEnum('role').default('employee'),
+  modulePermissions: jsonb('module_permissions').notNull().default({}),
   actif: boolean('actif').default(true),
   lastLogin: timestamp('last_login'),
   createdAt: timestamp('created_at').defaultNow(),
