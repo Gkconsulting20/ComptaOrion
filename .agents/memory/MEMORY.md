@@ -8,7 +8,7 @@
 - [Synchronisation comptabilité-trésorerie](treasury-accounting-sync.md) — relier les journaux de banque au compte bancaire lié et éviter les mouvements en double.
 - [Coût de revient fournisseurs](supplier-costing.md) — calculer les frais au poids, majorer le CMV et suivre les fournisseurs via le compte collectif 401.
 - [Pause du module Paie & RH](payroll-paused.md) — garder Paie & RH masqué pendant la préparation du lancement initial de l’application.
-- [Espace commercial](saas-commercial-portal.md) — démo prospects: montrer les modules métiers, sans Paie & RH ni Assistant IA.
+- [Espace commercial](saas-commercial-portal.md) — offres Base/Standard/Premium, démo métier, sans Paie & RH ni Assistant IA.
 - [Interface ComptaOrion](comptaorion-interface.md) — garder la navigation regroupée et la barre latérale sombre, avec ComptaOrion distinct de l’entreprise NERU.
 - [Piste d’audit](audit-trail-policy.md) — les traces de création, modification et suppression sont une exigence de sécurité pour les clients.
 - [Séquences comptables](accounting-sequences.md) — compteurs par journal, 6 chiffres pour achats et 8 pour ventes, sans réutilisation après suppression.

@@ -32,3 +32,9 @@ La démo destinée aux prospects doit montrer les modules métiers importants de
 **Why:** l’utilisateur a précisé que tous les modules métiers sont importants pour la démo et l’offre, à l’exception de la paie et de l’IA.
 
 **How to apply:** présenter les fonctionnalités métiers avec des données fictives; ne pas ajouter Paie & RH ni Assistant IA au menu public de démonstration ou à la liste des fonctionnalités vendues.
+
+La répartition commerciale approuvée est : Base pour le socle ERP et les droits par module; Standard ajoute l’OCR fournisseur, le coût moyen pondéré avec frais répartis au poids et la bibliothèque de prix; Premium ajoute la comptabilité associative par projet, les paiements partiels et le détail des états financiers.
+
+**Why:** l’utilisateur a autorisé la publication Cloudflare après avoir vu et reçu le résumé de cette répartition.
+
+**How to apply:** conserver cette répartition dans l’offre; exclure Paie & RH, Assistant IA et Immobilisations. Ne pas inventer de tarifs ni prétendre que les limites par forfait sont appliquées avant configuration et validation.
