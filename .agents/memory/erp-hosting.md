@@ -26,3 +26,9 @@ Pour les opérations de base de données et de Cloudflare, l’utilisateur préf
 **Why:** L’utilisateur a indiqué ne pas pouvoir créer lui-même les bases de données et a demandé de l’aide pour ces opérations.
 
 **How to apply:** Privilégier les procédures que l’agent peut effectuer avec les outils connectés; demander uniquement les validations ou actions qui ne sont pas accessibles à l’agent.
+
+Les sauvegardes Render doivent utiliser un client `pg_dump` de la même version majeure que la base PostgreSQL 18; le canal Nix épinglé du projet ne fournit pas cette version.
+
+**Why:** Un client PostgreSQL plus ancien ne prend pas en charge correctement un serveur plus récent, et le canal de paquets du projet était en retard sur la version du serveur.
+
+**How to apply:** Pour une sauvegarde de production, utiliser un client PostgreSQL 18 temporaire, chiffrer l’archive et vérifier son intégrité avant toute migration; ne pas ajouter cet outil de sauvegarde aux dépendances d’exécution de l’application.
