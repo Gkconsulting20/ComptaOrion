@@ -110,7 +110,7 @@ function DemoPanel({ section }) {
     return (
       <section className="prospect-demo-panel">
         <div className="prospect-demo-section-heading">
-          <div><span className="prospect-demo-eyebrow">PRÉPARATION FISCALE</span><h2>Suivi des taxes</h2></div>
+          <div><span className="prospect-demo-eyebrow">SUIVI FISCAL</span><h2>Suivi des taxes</h2></div>
           <span className="prospect-demo-badge">Exemple uniquement</span>
         </div>
         <div className="prospect-demo-tax-grid">
@@ -118,7 +118,7 @@ function DemoPanel({ section }) {
           <article><span>TVA récupérable</span><strong>201 500 FCFA</strong><small>Exemple fictif sur la période</small></article>
           <article><span>Solde indicatif</span><strong>284 500 FCFA</strong><small>À contrôler avant toute déclaration</small></article>
         </div>
-        <p className="prospect-demo-note">Cette page présente une maquette. Elle ne prépare ni ne dépose de déclaration officielle.</p>
+        <p className="prospect-demo-note">Les chiffres sont fictifs et ne constituent pas une déclaration fiscale validée ou transmise à l’OTR.</p>
       </section>
     );
   }

@@ -23,15 +23,27 @@ test('les modules avancés et les APIs globales sont réservés à l’administr
 test('le module fiscal crée des brouillons sans prétendre déposer ou payer', async () => {
   const routes = await read('../src/routes/impots.js');
   const frontend = await read('../../frontend/src/modules/ImpotsModule.jsx');
+  const app = await read('../../frontend/src/App.jsx');
+  const demo = await read('../../frontend/src/pages/ProspectDemo.jsx');
 
   assert.match(routes, /router\.post\('\/parametres\/tester-connexion', \(_req, res\) => res\.status\(501\)/);
   assert.match(routes, /router\.post\('\/declarations\/:id\/payer', \(_req, res\) => res\.status\(501\)/);
   assert.match(routes, /router\.post\('\/declarations\/tva', async \(req, res\) =>/);
   assert.match(routes, /statut: 'brouillon'/);
   assert.match(routes, /Aucun dépôt ni paiement n’a été effectué/);
+  assert.match(routes, /cc\.numero LIKE '443%'/);
+  assert.match(routes, /cc\.numero NOT LIKE '4434%'/);
+  assert.match(routes, /cc\.numero LIKE '445%'/);
+  assert.match(routes, /e\.valide = true/);
   assert.match(routes, /router\.post\('\/declarations\/:id\/depot-manuel', async \(req, res\) =>/);
-  assert.match(frontend, /Préparation de brouillons disponible — aucune télédéclaration ni aucun paiement automatique/);
+  assert.match(routes, /pg_advisory_xact_lock\(hashtext\(\$\{lockKey\}\)\)/);
+  assert.match(frontend, /Calculs fiscaux disponibles — aucun envoi ni paiement automatique/);
   assert.match(frontend, /ne calcule pas le bénéfice imposable ni l’impôt dû/);
+  assert.match(app, /id: 'impots', label: 'Impôts'/);
+  assert.doesNotMatch(app, /Impôts \(en préparation\)/i);
+  assert.doesNotMatch(frontend, /en préparation|préparation de brouillons|préparation disponible/i);
+  assert.match(demo, /SUIVI FISCAL/);
+  assert.doesNotMatch(demo, /PRÉPARATION FISCALE/i);
   assert.doesNotMatch(frontend, /testerConnexion|declarerTVA/);
 });
 

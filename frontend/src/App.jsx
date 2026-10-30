@@ -50,7 +50,7 @@ const ALL_MODULES = [
   { id: 'stock', label: 'Stock', requiresSuperAdmin: false },
   { id: 'comptabilite', label: 'Comptabilité', requiresSuperAdmin: false },
   { id: 'associations', label: 'Comptabilité associations', requiresAssociationAccess: true },
-  { id: 'impots', label: 'Impôts (en préparation)', requiresSuperAdmin: false },
+  { id: 'impots', label: 'Impôts', requiresSuperAdmin: false },
   { id: 'integrations', label: 'Intégrations', requiresSuperAdmin: false, requiresAdmin: true },
   ...(AI_ENABLED
     ? [{ id: 'ia-assistant', label: 'Assistant IA', requiresSuperAdmin: false }]

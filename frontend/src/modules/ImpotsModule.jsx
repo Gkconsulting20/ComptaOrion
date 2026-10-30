@@ -134,7 +134,7 @@ export function ImpotsModule() {
       const declarationsRes = await api.get('/impots/declarations');
       setDeclarations(declarationsRes.data || []);
     } catch (error) {
-      setTaxFeedback({ type: 'error', message: error.message || 'Impossible de préparer le brouillon TVA.' });
+      setTaxFeedback({ type: 'error', message: error.message || 'Impossible de créer le brouillon TVA.' });
     } finally {
       setLoading(false);
     }
@@ -300,7 +300,7 @@ export function ImpotsModule() {
             disabled={loading}
             style={{ padding: '8px 16px', backgroundColor: loading ? '#95a5a6' : '#6c5ce7', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer' }}
           >
-            {loading ? 'Préparation…' : 'Créer un brouillon TVA'}
+            {loading ? 'Enregistrement…' : 'Créer un brouillon TVA'}
           </button>
           <button 
             onClick={() => {
@@ -410,9 +410,9 @@ export function ImpotsModule() {
         </div>
 
         <div role="status" style={{ backgroundColor: '#fff3cd', padding: '20px', borderRadius: '8px', marginTop: '20px', color: '#735515' }}>
-          <h4 style={{ marginTop: 0 }}>Préparation disponible — dépôt manuel uniquement</h4>
+          <h4 style={{ marginTop: 0 }}>Dossier TVA calculé — dépôt manuel uniquement</h4>
           <p style={{ marginBottom: 0 }}>
-            Le dossier reprend les écritures validées des comptes 443* (hors 4434) et 445* pour la période choisie. Vérifiez les comptes, les pièces et le régime fiscal avec votre comptable avant tout dépôt sur le portail de l’OTR.
+            Le calcul reprend les écritures validées des comptes 443* (hors 4434) et 445* pour la période choisie. Vérifiez les comptes, les pièces et le régime fiscal avec votre comptable avant tout dépôt sur le portail de l’OTR. ComptaOrion ne transmet pas la déclaration et n’effectue pas le paiement.
           </p>
           <p style={{ margin: '10px 0 0' }}>
             <a href="https://new.otr.tg/documentation#fiscalite" target="_blank" rel="noreferrer">
@@ -430,7 +430,7 @@ export function ImpotsModule() {
 
   const renderIS = () => (
     <div>
-      <h3 style={{ marginBottom: '8px' }}>Préparation des données pour l’Impôt sur les Sociétés</h3>
+      <h3 style={{ marginBottom: '8px' }}>Résultat comptable pour l’Impôt sur les Sociétés</h3>
       <p style={{ marginTop: 0, color: '#52606d' }}>
         Ce relevé présente le résultat comptable de la période. Il ne calcule pas le bénéfice imposable ni l’impôt dû.
       </p>
@@ -597,13 +597,13 @@ export function ImpotsModule() {
     <div style={{ padding: '20px' }}>
       <div style={{ marginBottom: '30px' }}>
         <h2 style={{ margin: '0 0 10px 0', color: '#2c3e50' }}>🏛️ Gestion des Impôts et Taxes</h2>
-        <p style={{ margin: 0, color: '#7f8c8d' }}>Suivi indicatif des montants fiscaux</p>
+        <p style={{ margin: 0, color: '#7f8c8d' }}>Suivi fiscal par période</p>
       </div>
 
       <div role="alert" style={{ backgroundColor: '#fff3cd', border: '1px solid #f0d58a', padding: '16px', borderRadius: '8px', marginBottom: '20px', color: '#735515' }}>
-        <strong>Préparation de brouillons disponible — aucune télédéclaration ni aucun paiement automatique.</strong>
+        <strong>Calculs fiscaux disponibles — aucun envoi ni paiement automatique.</strong>
         <p style={{ margin: '6px 0 0' }}>
-          Les calculs utilisent les écritures comptables et doivent être vérifiés avant dépôt. Les anciennes déclarations peuvent provenir d’une simulation.
+          Les montants sont calculés à partir des écritures comptables et doivent être vérifiés avant dépôt. Les déclarations sont à transmettre manuellement sur le portail de l’OTR. Les anciennes déclarations peuvent provenir d’une simulation.
         </p>
       </div>
       {taxFeedback.message && (

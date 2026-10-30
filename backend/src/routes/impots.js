@@ -30,9 +30,9 @@ function isValidISODate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-async function calculerTva(entrepriseId, dateDebut, dateFin) {
+export async function calculerTva(entrepriseId, dateDebut, dateFin, executor = db) {
   const [collecteeData, deductibleData] = await Promise.all([
-    db.execute(sql`
+    executor.execute(sql`
     SELECT cc.numero AS "numero", cc.nom AS "nom",
       COALESCE(SUM(le.credit), 0) - COALESCE(SUM(le.debit), 0) AS "montant",
       COUNT(DISTINCT e.id)::int AS "nombreEcritures"
@@ -48,7 +48,7 @@ async function calculerTva(entrepriseId, dateDebut, dateFin) {
     GROUP BY cc.numero, cc.nom
     ORDER BY cc.numero
   `),
-    db.execute(sql`
+    executor.execute(sql`
     SELECT cc.numero AS "numero", cc.nom AS "nom",
       COALESCE(SUM(le.debit), 0) - COALESCE(SUM(le.credit), 0) AS "montant",
       COUNT(DISTINCT e.id)::int AS "nombreEcritures"
@@ -377,43 +377,39 @@ router.post('/declarations/tva', async (req, res) => {
     }
 
     const periode = `${dateDebut}..${dateFin}`;
-    const [existingDraft] = await db
-      .select()
-      .from(declarationsFiscales)
-      .where(and(
-        eq(declarationsFiscales.entrepriseId, req.entrepriseId),
-        eq(declarationsFiscales.type, 'tva'),
-        eq(declarationsFiscales.periode, periode)
-      ))
-      .limit(1);
-    if (existingDraft) {
-      return res.status(409).json({
-        success: false,
-        message: 'Un dossier TVA existe déjà pour cette période.',
-        data: existingDraft
-      });
-    }
-
-    const totals = await calculerTva(req.entrepriseId, dateDebut, dateFin);
-    const notes = JSON.stringify({
-      version: 1,
-      pays: 'togo',
-      dateDebut,
-      dateFin,
-      source: 'écritures comptables validées',
-      comptes: {
-        tvaCollectee: '443* hors 4434 (TVA facturée)',
-        tvaDeductible: '445* (TVA récupérable)',
-        detailCollectee: totals.comptesCollectee,
-        detailDeductible: totals.comptesDeductible
-      },
-      tvaCollectee: totals.tvaCollectee,
-      tvaDeductible: totals.tvaDeductible,
-      tvaADecaisser: totals.tvaADecaisser,
-      creditTVA: totals.creditTVA,
-      avertissement: 'Dossier préparatoire uniquement; vérifier le régime, les pièces, les comptes et les règles OTR applicables avant tout dépôt.'
-    });
     const draft = await db.transaction(async (tx) => {
+      const lockKey = `comptaorion:tva:${req.entrepriseId}:${periode}`;
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+      const [existingDraft] = await tx
+        .select()
+        .from(declarationsFiscales)
+        .where(and(
+          eq(declarationsFiscales.entrepriseId, req.entrepriseId),
+          eq(declarationsFiscales.type, 'tva'),
+          eq(declarationsFiscales.periode, periode)
+        ))
+        .limit(1);
+      if (existingDraft) return { existing: existingDraft };
+
+      const totals = await calculerTva(req.entrepriseId, dateDebut, dateFin, tx);
+      const notes = JSON.stringify({
+        version: 1,
+        pays: 'togo',
+        dateDebut,
+        dateFin,
+        source: 'écritures comptables validées',
+        comptes: {
+          tvaCollectee: '443* hors 4434 (TVA facturée)',
+          tvaDeductible: '445* (TVA récupérable)',
+          detailCollectee: totals.comptesCollectee,
+          detailDeductible: totals.comptesDeductible
+        },
+        tvaCollectee: totals.tvaCollectee,
+        tvaDeductible: totals.tvaDeductible,
+        tvaADecaisser: totals.tvaADecaisser,
+        creditTVA: totals.creditTVA,
+        avertissement: 'Relevé indicatif; vérifier le régime, les pièces, les comptes et les règles OTR applicables avant tout dépôt.'
+      });
       const [created] = await tx.insert(declarationsFiscales).values({
         entrepriseId: req.entrepriseId,
         type: 'tva',
@@ -432,19 +428,27 @@ router.post('/declarations/tva', async (req, res) => {
         executor: tx,
         required: true
       });
-      return created;
+      return { created };
     });
+
+    if (draft.existing) {
+      return res.status(409).json({
+        success: false,
+        message: 'Un dossier TVA existe déjà pour cette période.',
+        data: draft.existing
+      });
+    }
 
     return res.status(201).json({
       success: true,
       message: 'Brouillon TVA créé. Aucun dépôt ni paiement n’a été effectué.',
-      data: draft
+      data: draft.created
     });
   } catch (error) {
     console.error('Erreur POST /api/impots/declarations/tva:', error);
     return res.status(500).json({
       success: false,
-      message: 'Erreur lors de la préparation du brouillon TVA',
+      message: 'Erreur lors de la création du brouillon TVA',
       error: error.message
     });
   }
