@@ -27,9 +27,9 @@ Les prix de lancement acceptés pour l’offre sont par entreprise : Base 9 900 
 
 **How to apply:** conserver ces tarifs et trois utilisateurs inclus dans l’offre affichée. Le traitement HT/TTC et le raccordement aux forfaits actifs, aux limites d’accès et à la facturation doivent être confirmés avant de les appliquer à l’inscription ou aux factures.
 
-L’accès d’un cabinet comptable externe est un avantage gratuit supplémentaire, distinct des trois utilisateurs inclus dans le forfait.
+Chaque entreprise peut offrir un compte nominatif gratuit à un cabinet comptable externe, distinct des trois utilisateurs inclus dans le forfait.
 
-**Why:** l’utilisateur a précisé que le cabinet invité ne doit pas consommer l’un des trois comptes inclus et que l’invitation gratuite doit distinguer l’offre.
+**Why:** l’utilisateur a précisé que le cabinet invité ne consomme pas l’un des trois comptes inclus et a choisi un seul compte nominatif gratuit par cabinet.
 
 **How to apply:** traiter cet accès séparément du quota des utilisateurs ordinaires. Ne pas le présenter comme opérationnel tant qu’un parcours d’invitation sécurisé, révocable et limité à l’entreprise concernée n’est pas disponible.
 
