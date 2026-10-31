@@ -12,6 +12,7 @@ const migrationScopes = new Map([
   ['stock-units', new Set(['produits', 'lignes_reception', 'facture_achat_items'])],
   ['expense-tracking', new Set(['projets_associatifs', 'categories_depenses', 'depenses'])],
   ['user-access', new Set(['users'])],
+  ['accountant-invitations', new Set(['users', 'accountant_invitations'])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
@@ -48,7 +49,7 @@ try {
     const [, name, body] = table;
     if (scopedTables && !scopedTables.has(name)) continue;
     if (!present.has(name)) {
-      if (scopedTables && scope !== 'expense-tracking') {
+      if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations') {
         throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
       }
       actions.push(statement);
@@ -161,9 +162,14 @@ try {
     'ecritures_entreprise_numero_unique',
     'ecriture_sequences_scope_unique',
     'journaux_entreprise_code_unique',
+    'accountant_invitations_one_live_per_company',
   ]);
   const indexesForScope = scopedTables
-    ? new Set(scope === 'expense-tracking' ? ['projets_associatifs_entreprise_code_idx'] : [])
+    ? new Set(scope === 'expense-tracking'
+      ? ['projets_associatifs_entreprise_code_idx']
+      : scope === 'accountant-invitations'
+        ? ['accountant_invitations_one_live_per_company']
+        : [])
     : permittedIndexes;
   const existingIndexes = new Set((await client.query(
     "SELECT indexname FROM pg_indexes WHERE schemaname='public'",

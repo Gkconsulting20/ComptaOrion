@@ -6,7 +6,15 @@ import { runtimeContext } from '../runtime-context.js';
 
 // Authentification publique, données globales SaaS et clés d'idempotence sont
 // traitées hors du contexte tenant transactionnel.
-const RLS_EXCLUDED_TABLES = new Set(['users', 'saas_clients', 'lite_idempotency']);
+// Public invite acceptance looks up a single bearer-token hash before the
+// company tenant is known. Every authenticated read/write still filters by
+// entreprise_id; the token itself is unguessable and stored only as a hash.
+const RLS_EXCLUDED_TABLES = new Set([
+  'users',
+  'saas_clients',
+  'lite_idempotency',
+  'accountant_invitations',
+]);
 
 export const MULTI_TENANT_TABLES = Object.values(schema)
   .flatMap((table) => {

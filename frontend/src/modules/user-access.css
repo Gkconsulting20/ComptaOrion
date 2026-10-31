@@ -263,6 +263,90 @@
   color: #64748b;
 }
 
+.user-access__accountant {
+  margin: 20px 0 28px;
+  padding: 18px;
+  border: 1px solid #d7e6e9;
+  border-radius: 12px;
+  background: #f6fafb;
+}
+
+.user-access__accountant .user-access__section-heading {
+  margin-top: 0;
+}
+
+.user-access__free-badge,
+.user-access__accountant-tag {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e3f3ed;
+  color: #17664b !important;
+  font-size: 11px !important;
+  font-weight: 700;
+}
+
+.user-access__accountant-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px;
+  border: 1px solid #e2e9ec;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.user-access__accountant-status strong,
+.user-access__accountant-status span,
+.user-access__accountant-status small {
+  display: block;
+}
+
+.user-access__accountant-status span,
+.user-access__accountant-status small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.user-access__accountant-form {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.user-access__accountant-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.user-access__accountant-form input {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #d4dee3;
+  border-radius: 7px;
+  font: inherit;
+}
+
+.user-access__accountant-form .user-access__hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.user-access__danger {
+  padding: 9px 12px;
+  border: 1px solid #efcaca;
+  border-radius: 7px;
+  background: #fff5f5;
+  color: #9b3030;
+  font: inherit;
+  font-weight: 650;
+}
+
 @media (max-width: 680px) {
   .user-access__header {
     display: grid;
@@ -270,5 +354,15 @@
 
   .user-access__form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .user-access__accountant-status,
+  .user-access__accountant-form {
+    grid-template-columns: 1fr;
+  }
+
+  .user-access__accountant-status {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

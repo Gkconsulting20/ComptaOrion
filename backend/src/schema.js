@@ -105,11 +105,29 @@ export const users = pgTable('users', {
   prenom: varchar('prenom', { length: 100 }),
   role: userRoleEnum('role').default('employee'),
   modulePermissions: jsonb('module_permissions').notNull().default({}),
+  isExternalAccountant: boolean('is_external_accountant').notNull().default(false),
   actif: boolean('actif').default(true),
   lastLogin: timestamp('last_login'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+export const accountantInvitations = pgTable('accountant_invitations', {
+  tokenHash: varchar('token_hash', { length: 64 }).primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  invitedByUserId: integer('invited_by_user_id').references(() => users.id).notNull(),
+  acceptedUserId: integer('accepted_user_id').references(() => users.id),
+  email: varchar('email', { length: 255 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('pending'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  oneLiveInvitePerCompany: uniqueIndex('accountant_invitations_one_live_per_company')
+    .on(table.entrepriseId)
+    .where(sql`${table.status} IN ('pending', 'accepted')`),
+}));
 
 // ==========================================
 // MODULE 4: CLIENTS & CRM

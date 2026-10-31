@@ -1,0 +1,135 @@
+.accountant-invitation {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px 18px;
+  background: #f3f6f8;
+  color: #23374b;
+}
+
+.accountant-invitation__card {
+  width: min(100%, 520px);
+  padding: 34px;
+  border: 1px solid #dde5e9;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(28, 50, 67, .08);
+}
+
+.accountant-invitation__brand {
+  margin-bottom: 26px;
+  color: #123a59;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -.04em;
+}
+
+.accountant-invitation h1 {
+  margin: 0 0 12px;
+  color: #1d3145;
+  font-size: 25px;
+}
+
+.accountant-invitation p {
+  line-height: 1.6;
+}
+
+.accountant-invitation__email {
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #eef4f7;
+  font-weight: 700;
+}
+
+.accountant-invitation__muted,
+.accountant-invitation__footnote {
+  color: #647582;
+  font-size: 13px;
+}
+
+.accountant-invitation form {
+  display: grid;
+  gap: 15px;
+  margin-top: 22px;
+}
+
+.accountant-invitation label {
+  display: grid;
+  gap: 7px;
+  color: #34495a;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.accountant-invitation input {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #d5dfe4;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.accountant-invitation input:focus {
+  border-color: #2384a5;
+  outline: 3px solid rgba(35, 132, 165, .13);
+}
+
+.accountant-invitation__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.accountant-invitation__button,
+.accountant-invitation__secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #183e5e;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.accountant-invitation__button:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.accountant-invitation__secondary {
+  margin-top: 8px;
+  background: #edf2f4;
+  color: #253d50;
+}
+
+.accountant-invitation__error {
+  margin-top: 16px;
+  padding: 11px 13px;
+  border: 1px solid #efb7b7;
+  border-radius: 8px;
+  background: #fff0f0;
+  color: #9b2d2d;
+}
+
+.accountant-invitation__footnote {
+  margin: 24px 0 0;
+  padding-top: 15px;
+  border-top: 1px solid #e9eef0;
+}
+
+@media (max-width: 480px) {
+  .accountant-invitation__card {
+    padding: 24px 18px;
+  }
+
+  .accountant-invitation__grid {
+    grid-template-columns: 1fr;
+  }
+}

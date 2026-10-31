@@ -24,6 +24,10 @@ const Login = loadNamed(() => import('./pages/Login'), 'Login');
 const Inscription = loadNamed(() => import('./pages/Inscription'), 'Inscription');
 const CommercialPortal = loadNamed(() => import('./pages/CommercialPortal'), 'CommercialPortal');
 const ProspectDemo = loadNamed(() => import('./pages/ProspectDemo'), 'ProspectDemo');
+const AccountantInvitationAccept = loadNamed(
+  () => import('./pages/AccountantInvitationAccept'),
+  'AccountantInvitationAccept'
+);
 const DashboardView = loadNamed(() => import('./Dashboard'), 'DashboardView');
 const AssociationAccountingModule = loadNamed(
   () => import('./modules/AssociationAccountingModule'),
@@ -95,6 +99,7 @@ export default function App() {
   const [showInscription, setShowInscription] = useState(false);
   const [showCommercialPortal, setShowCommercialPortal] = useState(false);
   const [showProspectDemo, setShowProspectDemo] = useState(false);
+  const [showAccountantInvitation, setShowAccountantInvitation] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +117,11 @@ export default function App() {
       }
       if (urlPath === '/demo' || urlPath.startsWith('/demo/')) {
         setShowProspectDemo(true);
+        setLoading(false);
+        return;
+      }
+      if (urlPath === '/invitation-comptable') {
+        setShowAccountantInvitation(true);
         setLoading(false);
         return;
       }
@@ -232,6 +242,10 @@ export default function App() {
 
   if (showProspectDemo) {
     return <Suspense fallback={<LazyModuleFallback />}><ProspectDemo /></Suspense>;
+  }
+
+  if (showAccountantInvitation) {
+    return <Suspense fallback={<LazyModuleFallback />}><AccountantInvitationAccept /></Suspense>;
   }
 
   if (!isAuthenticated) {

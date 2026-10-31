@@ -1,7 +1,13 @@
 import express from 'express';
 import { and, count, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '../db.js';
-import { abonnements, plansAbonnement, sessions, users } from '../schema.js';
+import {
+  accountantInvitations,
+  abonnements,
+  plansAbonnement,
+  sessions,
+  users,
+} from '../schema.js';
 import { requireRole, hashPassword } from '../auth.js';
 import { logAudit } from '../utils/auditLogger.js';
 import {
@@ -25,6 +31,7 @@ const safeUserFields = {
   prenom: users.prenom,
   role: users.role,
   modulePermissions: users.modulePermissions,
+  isExternalAccountant: users.isExternalAccountant,
   actif: users.actif,
   lastLogin: users.lastLogin,
   createdAt: users.createdAt,
@@ -39,6 +46,7 @@ function toSafeUser(user) {
     prenom: user.prenom,
     role: user.role,
     modulePermissions: resolveModulePermissions(user.role, user.modulePermissions),
+    isExternalAccountant: Boolean(user.isExternalAccountant),
     actif: user.actif,
     lastLogin: user.lastLogin,
     createdAt: user.createdAt,
@@ -83,6 +91,7 @@ async function getActiveUserCount(executor, entrepriseId) {
   const [result] = await executor.select({ value: count() }).from(users).where(and(
     eq(users.entrepriseId, entrepriseId),
     eq(users.actif, true),
+    eq(users.isExternalAccountant, false),
   ));
   return Number(result?.value || 0);
 }
@@ -184,6 +193,7 @@ router.post('/', async (req, res) => {
         prenom,
         role,
         modulePermissions,
+        isExternalAccountant: false,
         actif: true,
       }).returning(safeUserFields);
 
@@ -251,11 +261,25 @@ router.put('/:userId', async (req, res) => {
 
       const nextRole = requestedRole ?? current.role;
       const nextActive = requestedActive ?? current.actif;
+      if (current.isExternalAccountant && nextRole !== 'accountant') {
+        return { externalRoleLocked: true };
+      }
       if (Number(current.id) === Number(req.user.id) && (nextRole !== 'admin' || !nextActive)) {
         return { selfLockout: true };
       }
 
-      if (!current.actif && nextActive) {
+      if (current.isExternalAccountant && !current.actif && nextActive) {
+        const [acceptedInvitation] = await tx.select({
+          status: accountantInvitations.status,
+        }).from(accountantInvitations).where(and(
+          eq(accountantInvitations.entrepriseId, req.entrepriseId),
+          eq(accountantInvitations.acceptedUserId, current.id),
+          eq(accountantInvitations.status, 'accepted'),
+        )).limit(1);
+        if (!acceptedInvitation) return { externalInvitationRevoked: true };
+      }
+
+      if (!current.actif && nextActive && !current.isExternalAccountant) {
         const activeUsers = await getActiveUserCount(tx, req.entrepriseId);
         const userLimit = await getUserLimit(tx, req.entrepriseId);
         if (activeUsers >= userLimit) return { limitReached: true };
@@ -337,6 +361,7 @@ router.put('/:userId', async (req, res) => {
           prenom: current.prenom,
           role: current.role,
           modulePermissions: resolveModulePermissions(current.role, current.modulePermissions),
+          isExternalAccountant: current.isExternalAccountant,
           actif: current.actif,
         },
         nouvelleValeur: {
@@ -346,6 +371,7 @@ router.put('/:userId', async (req, res) => {
           prenom: saved.prenom,
           role: saved.role,
           modulePermissions: nextModulePermissions,
+          isExternalAccountant: saved.isExternalAccountant,
           actif: saved.actif,
         },
         description: `Modification des accès de ${saved.email}`,
@@ -357,6 +383,12 @@ router.put('/:userId', async (req, res) => {
     if (updated.selfLockout) return res.status(400).json({ error: 'Vous ne pouvez pas désactiver votre propre compte ni retirer votre rôle administrateur.' });
     if (updated.lastAdmin) return res.status(409).json({ error: 'L’entreprise doit conserver au moins un administrateur actif.' });
     if (updated.limitReached) return res.status(409).json({ error: 'La limite d’utilisateurs de votre forfait est atteinte.' });
+    if (updated.externalRoleLocked) {
+      return res.status(403).json({ error: 'Le compte externe conserve le rôle Comptable. Vous pouvez modifier ses droits par module.' });
+    }
+    if (updated.externalInvitationRevoked) {
+      return res.status(403).json({ error: 'Cet accès a été révoqué. Envoyez une nouvelle invitation pour le réactiver.' });
+    }
     if (updated.invalidModulePermissions) return res.status(400).json({ error: 'Les droits par module transmis ne sont pas valides.' });
     if (updated.invalidEmail) return res.status(400).json({ error: 'Adresse courriel invalide.' });
     if (updated.invalidUsername) return res.status(400).json({ error: 'Nom d’utilisateur invalide.' });

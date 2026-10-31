@@ -27,11 +27,11 @@ Les prix de lancement acceptés pour l’offre sont par entreprise : Base 9 900 
 
 **How to apply:** conserver ces tarifs et trois utilisateurs inclus dans l’offre affichée. Le traitement HT/TTC et le raccordement aux forfaits actifs, aux limites d’accès et à la facturation doivent être confirmés avant de les appliquer à l’inscription ou aux factures.
 
-Chaque entreprise cliente peut inviter son cabinet comptable gratuitement, sans consommer l’un des trois utilisateurs inclus. Le compte du comptable est lié aux entreprises clientes qui l’ont invité.
+Chaque entreprise cliente peut inviter gratuitement un compte nominatif de cabinet comptable, sans consommer l’un des trois utilisateurs inclus. Pour le MVP choisi, le compte est distinct et lié à une seule entreprise.
 
-**Why:** l’utilisateur a précisé que le cabinet invité ne consomme pas l’un des trois comptes inclus et que chaque entreprise cliente reste libre d’inviter son propre cabinet.
+**Why:** l’utilisateur a précisé que le cabinet invité ne consomme pas l’un des trois comptes inclus, puis a choisi un premier MVP séparé par entreprise.
 
-**How to apply:** traiter les accès comptables séparément du quota ordinaire, et n’autoriser l’accès qu’aux entreprises qui ont explicitement invité ce comptable. Ne pas présenter l’avantage comme opérationnel tant qu’un parcours d’invitation sécurisé et révocable n’est pas disponible.
+**How to apply:** traiter le compte comptable séparément du quota ordinaire; l’accès est limité à l’entreprise qui a envoyé l’invitation. Dans ce MVP, la même adresse ne peut pas encore utiliser un compte unique pour plusieurs entreprises. Ne pas présenter l’avantage comme opérationnel avant la mise à niveau et le déploiement du parcours sécurisé et révocable.
 
 La démo destinée aux prospects doit montrer les modules métiers importants de ComptaOrion, dont la comptabilité générale, la trésorerie et la comptabilité des associations. Paie & RH et l’Assistant IA restent masqués et exclus de l’offre commercialisée.
 

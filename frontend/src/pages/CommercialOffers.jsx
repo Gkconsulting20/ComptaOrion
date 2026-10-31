@@ -8,6 +8,7 @@ const BASE_FEATURES = [
   'Gestion du stock, unités et conversions',
   'Comptabilité générale, journaux et états financiers',
   'Gestion des utilisateurs et des droits par module',
+  'Invitation gratuite d’un comptable externe (1 compte par entreprise, hors quota des 3 utilisateurs)',
   'Tableau de bord de suivi'
 ];
 

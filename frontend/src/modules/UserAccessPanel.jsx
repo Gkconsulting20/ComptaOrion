@@ -43,12 +43,16 @@ function PermissionMatrix({ modules, levels, value = {}, onChange, disabled = fa
 
 export function UserAccessPanel({ currentUserId }) {
   const [data, setData] = useState({ users: [], activeUsers: 0, userLimit: 3, roles: [] });
+  const [accountantInvitation, setAccountantInvitation] = useState({ status: 'loading' });
+  const [accountantEmail, setAccountantEmail] = useState('');
   const [drafts, setDrafts] = useState({});
   const [form, setForm] = useState(createEmptyForm);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [expandedUserId, setExpandedUserId] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [invitingAccountant, setInvitingAccountant] = useState(false);
+  const [revokingAccountant, setRevokingAccountant] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -57,6 +61,11 @@ export function UserAccessPanel({ currentUserId }) {
     try {
       const result = await api.get('/user-management');
       setData(result);
+      try {
+        setAccountantInvitation(await api.get('/accountant-invitations'));
+      } catch {
+        setAccountantInvitation({ status: 'unavailable' });
+      }
       setDrafts(Object.fromEntries((result.users || []).map((user) => [
         user.id,
         {
@@ -115,6 +124,39 @@ export function UserAccessPanel({ currentUserId }) {
     }
   };
 
+  const inviteAccountant = async (event) => {
+    event.preventDefault();
+    setInvitingAccountant(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await api.post('/accountant-invitations', { email: accountantEmail });
+      setAccountantEmail('');
+      setNotice(result.message || 'Invitation envoyée.');
+      await loadUsers();
+    } catch (inviteError) {
+      setError(inviteError.message || 'Impossible d’envoyer l’invitation.');
+    } finally {
+      setInvitingAccountant(false);
+    }
+  };
+
+  const revokeAccountant = async () => {
+    if (!window.confirm('Révoquer l’accès du cabinet comptable à cette entreprise ?')) return;
+    setRevokingAccountant(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await api.delete('/accountant-invitations');
+      setNotice(result.message || 'Accès révoqué.');
+      await loadUsers();
+    } catch (revokeError) {
+      setError(revokeError.message || 'Impossible de révoquer cet accès.');
+    } finally {
+      setRevokingAccountant(false);
+    }
+  };
+
   if (loading) return <p>Chargement des utilisateurs…</p>;
 
   const atLimit = data.activeUsers >= data.userLimit;
@@ -127,12 +169,70 @@ export function UserAccessPanel({ currentUserId }) {
           <p>Créez les comptes de votre équipe et choisissez leurs droits pour chaque module.</p>
         </div>
         <div className="user-access__count">
-          {data.activeUsers} / {data.userLimit} comptes actifs
+          {data.activeUsers} / {data.userLimit} utilisateurs du forfait
         </div>
       </header>
 
       {error && <div className="user-access__alert user-access__alert--error" role="alert">{error}</div>}
       {notice && <div className="user-access__alert user-access__alert--success" role="status">{notice}</div>}
+
+      <section className="user-access__accountant" aria-labelledby="accountant-access-title">
+        <div className="user-access__section-heading">
+          <div>
+            <h4 id="accountant-access-title">Accès gratuit au cabinet comptable</h4>
+            <p>Un accès nominatif par entreprise, en plus des utilisateurs du forfait. L’accès est limité à votre entreprise.</p>
+          </div>
+          <span className="user-access__free-badge">Gratuit</span>
+        </div>
+        {accountantInvitation.status === 'loading' ? (
+          <p className="user-access__hint">Chargement de l’accès comptable…</p>
+        ) : accountantInvitation.status === 'unavailable' ? (
+          <p className="user-access__hint">
+            La base doit être mise à niveau avant d’activer les invitations comptables.
+          </p>
+        ) : ['pending', 'accepted', 'disabled'].includes(accountantInvitation.status) ? (
+          <div className="user-access__accountant-status">
+            <div>
+              <strong>
+                {accountantInvitation.status === 'pending' ? 'Invitation en attente' :
+                  accountantInvitation.status === 'accepted' ? 'Compte comptable actif' : 'Compte comptable désactivé'}
+              </strong>
+              <span>{accountantInvitation.email}</span>
+              {accountantInvitation.expiresAt && accountantInvitation.status === 'pending' && (
+                <small>
+                  Expire le {new Intl.DateTimeFormat('fr-FR', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  }).format(new Date(accountantInvitation.expiresAt))}
+                </small>
+              )}
+              {accountantInvitation.status === 'disabled' && (
+                <small>Révoquez cet accès avant d’inviter un autre cabinet.</small>
+              )}
+            </div>
+            <button className="user-access__danger" type="button" onClick={revokeAccountant}
+              disabled={revokingAccountant}>
+              {revokingAccountant ? 'Révocation…' : 'Révoquer l’accès'}
+            </button>
+          </div>
+        ) : (
+          <form className="user-access__accountant-form" onSubmit={inviteAccountant}>
+            <label>
+              Courriel nominatif du cabinet
+              <input required type="email" maxLength={255} value={accountantEmail}
+                onChange={(event) => setAccountantEmail(event.target.value)} />
+            </label>
+            <button className="user-access__primary" type="submit"
+              disabled={invitingAccountant || accountantInvitation.status === 'unavailable'}>
+              {invitingAccountant ? 'Envoi…' : 'Envoyer une invitation'}
+            </button>
+            <p className="user-access__hint">
+              Le lien expire après 72 heures. Le comptable choisit son mot de passe et commence en lecture seule.
+              Un même courriel ne peut pas encore servir à plusieurs entreprises dans cette première version.
+            </p>
+          </form>
+        )}
+      </section>
 
       <div className="user-access__roles">
         {data.roles.map((role) => (
@@ -250,10 +350,13 @@ export function UserAccessPanel({ currentUserId }) {
                       <strong>{[user.prenom, user.nom].filter(Boolean).join(' ') || user.username}</strong>
                       <span>{user.email}</span>
                       <small>@{user.username}</small>
+                      {user.isExternalAccountant && (
+                        <small className="user-access__accountant-tag">Cabinet comptable · gratuit</small>
+                      )}
                     </td>
                     <td>
                       <select aria-label={`Profil de ${user.email}`} value={draft.role}
-                        disabled={Number(user.id) === Number(currentUserId)}
+                        disabled={user.isExternalAccountant || Number(user.id) === Number(currentUserId)}
                         onChange={(event) => {
                           const role = event.target.value;
                           updateDraft(user.id, {
@@ -269,7 +372,7 @@ export function UserAccessPanel({ currentUserId }) {
                     <td>
                       <label className="user-access__active">
                         <input type="checkbox" checked={draft.actif}
-                          disabled={Number(user.id) === Number(currentUserId)}
+                          disabled={user.isExternalAccountant || Number(user.id) === Number(currentUserId)}
                           onChange={(event) => updateDraft(user.id, { actif: event.target.checked })} />
                         {draft.actif ? 'Actif' : 'Désactivé'}
                       </label>

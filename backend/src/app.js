@@ -35,6 +35,10 @@ import { idempotencyMiddleware } from './middleware/idempotency.js';
 import { tenantAccessControl } from './middleware/tenant-access.js';
 import { createTenantMiddleware } from './utils/rlsPolicies.js';
 import userManagementRoutes from './routes/user-management.js';
+import {
+  companyAccountantInvitationRoutes,
+  publicAccountantInvitationRoutes,
+} from './routes/accountant-invitations.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -66,6 +70,7 @@ app.use('/api/auth-security', authSecurityRoutes);
 
 // Routes publiques d'inscription (pas d'authentification requise)
 app.use('/api/public', publicInscriptionRoutes);
+app.use('/api/public', publicAccountantInvitationRoutes);
 
 // Espace commercial (authentification séparée via JWT commercial)
 app.use('/api/commercial', commercialPortalRoutes);
@@ -93,6 +98,7 @@ app.use('/api/saas-admin', authMiddleware, saasAdminOnly,
 // tenant est fixé dans une transaction qui couvre toute la requête protégée.
 app.use('/api', authMiddleware, entrepriseIsolation, createTenantMiddleware(), tenantAccessControl, idempotencyMiddleware);
 app.use('/api/user-management', userManagementRoutes);
+app.use('/api/accountant-invitations', companyAccountantInvitationRoutes);
 app.use('/api/associations', associationAccountingRoutes);
 
 // ===============================================
