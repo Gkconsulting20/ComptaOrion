@@ -18,3 +18,4 @@
 - [Recettes multi-tenant](tenant-functional-tests.md) — isoler les sessions par identité et attendre les statuts réellement imposés par les contrôles.
 - [Immobilisations en pause](immobilisations-paused.md) — garder le registre caché tant qu’il ne suit pas les emplacements et ne génère pas d’écritures comptables.
 - [Affichage des devises](currency-display.md) — afficher XOF groupé par espaces avec deux décimales, sans conversion ni modification des montants enregistrés.
+- [Éditeur ComptaOrion](publisher-identity.md) — ORIONEXA édite ComptaOrion; utiliser ses coordonnées uniquement pour les contacts éditeur.

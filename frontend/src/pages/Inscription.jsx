@@ -248,7 +248,7 @@ export function Inscription() {
                     fontSize: '15px',
                     boxSizing: 'border-box'
                   }}
-                  placeholder="+229 XX XX XX XX"
+                  placeholder="+228 XX XX XX XX"
                 />
               </div>
 

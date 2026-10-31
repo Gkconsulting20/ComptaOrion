@@ -99,8 +99,9 @@ async function envoyerEmailBienvenue(email, nomEntreprise, motDePasse, planId, e
           <h3 style="color: #667eea;">💡 Besoin d'aide ?</h3>
           <p>Notre équipe support est là pour vous accompagner :</p>
           <ul>
-            <li>📧 Email : support@comptaorion.com</li>
-            <li>📞 Téléphone : +229 XX XX XX XX</li>
+            <li>📧 Email : admin@orionexa.com</li>
+            <li>📞 Téléphone : 90 54 15 15</li>
+            <li>📍 ORIONEXA — Agbodrafo, Togo</li>
             <li>💬 Chat en direct sur l'application</li>
           </ul>
           
