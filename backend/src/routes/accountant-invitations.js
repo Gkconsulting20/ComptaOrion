@@ -1,13 +1,21 @@
 import express from 'express';
+import { createHash } from 'node:crypto';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../db.js';
 import {
+  auditConnexions,
   accountantInvitations,
   entreprises,
   sessions,
   users,
 } from '../schema.js';
-import { hashPassword, requireRole } from '../auth.js';
+import {
+  generateRefreshToken,
+  generateToken,
+  hashPassword,
+  requireRole,
+  setAuthCookies,
+} from '../auth.js';
 import emailService from '../services/emailService.js';
 import {
   ACCOUNTANT_INVITATION_TTL_MS,
@@ -449,6 +457,8 @@ publicAccountantInvitationRoutes.post('/accountant-invitations/accept', async (r
           id: users.id,
           email: users.email,
           username: users.username,
+          role: users.role,
+          entrepriseId: users.entrepriseId,
         })
         : await tx.insert(users).values({
           entrepriseId: invite.entrepriseId,
@@ -465,6 +475,8 @@ publicAccountantInvitationRoutes.post('/accountant-invitations/accept', async (r
           id: users.id,
           email: users.email,
           username: users.username,
+          role: users.role,
+          entrepriseId: users.entrepriseId,
         });
       if (!user) return { emailUsed: true };
       if (existing) {
@@ -509,15 +521,42 @@ publicAccountantInvitationRoutes.post('/accountant-invitations/accept', async (r
         userAgent: req.get('user-agent') || null,
         required: true,
       });
-      return { user };
+      const accessToken = generateToken(user);
+      const refreshToken = generateRefreshToken(user);
+      const sessionExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const ipAddress = req.get('cf-connecting-ip') ||
+        req.ip ||
+        req.socket?.remoteAddress ||
+        'unknown';
+      const userAgent = req.get('user-agent') || null;
+      const [session] = await tx.insert(sessions).values({
+        userId: user.id,
+        enterpriseId: invite.entrepriseId,
+        tokenHash: createHash('sha256').update(accessToken).digest('hex'),
+        refreshTokenHash: createHash('sha256').update(refreshToken).digest('hex'),
+        ipAddress,
+        userAgent,
+        expiresAt: sessionExpiresAt,
+      }).returning({ id: sessions.id, expiresAt: sessions.expiresAt });
+      await tx.insert(auditConnexions).values({
+        userId: user.id,
+        enterpriseId: invite.entrepriseId,
+        type: 'login',
+        ipAddress,
+        userAgent,
+        statut: 'success',
+      });
+      return { user, accessToken, refreshToken, session };
     });
 
     if (result.invalid) return res.status(404).json({ error: 'Invitation invalide ou déjà utilisée.' });
     if (result.expired) return res.status(410).json({ error: 'Cette invitation a expiré.' });
     if (result.emailUsed) return res.status(409).json({ error: 'Cette adresse courriel possède déjà un compte ComptaOrion.' });
+    setAuthCookies(res, result.accessToken, result.refreshToken);
     return res.status(201).json({
-      message: 'Invitation acceptée. Connectez-vous avec votre adresse courriel et le mot de passe choisi.',
+      message: 'Invitation acceptée. Votre session est ouverte et votre espace est prêt.',
       email: result.user.email,
+      session: result.session,
     });
   } catch (error) {
     if (error.code === '23505') {

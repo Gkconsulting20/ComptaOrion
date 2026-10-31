@@ -354,6 +354,35 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.deepEqual(forged.map(product=>product.id),[secondProduct.data.id],
       'Un paramètre entreprise falsifié ne doit retourner que les produits du tenant connecté');
     cookieJar = firstCookieJar;
+    const accountantInvite = await api('/accountant-invitations/whatsapp-link', 'POST', {
+      email: 'cabinet@example.invalid',
+    }, 201);
+    const accountantToken = new URL(accountantInvite.inviteUrl).searchParams.get('token');
+    assert.match(accountantToken || '', /^[a-f0-9]{64}$/);
+    const accountantInviteDetails = await api(
+      `/public/accountant-invitations/${accountantToken}`,
+    );
+    assert.equal(accountantInviteDetails.email, 'cabinet@example.invalid');
+    const accountantAcceptance = await api('/public/accountant-invitations/accept', 'POST', {
+      token: accountantToken,
+      username: 'cabinet-comptable',
+      prenom: 'Compte',
+      nom: 'Comptable',
+      password: 'CabinetTestPassword2026!',
+    }, 201);
+    assert.equal(accountantAcceptance.email, 'cabinet@example.invalid');
+    assert.ok(accountantAcceptance.session?.id, 'L’acceptation doit ouvrir une session sécurisée');
+    assert.equal(Object.hasOwn(accountantAcceptance, 'accessToken'), false,
+      'Les jetons restent dans des cookies HttpOnly');
+    const accountantSession = await api('/auth-security/session');
+    assert.equal(accountantSession.user.role, 'accountant');
+    assert.equal(Number(accountantSession.user.entrepriseId), Number(signup.user.entrepriseId),
+      'Le comptable reste lié à l’entreprise invitante');
+    assert.equal(accountantSession.user.modulePermissions.comptabilite, 'read');
+    assert.equal(accountantSession.user.modulePermissions.parametres, 'none');
+    await api('/comptabilite/plans');
+    await api('/clients', 'POST', { nom: 'Écriture interdite au comptable externe' }, 403);
+    cookieJar = firstCookieJar;
     await api('/ia/chat','POST',{message:'ne pas envoyer'},404);
     await api('/auth-security/logout','POST',{sessionId:login.session.id});
     await api('/auth-security/session','GET',null,401);

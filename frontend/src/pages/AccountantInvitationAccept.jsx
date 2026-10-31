@@ -55,9 +55,11 @@ export function AccountantInvitationAccept() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Impossible d’accepter l’invitation.');
+      if (body.session?.id) localStorage.setItem('sessionId', String(body.session.id));
       setSuccessEmail(body.email);
       setInvitation(null);
       window.history.replaceState({}, '', '/invitation-comptable');
+      window.setTimeout(() => window.location.assign('/'), 1200);
     } catch (submitError) {
       setError(submitError.message);
     } finally {
@@ -75,8 +77,8 @@ export function AccountantInvitationAccept() {
           <div>
             <h1>Invitation acceptée</h1>
             <p>Votre compte comptable est créé pour <strong>{successEmail}</strong>.</p>
-            <p>Vous pouvez maintenant vous connecter. Les données accessibles dépendront des droits accordés par l’entreprise.</p>
-            <a className="accountant-invitation__button" href="/">Aller à la connexion</a>
+            <p>Votre session est ouverte. Vous allez accéder à l’entreprise qui vous a invité.</p>
+            <a className="accountant-invitation__button" href="/">Accéder au logiciel</a>
           </div>
         ) : invitation ? (
           <div>
