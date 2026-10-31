@@ -26,6 +26,7 @@ import {
   calculateCurrentInventoryValue,
   calculateGrossMargin,
   calculateNetCashflow,
+  buildMonthlySalesSeries,
   countInclusiveDays,
   dateOnly,
   outstandingBalanceAt,
@@ -343,36 +344,18 @@ router.get('/ventes-mensuelles', async (req, res) => {
     const eId = req.entrepriseId;
     if (!eId) return res.status(400).json({ error: 'entrepriseId requis' });
     const period = await getDashboardPeriod(req, eId);
-    const periodStart = new Date(`${period.start}T00:00:00.000Z`);
-    const periodEnd = new Date(`${period.effectiveEnd}T00:00:00.000Z`);
-    
-    const data = [];
-    const current = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), 1));
-    
-    while (current <= periodEnd) {
-      const monthStart = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), 1)).toISOString().slice(0, 10);
-      const monthEnd = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
-      const start = monthStart < period.start ? period.start : monthStart;
-      const end = monthEnd > period.effectiveEnd ? period.effectiveEnd : monthEnd;
+    const monthKey = sql`to_char(${factures.dateFacture}::timestamp, 'YYYY-MM')`;
+    const monthlyTotals = await db.select({
+      month: monthKey,
+      total: sql`COALESCE(SUM(${factures.totalTTC}), 0)`,
+    }).from(factures).where(and(
+      eq(factures.entrepriseId, eId),
+      gte(factures.dateFacture, period.start),
+      lte(factures.dateFacture, period.effectiveEnd),
+      inArray(factures.statut, SALES_STATUS_VALUES),
+    )).groupBy(monthKey);
 
-      const ventes = await db.query.factures.findMany({
-        where: and(
-          eq(factures.entrepriseId, eId),
-          gte(factures.dateFacture, start),
-          lte(factures.dateFacture, end),
-          inArray(factures.statut, SALES_STATUS_VALUES),
-        )
-      });
-
-      const total = sumMoney(ventes, 'totalTTC');
-      data.push({
-        mois: current.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
-        ventes: total.toFixed(2),
-      });
-      current.setUTCMonth(current.getUTCMonth() + 1);
-    }
-
-    res.json(data);
+    res.json(buildMonthlySalesSeries(period.start, period.effectiveEnd, monthlyTotals));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -6,6 +6,7 @@ import {
   calculateGrossMargin,
   calculateNetCashflow,
   calculateWorkingCapitalDays,
+  buildMonthlySalesSeries,
   countInclusiveDays,
   outstandingBalanceAt,
   sumMoney,
@@ -75,4 +76,19 @@ test('ne calcule pas le cycle de conversion si le DIO manque', () => {
 
 test('additionne les montants en centimes', () => {
   assert.equal(sumMoney([{ value: '0.10' }, { value: '0.20' }], 'value'), 0.3);
+});
+
+test('construit les ventes mensuelles avec les agrégats, les mois vides et les centimes', () => {
+  const series = buildMonthlySalesSeries('2026-01-15', '2026-03-10', [
+    { month: '2026-01', total: '1250.50' },
+    { month: '2026-03', total: '0.20' },
+  ]);
+
+  assert.equal(series.length, 3);
+  assert.deepEqual(series.map(({ ventes }) => ventes), ['1250.50', '0.00', '0.20']);
+  assert.ok(series.every(({ mois }) => mois.length > 0));
+});
+
+test('ne produit aucune série mensuelle pour une période invalide', () => {
+  assert.deepEqual(buildMonthlySalesSeries('2026-04-01', '2026-03-31', []), []);
 });

@@ -15,6 +15,36 @@ export function sumMoney(rows, field) {
   return cents / 100;
 }
 
+export function buildMonthlySalesSeries(start, end, monthlyTotals) {
+  const startDate = dateOnly(start);
+  const endDate = dateOnly(end);
+  if (!startDate || !endDate || startDate > endDate) return [];
+
+  const totalsByMonth = new Map(
+    monthlyTotals.map(({ month, total }) => [String(month), roundMoney(total)]),
+  );
+  const [startYear, startMonth] = startDate.split('-').map(Number);
+  const [endYear, endMonth] = endDate.split('-').map(Number);
+  const current = new Date(Date.UTC(startYear, startMonth - 1, 1));
+  const lastMonth = Date.UTC(endYear, endMonth - 1, 1);
+  const series = [];
+
+  while (current.getTime() <= lastMonth) {
+    const monthKey = `${current.getUTCFullYear()}-${String(current.getUTCMonth() + 1).padStart(2, '0')}`;
+    series.push({
+      mois: current.toLocaleDateString('fr-FR', {
+        month: 'short',
+        year: '2-digit',
+        timeZone: 'UTC',
+      }),
+      ventes: (totalsByMonth.get(monthKey) || 0).toFixed(2),
+    });
+    current.setUTCMonth(current.getUTCMonth() + 1);
+  }
+
+  return series;
+}
+
 export function dateOnly(value) {
   if (value instanceof Date && Number.isFinite(value.getTime())) {
     return value.toISOString().slice(0, 10);

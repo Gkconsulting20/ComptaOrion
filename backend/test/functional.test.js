@@ -158,6 +158,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
         client.release();
       }
     }
+    const testYear=new Date().getFullYear();
     const password=randomUUID()+'Aa9!';
     const signup=await api('/auth/register','POST',{
       username:'recette',email:'recette@example.invalid',password,entrepriseNom:'Entreprise de recette isolée',
@@ -189,7 +190,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       quantite:10,prixVente:1000,prixAchat:500},201);
     const productId=productRecord.data.id;
     const invoice=await api('/factures','POST',{
-      clientId,dateFacture:'2026-10-16',items:[{produitId:productId,quantite:2,prixUnitaire:1000}],
+      clientId,dateFacture:`${testYear}-01-16`,items:[{produitId:productId,quantite:2,prixUnitaire:1000}],
     },201);
     const f=invoice.data;
     assert.equal(Number(f.totalHT),2000);
@@ -201,6 +202,15 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const another=await api('/factures','POST',{
       clientId,items:[{produitId:productId,quantite:1,prixUnitaire:1000}],
     },201);
+    const monthlySales=await api(`/dashboard/ventes-mensuelles?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`);
+    assert.equal(monthlySales.length,new Date().getMonth()+1,'Une entrée doit exister pour chaque mois écoulé');
+    assert.equal(monthlySales.reduce((total,row)=>total+Number(row.ventes),0),2360,
+      'La série mensuelle doit inclure les ventes valides et exclure le brouillon');
+    assert.equal(Number(monthlySales[0].ventes),2360,
+      'La première facture doit rester comptée dans le bon mois');
+    if(new Date().getMonth()>0) {
+      assert.equal(Number(monthlySales.at(-1).ventes),0,'La facture brouillon ne doit pas apparaître dans les ventes');
+    }
     const paymentCookie = requestCookieHeader(`/factures/${another.data.id}/paiement`);
     const paymentRequest={method:'POST',headers:{'Content-Type':'application/json',Cookie:paymentCookie},
       body:JSON.stringify({montant:1180,modePaiement:'especes'})};
