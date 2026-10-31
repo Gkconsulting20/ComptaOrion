@@ -15,6 +15,7 @@ import {
   defaultAccountantInvitationPermissions,
   getInvitationDisplayStatus,
   hashAccountantInvitationToken,
+  simulateAccountantInvitationFlow,
 } from '../services/accountantInvitationPolicy.js';
 import { logAudit } from '../utils/auditLogger.js';
 import { withTenantTransaction } from '../utils/rlsPolicies.js';
@@ -80,6 +81,95 @@ async function latestInvitation(executor, entrepriseId) {
   return invitation || null;
 }
 
+function invitationRouteError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+async function createPendingAccountantInvitation(req, email, deliveryMethod) {
+  let baseUrl;
+  try {
+    baseUrl = invitationBaseUrl(req);
+  } catch {
+    throw invitationRouteError(503, 'Configurez l’adresse publique avant de générer le lien.');
+  }
+
+  const previous = await latestInvitation(db, req.entrepriseId);
+  const now = new Date();
+  const previousStatus = getInvitationDisplayStatus(previous, null, now);
+  if (previousStatus === 'pending' || previousStatus === 'accepted' || previousStatus === 'disabled') {
+    throw invitationRouteError(
+      409,
+      'Un accès comptable est déjà actif ou en attente. Révoquez-le avant d’en créer un autre.',
+    );
+  }
+
+  const [existingUser] = await db.select({
+    id: users.id,
+    entrepriseId: users.entrepriseId,
+    isExternalAccountant: users.isExternalAccountant,
+    actif: users.actif,
+  }).from(users).where(sql`LOWER(${users.email}) = ${email}`).limit(1);
+  const canReinviteSamePerson = Boolean(existingUser?.isExternalAccountant) &&
+    Number(existingUser.entrepriseId) === Number(req.entrepriseId) &&
+    !existingUser.actif &&
+    previous?.status === 'revoked';
+  if (existingUser && !canReinviteSamePerson) {
+    throw invitationRouteError(
+      409,
+      'Cette adresse est déjà utilisée. Cette première version utilise un compte distinct par entreprise.',
+    );
+  }
+
+  const { token, tokenHash } = createAccountantInvitationToken();
+  const expiresAt = new Date(now.getTime() + ACCOUNTANT_INVITATION_TTL_MS);
+  if (previous?.status === 'pending') {
+    await db.update(accountantInvitations).set({ status: 'expired' }).where(and(
+      eq(accountantInvitations.tokenHash, previous.tokenHash),
+      eq(accountantInvitations.entrepriseId, req.entrepriseId),
+      eq(accountantInvitations.status, 'pending'),
+    ));
+  }
+
+  const [invitation] = await db.insert(accountantInvitations).values({
+    tokenHash,
+    entrepriseId: req.entrepriseId,
+    invitedByUserId: req.user.id,
+    email,
+    status: 'pending',
+    expiresAt,
+  }).returning();
+
+  const [company] = await db.select({ nom: entreprises.nom }).from(entreprises)
+    .where(eq(entreprises.id, req.entrepriseId)).limit(1);
+  const inviteUrl = new URL('/invitation-comptable', baseUrl);
+  inviteUrl.searchParams.set('token', token);
+
+  await logAudit({
+    ...requestAudit(req),
+    action: 'CREATE',
+    table: 'accountant_invitations',
+    description: deliveryMethod === 'whatsapp'
+      ? `Création d’un lien d’invitation comptable à partager manuellement (${email})`
+      : `Création d’une invitation comptable par courriel (${email})`,
+    nouvelleValeur: { email, expiresAt, status: 'pending', deliveryMethod },
+  });
+
+  return { invitation, company, inviteUrl: inviteUrl.toString(), expiresAt };
+}
+
+function sendInvitationRouteError(error, res) {
+  if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+  if (error.code === '23505') {
+    return res.status(409).json({
+      error: 'Un accès comptable est déjà actif ou en attente pour cette entreprise.',
+    });
+  }
+  console.error('Erreur de création de l’invitation comptable:', error);
+  return res.status(500).json({ error: 'Impossible de créer l’invitation comptable.' });
+}
+
 companyAccountantInvitationRoutes.use(requireRole('admin'));
 
 companyAccountantInvitationRoutes.get('/', async (req, res) => {
@@ -117,6 +207,19 @@ companyAccountantInvitationRoutes.get('/', async (req, res) => {
   }
 });
 
+companyAccountantInvitationRoutes.post('/simulate', (req, res) => {
+  if (process.env.RUNTIME_CLOUDFLARE === 'true' || process.env.NODE_ENV === 'production') {
+    return res.sendStatus(404);
+  }
+
+  const simulation = simulateAccountantInvitationFlow();
+  return res.json({
+    simulation: true,
+    ...simulation,
+    message: 'Simulation terminée sans envoyer de courriel ni créer de compte ou de données.',
+  });
+});
+
 companyAccountantInvitationRoutes.post('/', async (req, res) => {
   const email = normalizeEmail(req.body?.email);
   if (!isValidEmail(email)) {
@@ -126,81 +229,21 @@ companyAccountantInvitationRoutes.post('/', async (req, res) => {
     return res.status(503).json({ error: 'L’envoi des invitations est indisponible. Contactez l’administrateur.' });
   }
 
+  let invitationContext;
   try {
-    let baseUrl;
-    try {
-      baseUrl = invitationBaseUrl(req);
-    } catch (configurationError) {
-      return res.status(503).json({ error: configurationError.message });
-    }
-
-    const previous = await latestInvitation(db, req.entrepriseId);
-    const now = new Date();
-    const previousStatus = getInvitationDisplayStatus(previous, null, now);
-    if (previousStatus === 'pending' || previousStatus === 'accepted' || previousStatus === 'disabled') {
-      return res.status(409).json({
-        error: 'Un accès comptable est déjà actif ou en attente. Révoquez-le avant d’en créer un autre.',
-      });
-    }
-
-    const [existingUser] = await db.select({
-      id: users.id,
-      entrepriseId: users.entrepriseId,
-      isExternalAccountant: users.isExternalAccountant,
-      actif: users.actif,
-    }).from(users).where(sql`LOWER(${users.email}) = ${email}`).limit(1);
-    const canReinviteSamePerson = Boolean(existingUser?.isExternalAccountant) &&
-      Number(existingUser.entrepriseId) === Number(req.entrepriseId) &&
-      !existingUser.actif &&
-      previous?.status === 'revoked';
-    if (existingUser && !canReinviteSamePerson) {
-      return res.status(409).json({
-        error: 'Cette adresse est déjà utilisée. Cette première version utilise un compte distinct par entreprise.',
-      });
-    }
-
-    const { token, tokenHash } = createAccountantInvitationToken();
-    const expiresAt = new Date(now.getTime() + ACCOUNTANT_INVITATION_TTL_MS);
-    if (previous?.status === 'pending') {
-      await db.update(accountantInvitations).set({ status: 'expired' }).where(and(
-        eq(accountantInvitations.tokenHash, previous.tokenHash),
-        eq(accountantInvitations.entrepriseId, req.entrepriseId),
-        eq(accountantInvitations.status, 'pending'),
-      ));
-    }
-
-    const [invitation] = await db.insert(accountantInvitations).values({
-      tokenHash,
-      entrepriseId: req.entrepriseId,
-      invitedByUserId: req.user.id,
-      email,
-      status: 'pending',
-      expiresAt,
-    }).returning();
-
-    const [company] = await db.select({ nom: entreprises.nom }).from(entreprises)
-      .where(eq(entreprises.id, req.entrepriseId)).limit(1);
-    const inviteUrl = new URL('/invitation-comptable', baseUrl);
-    inviteUrl.searchParams.set('token', token);
-    const companyName = escapeHtml(company?.nom || 'votre entreprise');
+    invitationContext = await createPendingAccountantInvitation(req, email, 'email');
+    const companyName = escapeHtml(invitationContext.company?.nom || 'votre entreprise');
     const invitationHtml = `
       <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#243447">
         <h2>Invitation comptable — ComptaOrion</h2>
         <p>L’entreprise <strong>${companyName}</strong> vous invite à consulter sa comptabilité dans ComptaOrion.</p>
         <p>Cette invitation est personnelle, valable 72 heures et limitée aux données de cette entreprise.</p>
-        <p><a href="${escapeHtml(inviteUrl.toString())}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#17324d;color:#fff;text-decoration:none">Accepter l’invitation</a></p>
+        <p><a href="${escapeHtml(invitationContext.inviteUrl)}" style="display:inline-block;padding:12px 18px;border-radius:6px;background:#17324d;color:#fff;text-decoration:none">Accepter l’invitation</a></p>
         <p>À l’acceptation, vous choisirez vous-même votre mot de passe. Ne transférez pas ce lien.</p>
       </div>`;
-    await logAudit({
-      ...requestAudit(req),
-      action: 'CREATE',
-      table: 'accountant_invitations',
-      description: `Création et tentative d’envoi d’une invitation comptable (${email})`,
-      nouvelleValeur: { email, expiresAt, status: 'pending' },
-    });
     const emailResult = await emailService.sendEmail({
       to: email,
-      subject: `Invitation comptable de ${company?.nom || 'votre client'} sur ComptaOrion`,
+      subject: `Invitation comptable de ${invitationContext.company?.nom || 'votre client'} sur ComptaOrion`,
       html: invitationHtml,
       entrepriseId: req.entrepriseId,
       userId: req.user.id,
@@ -209,7 +252,7 @@ companyAccountantInvitationRoutes.post('/', async (req, res) => {
 
     if (!emailResult.success) {
       await db.update(accountantInvitations).set({ status: 'failed' }).where(and(
-        eq(accountantInvitations.tokenHash, invitation.tokenHash),
+        eq(accountantInvitations.tokenHash, invitationContext.invitation.tokenHash),
         eq(accountantInvitations.entrepriseId, req.entrepriseId),
       ));
       await logAudit({
@@ -226,15 +269,32 @@ companyAccountantInvitationRoutes.post('/', async (req, res) => {
     return res.status(201).json({
       status: 'pending',
       email,
-      expiresAt,
+      expiresAt: invitationContext.expiresAt,
       message: 'Invitation envoyée. Le cabinet doit l’accepter dans les 72 heures.',
     });
   } catch (error) {
-    if (error.code === '23505') {
-      return res.status(409).json({ error: 'Un accès comptable est déjà actif ou en attente pour cette entreprise.' });
-    }
-    console.error('Erreur d’envoi de l’invitation comptable:', error);
-    return res.status(500).json({ error: 'Impossible d’envoyer l’invitation comptable.' });
+    return sendInvitationRouteError(error, res);
+  }
+});
+
+companyAccountantInvitationRoutes.post('/whatsapp-link', async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: 'Saisissez une adresse courriel valide.' });
+  }
+
+  try {
+    const invitationContext = await createPendingAccountantInvitation(req, email, 'whatsapp');
+    return res.status(201).json({
+      status: 'pending',
+      deliveryMethod: 'whatsapp',
+      email,
+      expiresAt: invitationContext.expiresAt,
+      inviteUrl: invitationContext.inviteUrl,
+      message: 'Lien créé. Partagez-le uniquement avec le comptable concerné; il expire dans 72 heures.',
+    });
+  } catch (error) {
+    return sendInvitationRouteError(error, res);
   }
 });
 

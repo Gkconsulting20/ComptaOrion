@@ -7,6 +7,7 @@ import {
   hashAccountantInvitationToken,
   invitationCountsTowardSeat,
   isInvitationPending,
+  simulateAccountantInvitationFlow,
 } from '../src/services/accountantInvitationPolicy.js';
 
 test('creates a high-entropy invite token and stores only a deterministic hash', () => {
@@ -46,4 +47,13 @@ test('external accountant does not consume an ordinary subscription seat', () =>
   assert.equal(invitationCountsTowardSeat({ actif: true, isExternalAccountant: false }), true);
   assert.equal(invitationCountsTowardSeat({ actif: true, isExternalAccountant: true }), false);
   assert.equal(invitationCountsTowardSeat({ actif: false, isExternalAccountant: false }), false);
+});
+
+test('invitation simulation checks token, expiry and read-only defaults without side effects', () => {
+  const simulation = simulateAccountantInvitationFlow(new Date('2026-10-31T12:00:00.000Z'));
+
+  assert.equal(simulation.success, true);
+  assert.equal(simulation.checks.length, 5);
+  assert.ok(simulation.checks.every((check) => check.passed));
+  assert.equal(simulation.checks.find((check) => check.id === 'no-side-effects').passed, true);
 });

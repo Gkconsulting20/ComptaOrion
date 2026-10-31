@@ -52,7 +52,10 @@ export function UserAccessPanel({ currentUserId }) {
   const [expandedUserId, setExpandedUserId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [invitingAccountant, setInvitingAccountant] = useState(false);
+  const [simulatingAccountant, setSimulatingAccountant] = useState(false);
   const [revokingAccountant, setRevokingAccountant] = useState(false);
+  const [shareableInviteUrl, setShareableInviteUrl] = useState('');
+  const [invitationSimulation, setInvitationSimulation] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -124,20 +127,47 @@ export function UserAccessPanel({ currentUserId }) {
     }
   };
 
-  const inviteAccountant = async (event) => {
+  const simulateAccountantInvitation = async () => {
+    setSimulatingAccountant(true);
+    setError('');
+    setNotice('');
+    setInvitationSimulation(null);
+    try {
+      const result = await api.post('/accountant-invitations/simulate');
+      setInvitationSimulation(result);
+      setNotice(result.message || 'Simulation terminée sans envoi.');
+    } catch (simulationError) {
+      setError(simulationError.message || 'Impossible de lancer la simulation.');
+    } finally {
+      setSimulatingAccountant(false);
+    }
+  };
+
+  const createWhatsAppInvitation = async (event) => {
     event.preventDefault();
     setInvitingAccountant(true);
     setError('');
     setNotice('');
     try {
-      const result = await api.post('/accountant-invitations', { email: accountantEmail });
+      const result = await api.post('/accountant-invitations/whatsapp-link', { email: accountantEmail });
       setAccountantEmail('');
-      setNotice(result.message || 'Invitation envoyée.');
+      setShareableInviteUrl(result.inviteUrl);
+      setNotice(result.message || 'Lien WhatsApp créé.');
       await loadUsers();
-    } catch (inviteError) {
-      setError(inviteError.message || 'Impossible d’envoyer l’invitation.');
+    } catch (linkError) {
+      setError(linkError.message || 'Impossible de créer le lien d’invitation.');
     } finally {
       setInvitingAccountant(false);
+    }
+  };
+
+  const copyWhatsAppInvitation = async () => {
+    try {
+      await navigator.clipboard.writeText(shareableInviteUrl);
+      setNotice('Lien copié. Partage-le uniquement avec le comptable invité.');
+      setError('');
+    } catch {
+      setError('Copie automatique indisponible. Sélectionne le lien et copie-le manuellement.');
     }
   };
 
@@ -148,6 +178,7 @@ export function UserAccessPanel({ currentUserId }) {
     setNotice('');
     try {
       const result = await api.delete('/accountant-invitations');
+      setShareableInviteUrl('');
       setNotice(result.message || 'Accès révoqué.');
       await loadUsers();
     } catch (revokeError) {
@@ -209,6 +240,11 @@ export function UserAccessPanel({ currentUserId }) {
               {accountantInvitation.status === 'disabled' && (
                 <small>Révoquez cet accès avant d’inviter un autre cabinet.</small>
               )}
+              {accountantInvitation.status === 'pending' && !shareableInviteUrl && (
+                <small>
+                  Si le lien WhatsApp a été perdu, révoquez cette invitation puis créez-en une nouvelle.
+                </small>
+              )}
             </div>
             <button className="user-access__danger" type="button" onClick={revokeAccountant}
               disabled={revokingAccountant}>
@@ -216,21 +252,72 @@ export function UserAccessPanel({ currentUserId }) {
             </button>
           </div>
         ) : (
-          <form className="user-access__accountant-form" onSubmit={inviteAccountant}>
+          <form className="user-access__accountant-form" onSubmit={createWhatsAppInvitation}>
             <label>
               Courriel nominatif du cabinet
               <input required type="email" maxLength={255} value={accountantEmail}
                 onChange={(event) => setAccountantEmail(event.target.value)} />
             </label>
-            <button className="user-access__primary" type="submit"
+            <div className="user-access__accountant-actions">
+              {import.meta.env.DEV && (
+                <button className="user-access__secondary" type="button"
+                  onClick={simulateAccountantInvitation}
+                  disabled={simulatingAccountant || invitingAccountant}>
+                  {simulatingAccountant ? 'Simulation…' : 'Tester en simulation'}
+                </button>
+              )}
+              <button className="user-access__primary" type="submit"
               disabled={invitingAccountant || accountantInvitation.status === 'unavailable'}>
-              {invitingAccountant ? 'Envoi…' : 'Envoyer une invitation'}
-            </button>
+                {invitingAccountant ? 'Création du lien…' : 'Créer le lien WhatsApp'}
+              </button>
+            </div>
             <p className="user-access__hint">
-              Le lien expire après 72 heures. Le comptable choisit son mot de passe et commence en lecture seule.
+              {import.meta.env.DEV &&
+                'La simulation n’envoie aucun courriel et ne crée aucune donnée. '}
+              Le lien WhatsApp est une vraie invitation : il expire après 72 heures, et le comptable choisit son mot de
+              passe avec des droits initiaux en lecture seule.
               Un même courriel ne peut pas encore servir à plusieurs entreprises dans cette première version.
             </p>
           </form>
+        )}
+        {invitationSimulation && (
+          <div className="user-access__simulation" role="status">
+            <strong>
+              {invitationSimulation.success ? 'Simulation réussie' : 'La simulation a détecté un problème'}
+            </strong>
+            <ul>
+              {(invitationSimulation.checks || []).map((check) => (
+                <li className={check.passed ? 'is-passed' : 'is-failed'} key={check.id}>
+                  <span aria-hidden="true">{check.passed ? '✓' : '!'}</span>
+                  {check.label}
+                </li>
+              ))}
+            </ul>
+            <p>{invitationSimulation.message}</p>
+          </div>
+        )}
+        {shareableInviteUrl && accountantInvitation.status === 'pending' && (
+          <div className="user-access__share-link" role="status">
+            <strong>Lien d’invitation prêt à partager</strong>
+            <p>
+              Ce lien est personnel et donne accès à cette entreprise. Partage-le uniquement avec le comptable invité.
+            </p>
+            <input aria-label="Lien d’invitation comptable" readOnly value={shareableInviteUrl} />
+            <div className="user-access__accountant-actions">
+              <button className="user-access__secondary" type="button" onClick={copyWhatsAppInvitation}>
+                Copier le lien
+              </button>
+              <a
+                className="user-access__primary user-access__whatsapp"
+                href={`https://wa.me/?text=${encodeURIComponent(`Invitation comptable ComptaOrion : ${shareableInviteUrl}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Ouvrir WhatsApp
+              </a>
+            </div>
+            <small>Le lien expire après 72 heures et ne peut être utilisé qu’une seule fois.</small>
+          </div>
         )}
       </section>
 
