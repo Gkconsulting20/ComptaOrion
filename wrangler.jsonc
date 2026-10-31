@@ -5,6 +5,16 @@
   "compatibility_date": "2026-02-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "comptaorion.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.comptaorion.com",
+      "custom_domain": true
+    }
+  ],
   "keep_vars": true,
   "assets": {
     "directory": "./frontend/dist",
