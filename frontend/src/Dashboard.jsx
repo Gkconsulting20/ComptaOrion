@@ -321,6 +321,7 @@ export function DashboardView({ entrepriseName }) {
           onApply={loadDashboard}
           loading={loading}
           showTitle={false}
+          compactSelector={true}
           showFiscalPeriods={true}
         />
       </div>

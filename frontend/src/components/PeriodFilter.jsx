@@ -195,6 +195,7 @@ export default function PeriodFilter({
   loading = false,
   showTitle = true,
   compact = false,
+  compactSelector = false,
   showFiscalPeriods = true
 }) {
   const [periodeActive, setPeriodeActive] = useState('fiscal_courant');
@@ -228,6 +229,14 @@ export default function PeriodFilter({
     }
   };
 
+  const handleCompactPeriodChange = (type) => {
+    if (type === 'custom') {
+      setPeriodeActive('custom');
+      return;
+    }
+    handlePeriodeClick(type);
+  };
+
   const handleDateChange = (type, value) => {
     if (type === 'debut') {
       onDateDebutChange(value);
@@ -245,7 +254,9 @@ export default function PeriodFilter({
     ? allPeriodes.slice(0, 4) 
     : allPeriodes;
 
-  const containerStyle = compact ? {
+  const containerStyle = compactSelector ? {
+    marginBottom: 0
+  } : compact ? {
     padding: '12px',
     backgroundColor: '#f8f9fa',
     borderRadius: '8px',
@@ -269,6 +280,91 @@ export default function PeriodFilter({
 
   return (
     <div style={containerStyle}>
+      {compactSelector ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '205px' }}>
+          <select
+            aria-label="Période du tableau de bord"
+            value={periodeActive}
+            onChange={(event) => handleCompactPeriodChange(event.target.value)}
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '9px 34px 9px 12px',
+              color: '#29465d',
+              backgroundColor: '#fff',
+              border: '1px solid #dce4e9',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: 650,
+              cursor: loading ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <optgroup label="Périodes calendaires">
+              {PERIODES_CALENDAIRES.map((periode) => (
+                <option key={periode.id} value={periode.id}>{periode.label}</option>
+              ))}
+            </optgroup>
+            {showFiscalPeriods && (
+              <optgroup label="Périodes fiscales">
+                {PERIODES_FISCALES.map((periode) => (
+                  <option key={periode.id} value={periode.id}>{periode.label}</option>
+                ))}
+              </optgroup>
+            )}
+            <option value="custom">Dates personnalisées…</option>
+          </select>
+
+          {periodeActive === 'custom' && (
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px',
+              backgroundColor: '#fff',
+              border: '1px solid #e1e7eb',
+              borderRadius: '8px'
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#667784' }}>
+                Du
+                <input
+                  type="date"
+                  value={dateDebut}
+                  onChange={(event) => handleDateChange('debut', event.target.value)}
+                  style={{ padding: '6px', border: '1px solid #dce4e9', borderRadius: '5px', fontSize: '11px' }}
+                />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#667784' }}>
+                Au
+                <input
+                  type="date"
+                  value={dateFin}
+                  onChange={(event) => handleDateChange('fin', event.target.value)}
+                  style={{ padding: '6px', border: '1px solid #dce4e9', borderRadius: '5px', fontSize: '11px' }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={onApply}
+                disabled={loading}
+                style={{
+                  padding: '7px 11px',
+                  color: '#fff',
+                  backgroundColor: '#315f78',
+                  border: 'none',
+                  borderRadius: '5px',
+                  fontSize: '11px',
+                  fontWeight: 650,
+                  cursor: loading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {loading ? '...' : 'Appliquer'}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {showTitle && !compact && (
         <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '14px', color: '#666' }}>
@@ -373,6 +469,8 @@ export default function PeriodFilter({
           {loading ? '...' : 'Appliquer'}
         </button>
       </div>
+        </>
+      )}
     </div>
   );
 }
