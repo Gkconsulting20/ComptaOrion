@@ -390,7 +390,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       password,
     });
     assert.ok(finalAdminLogin.session?.id);
-    await api('/ia/chat','POST',{message:'ne pas envoyer'},403);
+    await api('/ia/chat','POST',{message:'ne pas envoyer'},404);
     await api('/auth-security/logout','POST',{sessionId:finalAdminLogin.session.id});
     await api('/auth-security/session','GET',null,401);
     console.log('Recette : connexion, facture/paiement, écritures équilibrées, dépenses, projets associatifs, budgets, reçus de subvention, isolation tenant et déconnexion vérifiés.');
