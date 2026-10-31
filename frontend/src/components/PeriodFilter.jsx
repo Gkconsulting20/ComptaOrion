@@ -289,15 +289,6 @@ export default function PeriodFilter({
         </div>
       )}
 
-      {showFiscalPeriods && !compact && (
-        <div style={{ marginBottom: '10px' }}>
-          <div style={{ display: 'flex', gap: '20px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', color: '#007bff', fontWeight: 'bold' }}>● Périodes calendaires</span>
-            <span style={{ fontSize: '11px', color: '#28a745', fontWeight: 'bold' }}>● Périodes fiscales</span>
-          </div>
-        </div>
-      )}
-
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: compact ? '10px' : '12px' }}>
         {displayedPeriodes.map(p => (
           <button
