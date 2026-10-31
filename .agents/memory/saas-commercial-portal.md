@@ -27,6 +27,12 @@ Les prix de lancement acceptés pour l’offre sont par entreprise : Base 9 900 
 
 **How to apply:** conserver ces tarifs et trois utilisateurs inclus dans l’offre affichée. Le traitement HT/TTC et le raccordement aux forfaits actifs, aux limites d’accès et à la facturation doivent être confirmés avant de les appliquer à l’inscription ou aux factures.
 
+L’accès d’un cabinet comptable externe est un avantage gratuit supplémentaire, distinct des trois utilisateurs inclus dans le forfait.
+
+**Why:** l’utilisateur a précisé que le cabinet invité ne doit pas consommer l’un des trois comptes inclus et que l’invitation gratuite doit distinguer l’offre.
+
+**How to apply:** traiter cet accès séparément du quota des utilisateurs ordinaires. Ne pas le présenter comme opérationnel tant qu’un parcours d’invitation sécurisé, révocable et limité à l’entreprise concernée n’est pas disponible.
+
 La démo destinée aux prospects doit montrer les modules métiers importants de ComptaOrion, dont la comptabilité générale, la trésorerie et la comptabilité des associations. Paie & RH et l’Assistant IA restent masqués et exclus de l’offre commercialisée.
 
 **Why:** l’utilisateur a précisé que tous les modules métiers sont importants pour la démo et l’offre, à l’exception de la paie et de l’IA.
