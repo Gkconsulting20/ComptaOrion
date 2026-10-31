@@ -21,11 +21,11 @@ Les administrateurs clients doivent pouvoir régler séparément, pour chaque ut
 
 **How to apply:** les profils servent de valeurs de départ; les droits effectifs restent configurables par utilisateur et vérifiés côté serveur dans le tenant de son entreprise. Pour les objets de droits imbriqués, valider l’identifiant ajouté par le middleware avant de le retirer du contenu métier.
 
-Trois utilisateurs est une capacité fréquente à considérer pour un forfait, mais l’offre commerciale complète reste à revoir.
+Les prix de lancement acceptés pour l’offre sont par entreprise : Base 9 900 XOF/mois ou 99 000 XOF/an; Standard 17 900 XOF/mois ou 179 000 XOF/an; Premium 29 900 XOF/mois ou 299 000 XOF/an. Chaque forfait inclut trois utilisateurs; un utilisateur supplémentaire est proposé à 2 500 XOF/mois. L’annuel donne 12 mois d’accès pour 10 mois payés.
 
-**Why:** l’utilisateur a indiqué que le nombre d’utilisateurs est souvent de trois et qu’il souhaite revenir sur l’offre commerciale plus tard.
+**Why:** l’utilisateur a accepté d’ajouter à l’offre commerciale la grille tarifaire proposée après comparaison de tarifs publics locaux et régionaux.
 
-**How to apply:** considérer trois utilisateurs comme une référence provisoire pour les nouveaux forfaits, sans modifier les offres existantes ni figer la tarification avant la revue commerciale.
+**How to apply:** conserver ces tarifs et trois utilisateurs inclus dans l’offre affichée. Le traitement HT/TTC et le raccordement aux forfaits actifs, aux limites d’accès et à la facturation doivent être confirmés avant de les appliquer à l’inscription ou aux factures.
 
 La démo destinée aux prospects doit montrer les modules métiers importants de ComptaOrion, dont la comptabilité générale, la trésorerie et la comptabilité des associations. Paie & RH et l’Assistant IA restent masqués et exclus de l’offre commercialisée.
 

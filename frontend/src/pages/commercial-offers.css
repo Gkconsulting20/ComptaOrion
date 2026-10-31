@@ -38,9 +38,9 @@
 .commercial-offers__status {
   flex: 0 0 auto;
   padding: 7px 10px;
-  color: #865b13;
-  background: #fff5dc;
-  border: 1px solid #f2dfa9;
+  color: #24577d;
+  background: #eaf4fb;
+  border: 1px solid #cfe4f3;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
@@ -109,13 +109,39 @@
 }
 
 .commercial-offer-card__price {
+  display: grid;
+  gap: 5px;
   margin: 18px 0;
-  padding: 10px 12px;
+  padding: 12px;
   color: #394b5e;
   background: #f5f7fa;
   border-radius: 7px;
-  font-size: 15px;
-  font-weight: 800;
+}
+
+.commercial-offer-card__monthly {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.commercial-offer-card__monthly strong {
+  color: #243447;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.commercial-offer-card__monthly span,
+.commercial-offer-card__price small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.commercial-offer-card__annual {
+  margin-top: 3px;
+  color: #24734d;
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .commercial-offer-card h4 {

@@ -17,6 +17,8 @@ const OFFERS = [
     audience: 'Pour démarrer avec une gestion centralisée',
     description: 'Les fonctions essentielles pour suivre l’activité et tenir les comptes.',
     features: BASE_FEATURES,
+    monthlyPrice: '9 900,00 XOF',
+    annualPrice: '99 000,00 XOF',
     accent: 'base'
   },
   {
@@ -29,6 +31,8 @@ const OFFERS = [
       'Coût moyen pondéré avec frais logistiques répartis selon le poids',
       'Catalogue de prix de vente calculé selon la marge définie'
     ],
+    monthlyPrice: '17 900,00 XOF',
+    annualPrice: '179 000,00 XOF',
     accent: 'standard',
     featured: true
   },
@@ -45,6 +49,8 @@ const OFFERS = [
       'Suivi des paiements partiels et du solde des projets',
       'Détail des montants des états financiers et accès aux opérations'
     ],
+    monthlyPrice: '29 900,00 XOF',
+    annualPrice: '299 000,00 XOF',
     accent: 'premium'
   }
 ];
@@ -58,7 +64,7 @@ export default function CommercialOffers() {
           <h2 id="commercial-offers-title">Les forfaits ComptaOrion</h2>
           <p>Une gestion comptable et opérationnelle adaptée à la taille de l’activité.</p>
         </div>
-        <span className="commercial-offers__status">Tarifs à confirmer</span>
+        <span className="commercial-offers__status">Tarifs proposés</span>
       </div>
 
       <div className="commercial-offers__grid">
@@ -71,7 +77,16 @@ export default function CommercialOffers() {
             <h3>{offer.name}</h3>
             <p className="commercial-offer-card__audience">{offer.audience}</p>
             <p className="commercial-offer-card__description">{offer.description}</p>
-            <div className="commercial-offer-card__price">Prix à définir</div>
+            <div className="commercial-offer-card__price">
+              <div className="commercial-offer-card__monthly">
+                <strong>{offer.monthlyPrice}</strong>
+                <span>/ mois</span>
+              </div>
+              <small>Par entreprise · 3 utilisateurs inclus</small>
+              <div className="commercial-offer-card__annual">
+                {offer.annualPrice} / an · 2 mois offerts
+              </div>
+            </div>
             <h4>Fonctionnalités incluses</h4>
             <ul>
               {offer.features.map((feature) => (
@@ -86,7 +101,9 @@ export default function CommercialOffers() {
         <strong>Repères pour l’équipe commerciale</strong>
         <span>
           Paie &amp; RH, Assistant IA et Immobilisations sont exclus de l’offre actuelle.
-          Les tarifs et les limites d’accès par forfait ne sont pas encore configurés dans l’inscription.
+          Un utilisateur supplémentaire est proposé à 2 500,00 XOF par mois.
+          Le traitement HT/TTC doit être confirmé avant facturation. Les limites par forfait et la facturation
+          automatique ne sont pas encore appliquées dans le parcours d’inscription.
           Ne pas présenter la préparation fiscale comme un dépôt officiel.
         </span>
       </aside>
