@@ -3,6 +3,7 @@
 - [Hébergement ERP](erp-hosting.md) — Cloudflare pour l’application, Supabase PostgreSQL visée en remplacement de Render après migration et tests validés.
 - [Rotation des jetons](jwt-refresh-rotation.md) — ajouter un identifiant aléatoire à chaque refresh JWT pour garantir une rotation effective.
 - [Authentification GitHub](github-auth.md) — l’état OAuth d’intégration ne prouve pas que les opérations Git sont autorisées.
+- [Push Git depuis Replit](git-push-replit.md) — un push distant peut réussir même si Replit bloque la mise à jour locale de `origin/main`.
 - [Runtime Cloudflare](cloudflare-runtime.md) — vérifier runtime, SQL et R2, et garder les URLs de paquets du lockfile accessibles aux builds Workers.
 - [Paiements associatifs](association-payments.md) — séparer dépenses engagées, paiements réels et approbation ; chaque paiement réel a son écriture équilibrée.
 - [Synchronisation comptabilité-trésorerie](treasury-accounting-sync.md) — relier les journaux de banque au compte bancaire lié et éviter les mouvements en double.
