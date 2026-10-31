@@ -382,9 +382,16 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.equal(accountantSession.user.modulePermissions.parametres, 'none');
     await api('/comptabilite/plans');
     await api('/clients', 'POST', { nom: 'Écriture interdite au comptable externe' }, 403);
-    cookieJar = firstCookieJar;
-    await api('/ia/chat','POST',{message:'ne pas envoyer'},404);
-    await api('/auth-security/logout','POST',{sessionId:login.session.id});
+    await api('/auth-security/logout', 'POST', { sessionId: accountantAcceptance.session.id });
+    await api('/auth-security/session', 'GET', null, 401);
+    cookieJar = new Map();
+    const finalAdminLogin = await api('/auth-security/login', 'POST', {
+      email: 'recette@example.invalid',
+      password,
+    });
+    assert.ok(finalAdminLogin.session?.id);
+    await api('/ia/chat','POST',{message:'ne pas envoyer'},403);
+    await api('/auth-security/logout','POST',{sessionId:finalAdminLogin.session.id});
     await api('/auth-security/session','GET',null,401);
     console.log('Recette : connexion, facture/paiement, écritures équilibrées, dépenses, projets associatifs, budgets, reçus de subvention, isolation tenant et déconnexion vérifiés.');
   } finally {
