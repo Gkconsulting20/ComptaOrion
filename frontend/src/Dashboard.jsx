@@ -77,7 +77,7 @@ function DrillDownModal({ isOpen, onClose, title, loading, data, columns, render
   );
 }
 
-export function DashboardView({ entrepriseName }) {
+export function DashboardView() {
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState(null);
   const [ventesMensuelles, setVentesMensuelles] = useState([]);
@@ -305,9 +305,6 @@ export function DashboardView({ entrepriseName }) {
     <div className="dashboard-page">
       <div className="dashboard-page-header">
         <div>
-          <p className="dashboard-page-eyebrow">
-            Tableau de bord{entrepriseName ? ` · ${entrepriseName}` : ''}
-          </p>
           <h1 className="dashboard-page-title">Vue d’ensemble</h1>
           <p className="dashboard-page-subtitle">Votre activité financière sur la période sélectionnée</p>
         </div>
