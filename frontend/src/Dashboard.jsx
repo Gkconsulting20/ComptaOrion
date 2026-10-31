@@ -320,6 +320,7 @@ export function DashboardView({ entrepriseName }) {
           onDateFinChange={setDateFin}
           onApply={loadDashboard}
           loading={loading}
+          showTitle={false}
           showFiscalPeriods={true}
         />
       </div>
