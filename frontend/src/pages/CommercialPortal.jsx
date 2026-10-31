@@ -198,22 +198,22 @@ export function CommercialPortal() {
               </div>
               <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', borderLeft: '4px solid #3498db' }}>
                 <h3 style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>CA Total</h3>
-                <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#3498db' }}>{Math.round(parseFloat(dashboard.stats?.ca_total || 0)).toLocaleString('fr-FR')} XOF</p>
+                <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#3498db' }}>{Number(dashboard.stats?.ca_total || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</p>
               </div>
               <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', borderLeft: '4px solid #e67e22' }}>
                 <h3 style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Commissions Totales</h3>
-                <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#e67e22' }}>{Math.round(parseFloat(dashboard.stats?.commissions_totales || 0)).toLocaleString('fr-FR')} XOF</p>
+                <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#e67e22' }}>{Number(dashboard.stats?.commissions_totales || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</p>
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '25px' }}>
               <div style={{ backgroundColor: '#f0f4ff', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                 <h3 style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>CA ce mois</h3>
-                <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#667eea' }}>{Math.round(parseFloat(dashboard.stats?.ca_mois || 0)).toLocaleString('fr-FR')} XOF</p>
+                <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#667eea' }}>{Number(dashboard.stats?.ca_mois || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</p>
               </div>
               <div style={{ backgroundColor: '#fff4e6', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                 <h3 style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Commissions ce mois</h3>
-                <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#e67e22' }}>{Math.round(parseFloat(dashboard.stats?.commissions_mois || 0)).toLocaleString('fr-FR')} XOF</p>
+                <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#e67e22' }}>{Number(dashboard.stats?.commissions_mois || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</p>
               </div>
             </div>
 
@@ -264,8 +264,8 @@ export function CommercialPortal() {
                     {dashboard.ventes.map(vente => (
                       <tr key={vente.id} style={{ borderBottom: '1px solid #dee2e6' }}>
                         <td style={{ padding: '12px' }}>{vente.clientNom}</td>
-                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{Math.round(parseFloat(vente.montantVente)).toLocaleString('fr-FR')} XOF</td>
-                        <td style={{ padding: '12px', textAlign: 'right', color: '#e67e22', fontWeight: 'bold' }}>{Math.round(parseFloat(vente.commission)).toLocaleString('fr-FR')} XOF</td>
+                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{Number(vente.montantVente || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
+                        <td style={{ padding: '12px', textAlign: 'right', color: '#e67e22', fontWeight: 'bold' }}>{Number(vente.commission || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
                         <td style={{ padding: '12px' }}>{new Date(vente.dateVente).toLocaleDateString('fr-FR')}</td>
                         <td style={{ padding: '12px' }}>
                           <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', backgroundColor: '#d4edda', color: '#155724' }}>

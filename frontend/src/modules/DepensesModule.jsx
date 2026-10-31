@@ -475,7 +475,7 @@ export function DepensesModule() {
               fields: [
                 { label: 'ID', value: selectedDepense.id },
                 { label: 'Description', value: selectedDepense.description || '-' },
-                { label: 'Montant', value: `${Math.round(parseFloat(selectedDepense.montant || 0)).toLocaleString('fr-FR')} XOF` },
+                { label: 'Montant', value: `${Number(selectedDepense.montant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { label: 'Date', value: selectedDepense.dateDepense?.split('T')[0] || '-' },
                 { label: 'Statut', value: selectedDepense.statut?.replace('_', ' ') }
               ]

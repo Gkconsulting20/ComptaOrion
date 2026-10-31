@@ -145,20 +145,20 @@ export function SaaSAdminModule() {
 
           <div style={{ padding: '20px', backgroundColor: '#27ae60', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>MRR (Revenu Mensuel)</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(parseFloat(stats.mrr_total || 0)).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Number(stats.mrr_total || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>{stats.total_abonnements || 0} abonnements actifs</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: '#f39c12', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>CA Total</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Math.round(parseFloat(stats.ca_total || 0)).toLocaleString('fr-FR')} XOF</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Number(stats.ca_total || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
             <div style={{ fontSize: '12px', opacity: 0.8 }}>Toutes ventes confondues</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: '#e74c3c', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>Commerciaux</div>
             <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{stats.total_commerciaux || 0}</div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>{Math.round(parseFloat(stats.commissions_total || 0)).toLocaleString('fr-FR')} XOF de commissions</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>{Number(stats.commissions_total || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF de commissions</div>
           </div>
         </div>
 
@@ -262,7 +262,7 @@ export function SaaSAdminModule() {
               <td style={{ padding: '12px' }}>{com.email}</td>
               <td style={{ padding: '12px' }}>{com.region}</td>
               <td style={{ padding: '12px' }}>{com.commission}%</td>
-              <td style={{ padding: '12px' }}>{Math.round(parseFloat(com.objectifMensuel || 0)).toLocaleString('fr-FR')} XOF</td>
+              <td style={{ padding: '12px' }}>{Number(com.objectifMensuel || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
               <td style={{ padding: '12px' }}>
                 <button
                   onClick={() => {
@@ -453,7 +453,7 @@ export function SaaSAdminModule() {
             <tr key={abo.id} style={{ borderBottom: '1px solid #dee2e6' }}>
               <td style={{ padding: '12px' }}>{abo.entreprise}</td>
               <td style={{ padding: '12px' }}>{abo.plan}</td>
-              <td style={{ padding: '12px' }}>{Math.round(parseFloat(abo.montantMensuel)).toLocaleString('fr-FR')} XOF</td>
+              <td style={{ padding: '12px' }}>{Number(abo.montantMensuel || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
               <td style={{ padding: '12px' }}>{new Date(abo.dateDebut).toLocaleDateString('fr-FR')}</td>
               <td style={{ padding: '12px' }}>{new Date(abo.dateExpiration).toLocaleDateString('fr-FR')}</td>
               <td style={{ padding: '12px' }}>
@@ -500,17 +500,17 @@ export function SaaSAdminModule() {
             <div style={{ padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '6px' }}>
               <div style={{ fontSize: '12px', color: '#666' }}>Ventes Commerciaux</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>{statsVentes.commercial}</div>
-              <div style={{ fontSize: '11px', color: '#999' }}>{Math.round(statsVentes.montantCommercial).toLocaleString('fr-FR')} XOF</div>
+              <div style={{ fontSize: '11px', color: '#999' }}>{Number(statsVentes.montantCommercial || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
             </div>
             <div style={{ padding: '10px', backgroundColor: '#e8f5e9', borderRadius: '6px' }}>
               <div style={{ fontSize: '12px', color: '#666' }}>Ventes Web</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#388e3c' }}>{statsVentes.web}</div>
-              <div style={{ fontSize: '11px', color: '#999' }}>{Math.round(statsVentes.montantWeb).toLocaleString('fr-FR')} XOF</div>
+              <div style={{ fontSize: '11px', color: '#999' }}>{Number(statsVentes.montantWeb || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
             </div>
             <div style={{ padding: '10px', backgroundColor: '#fff3e0', borderRadius: '6px' }}>
               <div style={{ fontSize: '12px', color: '#666' }}>Total Ventes</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f57c00' }}>{statsVentes.total}</div>
-              <div style={{ fontSize: '11px', color: '#999' }}>{Math.round(statsVentes.montantCommercial + statsVentes.montantWeb).toLocaleString('fr-FR')} XOF</div>
+              <div style={{ fontSize: '11px', color: '#999' }}>{(statsVentes.montantCommercial + statsVentes.montantWeb).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
             </div>
           </div>
           <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
@@ -589,12 +589,12 @@ export function SaaSAdminModule() {
                 </td>
                 <td style={{ padding: '12px' }}>{vente.source === 'web' ? '—' : vente.commercial}</td>
                 <td style={{ padding: '12px' }}>{vente.client}</td>
-                <td style={{ padding: '12px' }}>{Math.round(parseFloat(vente.montantVente)).toLocaleString('fr-FR')} XOF</td>
+                <td style={{ padding: '12px' }}>{Number(vente.montantVente || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
                 <td style={{ padding: '12px' }}>
                   {vente.source === 'web' ? (
                     <span style={{ color: '#999', fontSize: '12px' }}>—</span>
                   ) : (
-                    `${Math.round(parseFloat(vente.commission)).toLocaleString('fr-FR')} XOF`
+                    `${Number(vente.commission || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
                   )}
                 </td>
                 <td style={{ padding: '12px' }}>

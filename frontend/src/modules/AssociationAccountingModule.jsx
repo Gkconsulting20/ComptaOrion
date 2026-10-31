@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api';
 
 const today = () => new Date().toISOString().slice(0, 10);
-const amount = (value) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(value || 0));
+const amount = (value) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
 const styles = {
   panel: { background: '#fff', border: '1px solid #e5e9f0', borderRadius: 14, padding: 22 },
   button: { border: 0, borderRadius: 9, padding: '10px 15px', background: '#176b54', color: '#fff', cursor: 'pointer', fontWeight: 650 },

@@ -1204,7 +1204,7 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
           avertissements: [
             ...coutRevient.avertissements,
             ...(repartitionLogistique.unallocated > 0
-              ? [`${Math.round(repartitionLogistique.unallocated).toLocaleString('fr-FR')} XOF de frais restent non répartis : renseignez le poids par unité de stock${produitsSansPoids.length ? ` pour ${[...new Set(produitsSansPoids)].join(', ')}` : ''}.`]
+              ? [`${repartitionLogistique.unallocated.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF de frais restent non répartis : renseignez le poids par unité de stock${produitsSansPoids.length ? ` pour ${[...new Set(produitsSansPoids)].join(', ')}` : ''}.`]
               : []),
             ...(comptabiliteAvertissement ? [comptabiliteAvertissement] : []),
           ],

@@ -1,9 +1,6 @@
-export function formatMontant(value, showDecimals = false) {
+export function formatMontant(value) {
   const num = parseFloat(value) || 0;
-  if (showDecimals) {
-    return num.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  return Math.round(num).toLocaleString('fr-FR');
+  return num.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function formatMontantXOF(value) {

@@ -7,7 +7,7 @@ import OrionIcon from './components/OrionIcon';
 const COLORS = ['#39769a', '#c79a43', '#5a9a8e', '#a8b4bc', '#8b76a8'];
 
 function formatMoney(value) {
-  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(value || 0)} XOF`;
+  return `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0)} XOF`;
 }
 
 function formatKpiMoney(value) {
