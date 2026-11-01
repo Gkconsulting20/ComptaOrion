@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import guideUrl from '../../../docs/Guide-demarrage-ComptaOrion.html?url';
 
 export function SaaSAdminModule() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -24,7 +25,8 @@ export function SaaSAdminModule() {
     { id: 'commerciaux', label: '👔 Commerciaux' },
     { id: 'plans', label: '💳 Plans Tarifaires' },
     { id: 'abonnements', label: '📋 Abonnements' },
-    { id: 'ventes', label: '💰 Ventes' }
+    { id: 'ventes', label: '💰 Ventes' },
+    { id: 'guide', label: '📘 Guide de mise en route' }
   ];
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export function SaaSAdminModule() {
   }, [activeTab]);
 
   const loadData = async () => {
+    if (activeTab === 'guide') return;
     setLoading(true);
     try {
       if (activeTab === 'dashboard') {
@@ -616,6 +619,73 @@ export function SaaSAdminModule() {
     );
   };
 
+  const renderGuide = () => (
+    <section style={{ padding: '20px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        flexWrap: 'wrap',
+        gap: '16px',
+        marginBottom: '18px'
+      }}>
+        <div>
+          <h3 style={{ margin: '0 0 8px', color: '#263746' }}>Guide de mise en route ComptaOrion</h3>
+          <p style={{ margin: 0, color: '#5d6d79', maxWidth: '700px' }}>
+            La version actuelle du guide est affichée ci-dessous. Elle sera actualisée au fil des évolutions du logiciel.
+          </p>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          <a
+            href={guideUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              padding: '10px 14px',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              color: '#17324d',
+              background: '#fff',
+              fontWeight: 700,
+              textDecoration: 'none'
+            }}
+          >
+            Ouvrir le guide
+          </a>
+          <a
+            href={guideUrl}
+            download="Guide-demarrage-ComptaOrion.html"
+            style={{
+              padding: '10px 14px',
+              border: '1px solid #17324d',
+              borderRadius: '8px',
+              color: '#fff',
+              background: '#17324d',
+              fontWeight: 700,
+              textDecoration: 'none'
+            }}
+          >
+            Télécharger le guide
+          </a>
+        </div>
+      </div>
+      <iframe
+        title="Aperçu du guide de mise en route ComptaOrion"
+        src={guideUrl}
+        loading="lazy"
+        style={{
+          display: 'block',
+          width: '100%',
+          height: 'min(78vh, 1000px)',
+          minHeight: '560px',
+          border: '1px solid #dce5eb',
+          borderRadius: '8px',
+          background: '#f3f7f8'
+        }}
+      />
+    </section>
+  );
+
   const renderModal = () => {
     if (!showModal) return null;
 
@@ -882,8 +952,8 @@ export function SaaSAdminModule() {
     <div style={{ padding: '20px' }}>
       <h2 style={{ marginBottom: '20px' }}>🎯 Administration SaaS - Commercialisation ComptaOrion</h2>
 
-      <div style={{ borderBottom: '2px solid #e0e0e0', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', gap: '10px' }}>
+      <div style={{ borderBottom: '2px solid #e0e0e0', marginBottom: '20px', overflowX: 'auto' }}>
+        <div style={{ display: 'flex', gap: '10px', width: 'max-content', minWidth: '100%' }}>
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -897,6 +967,7 @@ export function SaaSAdminModule() {
                 cursor: 'pointer',
                 fontWeight: activeTab === tab.id ? 'bold' : 'normal',
                 fontSize: '14px',
+                whiteSpace: 'nowrap',
                 transition: 'all 0.3s'
               }}
             >
@@ -917,6 +988,7 @@ export function SaaSAdminModule() {
             {activeTab === 'plans' && renderPlans()}
             {activeTab === 'abonnements' && renderAbonnements()}
             {activeTab === 'ventes' && renderVentes()}
+            {activeTab === 'guide' && renderGuide()}
           </>
         )}
       </div>

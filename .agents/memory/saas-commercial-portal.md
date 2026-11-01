@@ -44,3 +44,9 @@ La répartition commerciale approuvée est : Base pour le socle ERP et les droit
 **Why:** l’utilisateur a autorisé la publication Cloudflare après avoir vu et reçu le résumé de cette répartition.
 
 **How to apply:** conserver cette répartition dans l’offre; exclure Paie & RH, Assistant IA et Immobilisations. Ne pas inventer de tarifs ni prétendre que les limites par forfait sont appliquées avant configuration et validation.
+
+La version à jour du guide de mise en route doit rester accessible à l’administrateur de la plateforme dans l’espace Admin SaaS et être actualisée au fil des changements de ComptaOrion.
+
+**Why:** l’utilisateur a demandé que le document soit disponible dans l’administration SaaS et maintenu à mesure que le logiciel évolue.
+
+**How to apply:** garder une source unique du guide et faire pointer l’onglet Admin SaaS vers le document courant; éviter les copies publiées qui pourraient devenir obsolètes.
