@@ -72,3 +72,9 @@ Le runtime Express sur Cloudflare Workers ne garantit pas `req.connection.remote
 **Why:** Le test fonctionnel Worker a échoué lors de l’écriture de l’audit de session, car l’adresse IP était absente alors que la colonne PostgreSQL est obligatoire.
 
 **How to apply:** Pour l’audit d’IP, lire les en-têtes Cloudflare et les propriétés Express/Node de manière optionnelle, puis fournir une valeur non nulle; valider connexion et renouvellement de session dans le Worker simulé.
+
+Le Worker ComptaOrion de production utilise le bucket R2 `comptaorion-uploads`; le bucket historique `comptaorion-uploads-staging` est conservé vide.
+
+**Why:** Le 3 novembre 2026, les deux buckets étaient vides au moment du basculement. L’utilisateur a choisi un bucket de production distinct, sans supprimer l’ancien.
+
+**How to apply:** Garder `UPLOADS` lié au bucket de production. Ne pas supprimer le bucket staging ni y rediriger les fichiers clients sans accord explicite.
