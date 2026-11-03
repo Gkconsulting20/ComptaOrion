@@ -49,11 +49,11 @@ donc pas indispensable.
 **How to apply:** Confronter ce type d’échec à une requête SQL inoffensive sur
 le Worker déployé avant d’imposer Hyperdrive ou un changement d’architecture.
 
-Le push de `main` sur GitHub déclenche automatiquement le déploiement de production Cloudflare.
+Un push GitHub sur `main` déclenche normalement Workers Builds, mais ne garantit pas la publication : l’installation des outils peut échouer avant la compilation. Un déploiement Wrangler direct a servi de solution de repli.
 
-**Why:** Le Worker de l’ERP est relié à Workers Builds; son déclencheur exécute `npm run build` puis `npx wrangler deploy`. Un push avant la mise à niveau du schéma Render peut donc publier du code qui attend des tables absentes.
+**Why:** Le 3 novembre 2026, le push a bien atteint GitHub et déclenché un build Cloudflare, mais celui-ci s’est arrêté pendant l’installation de Node. `npm run cloudflare:deploy` a ensuite publié avec succès le même code après la mise à niveau du schéma Render.
 
-**How to apply:** Simuler la migration avec l’URL Render, appliquer la migration additive sur la base confirmée, vérifier qu’une simulation suivante ne prévoit plus de changements, puis pousser `main` et contrôler le résultat du build correspondant au commit.
+**How to apply:** Avant un push, simuler puis appliquer toute migration Render autorisée. Après le push, vérifier le statut du build et la version réellement servie par le Worker; si Workers Builds échoue avant compilation, ne pas répéter le push et utiliser Wrangler après validation locale.
 
 Les builds Cloudflare ne peuvent pas télécharger les paquets depuis les URLs internes du pare-feu npm de Replit inscrites dans le lockfile racine.
 
