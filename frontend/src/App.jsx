@@ -3,6 +3,7 @@ import './app.css';
 import api from './api';
 import OrionIcon from './components/OrionIcon';
 import OrionLogo from './components/OrionLogo';
+import guideUrl from '../../docs/Guide-demarrage-ComptaOrion.html?url';
 import { roleCanAccessModule } from '@shared/access-policy.js';
 
 const loadNamed = (loader, exportName) => lazy(() =>
@@ -350,6 +351,20 @@ export default function App() {
           </div>
 
           <div className="app-topbar-actions">
+            <a
+              href={guideUrl}
+              className="app-guide-link"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Ouvrir le guide de test ComptaOrion dans un nouvel onglet"
+              title="Guide de test"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 4.75A2.75 2.75 0 0 1 7.75 2H20v17H7.75A2.75 2.75 0 0 0 5 21.75z" />
+                <path d="M5 5v16.75M9 6h7M9 10h7" />
+              </svg>
+              <span>Guide de test</span>
+            </a>
             <div className="app-user-chip" title={user?.nom || user?.username || 'Utilisateur'}>
               <span className="app-user-avatar" aria-hidden="true">
                 {(user?.nom || user?.username || 'U').trim().charAt(0).toUpperCase()}

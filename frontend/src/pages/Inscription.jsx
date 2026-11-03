@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import guideUrl from '../../../docs/Guide-demarrage-ComptaOrion.html?url';
 
 export function Inscription() {
   const [plans, setPlans] = useState([]);
@@ -162,6 +163,17 @@ export function Inscription() {
           }}>
             Se connecter
           </a>
+           <p style={{ margin: '18px 0 0', color: '#64748b', fontSize: '14px' }}>
+             Besoin d’aide pour commencer ?
+           </p>
+           <a
+             href={guideUrl}
+             target="_blank"
+             rel="noreferrer"
+             style={{ color: '#3157a4', fontWeight: 700, textDecoration: 'underline' }}
+           >
+             Ouvrir le guide de test
+           </a>
         </section>
       </main>
     );
@@ -214,6 +226,16 @@ export function Inscription() {
           </h2>
           <p style={{ color: '#666', marginBottom: '30px' }}>
             Créez l’espace de votre entreprise en quelques minutes. Aucun paiement ni carte bancaire n’est demandé.
+          </p>
+          <p style={{ margin: '-16px 0 24px', fontSize: '14px' }}>
+            <a
+              href={guideUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: '#3157a4', fontWeight: 700 }}
+            >
+              Consulter le guide de test et de prise en main
+            </a>
           </p>
 
           {error && (

@@ -1109,6 +1109,7 @@ body {
 
 .app-nav-item:focus-visible,
 .app-menu-toggle:focus-visible,
+.app-guide-link:focus-visible,
 .app-logout-button:focus-visible {
   outline: 3px solid #78b9d8;
   outline-offset: 2px;
@@ -1274,6 +1275,30 @@ body {
 .app-topbar-actions {
   flex: 0 0 auto;
   gap: 15px;
+}
+
+.app-guide-link {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid #e2e8eb;
+  border-radius: 7px;
+  color: #526b7b;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
+}
+
+.app-guide-link:hover {
+  border-color: #c7d8df;
+  color: #1d4e73;
+  background: #f1f7f8;
 }
 
 .app-user-chip {
@@ -1717,8 +1742,14 @@ body {
   }
 
   .app-user-name,
+  .app-guide-link span,
   .app-logout-button span:last-child {
     display: none;
+  }
+
+  .app-guide-link {
+    width: 32px;
+    padding: 0;
   }
 
   .app-logout-button {
