@@ -39,6 +39,12 @@ L’accès à l’essai doit être automatiquement bloqué à l’échéance des
 
 **How to apply:** refuser l’authentification et l’accès aux API après l’expiration de l’essai.
 
+Avant la vente des abonnements payants, attendre les retours de plusieurs clients testeurs, compléter la checklist `docs/Checklist-avant-commercialisation.md` et fermer les blocages de sécurité et de fonctionnement. Les offres de paiement FedaPay/Stripe et les autres fonctions incomplètes doivent être vérifiées avant de commencer la commercialisation.
+
+**Why:** l’utilisateur veut corriger les problèmes détectés pendant les essais et les fonctions incomplètes avant de vendre les abonnements.
+
+**How to apply:** garder l’application en phase de test jusqu’aux retours clients; réviser la checklist avec chaque retour, puis confirmer la fermeture des points critiques avant toute vente payante.
+
 Chaque entreprise cliente peut inviter gratuitement un compte nominatif de cabinet comptable, sans consommer l’un des trois utilisateurs inclus. Pour le MVP choisi, le compte est distinct et lié à une seule entreprise.
 
 **Why:** l’utilisateur a précisé que le cabinet invité ne consomme pas l’un des trois comptes inclus, puis a choisi un premier MVP séparé par entreprise.
