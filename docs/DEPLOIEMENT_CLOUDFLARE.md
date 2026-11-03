@@ -16,18 +16,18 @@ L’accès réseau externe Render doit autoriser le Worker.
 déploiements Wrangler ; cela ne remplace pas le chiffrement des valeurs
 sensibles, qui doivent être enregistrées comme Secrets.
 
-## Architecture préparée
+## Configuration actuellement déployée
 
-- **Un Worker** : `comptaorion-erp-staging`, avec compatibilité Node.js.
+- **Worker actif** : `comptaorion`, avec compatibilité Node.js et domaines `comptaorion.com` / `www.comptaorion.com`.
 - **Interface React** : assets statiques du même Worker, sans serveur Replit.
 - **API Express** : exécutée dans le Worker via `httpServerHandler`.
-- **PostgreSQL conservé** : Neon par WebSocket, ou PostgreSQL via Hyperdrive.
-- **Fichiers** : binding R2 `UPLOADS`, bucket `comptaorion-uploads-staging`.
+- **PostgreSQL conservé** : base Render.
+- **Fichiers** : binding R2 `UPLOADS`, bucket de production `comptaorion-uploads`.
 - **IA désactivée**, FedaPay en sandbox.
 
-`wrangler.jsonc` contient la configuration de préproduction. Le compte connecté
-possède déjà ce bucket R2. Les Workers existants, notamment `comptaorion`,
-ne sont ni modifiés ni remplacés par cette préparation.
+`wrangler.jsonc` contient la configuration actuellement utilisée par le Worker
+de production. Le bucket historique `comptaorion-uploads-staging` est conservé
+séparément et n’est pas utilisé par ce Worker.
 
 Les connexions SQL sont créées par requête puis fermées avec `waitUntil`.
 Les transactions utilisent une même connexion ; les fichiers ne sont jamais
@@ -75,24 +75,24 @@ ajouter son binding `HYPERDRIVE` dans Wrangler et tester la connexion.
 
 ### 3. Fichiers R2
 
-Le bucket **`comptaorion-uploads-staging` existe déjà**. Aucun nouveau bucket
-n’est requis pour cette préproduction ; Wrangler déclare son binding.
+Le Worker actif utilise le bucket privé **`comptaorion-uploads`**. Le bucket
+historique **`comptaorion-uploads-staging`** a été vérifié vide et reste
+conservé, sans être supprimé ni utilisé pour les nouveaux fichiers.
 
-Les fichiers présents dans `backend/uploads/` ne sont pas automatiquement
-copiés dans R2. Avant la bascule, les importer en préservant les clés relatives :
-un logo accessible à `/uploads/logos/fichier.png` doit avoir pour clé R2
-`logos/fichier.png`. Les sauvegardes ne doivent pas être exposées comme logos.
+Les anciens fichiers qui auraient été dans `backend/uploads/` ne sont pas
+automatiquement copiés dans R2. Les nouveaux fichiers sont enregistrés dans
+`comptaorion-uploads`, avec leurs clés relatives; par exemple
+`/uploads/logos/fichier.png` correspond à la clé `logos/fichier.png`.
 
 Exemple depuis un poste autorisé :
 
 ```sh
-npx wrangler r2 object put comptaorion-uploads-staging/logos/fichier.png \
+npx wrangler r2 object put comptaorion-uploads/logos/fichier.png \
   --file backend/uploads/logos/fichier.png --content-type image/png --remote
 ```
 
-Pour la production, utiliser un bucket et une configuration distincts après
-validation de la préproduction. Un domaine personnalisé n’est pas obligatoire
-pour les premiers essais : l’adresse `workers.dev` suffit.
+Toute préproduction future doit utiliser son propre Worker et le bucket
+`comptaorion-uploads-staging`; ne pas le rattacher au Worker de production.
 
 ### 4. Services facultatifs
 

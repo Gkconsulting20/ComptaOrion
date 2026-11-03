@@ -24,7 +24,7 @@
   },
   "r2_buckets": [{
     "binding": "UPLOADS",
-    "bucket_name": "comptaorion-uploads-staging"
+    "bucket_name": "comptaorion-uploads"
   }],
   "vars": {
     "NODE_ENV": "production",
