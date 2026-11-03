@@ -27,6 +27,18 @@ Les prix de lancement acceptés pour l’offre sont par entreprise : Base 9 900 
 
 **How to apply:** conserver ces tarifs et trois utilisateurs inclus dans l’offre affichée. Le traitement HT/TTC et le raccordement aux forfaits actifs, aux limites d’accès et à la facturation doivent être confirmés avant de les appliquer à l’inscription ou aux factures.
 
+Les nouveaux clients peuvent créer leur espace avec un essai gratuit de 30 jours, sans paiement. Chaque période commence à la création de l’organisation; le lien public reste réutilisable pour d’autres prospects.
+
+**Why:** l’utilisateur a choisi l’essai gratuit sans paiement et a fixé sa durée à 30 jours.
+
+**How to apply:** le formulaire public demande un mot de passe choisi par le client, active le compte et son abonnement de test, puis propose la connexion. Calculer les 30 jours par organisation, pas depuis la création ou le partage du lien; ne pas afficher les anciens forfaits payants tant qu’ils ne correspondent pas à l’offre approuvée.
+
+L’accès à l’essai doit être automatiquement bloqué à l’échéance des 30 jours.
+
+**Why:** l’utilisateur a confirmé que le blocage automatique est nécessaire.
+
+**How to apply:** refuser l’authentification et l’accès aux API après l’expiration de l’essai.
+
 Chaque entreprise cliente peut inviter gratuitement un compte nominatif de cabinet comptable, sans consommer l’un des trois utilisateurs inclus. Pour le MVP choisi, le compte est distinct et lié à une seule entreprise.
 
 **Why:** l’utilisateur a précisé que le cabinet invité ne consomme pas l’un des trois comptes inclus, puis a choisi un premier MVP séparé par entreprise.

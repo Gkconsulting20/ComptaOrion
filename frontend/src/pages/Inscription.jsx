@@ -6,15 +6,17 @@ export function Inscription() {
   const [commercialInfo, setCommercialInfo] = useState(null);
   const [formData, setFormData] = useState({
     nomEntreprise: '',
+    nomAdministrateur: '',
     email: '',
     telephone: '',
-    pays: 'Bénin',
+    pays: 'Togo',
     planId: '',
-    dureeEnMois: 12,
-    methodePaiement: 'fedapay',
+    motDePasse: '',
+    confirmationMotDePasse: '',
     commercialId: null
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -64,14 +66,26 @@ export function Inscription() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'planId' ? Number(value) : value,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     if (!selectedPlan) {
       setError('Aucun forfait actif n’est disponible pour le moment.');
+      return;
+    }
+    if (formData.motDePasse.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
+    if (formData.motDePasse !== formData.confirmationMotDePasse) {
+      setError('Les mots de passe ne correspondent pas.');
       return;
     }
     setSubmitting(true);
@@ -89,11 +103,7 @@ export function Inscription() {
         throw new Error(data.error || 'Erreur lors de l\'inscription');
       }
 
-      if (data.paymentUrl) {
-        window.location.href = data.paymentUrl;
-      } else {
-        alert('Inscription réussie ! Vérifiez votre email pour les identifiants.');
-      }
+      setSuccess(data.message || 'Votre espace est créé. Vous pouvez vous connecter.');
     } catch (err) {
       console.error('Erreur inscription:', err);
       setError(err.message);
@@ -103,7 +113,6 @@ export function Inscription() {
   };
 
   const selectedPlan = plans.find(p => p.id === parseInt(formData.planId));
-  const montantTotal = selectedPlan ? parseFloat(selectedPlan.prix) * parseInt(formData.dureeEnMois) : 0;
 
   if (loading) {
     return (
@@ -118,6 +127,43 @@ export function Inscription() {
           <p style={{ fontSize: '18px', color: '#666' }}>Chargement...</p>
         </div>
       </div>
+    );
+  }
+
+  if (success) {
+    return (
+      <main style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        padding: '24px',
+        backgroundColor: '#f5f5f5',
+      }}>
+        <section style={{
+          width: '100%',
+          maxWidth: '520px',
+          padding: '36px',
+          borderRadius: '12px',
+          backgroundColor: 'white',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          textAlign: 'center',
+        }}>
+          <h1 style={{ color: '#256b48', marginTop: 0 }}>Essai gratuit activé</h1>
+          <p aria-live="polite" style={{ color: '#4b5563', lineHeight: 1.6 }}>{success}</p>
+          <a href="/" style={{
+            display: 'inline-block',
+            marginTop: '12px',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            backgroundColor: '#3157a4',
+            color: 'white',
+            fontWeight: 700,
+            textDecoration: 'none',
+          }}>
+            Se connecter
+          </a>
+        </section>
+      </main>
     );
   }
 
@@ -164,10 +210,10 @@ export function Inscription() {
         {/* Corps */}
         <div style={{ padding: '40px 30px' }}>
           <h2 style={{ marginTop: 0, marginBottom: '10px', fontSize: '24px', color: '#333' }}>
-            Inscription & Abonnement
+            Essayez ComptaOrion gratuitement
           </h2>
           <p style={{ color: '#666', marginBottom: '30px' }}>
-            Créez votre compte et choisissez votre plan pour commencer à gérer votre entreprise dès aujourd'hui.
+            Créez l’espace de votre entreprise en quelques minutes. Aucun paiement ni carte bancaire n’est demandé.
           </p>
 
           {error && (
@@ -183,8 +229,26 @@ export function Inscription() {
             </div>
           )}
 
+          {success && (
+            <div role="status" aria-live="polite" style={{
+              backgroundColor: '#e8f5e9',
+              border: '1px solid #81c784',
+              borderRadius: '6px',
+              padding: '12px 15px',
+              marginBottom: '20px',
+              color: '#256b48',
+            }}>
+              {success}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
+              gap: '20px',
+              marginBottom: '20px',
+            }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#333' }}>
                   Nom de l'Entreprise *
@@ -208,14 +272,16 @@ export function Inscription() {
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#333' }}>
+                <label htmlFor="trial-email" style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#333' }}>
                   Email *
                 </label>
                 <input
+                  id="trial-email"
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
+                  autoComplete="email"
                   required
                   style={{
                     width: '100%',
@@ -230,7 +296,38 @@ export function Inscription() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <label htmlFor="trial-admin-name" style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#333' }}>
+                Nom complet de l’administrateur *
+              </label>
+              <input
+                id="trial-admin-name"
+                type="text"
+                name="nomAdministrateur"
+                value={formData.nomAdministrateur}
+                onChange={handleChange}
+                minLength={2}
+                maxLength={120}
+                autoComplete="name"
+                required
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '15px',
+                  boxSizing: 'border-box',
+                }}
+                placeholder="Ex. Afi Mensah"
+              />
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
+              gap: '20px',
+              marginBottom: '20px',
+            }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#333' }}>
                   Téléphone
@@ -278,18 +375,72 @@ export function Inscription() {
             </div>
 
             <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
+              gap: '20px',
+              marginBottom: '20px',
+            }}>
+              <div>
+                <label htmlFor="trial-password" style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#333' }}>
+                  Mot de passe *
+                </label>
+                <input
+                  id="trial-password"
+                  type="password"
+                  name="motDePasse"
+                  value={formData.motDePasse}
+                  onChange={handleChange}
+                  minLength={8}
+                  autoComplete="new-password"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    fontSize: '15px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div>
+                <label htmlFor="trial-password-confirm" style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#333' }}>
+                  Confirmer le mot de passe *
+                </label>
+                <input
+                  id="trial-password-confirm"
+                  type="password"
+                  name="confirmationMotDePasse"
+                  value={formData.confirmationMotDePasse}
+                  onChange={handleChange}
+                  minLength={8}
+                  autoComplete="new-password"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    fontSize: '15px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{
               backgroundColor: '#f9f9f9',
               borderRadius: '8px',
               padding: '20px',
               marginBottom: '20px'
             }}>
               <h3 style={{ marginTop: 0, marginBottom: '15px', fontSize: '18px', color: '#333' }}>
-                Choix du Plan
+                Votre essai gratuit
               </h3>
 
               <div style={{ marginBottom: '15px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
-                  Plan Tarifaire *
+                  Forfait d’essai *
                 </label>
                 <div style={{ display: 'grid', gap: '10px' }}>
                   {plans.length === 0 && (
@@ -336,7 +487,7 @@ export function Inscription() {
                           {parseFloat(plan.prix).toLocaleString('fr-FR', { maximumFractionDigits: plan.devise === 'XOF' || !plan.devise ? 0 : 2 })} {plan.devise || 'XOF'}
                         </strong>
                         <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#999' }}>
-                          /{plan.periode || 'mois'}
+                          30 jours
                         </p>
                       </div>
                     </label>
@@ -344,141 +495,14 @@ export function Inscription() {
                 </div>
               </div>
 
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
-                  Durée de l'Abonnement *
-                </label>
-                <select
-                  name="dureeEnMois"
-                  value={formData.dureeEnMois}
-                  onChange={handleChange}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '6px',
-                    fontSize: '15px',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="1">1 mois</option>
-                  <option value="3">3 mois</option>
-                  <option value="6">6 mois</option>
-                  <option value="12">12 mois</option>
-                </select>
-              </div>
-
-              {selectedPlan && (
-                <div style={{
-                  backgroundColor: '#e8f5e9',
-                  padding: '15px',
-                  borderRadius: '8px',
-                  border: '1px solid #81c784'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                    <span style={{ color: '#666' }}>Prix mensuel:</span>
-                    <strong>{parseFloat(selectedPlan.prix).toLocaleString('fr-FR', { maximumFractionDigits: selectedPlan.devise === 'XOF' || !selectedPlan.devise ? 0 : 2 })} {selectedPlan.devise || 'XOF'}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                    <span style={{ color: '#666' }}>Durée:</span>
-                    <strong>{formData.dureeEnMois} mois</strong>
-                  </div>
-                  <div style={{
-                    borderTop: '2px solid #4caf50',
-                    marginTop: '10px',
-                    paddingTop: '10px',
-                    display: 'flex',
-                    justifyContent: 'space-between'
-                  }}>
-                    <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#2e7d32' }}>Total:</span>
-                    <strong style={{ fontSize: '22px', color: '#2e7d32' }}>
-                      {montantTotal.toLocaleString('fr-FR', { maximumFractionDigits: selectedPlan.devise === 'XOF' || !selectedPlan.devise ? 0 : 2 })} {selectedPlan.devise || 'XOF'}
-                    </strong>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '10px', fontWeight: '600', color: '#333' }}>
-                Méthode de Paiement *
-              </label>
-              <div style={{ display: 'grid', gap: '10px' }}>
-                <label style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '12px',
-                  border: formData.methodePaiement === 'fedapay' ? '2px solid #667eea' : '1px solid #ddd',
-                  borderRadius: '8px',
-                  backgroundColor: formData.methodePaiement === 'fedapay' ? '#f0f4ff' : 'white',
-                  cursor: 'pointer'
-                }}>
-                  <input
-                    type="radio"
-                    name="methodePaiement"
-                    value="fedapay"
-                    checked={formData.methodePaiement === 'fedapay'}
-                    onChange={handleChange}
-                    style={{ marginRight: '12px' }}
-                  />
-                  <div>
-                    <strong>FedaPay</strong>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#666' }}>
-                      Mobile Money (MTN, Moov, Orange Money) - Recommandé pour l'Afrique
-                    </p>
-                  </div>
-                </label>
-
-                <label style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '12px',
-                  border: formData.methodePaiement === 'stripe' ? '2px solid #667eea' : '1px solid #ddd',
-                  borderRadius: '8px',
-                  backgroundColor: formData.methodePaiement === 'stripe' ? '#f0f4ff' : 'white',
-                  cursor: 'not-allowed',
-                  opacity: 0.5
-                }}>
-                  <input
-                    type="radio"
-                    name="methodePaiement"
-                    value="stripe"
-                    disabled
-                    style={{ marginRight: '12px' }}
-                  />
-                  <div>
-                    <strong>Stripe</strong>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#666' }}>
-                      Cartes bancaires internationales (Bientôt disponible)
-                    </p>
-                  </div>
-                </label>
-
-                <label style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '12px',
-                  border: formData.methodePaiement === 'paypal' ? '2px solid #667eea' : '1px solid #ddd',
-                  borderRadius: '8px',
-                  backgroundColor: formData.methodePaiement === 'paypal' ? '#f0f4ff' : 'white',
-                  cursor: 'not-allowed',
-                  opacity: 0.5
-                }}>
-                  <input
-                    type="radio"
-                    name="methodePaiement"
-                    value="paypal"
-                    disabled
-                    style={{ marginRight: '12px' }}
-                  />
-                  <div>
-                    <strong>PayPal</strong>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#666' }}>
-                      Paiement international (Bientôt disponible)
-                    </p>
-                  </div>
-                </label>
+              <div role="note" style={{
+                padding: '14px 16px',
+                borderRadius: '8px',
+                border: '1px solid #81c784',
+                backgroundColor: '#e8f5e9',
+                color: '#256b48',
+              }}>
+                Les 30 jours commencent à la création de votre organisation. Aucun paiement n’est demandé.
               </div>
             </div>
 
@@ -498,7 +522,7 @@ export function Inscription() {
                 transition: 'background-color 0.2s'
               }}
             >
-              {submitting ? 'Traitement en cours...' : `Procéder au Paiement (${montantTotal.toLocaleString('fr-FR', { maximumFractionDigits: selectedPlan?.devise === 'XOF' || !selectedPlan?.devise ? 0 : 2 })} ${selectedPlan?.devise || 'XOF'})`}
+              {submitting ? 'Création de votre espace…' : 'Créer mon espace gratuitement'}
             </button>
 
             <p style={{ marginTop: '20px', fontSize: '13px', color: '#999', textAlign: 'center' }}>

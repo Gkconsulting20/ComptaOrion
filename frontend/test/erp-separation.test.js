@@ -55,12 +55,19 @@ test('les fonctions avancées sont filtrées selon les rôles', async () => {
   assert.match(source, /const isAdmin = user\?\.role === 'admin'/);
 });
 
-test('l’inscription publique utilise l’API du même domaine et bloque sans forfait actif', async () => {
+test('l’inscription publique propose uniquement l’essai gratuit et demande un mot de passe', async () => {
   const source = await read('../src/pages/Inscription.jsx');
+  const login = await read('../src/pages/Login.jsx');
   assert.doesNotMatch(source, /localhost:3000|VITE_API_URL/);
   assert.match(source, /fetch\('\/api\/public\/plans'\)/);
   assert.match(source, /disabled=\{submitting \|\| !selectedPlan\}/);
   assert.match(source, /Aucun forfait actif n’est disponible/);
+  assert.match(source, /name="motDePasse"/);
+  assert.match(source, /name="confirmationMotDePasse"/);
+  assert.match(source, /Les 30 jours commencent à la création de votre organisation/);
+  assert.doesNotMatch(source, /methodePaiement|Procéder au Paiement/);
+  assert.match(login, /window\.location\.assign\('\/inscription'\)/);
+  assert.doesNotMatch(login, /fetch\('\/api\/auth\/register'/);
 });
 
 test('l’ancien écran Factures autonome est retiré, les factures restent dans Clients', async () => {

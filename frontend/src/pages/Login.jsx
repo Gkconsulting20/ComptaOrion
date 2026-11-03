@@ -35,7 +35,10 @@ export function Login({ onLoginSuccess }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          email: formData.email.trim().toLowerCase(),
+        })
       });
 
       const data = await response.json();
@@ -63,42 +66,7 @@ export function Login({ onLoginSuccess }) {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    if (registerData.password !== registerData.confirmPassword) {
-      setError('Les mots de passe ne correspondent pas');
-      return;
-    }
-
-    if (registerData.password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(registerData)
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erreur lors de l\'inscription');
-      }
-
-      setSuccess('Compte créé avec succès! Vous pouvez maintenant vous connecter.');
-      setMode('login');
-      setFormData({ ...formData, email: registerData.email });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    window.location.assign('/inscription');
   };
 
   const handleForgotPassword = async (e) => {
@@ -204,6 +172,7 @@ export function Login({ onLoginSuccess }) {
               </label>
               <input
                 type="email"
+                autoComplete="username"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
@@ -226,6 +195,7 @@ export function Login({ onLoginSuccess }) {
               </label>
               <input
                 type="password"
+                autoComplete="current-password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
@@ -285,7 +255,7 @@ export function Login({ onLoginSuccess }) {
               <p style={{ color: '#7f8c8d', margin: '0 0 10px 0' }}>Pas encore de compte?</p>
               <button
                 type="button"
-                onClick={() => setMode('register')}
+                onClick={() => window.location.assign('/inscription')}
                 style={{
                   padding: '10px 24px',
                   backgroundColor: '#27ae60',
@@ -297,7 +267,7 @@ export function Login({ onLoginSuccess }) {
                   fontWeight: 'bold'
                 }}
               >
-                Créer un compte
+                Essai gratuit 30 jours
               </button>
             </div>
           </form>

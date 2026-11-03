@@ -6,7 +6,6 @@ import crypto from 'crypto';
 import {
   generateToken,
   generateRefreshToken,
-  hashPassword,
   comparePassword,
   verifyRefreshToken,
   readCookie,
@@ -15,102 +14,17 @@ import {
   REFRESH_TOKEN_COOKIE,
   authMiddleware,
 } from '../auth.js';
-import { initializeSyscohadaForEnterprise } from '../services/syscohadaService.js';
-import { withTenantTransaction } from '../utils/rlsPolicies.js';
 
 const router = express.Router();
 
 /**
  * POST /auth/register
- * Inscription d'un nouvel utilisateur + création d'entreprise
+ * Ancien parcours désactivé : la création publique passe par l’essai SaaS.
  */
 router.post('/register', async (req, res) => {
-  try {
-    const {
-      username,
-      email,
-      password,
-      nom,
-      prenom,
-      entrepriseNom,
-      entrepriseAdresse,
-      entrepriseTelephone,
-      entrepriseEmail,
-    } = req.body;
-
-    // Validation
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: 'Champs requis: username, email, password' });
-    }
-
-    // Vérifier si l'utilisateur existe déjà
-    const [existingUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email));
-
-    if (existingUser) {
-      return res.status(400).json({ error: 'Cet email est déjà utilisé' });
-    }
-
-    // Créer d'abord l'entreprise
-    const [newEntreprise] = await db
-      .insert(entreprises)
-      .values({
-        nom: entrepriseNom || `Entreprise de ${nom || username}`,
-        adresse: entrepriseAdresse,
-        telephone: entrepriseTelephone,
-        email: entrepriseEmail || email,
-        actif: true,
-      })
-      .returning();
-
-    // Hash du mot de passe
-    const passwordHash = await hashPassword(password);
-
-    // Créer l'utilisateur
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        entrepriseId: newEntreprise.id,
-        username,
-        email,
-        passwordHash,
-        nom,
-        prenom,
-        role: 'admin', // Premier utilisateur = admin
-        actif: true,
-      })
-      .returning();
-
-    // Initialiser automatiquement le plan comptable SYSCOHADA
-    try {
-      const syscohadaResult = await withTenantTransaction(
-        newEntreprise.id,
-        () => initializeSyscohadaForEnterprise(newEntreprise.id),
-      );
-      console.log(`Plan comptable SYSCOHADA initialisé pour entreprise ${newEntreprise.id}:`, syscohadaResult);
-    } catch (syscohadaError) {
-      console.error('Erreur initialisation SYSCOHADA:', syscohadaError.message);
-    }
-
-    res.status(201).json({
-      message: 'Inscription réussie',
-      user: {
-        id: newUser.id,
-        username: newUser.username,
-        email: newUser.email,
-        nom: newUser.nom,
-        prenom: newUser.prenom,
-        role: newUser.role,
-        entrepriseId: newUser.entrepriseId,
-      },
-      entreprise: newEntreprise,
-    });
-  } catch (error) {
-    console.error('Erreur lors de l\'inscription:', error);
-    res.status(500).json({ error: 'Erreur serveur lors de l\'inscription' });
-  }
+  return res.status(410).json({
+    error: 'Cette ancienne inscription est désactivée. Utilisez /inscription pour créer un essai gratuit de 30 jours.',
+  });
 });
 
 /**

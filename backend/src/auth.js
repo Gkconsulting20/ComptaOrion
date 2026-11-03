@@ -62,6 +62,9 @@ export function generateToken(user) {
     role: user.role,
     entrepriseId: user.entrepriseId,
   };
+  if (Number.isSafeInteger(user.trialExpiresAt) && user.trialExpiresAt > 0) {
+    payload.trialExpiresAt = user.trialExpiresAt;
+  }
   
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
@@ -75,6 +78,9 @@ export function generateRefreshToken(user) {
     entrepriseId: user.entrepriseId,
     jti: randomUUID(),
   };
+  if (Number.isSafeInteger(user.trialExpiresAt) && user.trialExpiresAt > 0) {
+    payload.trialExpiresAt = user.trialExpiresAt;
+  }
   
   return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES_IN });
 }
@@ -133,6 +139,14 @@ export function authMiddleware(req, res, next) {
   
   if (!decoded) {
     return res.status(401).json({ error: 'Token invalide ou expiré' });
+  }
+
+  if (Number.isSafeInteger(decoded.trialExpiresAt) && Date.now() >= decoded.trialExpiresAt) {
+    clearAuthCookies(res);
+    return res.status(401).json({
+      error: 'La période d’essai gratuit de 30 jours est terminée.',
+      code: 'TRIAL_EXPIRED',
+    });
   }
   
   // Ajouter les infos utilisateur à la requête

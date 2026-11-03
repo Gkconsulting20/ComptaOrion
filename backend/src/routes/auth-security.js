@@ -1,12 +1,18 @@
 import express from 'express';
 import { db } from '../db.js';
 import crypto from 'crypto';
-import { users, sessions, auditConnexions, passwordResetTokens, permissions, entreprises } from '../schema.js';
+import { users, sessions, auditConnexions, passwordResetTokens, permissions, entreprises, abonnements } from '../schema.js';
 import { generateToken, generateRefreshToken, verifyRefreshToken, hashPassword, comparePassword, authMiddleware, saasAdminOnly, readCookie, setAuthCookies, clearAuthCookies, REFRESH_TOKEN_COOKIE } from '../auth.js';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { resolveModulePermissions } from '../../../shared/access-policy.js';
+import { withTenantTransaction } from '../utils/rlsPolicies.js';
+import {
+  getTrialExpirationTimestamp,
+  TRIAL_SUBSCRIPTION_NOTE,
+} from '../services/trialSubscription.js';
 
 const router = express.Router();
+const TRIAL_EXPIRED_MESSAGE = 'La période d’essai gratuit de 30 jours est terminée. Contactez ComptaOrion pour réactiver le compte.';
 
 function getRequestIp(req) {
   return req.get('cf-connecting-ip') ||
@@ -14,6 +20,33 @@ function getRequestIp(req) {
     req.socket?.remoteAddress ||
     req.connection?.remoteAddress ||
     'unknown';
+}
+
+async function getTrialAccess(user) {
+  if (!Number.isSafeInteger(Number(user.entrepriseId)) || Number(user.entrepriseId) <= 0) {
+    return null;
+  }
+
+  const [subscription] = await withTenantTransaction(user.entrepriseId, () =>
+    db.select({
+      statut: abonnements.statut,
+      remarques: abonnements.remarques,
+      createdAt: abonnements.createdAt,
+    })
+      .from(abonnements)
+      .where(eq(abonnements.entrepriseId, user.entrepriseId))
+      .limit(1)
+  );
+
+  if (subscription?.remarques !== TRIAL_SUBSCRIPTION_NOTE) return null;
+
+  const trialExpiresAt = getTrialExpirationTimestamp(subscription.createdAt);
+  return {
+    trialExpiresAt,
+    expired: subscription.statut !== 'actif' ||
+      !Number.isSafeInteger(trialExpiresAt) ||
+      Date.now() >= trialExpiresAt,
+  };
 }
 
 // ==========================================
@@ -74,8 +107,26 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
     }
 
-    const token = generateToken(user);
-    const refreshToken = generateRefreshToken(user);
+    const trialAccess = await getTrialAccess(user);
+    if (trialAccess?.expired) {
+      await db.insert(auditConnexions).values({
+        userId: user.id,
+        enterpriseId: user.entrepriseId,
+        type: 'failed_login',
+        ipAddress,
+        userAgent,
+        statut: 'failed',
+        raison: 'Essai gratuit terminé',
+      });
+      return res.status(403).json({
+        error: TRIAL_EXPIRED_MESSAGE,
+        code: 'TRIAL_EXPIRED',
+      });
+    }
+
+    const tokenUser = trialAccess ? { ...user, trialExpiresAt: trialAccess.trialExpiresAt } : user;
+    const token = generateToken(tokenUser);
+    const refreshToken = generateRefreshToken(tokenUser);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
     // Créer session avec l'entrepriseId de l'utilisateur trouvé
@@ -190,6 +241,15 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'Utilisateur non trouvé' });
     }
 
+    const trialAccess = await getTrialAccess(user);
+    if (trialAccess?.expired) {
+      clearAuthCookies(res);
+      return res.status(401).json({
+        error: TRIAL_EXPIRED_MESSAGE,
+        code: 'TRIAL_EXPIRED',
+      });
+    }
+
     const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
     
     const session = await db.query.sessions.findFirst({
@@ -207,8 +267,9 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'Session invalide ou expirée' });
     }
 
-    const newToken = generateToken(user);
-    const newRefreshToken = generateRefreshToken(user);
+    const tokenUser = trialAccess ? { ...user, trialExpiresAt: trialAccess.trialExpiresAt } : user;
+    const newToken = generateToken(tokenUser);
+    const newRefreshToken = generateRefreshToken(tokenUser);
     const newRefreshTokenHash = crypto.createHash('sha256').update(newRefreshToken).digest('hex');
 
     await db.update(sessions).set({

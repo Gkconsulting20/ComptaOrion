@@ -2,11 +2,13 @@ import express from 'express';
 import { db } from '../db.js';
 import { withTenantTransaction } from '../utils/rlsPolicies.js';
 import { entreprises, users, plansAbonnement, abonnements, saasClients, saasVentes, saasCommerciaux, inscriptionsEnAttente } from '../schema.js';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import fedapayModule from 'fedapay';
 import crypto from 'crypto';
 import emailService from '../services/emailService.js';
+import { initializeSyscohadaForEnterprise } from '../services/syscohadaService.js';
+import { getTrialExpirationDate, TRIAL_SUBSCRIPTION_NOTE } from '../services/trialSubscription.js';
 
 const FedaPay = fedapayModule.FedaPay;
 const Transaction = fedapayModule.Transaction;
@@ -186,17 +188,19 @@ router.get('/plans', async (req, res) => {
       nom: plansAbonnement.nom,
       prix: plansAbonnement.prix,
       devise: plansAbonnement.devise,
-      periode: plansAbonnement.periode,
-      limiteUtilisateurs: plansAbonnement.limiteUtilisateurs,
-      limiteEntreprises: plansAbonnement.limiteEntreprises,
-      stockageGb: plansAbonnement.stockageGb,
-      descriptionFeatures: plansAbonnement.descriptionFeatures
     })
     .from(plansAbonnement)
-    .where(eq(plansAbonnement.actif, true))
+    .where(and(
+      eq(plansAbonnement.actif, true),
+      sql`${plansAbonnement.prix} = 0`,
+    ))
     .orderBy(plansAbonnement.prix);
 
-    res.json(plans);
+    res.json(plans.map(plan => ({
+      ...plan,
+      periode: '30 jours',
+      descriptionFeatures: 'Essai de 30 jours dès la création de votre organisation, sans paiement.',
+    })));
   } catch (error) {
     console.error('Erreur récupération plans:', error);
     res.status(500).json({ error: error.message });
@@ -205,137 +209,170 @@ router.get('/plans', async (req, res) => {
 
 // POST /api/public/inscription - Inscription publique
 router.post('/inscription', async (req, res) => {
+  let entrepriseIdCreated = null;
   try {
-    const { 
-      nomEntreprise, 
-      email, 
-      telephone, 
+    const {
+      nomEntreprise,
+      nomAdministrateur,
+      email,
+      telephone,
       pays,
       planId,
-      dureeEnMois,
-      methodePaiement, // fedapay, stripe, paypal
-      commercialId // ID du commercial référent (lien parrainage)
+      motDePasse,
+      confirmationMotDePasse,
+      commercialId,
     } = req.body;
 
-    // Validation
-    if (!nomEntreprise || !email || !planId || !dureeEnMois) {
-      return res.status(400).json({ 
-        error: 'Informations manquantes. Veuillez remplir tous les champs requis.' 
+    const normalizedName = typeof nomEntreprise === 'string' ? nomEntreprise.trim() : '';
+    const normalizedAdminName = typeof nomAdministrateur === 'string' ? nomAdministrateur.trim() : '';
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const parsedPlanId = Number(planId);
+    if (
+      normalizedName.length < 2 ||
+      normalizedName.length > 255 ||
+      normalizedAdminName.length < 2 ||
+      normalizedAdminName.length > 120 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ||
+      !Number.isSafeInteger(parsedPlanId) ||
+      typeof motDePasse !== 'string' ||
+      motDePasse.length < 8 ||
+      Buffer.byteLength(motDePasse, 'utf8') > 72
+    ) {
+      return res.status(400).json({
+        error: 'Vérifiez le nom de l’entreprise, le courriel et un mot de passe de 8 à 72 octets.',
       });
     }
+    if (confirmationMotDePasse !== motDePasse) {
+      return res.status(400).json({ error: 'Les mots de passe ne correspondent pas.' });
+    }
 
-    // Vérifier si l'utilisateur existe déjà pour déterminer le type d'inscription
-    const existingUser = await db.select()
-      .from(users)
-      .where(eq(users.email, email.toLowerCase()))
-      .limit(1);
-    
-    const typeInscription = existingUser.length > 0 ? 'renouvellement' : 'nouveau';
-    const entrepriseIdPourRenouvellement = existingUser.length > 0 ? existingUser[0].entrepriseId : null;
-
-    // Récupérer le plan
     const [plan] = await db.select()
       .from(plansAbonnement)
-      .where(eq(plansAbonnement.id, parseInt(planId)))
+      .where(and(
+        eq(plansAbonnement.id, parsedPlanId),
+        eq(plansAbonnement.actif, true),
+        sql`${plansAbonnement.prix} = 0`,
+      ))
       .limit(1);
 
     if (!plan) {
-      return res.status(404).json({ error: 'Plan non trouvé' });
+      return res.status(404).json({ error: 'Le forfait gratuit de test est indisponible.' });
     }
 
-    // Calculer le montant total
-    const montantTotal = parseFloat(plan.prix) * parseInt(dureeEnMois);
+    const [existingUser] = await db.select({ id: users.id })
+      .from(users)
+      .where(sql`LOWER(${users.email}) = ${normalizedEmail}`)
+      .limit(1);
+    if (existingUser) {
+      return res.status(409).json({
+        error: 'Cette adresse courriel possède déjà un compte. Connectez-vous plutôt.',
+      });
+    }
 
-    // Créer une transaction en attente
-    const inscriptionData = {
-      nomEntreprise,
-      email: email.toLowerCase(),
-      telephone,
-      pays,
-      planId: parseInt(planId),
-      dureeEnMois: parseInt(dureeEnMois),
-      montantTotal,
-      methodePaiement,
-      statut: 'en_attente_paiement'
-    };
+    const referralId = Number(commercialId);
+    const [commercial] = Number.isSafeInteger(referralId) && referralId > 0
+      ? await db.select({ id: saasCommerciaux.id, nom: saasCommerciaux.nom, prenom: saasCommerciaux.prenom })
+        .from(saasCommerciaux)
+        .where(eq(saasCommerciaux.id, referralId))
+        .limit(1)
+      : [];
 
-    // Créer la transaction de paiement selon la méthode choisie
-    let paymentUrl = null;
-    let transactionId = null;
+    const now = new Date();
+    const trialExpiration = getTrialExpirationDate(now);
+    const usernameStem = normalizedEmail.split('@')[0].replace(/[^a-z0-9]/g, '').slice(0, 24) || 'client';
+    const username = `${usernameStem}_${crypto.randomBytes(5).toString('hex')}`;
+    const passwordHash = await bcrypt.hash(motDePasse, 10);
 
-    if (methodePaiement === 'fedapay') {
-      // Créer transaction FedaPay
-      if (!FEDAPAY_SECRET_KEY) {
-        return res.status(500).json({ 
-          error: 'FedaPay n\'est pas configuré. Veuillez contacter l\'administrateur.' 
-        });
-      }
+    const [newEntreprise] = await db.insert(entreprises).values({
+      nom: normalizedName,
+      email: normalizedEmail,
+      telephone: typeof telephone === 'string' ? telephone.trim() : null,
+      pays: typeof pays === 'string' && pays.trim() ? pays.trim() : 'Togo',
+      devise: 'XOF',
+      systemeComptable: 'SYSCOHADA',
+      actif: true,
+    }).returning();
+    entrepriseIdCreated = newEntreprise.id;
 
+    let newUser;
+    let clientSaas;
+    let abonnement;
+    try {
+      [newUser, clientSaas, abonnement] = await withTenantTransaction(newEntreprise.id, async () => {
+        const [createdUser] = await db.insert(users).values({
+          nom: normalizedAdminName,
+          email: normalizedEmail,
+          username,
+          passwordHash,
+          entrepriseId: newEntreprise.id,
+          role: 'admin',
+          actif: true,
+        }).returning();
+
+        const [createdClient] = await db.insert(saasClients).values({
+          entrepriseId: newEntreprise.id,
+          commercialId: commercial?.id || null,
+          statut: 'actif',
+          source: commercial ? 'commercial' : 'web',
+          notes: `Essai gratuit de 30 jours${commercial ? ` - parrainage ${commercial.nom} ${commercial.prenom}` : ''}`,
+        }).returning();
+
+        const [createdSubscription] = await db.insert(abonnements).values({
+          entrepriseId: newEntreprise.id,
+          planId: plan.id,
+          statut: 'actif',
+          dateDebut: now,
+          dateExpiration: trialExpiration,
+          prochainRenouvellement: trialExpiration,
+          montantMensuel: '0.00',
+          modeRenouvellement: 'manuel',
+          remarques: TRIAL_SUBSCRIPTION_NOTE,
+          createdAt: now,
+        }).returning();
+
+        return [createdUser, createdClient, createdSubscription];
+      });
+
+      await withTenantTransaction(newEntreprise.id, () =>
+        initializeSyscohadaForEnterprise(newEntreprise.id),
+      );
+    } catch (creationError) {
       try {
-        const transaction = await Transaction.create({
-          description: `ComptaOrion - ${plan.nom} (${dureeEnMois} mois)`,
-          amount: montantTotal,
-          currency: { iso: plan.devise || 'XOF' },
-          callback_url: `${process.env.BACKEND_URL || 'http://localhost:3000'}/api/public/webhook/fedapay`,
-          customer: {
-            firstname: nomEntreprise.split(' ')[0] || 'Client',
-            lastname: nomEntreprise.split(' ').slice(1).join(' ') || 'ComptaOrion',
-            email: email,
-            phone_number: telephone ? {
-              number: telephone,
-              country: (pays || 'bj').toLowerCase().substring(0, 2)
-            } : undefined
-          },
-          custom_metadata: inscriptionData
+        await withTenantTransaction(newEntreprise.id, async () => {
+          await db.delete(saasClients).where(eq(saasClients.entrepriseId, newEntreprise.id));
+          await db.delete(abonnements).where(eq(abonnements.entrepriseId, newEntreprise.id));
+          await db.delete(users).where(eq(users.entrepriseId, newEntreprise.id));
         });
-
-        const token = await transaction.generateToken();
-        paymentUrl = token.url;
-        transactionId = transaction.id;
-        
-        // Persister l'inscription en attente avec le transaction_id
-        await db.insert(inscriptionsEnAttente).values({
-          transactionId: transaction.id,
-          email: email.toLowerCase(),
-          nomEntreprise,
-          telephone,
-          pays,
-          planId: parseInt(planId),
-          dureeEnMois: parseInt(dureeEnMois),
-          montantTotal,
-          methodePaiement,
-          typeInscription,
-          commercialId: commercialId ? parseInt(commercialId) : null,
-          entrepriseIdPourRenouvellement
-        });
-
-      } catch (fedapayError) {
-        console.error('Erreur FedaPay:', fedapayError);
-        return res.status(500).json({ 
-          error: 'Erreur lors de la création de la transaction FedaPay: ' + fedapayError.message 
-        });
+        await db.delete(entreprises).where(eq(entreprises.id, newEntreprise.id));
+      } catch (cleanupError) {
+        console.error('Nettoyage incomplet après échec d’inscription:', cleanupError);
       }
-    } else if (methodePaiement === 'stripe') {
-      // TODO: Implémenter Stripe
-      return res.status(501).json({ error: 'Stripe sera bientôt disponible' });
-    } else if (methodePaiement === 'paypal') {
-      // TODO: Implémenter PayPal
-      return res.status(501).json({ error: 'PayPal sera bientôt disponible' });
-    } else {
-      return res.status(400).json({ error: 'Méthode de paiement non supportée' });
+      throw creationError;
     }
 
-    res.json({
+    res.status(201).json({
       success: true,
-      message: 'Inscription initiée. Veuillez procéder au paiement.',
-      paymentUrl,
-      transactionId,
-      montantTotal,
-      devise: plan.devise || 'XOF'
+      message: 'Votre espace est créé. Connectez-vous avec votre courriel et le mot de passe choisi. Votre essai se termine le ' +
+        trialExpiration.toISOString().slice(0, 10) + '.',
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        nom: newUser.nom,
+        role: newUser.role,
+        entrepriseId: newUser.entrepriseId,
+      },
+      entreprise: newEntreprise,
+      clientSaas,
+      abonnement,
     });
-
   } catch (error) {
     console.error('Erreur inscription:', error);
+    if (error?.code === '23505') {
+      return res.status(409).json({
+        error: 'Cette adresse courriel possède déjà un compte. Connectez-vous plutôt.',
+      });
+    }
     res.status(500).json({ error: error.message });
   }
 });

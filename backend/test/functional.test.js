@@ -53,6 +53,24 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     adminSchemaUrl.searchParams.set('options', `-c search_path=${schema}`);
     adminSchemaPool = new pg.Pool({ connectionString: adminSchemaUrl.toString() });
     const adminSchemaDb = drizzle({ client: adminSchemaPool, schema: databaseSchema });
+    const [freeTrialPlan] = await adminSchemaDb.insert(databaseSchema.plansAbonnement).values({
+      nom: 'Essai Gratuit',
+      prix: '0.00',
+      devise: 'XOF',
+      periode: 'mensuel',
+      limiteUtilisateurs: 1,
+      limiteEntreprises: 1,
+      stockageGb: 1,
+      descriptionFeatures: '1 utilisateur • 50 factures par mois',
+      actif: true,
+    }).returning();
+    const [legacyPaidPlan] = await adminSchemaDb.insert(databaseSchema.plansAbonnement).values({
+      nom: 'Ancien forfait de test',
+      prix: '29900.00',
+      devise: 'XOF',
+      periode: 'mensuel',
+      actif: true,
+    }).returning();
     const appUrl = new URL(adminConnectionString);
     appUrl.username = rlsRole;
     appUrl.password = rlsPassword;
@@ -160,9 +178,73 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     }
     const testYear=new Date().getFullYear();
     const password=randomUUID()+'Aa9!';
-    const signup=await api('/auth/register','POST',{
-      username:'recette',email:'recette@example.invalid',password,entrepriseNom:'Entreprise de recette isolée',
+    const publicPlans = await api('/public/plans');
+    assert.deepEqual(publicPlans.map(plan => Number(plan.prix)), [0],
+      'L’inscription publique ne doit présenter que l’essai gratuit');
+    assert.equal(
+      publicPlans[0].descriptionFeatures,
+      'Essai de 30 jours dès la création de votre organisation, sans paiement.',
+    );
+    await api('/auth/register','POST',{
+      username:'ancien-parcours',email:'ancien@example.invalid',password,
+      entrepriseNom:'Parcours désactivé',
+    },410);
+    assert.equal(
+      (await adminSchemaDb.select().from(databaseSchema.entreprises)).length,
+      0,
+      'L’ancien endpoint ne doit créer aucune entreprise',
+    );
+    await api('/public/inscription','POST',{
+      nomEntreprise:'Mot de passe non confirmé',
+      nomAdministrateur:'Administrateur de test',
+      email:'confirmation@example.invalid',
+      motDePasse:password,
+      confirmationMotDePasse:'mot-de-passe-different',
+      planId:freeTrialPlan.id,
+    },400);
+    assert.equal(
+      (await adminSchemaDb.select().from(databaseSchema.entreprises)).length,
+      0,
+      'Une confirmation incorrecte ne doit créer aucune entreprise',
+    );
+    const signup=await api('/public/inscription','POST',{
+      nomEntreprise:'Entreprise de recette isolée',
+      nomAdministrateur:'Administrateur de recette',
+      email:'recette@example.invalid',
+      motDePasse:password,
+      confirmationMotDePasse:password,
+      pays:'Togo',
+      planId:freeTrialPlan.id,
     },201);
+    assert.equal(signup.user.role,'admin','Le créateur reçoit le rôle administrateur');
+    assert.equal(signup.entreprise.nom,'Entreprise de recette isolée');
+    assert.equal(signup.abonnement.statut,'actif');
+    assert.equal(Number(signup.abonnement.montantMensuel),0);
+    assert.ok(
+      Math.abs(Date.parse(signup.abonnement.createdAt) - Date.parse(signup.entreprise.createdAt)) < 5000,
+      'La période d’essai doit commencer à la création de l’organisation',
+    );
+    assert.equal(
+      Math.round((Date.parse(signup.abonnement.dateExpiration)-Date.parse(signup.abonnement.dateDebut))/86400000),
+      30,
+      'L’essai doit expirer après 30 jours',
+    );
+    await api('/public/inscription','POST',{
+      nomEntreprise:'Forfait payant refusé',
+      nomAdministrateur:'Administrateur de test',
+      email:'payant@example.invalid',
+      motDePasse:password,
+      confirmationMotDePasse:password,
+      planId:legacyPaidPlan.id,
+    },404);
+    await api('/public/inscription','POST',{
+      nomEntreprise:'Adresse déjà utilisée',
+      nomAdministrateur:'Administrateur de test',
+      email:'RECETTE@example.invalid',
+      motDePasse:password,
+      confirmationMotDePasse:password,
+      planId:freeTrialPlan.id,
+    },409);
     const login=await api('/auth-security/login','POST',{email:'recette@example.invalid',password});
     assert.ok(login.session?.id);
     assert.equal(Object.hasOwn(login, 'token'), false, 'Le jeton ne doit pas être retourné au navigateur');
@@ -322,9 +404,17 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.deepEqual(Buffer.from(await logo.arrayBuffer()),png);
     await api('/upload/logo','DELETE');
     const firstCookieJar = new Map(cookieJar);
-    await api('/auth/register','POST',{username:'second',email:'second@example.invalid',
-      password,entrepriseNom:'Autre entreprise isolée'},201);
-    const secondLogin=await api('/auth-security/login','POST',{email:'second@example.invalid',password});
+    const secondPassword=randomUUID()+'Bb8!';
+    const secondSignup=await api('/public/inscription','POST',{
+      nomEntreprise:'Autre entreprise isolée',
+      nomAdministrateur:'Second administrateur',
+      email:'second@example.invalid',
+      motDePasse:secondPassword,
+      confirmationMotDePasse:secondPassword,
+      pays:'Togo',
+      planId:freeTrialPlan.id,
+    },201);
+    const secondLogin=await api('/auth-security/login','POST',{email:'second@example.invalid',password:secondPassword});
     assert.ok(secondLogin.session?.id);
     const secondClient=await api('/clients','POST',{
       nom:'Autre client',entrepriseId:signup.user.entrepriseId,userId:signup.user.id,
@@ -393,6 +483,55 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     await api('/ia/chat','POST',{message:'ne pas envoyer'},404);
     await api('/auth-security/logout','POST',{sessionId:finalAdminLogin.session.id});
     await api('/auth-security/session','GET',null,401);
+
+    const { generateToken } = await import('../src/auth.js');
+    const expiredAccessToken = generateToken({
+      id: signup.user.id,
+      username: 'recette',
+      email: 'recette@example.invalid',
+      role: 'admin',
+      entrepriseId: signup.user.entrepriseId,
+      trialExpiresAt: Date.now() - 1000,
+    });
+    cookieJar = new Map();
+    await api('/clients', 'GET', null, 401, {
+      Authorization: `Bearer ${expiredAccessToken}`,
+    });
+
+    const pastDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await adminSchemaPool.query(
+      `UPDATE abonnements
+       SET created_at = $1, date_expiration = $2, remarques = 'Ancien abonnement de test'
+       WHERE entreprise_id = $3`,
+      [pastDate, pastDate, secondSignup.user.entrepriseId],
+    );
+    cookieJar = new Map();
+    const nonTrialLogin = await api('/auth-security/login', 'POST', {
+      email: 'second@example.invalid',
+      password: secondPassword,
+    });
+    assert.ok(nonTrialLogin.session?.id, 'Un compte hors essai n’est pas bloqué par cette règle');
+    await api('/auth-security/logout', 'POST', { sessionId: nonTrialLogin.session.id });
+
+    const expiryTestLogin = await api('/auth-security/login', 'POST', {
+      email: 'recette@example.invalid',
+      password,
+    });
+    assert.ok(expiryTestLogin.session?.id, 'Un essai actif permet encore la connexion');
+    await adminSchemaPool.query(
+      `UPDATE abonnements
+       SET created_at = $1, date_expiration = $2
+       WHERE entreprise_id = $3`,
+      [pastDate, pastDate, signup.user.entrepriseId],
+    );
+    const expiredRefresh = await api('/auth-security/refresh', 'POST', null, 401);
+    assert.equal(expiredRefresh.code, 'TRIAL_EXPIRED');
+    const expiredLogin = await api('/auth-security/login', 'POST', {
+      email: 'recette@example.invalid',
+      password,
+    }, 403);
+    assert.equal(expiredLogin.code, 'TRIAL_EXPIRED');
+
     console.log('Recette : connexion, facture/paiement, écritures équilibrées, dépenses, projets associatifs, budgets, reçus de subvention, isolation tenant et déconnexion vérifiés.');
   } finally {
     if(server) await new Promise(r=>server.close(r));
