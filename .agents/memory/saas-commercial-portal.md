@@ -41,9 +41,11 @@ L’accès à l’essai doit être automatiquement bloqué à l’échéance des
 
 Avant la vente des abonnements payants, attendre les retours de plusieurs clients testeurs, compléter la checklist `docs/Checklist-avant-commercialisation.md` et fermer les blocages de sécurité et de fonctionnement. Les offres de paiement FedaPay/Stripe et les autres fonctions incomplètes doivent être vérifiées avant de commencer la commercialisation.
 
+Les comptes clients/fournisseurs en débit-crédit, les retours avec avoirs comptables et l’encaissement des chèques clients sont des fonctions essentielles à inclure dans cette revue précommerciale.
+
 **Why:** l’utilisateur veut corriger les problèmes détectés pendant les essais et les fonctions incomplètes avant de vendre les abonnements, et demande qu’on lui rappelle cette vérification avant le lancement réel.
 
-**How to apply:** garder l’application en phase de test jusqu’aux retours clients; réviser la checklist avec chaque retour; dès que l’utilisateur évoque la vente ou l’activation des abonnements réels, lui rappeler de vérifier cette checklist et de fermer les points critiques avant le lancement payant.
+**How to apply:** garder l’application en phase de test jusqu’aux retours clients; réviser la checklist avec chaque retour; vérifier les flux débit/crédit et leur écriture équilibrée pour les factures, paiements, retours et chèques; dès que l’utilisateur évoque la vente ou l’activation des abonnements réels, lui rappeler de vérifier cette checklist et de fermer les points critiques avant le lancement payant.
 
 Chaque entreprise cliente peut inviter gratuitement un compte nominatif de cabinet comptable, sans consommer l’un des trois utilisateurs inclus. Pour le MVP choisi, le compte est distinct et lié à une seule entreprise.
 

@@ -37,6 +37,13 @@ Cette liste distingue les fonctions non terminées des fonctions présentes qui 
 - [ ] Dépenses : distinguer les montants engagés des paiements réellement effectués et permettre une dépense sans projet.
 - [ ] Trésorerie : vérifier le cycle de conversion avec l’historique réel du stock et des paiements.
 - [ ] Catalogue clients : vérifier que les tarifs propres à chaque client sont appliqués dans les devis et les factures.
+- [ ] Comptes clients et fournisseurs : fournir un relevé auxiliaire débit/crédit complet, avec les soldes d’ouverture et de clôture, toutes les factures, notes de crédit et tous les règlements.
+- [ ] Relevés de comptes : inclure un paiement dans sa période de paiement même si la facture est d’une période antérieure; calculer les dettes fournisseurs sur le TTC, pas seulement le HT.
+- [ ] Retours clients : permettre un retour total ou partiel lié à la facture d’origine, créer l’avoir, diminuer la créance et corriger ventes, TVA, stock et CMV de façon équilibrée.
+- [ ] Retours fournisseurs : enregistrer l’avoir reçu du fournisseur, diminuer la dette et corriger achats/stock, TVA déductible et éventuel remboursement ou crédit fournisseur.
+- [ ] Chèques reçus des clients : ajouter la saisie du chèque et son suivi jusqu’à l’encaissement bancaire, puis gérer les rejets sans laisser le compte client ni la trésorerie erronés. Confirmer le circuit comptable avant implémentation.
+- [ ] Garantir l’atomicité des paiements : si l’écriture comptable ne peut pas être créée, ne pas valider le paiement ni modifier le solde. Le contrôle du code a repéré un chemin de paiement fournisseur qui peut continuer après une erreur d’écriture.
+- [ ] Confirmer le traitement des écritures automatiques : elles sont créées en brouillon; les états financiers ne retiennent que les écritures validées. Définir clairement quand et par qui elles sont validées.
 - [ ] Coût de revient : valider tout le parcours achat, poids et conversions d’unités, frais logistiques répartis au poids, coût moyen pondéré et CMV lors de la vente.
 - [ ] OCR fournisseurs : faire tester des photos réelles de factures et contrôler les champs reconnus et leur correction avant validation comptable.
 - [ ] Format des montants : vérifier partout le format XOF avec deux décimales, y compris les états et les écrans récemment ajoutés.
