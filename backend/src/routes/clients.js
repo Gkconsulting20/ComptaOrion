@@ -1424,6 +1424,29 @@ router.post('/etat-compte/email', async (req, res) => {
       `;
     }
 
+    const montantFr = value => Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const mouvementsHtml = `
+      <h3>Grand livre auxiliaire client</h3>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+        <thead><tr style="background-color: #f8f9fa;">
+          <th style="padding: 10px; text-align: left;">Date</th>
+          <th style="padding: 10px; text-align: left;">Opération</th>
+          <th style="padding: 10px; text-align: left;">Référence</th>
+          <th style="padding: 10px; text-align: right;">Débit</th>
+          <th style="padding: 10px; text-align: right;">Crédit</th>
+          <th style="padding: 10px; text-align: right;">Solde</th>
+        </tr></thead>
+        <tbody>${statement.mouvements.map(row => `
+          <tr>
+            <td style="padding: 10px;">${row.date}</td>
+            <td style="padding: 10px;">${row.type === 'facture_client' ? 'Facture client' : row.type === 'encaissement_client' ? 'Encaissement' : row.type}</td>
+            <td style="padding: 10px;">${row.reference || '-'}</td>
+            <td style="padding: 10px; text-align: right;">${montantFr(row.debit)} XOF</td>
+            <td style="padding: 10px; text-align: right;">${montantFr(row.credit)} XOF</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold;">${montantFr(row.solde)} XOF</td>
+          </tr>`).join('')}</tbody>
+      </table>`;
+
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #3498db; padding-bottom: 20px;">
@@ -1442,13 +1465,12 @@ router.post('/etat-compte/email', async (req, res) => {
             <p style="margin: 0; font-size: 24px; font-weight: bold; color: #27ae60;">${totalPaye.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</p>
           </div>
           <div style="padding: 15px; background-color: #fff3e0; border-radius: 8px; text-align: center;">
-            <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Solde Restant</p>
+            <p style="margin: 0 0 5px 0; color: #666; font-size: 14px;">Solde de clôture (ouverture ${montantFr(soldeOuverture)} XOF)</p>
             <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${solde > 0 ? '#e74c3c' : '#27ae60'};">${solde.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</p>
           </div>
         </div>
 
-        ${facturesHtml}
-        ${paiementsHtml}
+        ${mouvementsHtml}
 
         <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center; color: #999; font-size: 12px;">
           <p>Cet état de compte a été généré automatiquement par ComptaOrion</p>

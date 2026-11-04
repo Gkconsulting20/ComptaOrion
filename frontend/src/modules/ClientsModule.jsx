@@ -3072,88 +3072,62 @@ function EtatsCompteTab() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '30px' }}>
             <div style={{ padding: '15px', backgroundColor: '#e8f4f8', borderRadius: '8px' }}>
-              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Facturé</p>
+              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Solde d’ouverture</p>
+              <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>
+                {Number(etatCompte.soldeOuverture || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF
+              </p>
+            </div>
+            <div style={{ padding: '15px', backgroundColor: '#eef4fb', borderRadius: '8px' }}>
+              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Factures de la période</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#3498db' }}>
                 {Number(etatCompte.totalFacture || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF
               </p>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#e8f8f0', borderRadius: '8px' }}>
-              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Total Payé</p>
+              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Encaissements de la période</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#27ae60' }}>
                 {Number(etatCompte.totalPaye || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF
               </p>
             </div>
             <div style={{ padding: '15px', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
-              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Solde Restant</p>
+              <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>Solde de clôture</p>
               <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: etatCompte.solde > 0 ? '#e74c3c' : '#27ae60' }}>
-                {Number(etatCompte.solde || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF
+                {Number(etatCompte.soldeCloture ?? etatCompte.solde ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF
               </p>
             </div>
           </div>
 
-          <div style={{ marginBottom: '30px' }}>
-            <h4 style={{ marginBottom: '15px', color: '#333' }}>📋 Factures</h4>
-            {etatCompte.factures && etatCompte.factures.length > 0 ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                    <th style={{ padding: '12px', textAlign: 'left' }}>N° Facture</th>
-                    <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
-                    <th style={{ padding: '12px', textAlign: 'right' }}>Montant TTC</th>
-                    <th style={{ padding: '12px', textAlign: 'center' }}>Statut</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {etatCompte.factures.map((f, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
-                      <td style={{ padding: '12px' }}>{f.numeroFacture}</td>
-                      <td style={{ padding: '12px' }}>{new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{Number(f.totalTTC || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <InvoiceStatusBadge 
-                          statut={f.statut} 
-                          montantPaye={f.montantPaye} 
-                          montantTTC={f.totalTTC} 
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p style={{ color: '#999', fontStyle: 'italic' }}>Aucune facture sur cette période</p>
-            )}
-          </div>
-
           <div>
-            <h4 style={{ marginBottom: '15px', color: '#333' }}>💳 Paiements</h4>
-            {etatCompte.paiements && etatCompte.paiements.length > 0 ? (
+            <h4 style={{ marginBottom: '15px', color: '#333' }}>Grand livre auxiliaire client</h4>
+            {etatCompte.mouvements && etatCompte.mouvements.length > 0 ? (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
                     <th style={{ padding: '12px', textAlign: 'left' }}>Date</th>
+                    <th style={{ padding: '12px', textAlign: 'left' }}>Opération</th>
                     <th style={{ padding: '12px', textAlign: 'left' }}>Référence</th>
-                    <th style={{ padding: '12px', textAlign: 'left' }}>Mode</th>
-                    <th style={{ padding: '12px', textAlign: 'right' }}>Montant</th>
+                    <th style={{ padding: '12px', textAlign: 'right' }}>Débit</th>
+                    <th style={{ padding: '12px', textAlign: 'right' }}>Crédit</th>
+                    <th style={{ padding: '12px', textAlign: 'right' }}>Solde</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {etatCompte.paiements.map((p, idx) => (
+                  {etatCompte.mouvements.map((m, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
-                      <td style={{ padding: '12px' }}>{new Date(p.datePaiement).toLocaleDateString('fr-FR')}</td>
-                      <td style={{ padding: '12px' }}>{p.reference || '-'}</td>
-                      <td style={{ padding: '12px' }}>{p.modePaiement}</td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold', color: '#27ae60' }}>
-                        {Number(p.montant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF
-                      </td>
+                      <td style={{ padding: '12px' }}>{new Date(`${m.date}T00:00:00`).toLocaleDateString('fr-FR')}</td>
+                      <td style={{ padding: '12px' }}>{m.type === 'facture_client' ? 'Facture client' : m.type === 'encaissement_client' ? 'Encaissement' : m.type}</td>
+                      <td style={{ padding: '12px' }}>{m.reference || '-'}</td>
+                      <td style={{ padding: '12px', textAlign: 'right' }}>{Number(m.debit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
+                      <td style={{ padding: '12px', textAlign: 'right' }}>{Number(m.credit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{Number(m.solde || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <p style={{ color: '#999', fontStyle: 'italic' }}>Aucun paiement sur cette période</p>
+              <p style={{ color: '#999', fontStyle: 'italic' }}>Aucune opération sur cette période</p>
             )}
           </div>
         </div>
