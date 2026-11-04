@@ -171,6 +171,8 @@ try {
       ? ['projets_associatifs_entreprise_code_idx']
       : scope === 'accountant-invitations'
         ? ['accountant_invitations_one_live_per_company']
+        : scope === 'credit-notes-cheques'
+          ? ['notes_credit_sequence_unique', 'notes_credit_number_unique']
         : [])
     : permittedIndexes;
   const existingIndexes = new Set((await client.query(

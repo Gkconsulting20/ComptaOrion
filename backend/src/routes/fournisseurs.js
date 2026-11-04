@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { fournisseurs, facturesAchat, paiementsFournisseurs } from '../schema.js';
+import { fournisseurs, facturesAchat, paiementsFournisseurs, notesCredit } from '../schema.js';
 import { eq, and, sql, desc, gte, lte, inArray } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import emailService from '../services/emailService.js';
@@ -477,6 +477,11 @@ router.post('/etat-compte', async (req, res) => {
         inArray(paiementsFournisseurs.factureId, factureIds)
       ))
       : [];
+    const creditNotes = await db.select().from(notesCredit).where(and(
+      eq(notesCredit.entrepriseId, req.entrepriseId),
+      eq(notesCredit.fournisseurId, parseInt(fournisseurId)),
+      eq(notesCredit.type, 'fournisseur')
+    ));
     const statement = buildThirdPartyStatement({
       side: 'fournisseur',
       invoices: allFactures.map(facture => ({
@@ -484,6 +489,7 @@ router.post('/etat-compte', async (req, res) => {
         totalTTC: facture.totalTTC ?? facture.montantTotal ?? facture.montantHT ?? 0,
       })),
       payments: paiementsList,
+      creditNotes,
       dateDebut,
       dateFin,
     });
@@ -559,6 +565,11 @@ router.post('/etat-compte/email', async (req, res) => {
         inArray(paiementsFournisseurs.factureId, allFactureIds)
       ))
       : [];
+    const creditNotes = await db.select().from(notesCredit).where(and(
+      eq(notesCredit.entrepriseId, req.entrepriseId),
+      eq(notesCredit.fournisseurId, parseInt(fournisseurId)),
+      eq(notesCredit.type, 'fournisseur')
+    ));
     const statement = buildThirdPartyStatement({
       side: 'fournisseur',
       invoices: allFactures.map(facture => ({
@@ -566,6 +577,7 @@ router.post('/etat-compte/email', async (req, res) => {
         totalTTC: facture.totalTTC ?? facture.montantTotal ?? facture.montantHT ?? 0,
       })),
       payments: paiementsList,
+      creditNotes,
       dateDebut,
       dateFin,
     });
@@ -647,7 +659,7 @@ router.post('/etat-compte/email', async (req, res) => {
         <tbody>${statement.mouvements.map(row => `
           <tr>
             <td style="padding: 10px;">${row.date}</td>
-            <td style="padding: 10px;">${row.type === 'facture_fournisseur' ? 'Facture fournisseur' : row.type === 'paiement_fournisseur' ? 'Règlement' : row.type}</td>
+            <td style="padding: 10px;">${row.libelle || row.type}</td>
             <td style="padding: 10px;">${row.reference || '-'}</td>
             <td style="padding: 10px; text-align: right;">${montantFr(row.debit)} XOF</td>
             <td style="padding: 10px; text-align: right;">${montantFr(row.credit)} XOF</td>

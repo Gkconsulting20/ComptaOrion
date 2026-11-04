@@ -250,7 +250,7 @@ export async function synchronizeActiveProductPrices(executor, entrepriseId, pro
   }
 }
 
-async function updateProductAverageCost(executor, entrepriseId, produitId) {
+export async function updateProductAverageCost(executor, entrepriseId, produitId) {
   const [totals] = await executor.select({
     quantity: sql`COALESCE(SUM(${valorisationsStock.quantite}), 0)`,
     value: sql`COALESCE(SUM(${valorisationsStock.coutTotal}), 0)`,

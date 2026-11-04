@@ -108,6 +108,7 @@ const PLAN_SYSCOHADA = [
   { numero: '604', nom: 'Achats d\'études et prestations de services', categorie: 'Charges', classe: '6' },
   { numero: '605', nom: 'Autres achats', categorie: 'Charges', classe: '6' },
   { numero: '608', nom: 'Frais accessoires d\'achat', categorie: 'Charges', classe: '6' },
+  { numero: '609', nom: 'Rabais, remises et ristournes obtenus', categorie: 'Charges', classe: '6' },
   { numero: '610', nom: 'Transports sur achats', categorie: 'Charges', classe: '6' },
   { numero: '612', nom: 'Transports sur ventes', categorie: 'Charges', classe: '6' },
   { numero: '613', nom: 'Locations et charges locatives', categorie: 'Charges', classe: '6' },

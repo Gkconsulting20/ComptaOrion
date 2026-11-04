@@ -17,6 +17,7 @@ const COMPTES_SYSCOHADA = {
   FOURNISSEURS_FACTURES_NON_PARVENUES: '408',
   CLIENTS: '411',
   CHEQUES_A_ENCAISSER: '5112',
+  ACHATS_RETOUR: '609',
   PERSONNEL_AVANCES: '421',
   ETAT_TVA_DUE: '4434',
   ETAT_IMPOTS: '44',
@@ -60,6 +61,24 @@ export async function getCompteByNumero(entrepriseId, numero, executor = db) {
     ))
     .limit(1);
   return comptes[0] || null;
+}
+
+async function ensureChequeAccount(entrepriseId, executor = db) {
+  let account = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CHEQUES_A_ENCAISSER, executor);
+  if (account) return account;
+  const lockKey = `comptaorion:system-account:${entrepriseId}:${COMPTES_SYSCOHADA.CHEQUES_A_ENCAISSER}`;
+  await executor.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+  account = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CHEQUES_A_ENCAISSER, executor);
+  if (account) return account;
+  const [created] = await executor.insert(comptesComptables).values({
+    entrepriseId,
+    numero: COMPTES_SYSCOHADA.CHEQUES_A_ENCAISSER,
+    nom: 'Chèques à encaisser',
+    type: 'actif',
+    classe: '5',
+    actif: true,
+  }).returning();
+  return created;
 }
 
 export async function getCompteById(compteId, executor = db) {
@@ -615,7 +634,7 @@ export async function createEcriturePaiementClient(params) {
 
   const compte411 = clientCompteId ? await getCompteById(clientCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
   const compteTresorerie = modePaiement === 'cheque'
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CHEQUES_A_ENCAISSER, executor)
+    ? await ensureChequeAccount(entrepriseId, executor)
     : await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
 
   const ecrituresLignes = [];
@@ -659,7 +678,7 @@ export async function createEcriturePaiementClient(params) {
 
 export async function createEcritureAvoirClient({
   entrepriseId, numeroAvoir, dateAvoir, clientNom, clientCompteId,
-  totalHT, totalTVA, totalTTC, sourceId, executor = db,
+  totalHT, totalTVA, totalTTC, coutStock = 0, sourceId, executor = db,
 }) {
   const clientAccount = clientCompteId
     ? await getCompteById(clientCompteId, executor)
@@ -668,8 +687,15 @@ export async function createEcritureAvoirClient({
   const vatCollected = Number(totalTVA) > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor)
     : null;
-  if (!clientAccount || !salesReturns || (Number(totalTVA) > 0 && !vatCollected)) {
-    throw new Error('Configurez les comptes 411, 709 et 443 avant de créer un avoir client.');
+  const stock = Number(coutStock) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES, executor)
+    : null;
+  const costOfGoods = Number(coutStock) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.COUT_VENTES_MARCHANDISES, executor)
+    : null;
+  if (!clientAccount || !salesReturns || (Number(totalTVA) > 0 && !vatCollected) ||
+      (Number(coutStock) > 0 && (!stock || !costOfGoods))) {
+    throw new Error('Configurez les comptes 411, 709, 443, 31 et 603 avant de créer un avoir client.');
   }
 
   const lines = [
@@ -679,6 +705,12 @@ export async function createEcritureAvoirClient({
     lines.push({ compteComptableId: vatCollected.id, debit: totalTVA, credit: 0, libelle: `Annulation TVA collectée - ${numeroAvoir}` });
   }
   lines.push({ compteComptableId: clientAccount.id, debit: 0, credit: totalTTC, libelle: `Avoir client ${clientNom} - ${numeroAvoir}` });
+  if (Number(coutStock) > 0) {
+    lines.push(
+      { compteComptableId: stock.id, debit: coutStock, credit: 0, libelle: `Réintégration du stock retourné - ${numeroAvoir}` },
+      { compteComptableId: costOfGoods.id, debit: 0, credit: coutStock, libelle: `Annulation du CMV - ${numeroAvoir}` }
+    );
+  }
 
   return createEcritureComptable({
     entrepriseId,
@@ -705,12 +737,16 @@ export async function createEcritureAvoirFournisseur({
   const transport = Number(fraisTransportNonRecuperable) > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_SERVICES, executor)
     : null;
+  const achatAdjustment = Number(fraisTransportNonRecuperable) < 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_RETOUR, executor)
+    : null;
   const vatDeductible = Number(totalTVA) > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor)
     : null;
   if (!supplier || !stock || (Number(totalTVA) > 0 && !vatDeductible) ||
-      (Number(fraisTransportNonRecuperable) > 0 && !transport)) {
-    throw new Error('Configurez les comptes 401, 31, 445 et 61 avant de créer un avoir fournisseur.');
+      (Number(fraisTransportNonRecuperable) > 0 && !transport) ||
+      (Number(fraisTransportNonRecuperable) < 0 && !achatAdjustment)) {
+    throw new Error('Configurez les comptes 401, 31, 445, 61 et 609 avant de créer un avoir fournisseur.');
   }
 
   const lines = [
@@ -722,6 +758,9 @@ export async function createEcritureAvoirFournisseur({
   lines.push({ compteComptableId: stock.id, debit: 0, credit: coutStock, libelle: `Sortie de stock retourné - ${numeroAvoir}` });
   if (Number(totalTVA) > 0) {
     lines.push({ compteComptableId: vatDeductible.id, debit: 0, credit: totalTVA, libelle: `Annulation TVA déductible - ${numeroAvoir}` });
+  }
+  if (Number(fraisTransportNonRecuperable) < 0) {
+    lines.push({ compteComptableId: achatAdjustment.id, debit: 0, credit: Math.abs(fraisTransportNonRecuperable), libelle: `Écart de coût sur retour fournisseur - ${numeroAvoir}` });
   }
 
   return createEcritureComptable({
@@ -744,7 +783,7 @@ export async function createEcritureEncaissementCheque({
   entrepriseId, reference, dateEncaissement, montant, compteBancaireId, sourceId, executor = db,
 }) {
   const bank = await getCompteTresorerie(entrepriseId, 'banque', compteBancaireId, executor);
-  const checks = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CHEQUES_A_ENCAISSER, executor);
+  const checks = await ensureChequeAccount(entrepriseId, executor);
   if (!bank || !checks) {
     throw new Error('Configurez le compte bancaire et le compte 5112 des chèques à encaisser.');
   }

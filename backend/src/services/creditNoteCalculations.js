@@ -35,7 +35,7 @@ export function calculateReturnedLine({
   const totalHTCents = Math.round(totalOriginalCents * requestedMilli / originalMilli);
   const costStockCents = historicalUnitCost == null
     ? null
-    : Math.round(toCents(historicalUnitCost) * requestedMilli / 1000);
+    : Math.round(Number(historicalUnitCost) * 100 * requestedMilli / 1000);
 
   return {
     quantite: requestedMilli / 1000,

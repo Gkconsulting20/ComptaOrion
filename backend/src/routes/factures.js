@@ -12,7 +12,7 @@ import {
 } from '../services/comptabiliteService.js';
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
-import { consumeStockValuation, createStockValuationLayer } from '../services/stockValuation.js';
+import { consumeStockValuation, createStockValuationLayer, updateProductAverageCost } from '../services/stockValuation.js';
 import { addDaysToIsoDate } from '../services/paymentTerms.js';
 import { calculateCreditNoteVat, calculateReturnedLine } from '../services/creditNoteCalculations.js';
 import { generateCreditNoteNumber } from '../services/creditNoteNumbering.js';
@@ -291,7 +291,9 @@ router.post('/lite-sale', async (req, res) => {
           clientNom: client.nom || 'Client',
           clientCompteId: client.compteComptableId,
           montant: requestedPayment,
-          modePaiement: payment.modePaiement === 'especes' ? 'especes' : 'banque',
+          modePaiement: payment.modePaiement === 'cheque'
+            ? 'cheque'
+            : payment.modePaiement === 'especes' ? 'especes' : 'banque',
           compteBancaireId: paiement?.compteBancaireId ? Number(paiement.compteBancaireId) : null,
           executor: tx,
         });
@@ -628,7 +630,7 @@ router.post('/:id/paiement', async (req, res) => {
       await tx.insert(transactionsTresorerie).values({
         entrepriseId: req.entrepriseId,
         compteBancaireId: parseInt(compteBancaireId),
-        type: 'encaissement',
+        type: 'entree',
         montant: montantPaiement.toFixed(2),
         dateTransaction: datePaiement || new Date().toISOString().split('T')[0],
         categorie: 'Vente',
@@ -1199,6 +1201,7 @@ router.post('/:id/avoir', async (req, res) => {
       if (totalHT <= 0) throw Object.assign(new Error('Le montant de l’avoir doit être positif.'), { status: 400 });
       const totalTVA = calculateCreditNoteVat(totalHT, facture.totalHT, facture.totalTVA);
       const totalTTC = Number((totalHT + totalTVA).toFixed(2));
+      const totalStockCost = Number(computedLines.reduce((sum, line) => sum + Number(line.coutStock || 0), 0).toFixed(2));
       const [client] = await tx.select().from(clients).where(and(
         eq(clients.id, facture.clientId),
         eq(clients.entrepriseId, req.entrepriseId)
@@ -1247,10 +1250,24 @@ router.post('/:id/avoir', async (req, res) => {
           unitCost: Number(line.coutStock || 0) / line.quantite,
           productSnapshot: product,
         });
+        const oldProductQuantity = Number(product.quantite || 0);
+        const newProductQuantity = Number((oldProductQuantity + line.quantite).toFixed(3));
         await tx.update(produits).set({
-          quantite: sql`${produits.quantite} + ${line.quantite}`,
+          quantite: newProductQuantity.toFixed(3),
           updatedAt: new Date(),
         }).where(and(eq(produits.id, product.id), eq(produits.entrepriseId, req.entrepriseId)));
+        await updateProductAverageCost(tx, req.entrepriseId, product.id);
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'UPDATE',
+          table: 'produits',
+          recordId: product.id,
+          ancienneValeur: { quantite: product.quantite },
+          nouvelleValeur: { quantite: newProductQuantity.toFixed(3), mouvementStockId: movement.id, avoirId: note.id },
+          description: `Stock augmenté par retour client ${note.numero}`,
+          executor: tx,
+          required: true,
+        });
         noteLines.push({
           entrepriseId: req.entrepriseId,
           noteCreditId: note.id,
@@ -1277,10 +1294,15 @@ router.post('/:id/avoir', async (req, res) => {
 
       const oldBalance = Number(facture.soldeRestant || 0);
       const updatedBalance = Math.max(0, oldBalance - totalTTC);
+      const updatedClientBalance = Number((Number(client.soldeDu || 0) - totalTTC).toFixed(2));
       await tx.update(factures).set({
         soldeRestant: updatedBalance.toFixed(2),
         updatedAt: new Date(),
       }).where(and(eq(factures.id, facture.id), eq(factures.entrepriseId, req.entrepriseId)));
+      await tx.update(clients).set({
+        soldeDu: updatedClientBalance.toFixed(2),
+        updatedAt: new Date(),
+      }).where(and(eq(clients.id, client.id), eq(clients.entrepriseId, req.entrepriseId)));
 
       const entry = await createEcritureAvoirClient({
         entrepriseId: req.entrepriseId,
@@ -1291,9 +1313,11 @@ router.post('/:id/avoir', async (req, res) => {
         totalHT,
         totalTVA,
         totalTTC,
+        coutStock: totalStockCost,
         sourceId: note.id,
         executor: tx,
       });
+      if (!entry) throw new Error('L’écriture comptable de l’avoir client n’a pas été créée.');
       await logAudit({
         ...extractAuditInfo(req),
         action: 'CREATE',
@@ -1312,6 +1336,17 @@ router.post('/:id/avoir', async (req, res) => {
         ancienneValeur: { soldeRestant: facture.soldeRestant },
         nouvelleValeur: { soldeRestant: updatedBalance.toFixed(2), avoirId: note.id },
         description: `Solde réduit par l’avoir ${note.numero}`,
+        executor: tx,
+        required: true,
+      });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'clients',
+        recordId: client.id,
+        ancienneValeur: { soldeDu: client.soldeDu },
+        nouvelleValeur: { soldeDu: updatedClientBalance.toFixed(2), avoirId: note.id },
+        description: `Solde client réduit par l’avoir ${note.numero}`,
         executor: tx,
         required: true,
       });
@@ -1377,7 +1412,7 @@ router.post('/paiements/:id/encaisser-cheque', async (req, res) => {
       await tx.insert(transactionsTresorerie).values({
         entrepriseId: req.entrepriseId,
         compteBancaireId: bankAccountId,
-        type: 'encaissement',
+        type: 'entree',
         montant: payment.montant,
         dateTransaction: dateEncaissement,
         categorie: 'Encaissement chèque client',

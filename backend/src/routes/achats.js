@@ -10,10 +10,13 @@ import {
   transactionsTresorerie,
   comptesBancaires,
   mouvementsStock,
-  produits
+  produits,
+  valorisationsStock,
+  notesCredit,
+  notesCreditItems,
 } from '../schema.js';
 import { eq, and, inArray, sql, desc } from 'drizzle-orm';
-import { createEcritureFactureAchat, createEcriturePaiementFournisseur } from '../services/comptabiliteService.js';
+import { createEcritureFactureAchat, createEcriturePaiementFournisseur, createEcritureAvoirFournisseur } from '../services/comptabiliteService.js';
 import { addDaysToIsoDate } from '../services/paymentTerms.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import {
@@ -24,7 +27,10 @@ import {
   createStockValuationLayer,
   ensureOpeningValuationLayer,
   splitCostVariance,
+  updateProductAverageCost,
 } from '../services/stockValuation.js';
+import { calculateCreditNoteVat, calculateReturnedLine } from '../services/creditNoteCalculations.js';
+import { generateCreditNoteNumber } from '../services/creditNoteNumbering.js';
 
 const router = express.Router();
 
@@ -1315,6 +1321,234 @@ router.get('/ecarts-costing', async (req, res) => {
   } catch (error) {
     console.error('Erreur rapport écarts costing:', error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/factures/:id/avoir', async (req, res) => {
+  try {
+    const factureId = Number(req.params.id);
+    const dateAvoir = String(req.body.dateAvoir || new Date().toISOString().slice(0, 10));
+    const requestedLines = Array.isArray(req.body.items) ? req.body.items : [];
+    if (!Number.isInteger(factureId) || requestedLines.length === 0) {
+      return res.status(400).json({ success: false, message: 'Sélectionnez au moins un article à retourner au fournisseur.' });
+    }
+
+    const result = await db.transaction(async tx => {
+      const [facture] = await tx.select().from(facturesAchat).where(and(
+        eq(facturesAchat.id, factureId),
+        eq(facturesAchat.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!facture) throw Object.assign(new Error('Facture fournisseur introuvable.'), { status: 404 });
+      if (['brouillon', 'annulee'].includes(String(facture.statut).toLowerCase())) {
+        throw Object.assign(new Error('Validez la facture fournisseur avant de créer un avoir.'), { status: 409 });
+      }
+
+      const invoiceLines = await tx.select().from(factureAchatItems).where(and(
+        eq(factureAchatItems.factureId, factureId),
+        eq(factureAchatItems.entrepriseId, req.entrepriseId)
+      )).for('update');
+      const lineById = new Map(invoiceLines.map(line => [Number(line.id), line]));
+      const itemIds = requestedLines.map(line => Number(line.factureAchatItemId));
+      if (itemIds.some(id => !Number.isInteger(id)) || new Set(itemIds).size !== itemIds.length) {
+        throw Object.assign(new Error('Les lignes du retour sont invalides ou répétées.'), { status: 400 });
+      }
+      const priorReturns = await tx.select({
+        factureAchatItemId: notesCreditItems.factureAchatItemId,
+        quantite: notesCreditItems.quantite,
+      }).from(notesCreditItems).where(and(
+        eq(notesCreditItems.entrepriseId, req.entrepriseId),
+        inArray(notesCreditItems.factureAchatItemId, itemIds)
+      ));
+      const returnedByItemId = new Map();
+      for (const row of priorReturns) {
+        const id = Number(row.factureAchatItemId);
+        returnedByItemId.set(id, (returnedByItemId.get(id) || 0) + Number(row.quantite || 0));
+      }
+
+      const computedLines = [];
+      for (const request of requestedLines) {
+        const original = lineById.get(Number(request.factureAchatItemId));
+        if (!original) throw Object.assign(new Error('Une ligne ne fait pas partie de cette facture fournisseur.'), { status: 400 });
+        if (!original.produitId || !original.mouvementStockId) {
+          throw Object.assign(new Error(`La ligne « ${original.description} » n’a pas de réception de stock traçable.`), { status: 409 });
+        }
+        const [layer] = await tx.select().from(valorisationsStock).where(and(
+          eq(valorisationsStock.entrepriseId, req.entrepriseId),
+          eq(valorisationsStock.produitId, original.produitId),
+          eq(valorisationsStock.mouvementId, original.mouvementStockId)
+        )).for('update').limit(1);
+        const [product] = await tx.select().from(produits).where(and(
+          eq(produits.id, original.produitId),
+          eq(produits.entrepriseId, req.entrepriseId)
+        )).for('update').limit(1);
+        if (!layer || !product || Number(layer.quantite) <= 0) {
+          throw Object.assign(new Error(`Le stock d’origine de « ${original.description} » n’est plus disponible pour un retour fournisseur.`), { status: 409 });
+        }
+        const calculated = calculateReturnedLine({
+          quantityOriginal: original.quantite,
+          quantityAlreadyReturned: returnedByItemId.get(Number(original.id)) || 0,
+          quantityRequested: request.quantite,
+          totalOriginalHT: original.totalLigne,
+          historicalUnitCost: Number(layer.coutTotal) / Number(layer.quantite),
+        });
+        if (calculated.quantite > Number(layer.quantite) + 0.0001 || calculated.quantite > Number(product.quantite || 0) + 0.0001) {
+          throw Object.assign(new Error(`Le stock restant de « ${original.description} » est insuffisant pour le retour demandé.`), { status: 409 });
+        }
+        computedLines.push({ original, product, layer, ...calculated });
+      }
+      const totalHT = Number(computedLines.reduce((sum, line) => sum + line.totalHT, 0).toFixed(2));
+      if (totalHT <= 0) throw Object.assign(new Error('Le montant de l’avoir doit être positif.'), { status: 400 });
+      const totalTVA = calculateCreditNoteVat(totalHT, facture.totalHT, facture.totalTVA);
+      const totalTTC = Number((totalHT + totalTVA).toFixed(2));
+      const totalStockCost = Number(computedLines.reduce((sum, line) => sum + Number(line.coutStock || 0), 0).toFixed(2));
+      const [fournisseur] = await tx.select().from(fournisseurs).where(and(
+        eq(fournisseurs.id, facture.fournisseurId),
+        eq(fournisseurs.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!fournisseur) throw Object.assign(new Error('Fournisseur de la facture introuvable.'), { status: 409 });
+
+      const number = await generateCreditNoteNumber(tx, { entrepriseId: req.entrepriseId, type: 'fournisseur', dateAvoir });
+      const [note] = await tx.insert(notesCredit).values({
+        entrepriseId: req.entrepriseId,
+        type: 'fournisseur',
+        ...number,
+        fournisseurId: fournisseur.id,
+        factureAchatId: facture.id,
+        dateAvoir,
+        montantHT: totalHT.toFixed(2),
+        montantTVA: totalTVA.toFixed(2),
+        montantTTC: totalTTC.toFixed(2),
+        motif: req.body.motif || null,
+        statut: 'validee',
+        userId: req.user.id,
+      }).returning();
+
+      const noteLines = [];
+      for (const line of computedLines) {
+        const remainingQuantity = Number((Number(line.layer.quantite) - line.quantite).toFixed(3));
+        const remainingCost = Number(Math.max(0, Number(line.layer.coutTotal) - Number(line.coutStock)).toFixed(2));
+        await tx.update(valorisationsStock).set({
+          quantite: remainingQuantity.toFixed(3),
+          coutTotal: remainingCost.toFixed(2),
+        }).where(and(
+          eq(valorisationsStock.id, line.layer.id),
+          eq(valorisationsStock.entrepriseId, req.entrepriseId)
+        ));
+        const [movement] = await tx.insert(mouvementsStock).values({
+          entrepriseId: req.entrepriseId,
+          produitId: line.product.id,
+          type: 'sortie',
+          quantite: line.quantite.toFixed(3),
+          prixUnitaire: (Number(line.coutStock || 0) / line.quantite).toFixed(4),
+          reference: note.numero,
+          notes: `Retour fournisseur lié à la facture ${facture.numeroFacture}`,
+          userId: req.user.id,
+        }).returning();
+        const oldProductQuantity = Number(line.product.quantite || 0);
+        const newProductQuantity = Number((oldProductQuantity - line.quantite).toFixed(3));
+        await tx.update(produits).set({
+          quantite: newProductQuantity.toFixed(3),
+          updatedAt: new Date(),
+        }).where(and(eq(produits.id, line.product.id), eq(produits.entrepriseId, req.entrepriseId)));
+        await updateProductAverageCost(tx, req.entrepriseId, line.product.id);
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'UPDATE',
+          table: 'produits',
+          recordId: line.product.id,
+          ancienneValeur: { quantite: line.product.quantite },
+          nouvelleValeur: { quantite: newProductQuantity.toFixed(3), mouvementStockId: movement.id, avoirId: note.id },
+          description: `Stock diminué par retour fournisseur ${note.numero}`,
+          executor: tx,
+          required: true,
+        });
+        noteLines.push({
+          entrepriseId: req.entrepriseId,
+          noteCreditId: note.id,
+          factureAchatItemId: line.original.id,
+          produitId: line.product.id,
+          description: line.original.description,
+          quantite: line.quantite.toFixed(3),
+          prixUnitaire: (line.totalHT / line.quantite).toFixed(4),
+          totalHT: line.totalHT.toFixed(2),
+          montantTVA: '0.00',
+          coutStock: Number(line.coutStock || 0).toFixed(2),
+          mouvementStockId: movement.id,
+        });
+      }
+      let taxAllocatedCents = 0;
+      noteLines.forEach((line, index) => {
+        const taxCents = index === noteLines.length - 1
+          ? Math.round(totalTVA * 100) - taxAllocatedCents
+          : Math.round(totalTVA * 100 * (Number(line.totalHT) / totalHT));
+        line.montantTVA = (taxCents / 100).toFixed(2);
+        taxAllocatedCents += taxCents;
+      });
+      await tx.insert(notesCreditItems).values(noteLines);
+
+      const updatedInvoiceBalance = Math.max(0, Number(facture.soldeRestant || 0) - totalTTC);
+      const updatedSupplierBalance = Number((Number(fournisseur.soldeDu || 0) - totalTTC).toFixed(2));
+      await tx.update(facturesAchat).set({
+        soldeRestant: updatedInvoiceBalance.toFixed(2),
+        updatedAt: new Date(),
+      }).where(and(eq(facturesAchat.id, facture.id), eq(facturesAchat.entrepriseId, req.entrepriseId)));
+      await tx.update(fournisseurs).set({
+        soldeDu: updatedSupplierBalance.toFixed(2),
+        updatedAt: new Date(),
+      }).where(and(eq(fournisseurs.id, fournisseur.id), eq(fournisseurs.entrepriseId, req.entrepriseId)));
+
+      const entry = await createEcritureAvoirFournisseur({
+        entrepriseId: req.entrepriseId,
+        numeroAvoir: note.numero,
+        dateAvoir,
+        fournisseurNom: fournisseur.raisonSociale || 'Fournisseur',
+        totalHT,
+        totalTVA,
+        totalTTC,
+        coutStock: totalStockCost,
+        fraisTransportNonRecuperable: Number((totalStockCost - totalHT).toFixed(2)),
+        sourceId: note.id,
+        executor: tx,
+      });
+      if (!entry) throw new Error('L’écriture comptable de l’avoir fournisseur n’a pas été créée.');
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'notes_credit',
+        recordId: note.id,
+        nouvelleValeur: { note, lignes: noteLines, ecritureId: entry?.id, coutStockSorti: totalStockCost },
+        description: `Avoir fournisseur ${note.numero} créé pour la facture ${facture.numeroFacture}`,
+        executor: tx,
+        required: true,
+      });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'fournisseurs',
+        recordId: fournisseur.id,
+        ancienneValeur: { soldeDu: fournisseur.soldeDu },
+        nouvelleValeur: { soldeDu: updatedSupplierBalance.toFixed(2), avoirId: note.id },
+        description: `Solde fournisseur réduit par l’avoir ${note.numero}`,
+        executor: tx,
+        required: true,
+      });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'factures_achat',
+        recordId: facture.id,
+        ancienneValeur: { soldeRestant: facture.soldeRestant },
+        nouvelleValeur: { soldeRestant: updatedInvoiceBalance.toFixed(2), avoirId: note.id },
+        description: `Solde fournisseur réduit par l’avoir ${note.numero}`,
+        executor: tx,
+        required: true,
+      });
+      return { note, lignes: noteLines, ecritureId: entry?.id };
+    });
+    res.status(201).json({ success: true, message: 'Avoir fournisseur créé; stock, solde et comptabilité mis à jour.', data: result });
+  } catch (error) {
+    console.error('Erreur création avoir fournisseur:', error);
+    res.status(error.status || 500).json({ success: false, message: error.message || 'Erreur lors de la création de l’avoir fournisseur.' });
   }
 });
 

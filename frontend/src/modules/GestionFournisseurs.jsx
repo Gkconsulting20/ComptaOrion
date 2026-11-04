@@ -822,6 +822,9 @@ export function GestionFournisseurs() {
     compteBancaireId: '',
     memo: ''
   });
+  const [supplierAvoirModal, setSupplierAvoirModal] = useState({
+    open: false, invoice: null, lines: [], motif: '', saving: false,
+  });
 
   const nombreEnLettres = (n) => {
     const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
@@ -862,6 +865,51 @@ export function GestionFournisseurs() {
     } catch (err) {
       console.error('Erreur chargement comptes bancaires:', err);
       setComptesBancaires([]);
+    }
+  };
+
+  const handleOpenSupplierAvoir = async invoice => {
+    try {
+      const response = await api.get(`/achats/factures/${invoice.id}`);
+      const payload = response.data || response;
+      const detail = payload.data || payload;
+      const facture = detail.facture || detail;
+      const items = detail.items || facture.items || [];
+      setSupplierAvoirModal({
+        open: true,
+        invoice: facture,
+        motif: '',
+        saving: false,
+        lines: items.map(item => ({
+          factureAchatItemId: item.id,
+          description: item.description,
+          quantiteOriginale: Number(item.quantite || 0),
+          quantiteRetour: 0,
+          stockable: Boolean(item.produitId && item.mouvementStockId),
+        })),
+      });
+    } catch (error) {
+      alert(`Impossible de charger les lignes de la facture : ${error.message}`);
+    }
+  };
+
+  const handleSubmitSupplierAvoir = async () => {
+    const items = supplierAvoirModal.lines
+      .filter(line => Number(line.quantiteRetour) > 0)
+      .map(line => ({ factureAchatItemId: line.factureAchatItemId, quantite: Number(line.quantiteRetour) }));
+    if (!items.length) return alert('Indiquez la quantité retournée pour au moins un article.');
+    setSupplierAvoirModal(current => ({ ...current, saving: true }));
+    try {
+      await api.post(`/achats/factures/${supplierAvoirModal.invoice.id}/avoir`, {
+        items,
+        motif: supplierAvoirModal.motif,
+      });
+      setSupplierAvoirModal({ open: false, invoice: null, lines: [], motif: '', saving: false });
+      await loadData();
+      alert('Avoir fournisseur créé. Le stock, le solde fournisseur et la comptabilité ont été mis à jour.');
+    } catch (error) {
+      setSupplierAvoirModal(current => ({ ...current, saving: false }));
+      alert(`Avoir fournisseur non créé : ${error.message}`);
     }
   };
 
@@ -1337,8 +1385,60 @@ export function GestionFournisseurs() {
                 { key: 'statut', label: 'Statut', render: value => value === 'brouillon' ? 'Brouillon — à vérifier' : value }
               ]}
               data={data.factures}
-              actions={false}
+              actions={true}
+              customActions={facture => (
+                <Button
+                  size="small"
+                  variant="secondary"
+                  disabled={['brouillon', 'annulee'].includes(String(facture.statut).toLowerCase())}
+                  onClick={() => handleOpenSupplierAvoir(facture)}
+                >
+                  ↩ Avoir
+                </Button>
+              )}
             />
+          )}
+          {supplierAvoirModal.open && (
+            <Modal
+              isOpen={supplierAvoirModal.open}
+              onClose={() => !supplierAvoirModal.saving && setSupplierAvoirModal({ open: false, invoice: null, lines: [], motif: '', saving: false })}
+              title={`Retour / avoir fournisseur — ${supplierAvoirModal.invoice?.numeroFacture || ''}`}
+              size="large"
+            >
+              <p>Le coût de stock sorti est calculé à partir de la valeur actuelle du stock. Le fournisseur est crédité du montant de la facture retournée.</p>
+              {supplierAvoirModal.lines.map(line => (
+                <div key={line.factureAchatItemId} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) 130px 150px', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+                  <span>{line.description}{!line.stockable ? ' — stock d’origine indisponible' : ''}</span>
+                  <span>Facturé : {line.quantiteOriginale}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={line.quantiteOriginale}
+                    step="0.001"
+                    value={line.quantiteRetour}
+                    disabled={!line.stockable || supplierAvoirModal.saving}
+                    onChange={event => setSupplierAvoirModal(current => ({
+                      ...current,
+                      lines: current.lines.map(item => item.factureAchatItemId === line.factureAchatItemId
+                        ? { ...item, quantiteRetour: event.target.value }
+                        : item),
+                    }))}
+                    aria-label={`Quantité retournée : ${line.description}`}
+                  />
+                </div>
+              ))}
+              <label style={{ display: 'block', margin: '16px 0 6px', fontWeight: 600 }}>Motif du retour</label>
+              <textarea
+                value={supplierAvoirModal.motif}
+                onChange={event => setSupplierAvoirModal(current => ({ ...current, motif: event.target.value }))}
+                rows={3}
+                style={{ width: '100%' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <Button variant="secondary" disabled={supplierAvoirModal.saving} onClick={() => setSupplierAvoirModal({ open: false, invoice: null, lines: [], motif: '', saving: false })}>Annuler</Button>
+                <Button variant="success" disabled={supplierAvoirModal.saving} onClick={handleSubmitSupplierAvoir}>{supplierAvoirModal.saving ? 'Création…' : 'Créer l’avoir'}</Button>
+              </div>
+            </Modal>
           )}
           <p style={{ marginTop: 12, color: '#52606d', fontSize: 13 }}>
             Les factures importées sont enregistrées en brouillon. Elles ne créent pas d’écriture comptable ni de mouvement de stock à ce stade.
@@ -2266,7 +2366,7 @@ function EtatsCompteFournisseurTab() {
 
     const mouvementsRows = (etatCompte.mouvements || []).map(m => {
       const amount = value => Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const type = m.type === 'facture_fournisseur' ? 'Facture fournisseur' : m.type === 'paiement_fournisseur' ? 'Règlement' : m.type;
+      const type = m.libelle || (m.type === 'facture_fournisseur' ? 'Facture fournisseur' : m.type === 'paiement_fournisseur' ? 'Règlement' : m.type);
       return '<tr><td>' + new Date(`${m.date}T00:00:00`).toLocaleDateString('fr-FR') + '</td><td>' + type + '</td><td>' + (m.reference || '-') + '</td><td class="text-right">' + amount(m.debit) + ' XOF</td><td class="text-right">' + amount(m.credit) + ' XOF</td><td class="text-right amount">' + amount(m.solde) + ' XOF</td></tr>';
     }).join('');
     const mouvementsTable = mouvementsRows
@@ -2424,7 +2524,7 @@ function EtatsCompteFournisseurTab() {
                   {etatCompte.mouvements.map((m, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
                       <td style={{ padding: '12px' }}>{new Date(`${m.date}T00:00:00`).toLocaleDateString('fr-FR')}</td>
-                      <td style={{ padding: '12px' }}>{m.type === 'facture_fournisseur' ? 'Facture fournisseur' : m.type === 'paiement_fournisseur' ? 'Règlement' : m.type}</td>
+                      <td style={{ padding: '12px' }}>{m.libelle || (m.type === 'facture_fournisseur' ? 'Facture fournisseur' : m.type === 'paiement_fournisseur' ? 'Règlement' : m.type)}</td>
                       <td style={{ padding: '12px' }}>{m.reference || '-'}</td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>{Number(m.debit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>{Number(m.credit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>

@@ -747,6 +747,7 @@ function FacturesClientTab() {
   const [wizardStep, setWizardStep] = useState(1);
   const [selectedFacture, setSelectedFacture] = useState(null);
   const [showFactureDetails, setShowFactureDetails] = useState(false);
+  const [avoirModal, setAvoirModal] = useState({ open: false, invoice: null, lines: [], motif: '', saving: false });
   const [factureData, setFactureData] = useState({
     clientId: '',
     dateFacture: new Date().toISOString().split('T')[0],
@@ -791,6 +792,48 @@ function FacturesClientTab() {
       loadData();
     } catch (error) {
       alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleOpenAvoir = async facture => {
+    try {
+      const response = await api.get(`/factures/${facture.id}`);
+      const payload = response.data || response;
+      const invoice = payload.data?.facture || payload.facture || payload.data || payload;
+      const items = invoice.items || payload.data?.items || payload.items || [];
+      setAvoirModal({
+        open: true,
+        invoice,
+        motif: '',
+        saving: false,
+        lines: items.map(item => ({
+          factureItemId: item.id,
+          description: item.description,
+          quantiteOriginale: Number(item.quantite || 0),
+          quantiteRetour: 0,
+          stockable: Boolean(item.produitId),
+          costAvailable: item.coutUnitaireCMV != null,
+        })),
+      });
+    } catch (error) {
+      alert(`Impossible de charger les lignes de la facture : ${error.message}`);
+    }
+  };
+
+  const handleCreateAvoir = async () => {
+    const items = avoirModal.lines
+      .filter(line => Number(line.quantiteRetour) > 0)
+      .map(line => ({ factureItemId: line.factureItemId, quantite: Number(line.quantiteRetour) }));
+    if (!items.length) return alert('Indiquez la quantité retournée pour au moins un article.');
+    setAvoirModal(current => ({ ...current, saving: true }));
+    try {
+      await api.post(`/factures/${avoirModal.invoice.id}/avoir`, { items, motif: avoirModal.motif });
+      setAvoirModal({ open: false, invoice: null, lines: [], motif: '', saving: false });
+      await loadData();
+      alert('Avoir créé. Le compte client, le stock et la comptabilité ont été mis à jour.');
+    } catch (error) {
+      setAvoirModal(current => ({ ...current, saving: false }));
+      alert(`Avoir non créé : ${error.message}`);
     }
   };
 
@@ -901,6 +944,11 @@ function FacturesClientTab() {
         actions={true}
         customActions={(facture) => (
           <div style={{ display: 'flex', gap: '5px' }}>
+            {!['brouillon', 'annulee'].includes(facture.statut) && (
+              <Button size="small" variant="secondary" onClick={() => handleOpenAvoir(facture)}>
+                ↩ Avoir
+              </Button>
+            )}
             {facture.statut === 'brouillon' && (
               <Button size="small" variant="danger" onClick={() => handleAnnulerFacture(facture.id)}>
                 ❌ Annuler
@@ -1144,6 +1192,49 @@ function FacturesClientTab() {
             data: selectedFacture.items
           }] : []}
         />
+      )}
+
+      {avoirModal.open && (
+        <Modal
+          isOpen={avoirModal.open}
+          onClose={() => !avoirModal.saving && setAvoirModal({ open: false, invoice: null, lines: [], motif: '', saving: false })}
+          title={`Retour / avoir — ${avoirModal.invoice?.numeroFacture || ''}`}
+          size="large"
+        >
+          <p>Le retour est crédité au coût historique de la vente. Les lignes d’anciennes factures sans coût enregistré ne sont pas éligibles.</p>
+          {avoirModal.lines.map(line => (
+            <div key={line.factureItemId} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) 130px 150px', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+              <span>{line.description}{!line.stockable ? ' — non stockable' : !line.costAvailable ? ' — coût historique absent' : ''}</span>
+              <span>Facturé : {line.quantiteOriginale}</span>
+              <input
+                type="number"
+                min="0"
+                max={line.quantiteOriginale}
+                step="0.001"
+                value={line.quantiteRetour}
+                disabled={!line.stockable || !line.costAvailable || avoirModal.saving}
+                onChange={event => setAvoirModal(current => ({
+                  ...current,
+                  lines: current.lines.map(item => item.factureItemId === line.factureItemId
+                    ? { ...item, quantiteRetour: event.target.value }
+                    : item),
+                }))}
+                aria-label={`Quantité retournée : ${line.description}`}
+              />
+            </div>
+          ))}
+          <label style={{ display: 'block', margin: '16px 0 6px', fontWeight: 600 }}>Motif du retour</label>
+          <textarea
+            value={avoirModal.motif}
+            onChange={event => setAvoirModal(current => ({ ...current, motif: event.target.value }))}
+            rows={3}
+            style={{ width: '100%' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <Button variant="secondary" disabled={avoirModal.saving} onClick={() => setAvoirModal({ open: false, invoice: null, lines: [], motif: '', saving: false })}>Annuler</Button>
+            <Button variant="success" disabled={avoirModal.saving} onClick={handleCreateAvoir}>{avoirModal.saving ? 'Création…' : 'Créer l’avoir'}</Button>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -1825,8 +1916,12 @@ function PaiementsTab() {
   const [paiementsList, setPaiementsList] = useState([]);
   const [facturesList, setFacturesList] = useState([]);
   const [clients, setClients] = useState([]);
+  const [pendingChecks, setPendingChecks] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [depositModal, setDepositModal] = useState({ open: false, payment: null });
+  const [depositData, setDepositData] = useState({ compteBancaireId: '', dateEncaissement: new Date().toISOString().slice(0, 10) });
   const [selectedFacture, setSelectedFacture] = useState(null);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [paymentData, setPaymentData] = useState({
@@ -1857,6 +1952,12 @@ function PaiementsTab() {
       setFacturesList(facturesRes.data || []);
       setClients(clientsRes.data || []);
       setPaiementsList([]);
+      const [checksRes, banksRes] = await Promise.all([
+        api.get('/factures/paiements/cheques/en-attente').catch(() => ({ data: [] })),
+        api.get('/tresorerie/comptes').catch(() => ({ data: [] })),
+      ]);
+      setPendingChecks(checksRes.data || []);
+      setBankAccounts(banksRes.data || []);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -1875,6 +1976,18 @@ function PaiementsTab() {
       alert('Paiement enregistré avec succès!');
     } catch (error) {
       alert('Erreur: ' + error.message);
+    }
+  };
+
+  const handleDepositCheque = async () => {
+    if (!depositModal.payment || !depositData.compteBancaireId) return alert('Sélectionnez le compte bancaire de dépôt.');
+    try {
+      await api.post(`/factures/paiements/${depositModal.payment.id}/encaisser-cheque`, depositData);
+      setDepositModal({ open: false, payment: null });
+      await loadData();
+      alert('Chèque transféré au compte bancaire.');
+    } catch (error) {
+      alert(`Encaissement impossible : ${error.message}`);
     }
   };
 
@@ -1899,7 +2012,7 @@ function PaiementsTab() {
   const handleOpenPaymentModal = (facture) => {
     setSelectedFacture(facture);
     const preferredMode = (facture.client?.modesPaiementPreferes || [])
-      .find(mode => ['mobile_money', 'carte_bancaire', 'virement', 'especes'].includes(mode));
+      .find(mode => ['mobile_money', 'carte_bancaire', 'virement', 'especes', 'cheque'].includes(mode));
     setPaymentData({ 
       ...paymentData, 
       factureId: facture.id, 
@@ -1979,6 +2092,28 @@ function PaiementsTab() {
         </div>
       )}
 
+      {pendingChecks.length > 0 && (
+        <section style={{ padding: 16, background: '#eef6ff', border: '1px solid #b8d8f5', borderRadius: 8, marginBottom: 20 }}>
+          <h4 style={{ marginTop: 0 }}>Chèques reçus — à déposer en banque</h4>
+          {pendingChecks.map(payment => {
+            const invoice = facturesList.find(item => Number(item.facture?.id) === Number(payment.factureId));
+            return (
+              <div key={payment.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid #d8e6f2' }}>
+                <span>
+                  <strong>{payment.reference || `Chèque ${payment.id}`}</strong>
+                  {' — '}{invoice?.client?.nom || 'Client'}
+                  {' — '}{Number(payment.montant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF
+                </span>
+                <Button size="small" variant="success" onClick={() => {
+                  setDepositData({ compteBancaireId: '', dateEncaissement: new Date().toISOString().slice(0, 10) });
+                  setDepositModal({ open: true, payment });
+                }}>Déposer / encaisser</Button>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
       <Table 
         columns={columns} 
         data={paiementsList} 
@@ -2004,7 +2139,7 @@ function PaiementsTab() {
                     setSelectedClientId(e.target.value);
                     const client = clients.find(item => String(item.id) === e.target.value);
                     const preferredMode = (client?.modesPaiementPreferes || [])
-                      .find(mode => ['mobile_money', 'carte_bancaire', 'virement', 'especes'].includes(mode));
+                      .find(mode => ['mobile_money', 'carte_bancaire', 'virement', 'especes', 'cheque'].includes(mode));
                     setPaymentData({
                       ...paymentData,
                       factureId: '',
@@ -2060,6 +2195,7 @@ function PaiementsTab() {
                 { value: 'carte_bancaire', label: '💳 Carte Bancaire' },
                 { value: 'virement', label: '🏦 Virement Bancaire' },
                 { value: 'especes', label: '💵 Espèces' },
+                { value: 'cheque', label: '📝 Chèque — à déposer ensuite' },
               ]}
               required
             />
@@ -2143,7 +2279,8 @@ function PaiementsTab() {
               label="Référence"
               value={paymentData.reference}
               onChange={(e) => setPaymentData({ ...paymentData, reference: e.target.value })}
-              placeholder="Numéro de transaction, référence bancaire..."
+              placeholder={paymentData.modePaiement === 'cheque' ? 'Numéro du chèque (obligatoire)' : 'Numéro de transaction, référence bancaire...'}
+              required={paymentData.modePaiement === 'cheque'}
             />
 
             <FormField
@@ -2165,6 +2302,41 @@ function PaiementsTab() {
           </div>
         </form>
       </Modal>
+      {depositModal.open && (
+        <Modal
+          isOpen={depositModal.open}
+          onClose={() => setDepositModal({ open: false, payment: null })}
+          title="Déposer le chèque reçu"
+          size="medium"
+        >
+          <p>Le chèque a été comptabilisé à sa réception. Cette étape transfère son montant du compte 5112 vers la banque.</p>
+          <FormField
+            label="Compte bancaire"
+            type="select"
+            value={depositData.compteBancaireId}
+            onChange={event => setDepositData(current => ({ ...current, compteBancaireId: event.target.value }))}
+            options={[
+              { value: '', label: '— Choisir un compte —' },
+              ...bankAccounts.filter(account => account.actif !== false).map(account => ({
+                value: String(account.id),
+                label: account.nomCompte || account.nom || account.libelle || account.banque || `Compte ${account.id}`,
+              })),
+            ]}
+            required
+          />
+          <FormField
+            label="Date d’encaissement"
+            type="date"
+            value={depositData.dateEncaissement}
+            onChange={event => setDepositData(current => ({ ...current, dateEncaissement: event.target.value }))}
+            required
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <Button variant="secondary" onClick={() => setDepositModal({ open: false, payment: null })}>Annuler</Button>
+            <Button variant="success" onClick={handleDepositCheque}>Confirmer le dépôt</Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2902,7 +3074,7 @@ function EtatsCompteTab() {
 
     const mouvementsRows = (etatCompte.mouvements || []).map(m => {
       const amount = value => Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const type = m.type === 'facture_client' ? 'Facture client' : m.type === 'encaissement_client' ? 'Encaissement' : m.type;
+      const type = m.libelle || (m.type === 'facture_client' ? 'Facture client' : m.type === 'encaissement_client' ? 'Encaissement' : m.type);
       return `<tr><td>${new Date(`${m.date}T00:00:00`).toLocaleDateString('fr-FR')}</td><td>${type}</td><td>${m.reference || '-'}</td><td class="text-right">${amount(m.debit)} XOF</td><td class="text-right">${amount(m.credit)} XOF</td><td class="text-right amount">${amount(m.solde)} XOF</td></tr>`;
     }).join('');
     const mouvementsTable = mouvementsRows
@@ -3117,7 +3289,7 @@ function EtatsCompteTab() {
                   {etatCompte.mouvements.map((m, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid #dee2e6' }}>
                       <td style={{ padding: '12px' }}>{new Date(`${m.date}T00:00:00`).toLocaleDateString('fr-FR')}</td>
-                      <td style={{ padding: '12px' }}>{m.type === 'facture_client' ? 'Facture client' : m.type === 'encaissement_client' ? 'Encaissement' : m.type}</td>
+                      <td style={{ padding: '12px' }}>{m.libelle || (m.type === 'facture_client' ? 'Facture client' : m.type === 'encaissement_client' ? 'Encaissement' : m.type)}</td>
                       <td style={{ padding: '12px' }}>{m.reference || '-'}</td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>{Number(m.debit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>{Number(m.credit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>

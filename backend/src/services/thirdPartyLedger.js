@@ -49,6 +49,7 @@ export function buildThirdPartyStatement({
     return {
       date: dateKey(invoice.dateFacture),
       type: side === 'client' ? 'facture_client' : 'facture_fournisseur',
+      libelle: side === 'client' ? 'Facture client' : 'Facture fournisseur',
       reference: invoice.numeroFacture || invoice.numeroFactureFournisseur || `#${invoice.id}`,
       description: invoice.description || null,
       debitCents,
@@ -65,6 +66,7 @@ export function buildThirdPartyStatement({
     return {
       date: dateKey(payment.datePaiement),
       type: side === 'client' ? 'encaissement_client' : 'paiement_fournisseur',
+      libelle: side === 'client' ? 'Encaissement' : 'Règlement fournisseur',
       reference: payment.reference || `#${payment.id}`,
       description: payment.notes || null,
       debitCents,
@@ -78,6 +80,7 @@ export function buildThirdPartyStatement({
     return {
       date: dateKey(note.dateAvoir),
       type: side === 'client' ? 'avoir_client' : 'avoir_fournisseur',
+      libelle: side === 'client' ? 'Avoir client' : 'Avoir fournisseur',
       reference: note.numero || `#${note.id}`,
       description: note.motif || null,
       debitCents: side === 'fournisseur' ? amountCents : 0,
@@ -121,6 +124,7 @@ export function buildThirdPartyStatement({
     return {
       date: movement.date,
       type: movement.type,
+      libelle: movement.libelle,
       reference: movement.reference,
       description: movement.description,
       debit: centsToMoney(movement.debitCents),

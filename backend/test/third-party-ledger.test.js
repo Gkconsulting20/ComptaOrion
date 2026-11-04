@@ -57,3 +57,35 @@ test('refuse une période inversée', () => {
     dateFin: '2026-03-31',
   }), /période/i);
 });
+
+test('un avoir client diminue le solde dû et apparaît au crédit du relevé', () => {
+  const statement = buildThirdPartyStatement({
+    side: 'client',
+    dateDebut: '2026-03-01',
+    dateFin: '2026-03-31',
+    invoices: [{ id: 1, statut: 'payee', dateFacture: '2026-03-02', totalTTC: '118.00', numeroFacture: 'V-001' }],
+    creditNotes: [{ id: 2, statut: 'validee', dateAvoir: '2026-03-12', montantTTC: '23.60', numero: 'AVC-2026-00000001' }],
+  });
+  assert.equal(statement.soldeCloture, 94.4);
+  assert.equal(statement.totalAvoir, 23.6);
+  assert.deepEqual(statement.mouvements.map(row => [row.libelle, row.debit, row.credit, row.solde]), [
+    ['Facture client', 118, 0, 118],
+    ['Avoir client', 0, 23.6, 94.4],
+  ]);
+});
+
+test('un avoir fournisseur diminue le solde dû et apparaît au débit du relevé', () => {
+  const statement = buildThirdPartyStatement({
+    side: 'fournisseur',
+    dateDebut: '2026-03-01',
+    dateFin: '2026-03-31',
+    invoices: [{ id: 1, statut: 'payee', dateFacture: '2026-03-02', totalTTC: '118.00', numeroFacture: 'A-001' }],
+    creditNotes: [{ id: 2, statut: 'validee', dateAvoir: '2026-03-12', montantTTC: '23.60', numero: 'AVF-2026-000001' }],
+  });
+  assert.equal(statement.soldeCloture, 94.4);
+  assert.equal(statement.totalAvoir, 23.6);
+  assert.deepEqual(statement.mouvements.map(row => [row.libelle, row.debit, row.credit, row.solde]), [
+    ['Facture fournisseur', 0, 118, 118],
+    ['Avoir fournisseur', 23.6, 0, 94.4],
+  ]);
+});

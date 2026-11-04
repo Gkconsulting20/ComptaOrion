@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { clients, factures, paiements, produitPrix, produits } from '../schema.js';
+import { clients, factures, paiements, produitPrix, produits, notesCredit } from '../schema.js';
 import { eq, and, desc, sql, gte, lte, between, gt, isNull, or } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import emailService from '../services/emailService.js';
@@ -1269,14 +1269,20 @@ router.post('/etat-compte', async (req, res) => {
         eq(paiements.entrepriseId, req.entrepriseId),
       ))
       .orderBy(paiements.datePaiement);
+    const creditNotes = await db.select().from(notesCredit).where(and(
+      eq(notesCredit.entrepriseId, req.entrepriseId),
+      eq(notesCredit.clientId, parseInt(clientId)),
+      eq(notesCredit.type, 'client')
+    ));
 
     const statement = buildThirdPartyStatement({
       side: 'client',
       invoices: allFactures,
       payments: paiementsList,
+      creditNotes,
       dateDebut,
       dateFin,
-      openingBalance: client[0].soldeDu || 0,
+      openingBalance: 0,
     });
 
     res.json({
@@ -1352,14 +1358,20 @@ router.post('/etat-compte/email', async (req, res) => {
         eq(paiements.entrepriseId, req.entrepriseId),
       ))
       .orderBy(paiements.datePaiement);
+    const creditNotes = await db.select().from(notesCredit).where(and(
+      eq(notesCredit.entrepriseId, req.entrepriseId),
+      eq(notesCredit.clientId, parseInt(clientId)),
+      eq(notesCredit.type, 'client')
+    ));
 
     const statement = buildThirdPartyStatement({
       side: 'client',
       invoices: allFactures,
       payments: paiementsList,
+      creditNotes,
       dateDebut,
       dateFin,
-      openingBalance: client[0].soldeDu || 0,
+      openingBalance: 0,
     });
     const { factures: facturesList, paiements: paiementsClient, totalFacture, totalPaye, solde, soldeOuverture, soldeCloture } = statement;
 
@@ -1439,7 +1451,7 @@ router.post('/etat-compte/email', async (req, res) => {
         <tbody>${statement.mouvements.map(row => `
           <tr>
             <td style="padding: 10px;">${row.date}</td>
-            <td style="padding: 10px;">${row.type === 'facture_client' ? 'Facture client' : row.type === 'encaissement_client' ? 'Encaissement' : row.type}</td>
+            <td style="padding: 10px;">${row.libelle || row.type}</td>
             <td style="padding: 10px;">${row.reference || '-'}</td>
             <td style="padding: 10px; text-align: right;">${montantFr(row.debit)} XOF</td>
             <td style="padding: 10px; text-align: right;">${montantFr(row.credit)} XOF</td>
