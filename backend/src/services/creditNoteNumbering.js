@@ -1,8 +1,11 @@
 import { sql } from 'drizzle-orm';
 
-export async function generateCreditNoteNumber(executor, { entrepriseId, type, dateAvoir }) {
+export async function generateCreditNoteNumber(executor, { entrepriseId, type, dateAvoir, operation = 'avoir' }) {
   if (!executor?.execute) throw new Error('La numérotation des avoirs exige une transaction.');
   if (!['client', 'fournisseur'].includes(type)) throw new Error('Type d’avoir invalide.');
+  if (!['avoir', 'debit'].includes(operation) || (operation === 'debit' && type !== 'client')) {
+    throw new Error('Type d’ajustement de tiers invalide.');
+  }
   const date = String(dateAvoir || '');
   const year = Number(date.slice(0, 4));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(year)) {
@@ -17,7 +20,7 @@ export async function generateCreditNoteNumber(executor, { entrepriseId, type, d
     WHERE entreprise_id = ${entrepriseId} AND type = ${type} AND annee = ${year}
   `);
   const sequence = Number(result.rows?.[0]?.last_sequence || 0) + 1;
-  const prefix = type === 'client' ? 'AVC' : 'AVF';
+  const prefix = operation === 'debit' ? 'NDC' : type === 'client' ? 'AVC' : 'AVF';
   const digits = type === 'client' ? 8 : 6;
   return {
     annee: year,

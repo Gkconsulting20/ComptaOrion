@@ -16,8 +16,13 @@ import {
   notesCreditItems,
 } from '../schema.js';
 import { eq, and, inArray, sql, desc } from 'drizzle-orm';
-import { createEcritureFactureAchat, createEcriturePaiementFournisseur, createEcritureAvoirFournisseur } from '../services/comptabiliteService.js';
-import { addDaysToIsoDate } from '../services/paymentTerms.js';
+import {
+  createEcritureFactureAchat,
+  createEcriturePaiementFournisseur,
+  createEcritureAvoirFournisseur,
+  createEcritureAvoirQualiteFournisseur,
+} from '../services/comptabiliteService.js';
+import { addDaysToIsoDate, calculateCashDiscount } from '../services/paymentTerms.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import {
   allocateLogisticsByWeight,
@@ -331,6 +336,10 @@ router.post('/factures', async (req, res) => {
         statut: 'brouillon',
         dateFacture: effectiveDateFacture,
         dateEcheance: dateEcheance || addDaysToIsoDate(effectiveDateFacture, fournisseur.delaiPaiement ?? 30),
+        escomptePourcentage: String(fournisseur.escomptePourcentage || 0),
+        dateLimiteEscompte: Number(fournisseur.escomptePourcentage || 0) > 0
+          ? addDaysToIsoDate(effectiveDateFacture, fournisseur.delaiEscompte || 0)
+          : null,
         totalHT: totalHT.toFixed(2),
         totalTVA: totalTVA.toFixed(2),
         totalTTC: totalTTC.toFixed(2),
@@ -599,7 +608,8 @@ router.post('/factures/:id/paiement', async (req, res) => {
       reference,
       datePaiement,
       compteBancaireId,
-      notes
+      notes,
+      appliquerEscompte = false,
     } = req.body;
 
     // Validation
@@ -623,7 +633,25 @@ router.post('/factures/:id/paiement', async (req, res) => {
       )).for('update').limit(1);
       if (!factureData) throw Object.assign(new Error('Facture non trouvée'), { status: 404 });
       const soldeRestant = Number(factureData.soldeRestant);
-      if (montantPaiement > soldeRestant + 0.005) {
+      let discount = null;
+      if (appliquerEscompte) {
+        discount = calculateCashDiscount({
+          totalHT: factureData.totalHT,
+          totalTVA: factureData.totalTVA,
+          rate: factureData.escomptePourcentage,
+          discountDeadline: factureData.dateLimiteEscompte,
+          paymentDate: date,
+          hasPriorPayments: Number(factureData.montantPaye || 0) > 0 || Number(factureData.montantEscompte || 0) > 0,
+        });
+        if (!discount) {
+          throw Object.assign(new Error('Cet escompte n’est pas applicable : il faut régler toute la facture avant sa date limite, sans paiement antérieur.'), { status: 400 });
+        }
+        if (Math.abs(montantPaiement - discount.montantNetTTC) > 0.01) {
+          throw Object.assign(new Error(`Pour appliquer l’escompte, le paiement doit être de ${discount.montantNetTTC.toFixed(2)} XOF.`), { status: 400 });
+        }
+      }
+      const discountTTC = discount?.montantTTC || 0;
+      if (montantPaiement + discountTTC > soldeRestant + 0.005) {
         throw Object.assign(new Error(`Le montant du paiement (${montantPaiement}) dépasse le solde restant (${soldeRestant})`), { status: 400 });
       }
 
@@ -647,6 +675,9 @@ router.post('/factures/:id/paiement', async (req, res) => {
         factureId: parseInt(id),
         fournisseurId: factureData.fournisseurId,
         montant: montantPaiement.toFixed(2),
+        montantEscompteHT: (discount?.montantHT || 0).toFixed(2),
+        montantEscompteTVA: (discount?.montantTVA || 0).toFixed(2),
+        montantEscompteTTC: discountTTC.toFixed(2),
         modePaiement: modePaiement || null,
         reference: reference || null,
         datePaiement: date,
@@ -655,9 +686,11 @@ router.post('/factures/:id/paiement', async (req, res) => {
       }).returning();
 
       const nouveauMontantPaye = Number(factureData.montantPaye) + montantPaiement;
-      const nouveauSolde = Math.max(0, Number(factureData.totalTTC) - nouveauMontantPaye);
+      const nouveauMontantEscompte = Number(factureData.montantEscompte || 0) + discountTTC;
+      const nouveauSolde = Math.max(0, Number(factureData.totalTTC) - nouveauMontantPaye - nouveauMontantEscompte);
       const [factureUpdated] = await tx.update(facturesAchat).set({
         montantPaye: nouveauMontantPaye.toFixed(2),
+        montantEscompte: nouveauMontantEscompte.toFixed(2),
         soldeRestant: nouveauSolde.toFixed(2),
         statut: nouveauSolde <= 0.01 ? 'payee' : 'partiellement_payee',
         updatedAt: new Date()
@@ -667,7 +700,7 @@ router.post('/factures/:id/paiement', async (req, res) => {
       )).returning();
 
       await tx.update(fournisseurs).set({
-        soldeDu: sql`${fournisseurs.soldeDu} - ${montantPaiement}`,
+        soldeDu: sql`${fournisseurs.soldeDu} - ${montantPaiement + discountTTC}`,
         updatedAt: new Date()
       }).where(and(
         eq(fournisseurs.id, factureData.fournisseurId),
@@ -706,6 +739,8 @@ router.post('/factures/:id/paiement', async (req, res) => {
           datePaiement: date,
           fournisseurNom: fournisseurInfo.raisonSociale || fournisseurInfo.nom || 'Fournisseur',
           montant: montantPaiement,
+          escompteHT: discount?.montantHT || 0,
+          escompteTVA: discount?.montantTVA || 0,
           modePaiement: modePaiement === 'especes' ? 'especes' : 'banque',
           compteBancaireId: bankAccount?.id || null,
           executor: tx
@@ -1321,6 +1356,186 @@ router.get('/ecarts-costing', async (req, res) => {
   } catch (error) {
     console.error('Erreur rapport écarts costing:', error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/factures/:id/avoir-qualite', async (req, res) => {
+  try {
+    const factureId = Number(req.params.id);
+    const requestedLines = Array.isArray(req.body.items) ? req.body.items : [];
+    const motif = String(req.body.motif || '').trim();
+    const dateAvoir = String(req.body.dateAvoir || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    if (!Number.isSafeInteger(factureId) || factureId <= 0 || requestedLines.length === 0 || !motif) {
+      return res.status(400).json({ success: false, message: 'Facture, lignes d’ajustement et motif sont obligatoires.' });
+    }
+    const ids = requestedLines.map(line => Number(line.factureAchatItemId));
+    if (ids.some(id => !Number.isSafeInteger(id) || id <= 0) || new Set(ids).size !== ids.length ||
+        requestedLines.some(line => !Number.isFinite(Number(line.montantHT)) || Number(line.montantHT) <= 0)) {
+      return res.status(400).json({ success: false, message: 'Chaque ligne doit avoir un identifiant et un montant HT positif; une ligne ne peut apparaître qu’une fois.' });
+    }
+    const result = await db.transaction(async tx => {
+      const [invoice] = await tx.select().from(facturesAchat).where(and(
+        eq(facturesAchat.id, factureId),
+        eq(facturesAchat.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!invoice || ['brouillon', 'annulee'].includes(String(invoice.statut).toLowerCase())) {
+        throw Object.assign(new Error('Facture fournisseur validée introuvable.'), { status: 404 });
+      }
+      const invoiceLines = await tx.select().from(factureAchatItems).where(and(
+        eq(factureAchatItems.factureId, invoice.id),
+        eq(factureAchatItems.entrepriseId, req.entrepriseId),
+        inArray(factureAchatItems.id, ids)
+      )).for('update');
+      const lineById = new Map(invoiceLines.map(line => [Number(line.id), line]));
+      if (invoiceLines.length !== ids.length) {
+        throw Object.assign(new Error('Une ligne ne fait pas partie de cette facture fournisseur.'), { status: 400 });
+      }
+      const priorResult = await tx.execute(sql`
+        SELECT ni.facture_achat_item_id, COALESCE(SUM(ni.total_ht), 0)::numeric AS total_credite
+        FROM notes_credit_items ni
+        JOIN notes_credit n ON n.id = ni.note_credit_id AND n.entreprise_id = ni.entreprise_id
+        WHERE ni.entreprise_id = ${req.entrepriseId}
+          AND ni.facture_achat_item_id = ANY(${ids}::integer[])
+          AND n.statut = 'validee'
+        GROUP BY ni.facture_achat_item_id
+      `);
+      const priorByLine = new Map((priorResult.rows || []).map(row => [Number(row.facture_achat_item_id), Number(row.total_credite || 0)]));
+      const computedLines = [];
+      for (const request of requestedLines) {
+        const original = lineById.get(Number(request.factureAchatItemId));
+        const creditHT = Number(request.montantHT);
+        const creditedBefore = priorByLine.get(Number(original.id)) || 0;
+        if (creditedBefore + creditHT > Number(original.totalLigne || 0) + 0.01) {
+          throw Object.assign(new Error(`L’ajustement dépasse le montant HT encore disponible sur « ${original.description} ».`), { status: 409 });
+        }
+        let product = null;
+        let layer = null;
+        if (original.produitId && original.mouvementStockId) {
+          [product] = await tx.select().from(produits).where(and(
+            eq(produits.id, original.produitId),
+            eq(produits.entrepriseId, req.entrepriseId)
+          )).for('update').limit(1);
+          [layer] = await tx.select().from(valorisationsStock).where(and(
+            eq(valorisationsStock.entrepriseId, req.entrepriseId),
+            eq(valorisationsStock.produitId, original.produitId),
+            eq(valorisationsStock.mouvementId, original.mouvementStockId)
+          )).for('update').limit(1);
+        }
+        const reductionStock = Math.min(creditHT, Number(layer?.coutTotal || 0));
+        computedLines.push({
+          original,
+          product,
+          layer,
+          creditHT,
+          reductionStock: Number(reductionStock.toFixed(2)),
+          reductionCoutVendu: Number((creditHT - reductionStock).toFixed(2)),
+        });
+      }
+      const totalHT = Number(computedLines.reduce((sum, line) => sum + line.creditHT, 0).toFixed(2));
+      const totalTVA = calculateCreditNoteVat(totalHT, invoice.totalHT, invoice.totalTVA);
+      const totalTTC = Number((totalHT + totalTVA).toFixed(2));
+      const totalStockReduction = Number(computedLines.reduce((sum, line) => sum + line.reductionStock, 0).toFixed(2));
+      const totalCostReduction = Number(computedLines.reduce((sum, line) => sum + line.reductionCoutVendu, 0).toFixed(2));
+      const [supplier] = await tx.select().from(fournisseurs).where(and(
+        eq(fournisseurs.id, invoice.fournisseurId),
+        eq(fournisseurs.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!supplier) throw Object.assign(new Error('Fournisseur introuvable.'), { status: 409 });
+      const number = await generateCreditNoteNumber(tx, { entrepriseId: req.entrepriseId, type: 'fournisseur', dateAvoir });
+      const [note] = await tx.insert(notesCredit).values({
+        entrepriseId: req.entrepriseId,
+        type: 'fournisseur',
+        operation: 'avoir',
+        nature: 'qualite',
+        ...number,
+        fournisseurId: supplier.id,
+        factureAchatId: invoice.id,
+        dateAvoir,
+        montantHT: totalHT.toFixed(2),
+        montantTVA: totalTVA.toFixed(2),
+        montantTTC: totalTTC.toFixed(2),
+        soldeRestant: '0.00',
+        motif,
+        statut: 'validee',
+        userId: req.user.id,
+      }).returning();
+      const noteLines = [];
+      for (const line of computedLines) {
+        if (line.layer && line.reductionStock > 0) {
+          const nextCost = Number(Math.max(0, Number(line.layer.coutTotal) - line.reductionStock).toFixed(2));
+          await tx.update(valorisationsStock).set({ coutTotal: nextCost.toFixed(2) })
+            .where(and(eq(valorisationsStock.id, line.layer.id), eq(valorisationsStock.entrepriseId, req.entrepriseId)));
+          await updateProductAverageCost(tx, req.entrepriseId, line.product.id);
+          await logAudit({
+            ...extractAuditInfo(req),
+            action: 'UPDATE',
+            table: 'valorisations_stock',
+            recordId: line.layer.id,
+            ancienneValeur: { coutTotal: line.layer.coutTotal },
+            nouvelleValeur: { coutTotal: nextCost.toFixed(2), noteCreditId: note.id },
+            description: `Coût du stock restant corrigé par avoir qualité ${note.numero}`,
+            executor: tx,
+            required: true,
+          });
+        }
+        noteLines.push({
+          entrepriseId: req.entrepriseId,
+          noteCreditId: note.id,
+          factureAchatItemId: line.original.id,
+          produitId: line.original.produitId || null,
+          description: line.original.description,
+          quantite: '0.000',
+          prixUnitaire: line.creditHT.toFixed(2),
+          totalHT: line.creditHT.toFixed(2),
+          montantTVA: '0.00',
+          coutStock: line.reductionStock.toFixed(2),
+        });
+      }
+      let allocatedTaxCents = 0;
+      noteLines.forEach((line, index) => {
+        const taxCents = index === noteLines.length - 1
+          ? Math.round(totalTVA * 100) - allocatedTaxCents
+          : Math.round(totalTVA * 100 * Number(line.totalHT) / totalHT);
+        line.montantTVA = (taxCents / 100).toFixed(2);
+        allocatedTaxCents += taxCents;
+      });
+      await tx.insert(notesCreditItems).values(noteLines);
+      const nextInvoiceBalance = Math.max(0, Number(invoice.soldeRestant || 0) - totalTTC);
+      const nextSupplierBalance = Number((Number(supplier.soldeDu || 0) - totalTTC).toFixed(2));
+      await tx.update(facturesAchat).set({ soldeRestant: nextInvoiceBalance.toFixed(2), updatedAt: new Date() })
+        .where(and(eq(facturesAchat.id, invoice.id), eq(facturesAchat.entrepriseId, req.entrepriseId)));
+      await tx.update(fournisseurs).set({ soldeDu: nextSupplierBalance.toFixed(2), updatedAt: new Date() })
+        .where(and(eq(fournisseurs.id, supplier.id), eq(fournisseurs.entrepriseId, req.entrepriseId)));
+      const entry = await createEcritureAvoirQualiteFournisseur({
+        entrepriseId: req.entrepriseId,
+        numeroAvoir: note.numero,
+        dateAvoir,
+        fournisseurNom: supplier.raisonSociale || 'Fournisseur',
+        totalHT,
+        totalTVA,
+        totalTTC,
+        reductionStock: totalStockReduction,
+        reductionCoutVendu: totalCostReduction,
+        sourceId: note.id,
+        executor: tx,
+      });
+      if (!entry) throw new Error('L’écriture de l’avoir qualité fournisseur n’a pas été créée.');
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'notes_credit',
+        recordId: note.id,
+        nouvelleValeur: { note, lignes: noteLines, ecritureId: entry.id },
+        description: `Avoir qualité fournisseur ${note.numero} enregistré sans retour physique`,
+        executor: tx,
+        required: true,
+      });
+      return { note, lignes: noteLines, ecritureId: entry.id };
+    });
+    return res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erreur avoir qualité fournisseur:', error);
+    return res.status(error.status || 500).json({ success: false, message: error.message || 'Erreur lors de la création de l’avoir qualité.' });
   }
 });
 

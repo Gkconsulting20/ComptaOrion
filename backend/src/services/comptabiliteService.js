@@ -32,6 +32,8 @@ const COMPTES_SYSCOHADA = {
   VENTES_MARCHANDISES: '701',
   TVA_DEDUCTIBLE: '445',
   TVA_COLLECTEE: '443',
+  ESCOMPTE_ACCORDE: '673',
+  ESCOMPTE_OBTENU: '773',
   ECARTS_PRIX: '603'
 };
 
@@ -565,6 +567,8 @@ export async function createEcriturePaiementFournisseur(params) {
     datePaiement,
     fournisseurNom,
     montant,
+    escompteHT = 0,
+    escompteTVA = 0,
     modePaiement,
     compteBancaireId,
     executor = db
@@ -578,12 +582,23 @@ export async function createEcriturePaiementFournisseur(params) {
     throw new Error('Le compte fournisseur collectif 401 est requis pour comptabiliser un paiement fournisseur.');
   }
   const compteTresorerie = await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
+  const discountHT = Number(escompteHT || 0);
+  const discountTVA = Number(escompteTVA || 0);
+  const discountAccount = discountHT > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ESCOMPTE_OBTENU, executor)
+    : null;
+  const deductibleVat = discountTVA > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor)
+    : null;
+  if ((discountHT > 0 && !discountAccount) || (discountTVA > 0 && !deductibleVat)) {
+    throw new Error('Configurez les comptes 773 (escomptes obtenus) et 445 (TVA déductible) avant d’appliquer un escompte fournisseur.');
+  }
 
   const ecrituresLignes = [];
 
   ecrituresLignes.push({
     compteComptableId: compte401.id,
-    debit: montant,
+    debit: Number(montant) + discountHT + discountTVA,
     credit: 0,
     libelle: `Règlement ${fournisseurNom}`
   });
@@ -596,8 +611,27 @@ export async function createEcriturePaiementFournisseur(params) {
       libelle: `Décaissement ${modePaiement} - ${reference}`
     });
   }
+  if (discountAccount) {
+    ecrituresLignes.push({
+      compteComptableId: discountAccount.id,
+      debit: 0,
+      credit: discountHT,
+      libelle: `Escompte obtenu - ${reference}`,
+    });
+  }
+  if (deductibleVat) {
+    ecrituresLignes.push({
+      compteComptableId: deductibleVat.id,
+      debit: 0,
+      credit: discountTVA,
+      libelle: `Réduction de TVA déductible sur escompte - ${reference}`,
+    });
+  }
 
-  if (ecrituresLignes.length < 2) {
+  if (ecrituresLignes.length < 2 || Math.abs(
+    ecrituresLignes.reduce((sum, line) => sum + Number(line.debit || 0), 0) -
+    ecrituresLignes.reduce((sum, line) => sum + Number(line.credit || 0), 0)
+  ) > 0.01) {
     console.warn('Pas assez de comptes comptables pour créer écriture paiement fournisseur');
     return null;
   }
@@ -624,6 +658,8 @@ export async function createEcriturePaiementClient(params) {
     clientNom,
     clientCompteId,
     montant,
+    escompteHT = 0,
+    escompteTVA = 0,
     modePaiement,
     compteBancaireId,
     executor = db
@@ -636,6 +672,17 @@ export async function createEcriturePaiementClient(params) {
   const compteTresorerie = modePaiement === 'cheque'
     ? await ensureChequeAccount(entrepriseId, executor)
     : await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
+  const discountHT = Number(escompteHT || 0);
+  const discountTVA = Number(escompteTVA || 0);
+  const discountAccount = discountHT > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ESCOMPTE_ACCORDE, executor)
+    : null;
+  const collectedVat = discountTVA > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor)
+    : null;
+  if ((discountHT > 0 && !discountAccount) || (discountTVA > 0 && !collectedVat)) {
+    throw new Error('Configurez les comptes 673 (escomptes accordés) et 443 (TVA collectée) avant d’appliquer un escompte client.');
+  }
 
   const ecrituresLignes = [];
 
@@ -652,12 +699,31 @@ export async function createEcriturePaiementClient(params) {
     ecrituresLignes.push({
       compteComptableId: compte411.id,
       debit: 0,
-      credit: montant,
+      credit: Number(montant) + discountHT + discountTVA,
       libelle: `Règlement ${clientNom}`
     });
   }
+  if (discountAccount) {
+    ecrituresLignes.push({
+      compteComptableId: discountAccount.id,
+      debit: discountHT,
+      credit: 0,
+      libelle: `Escompte accordé - ${reference}`,
+    });
+  }
+  if (collectedVat) {
+    ecrituresLignes.push({
+      compteComptableId: collectedVat.id,
+      debit: discountTVA,
+      credit: 0,
+      libelle: `Réduction de TVA collectée sur escompte - ${reference}`,
+    });
+  }
 
-  if (ecrituresLignes.length < 2) {
+  if (ecrituresLignes.length < 2 || Math.abs(
+    ecrituresLignes.reduce((sum, line) => sum + Number(line.debit || 0), 0) -
+    ecrituresLignes.reduce((sum, line) => sum + Number(line.credit || 0), 0)
+  ) > 0.01) {
     console.warn('Pas assez de comptes comptables pour créer écriture paiement client');
     return null;
   }
@@ -728,6 +794,43 @@ export async function createEcritureAvoirClient({
   });
 }
 
+export async function createEcritureNoteDebitClient({
+  entrepriseId, numeroNote, dateNote, clientNom, clientCompteId,
+  totalHT, totalTVA, totalTTC, sourceId, executor = db,
+}) {
+  const clientAccount = clientCompteId
+    ? await getCompteById(clientCompteId, executor)
+    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
+  const sales = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.VENTES_MARCHANDISES, executor);
+  const vatCollected = Number(totalTVA) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor)
+    : null;
+  if (!clientAccount || !sales || (Number(totalTVA) > 0 && !vatCollected)) {
+    throw new Error('Configurez les comptes 411, 701 et 443 avant de créer une note de débit client.');
+  }
+  const lines = [
+    { compteComptableId: clientAccount.id, debit: totalTTC, credit: 0, libelle: `Note de débit client ${clientNom} - ${numeroNote}` },
+    { compteComptableId: sales.id, debit: 0, credit: totalHT, libelle: `Ajustement de vente - ${numeroNote}` },
+  ];
+  if (vatCollected) {
+    lines.push({ compteComptableId: vatCollected.id, debit: 0, credit: totalTVA, libelle: `TVA sur note de débit - ${numeroNote}` });
+  }
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode: JOURNAL_CODES.VENTES,
+    journalNom: 'Journal des Ventes',
+    journalType: 'ventes',
+    dateEcriture: dateNote,
+    libelle: `Note de débit client ${clientNom} - ${numeroNote}`,
+    numeroPiece: numeroNote,
+    sourceType: 'note_debit_client',
+    sourceId,
+    lignes: lines,
+    valide: false,
+    executor,
+  });
+}
+
 export async function createEcritureAvoirFournisseur({
   entrepriseId, numeroAvoir, dateAvoir, fournisseurNom, totalHT, totalTVA,
   totalTTC, coutStock, fraisTransportNonRecuperable = 0, sourceId, executor = db,
@@ -770,6 +873,62 @@ export async function createEcritureAvoirFournisseur({
     journalType: 'achats',
     dateEcriture: dateAvoir,
     libelle: `Avoir fournisseur ${fournisseurNom} - ${numeroAvoir}`,
+    numeroPiece: numeroAvoir,
+    sourceType: 'note_credit',
+    sourceId,
+    lignes: lines,
+    valide: false,
+    executor,
+  });
+}
+
+export async function createEcritureAvoirQualiteFournisseur({
+  entrepriseId, numeroAvoir, dateAvoir, fournisseurNom, totalHT, totalTVA,
+  totalTTC, reductionStock = 0, reductionCoutVendu = 0, sourceId, executor = db,
+}) {
+  const supplier = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS, executor);
+  const stock = Number(reductionStock) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES, executor)
+    : null;
+  const purchaseAdjustment = Number(reductionCoutVendu) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_RETOUR, executor)
+    : null;
+  const vatDeductible = Number(totalTVA) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor)
+    : null;
+  if (!supplier || (Number(reductionStock) > 0 && !stock) ||
+      (Number(reductionCoutVendu) > 0 && !purchaseAdjustment) ||
+      (Number(totalTVA) > 0 && !vatDeductible)) {
+    throw new Error('Configurez les comptes 401, 31, 609 et 445 avant de créer un avoir qualité fournisseur.');
+  }
+  const lines = [
+    { compteComptableId: supplier.id, debit: totalTTC, credit: 0, libelle: `Avoir qualité fournisseur ${fournisseurNom} - ${numeroAvoir}` },
+  ];
+  if (stock) lines.push({
+    compteComptableId: stock.id,
+    debit: 0,
+    credit: reductionStock,
+    libelle: `Réduction de la valeur du stock restant - ${numeroAvoir}`,
+  });
+  if (purchaseAdjustment) lines.push({
+    compteComptableId: purchaseAdjustment.id,
+    debit: 0,
+    credit: reductionCoutVendu,
+    libelle: `Réduction du coût des articles déjà consommés - ${numeroAvoir}`,
+  });
+  if (vatDeductible) lines.push({
+    compteComptableId: vatDeductible.id,
+    debit: 0,
+    credit: totalTVA,
+    libelle: `Réduction de TVA déductible - ${numeroAvoir}`,
+  });
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode: JOURNAL_CODES.ACHATS,
+    journalNom: 'Journal des Achats',
+    journalType: 'achats',
+    dateEcriture: dateAvoir,
+    libelle: `Avoir qualité fournisseur ${fournisseurNom} - ${numeroAvoir}`,
     numeroPiece: numeroAvoir,
     sourceType: 'note_credit',
     sourceId,

@@ -8,12 +8,13 @@ import {
   createEcritureFactureVente,
   createEcriturePaiementClient,
   createEcritureAvoirClient,
+  createEcritureNoteDebitClient,
   createEcritureEncaissementCheque,
 } from '../services/comptabiliteService.js';
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { consumeStockValuation, createStockValuationLayer, updateProductAverageCost } from '../services/stockValuation.js';
-import { addDaysToIsoDate } from '../services/paymentTerms.js';
+import { addDaysToIsoDate, calculateCashDiscount } from '../services/paymentTerms.js';
 import { calculateCreditNoteVat, calculateReturnedLine } from '../services/creditNoteCalculations.js';
 import { generateCreditNoteNumber } from '../services/creditNoteNumbering.js';
 
@@ -392,6 +393,8 @@ router.post('/', async (req, res) => {
     const [ownedClient] = await db.select({
       id: clients.id,
       delaiPaiement: clients.delaiPaiement,
+      escomptePourcentage: clients.escomptePourcentage,
+      delaiEscompte: clients.delaiEscompte,
     }).from(clients)
       .where(and(eq(clients.id, parseInt(clientId)), eq(clients.entrepriseId, req.entrepriseId))).limit(1);
     if (!ownedClient) return res.status(400).json({ success: false, message: 'Client non trouvé ou non autorisé' });
@@ -448,6 +451,10 @@ router.post('/', async (req, res) => {
         statut: 'brouillon',
         dateFacture: effectiveDateFacture,
         dateEcheance: dateEcheance || addDaysToIsoDate(effectiveDateFacture, ownedClient.delaiPaiement ?? 30),
+        escomptePourcentage: String(ownedClient.escomptePourcentage || 0),
+        dateLimiteEscompte: Number(ownedClient.escomptePourcentage || 0) > 0
+          ? addDaysToIsoDate(effectiveDateFacture, ownedClient.delaiEscompte || 0)
+          : null,
         totalHT: totalHT.toFixed(2),
         totalTVA: totalTVA.toFixed(2),
         totalTTC: totalTTC.toFixed(2),
@@ -538,6 +545,7 @@ router.post('/:id/paiement', async (req, res) => {
       datePaiement,
       compteBancaireId,
       notes,
+      appliquerEscompte = false,
     } = req.body;
 
     // Validation
@@ -575,8 +583,27 @@ router.post('/:id/paiement', async (req, res) => {
 
     const montantPaiement = parseFloat(montant);
     const soldeRestant = parseFloat(factureData.soldeRestant);
+    const effectivePaymentDate = String(datePaiement || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    let discount = null;
+    if (appliquerEscompte) {
+      discount = calculateCashDiscount({
+        totalHT: factureData.totalHT,
+        totalTVA: factureData.totalTVA,
+        rate: factureData.escomptePourcentage,
+        discountDeadline: factureData.dateLimiteEscompte,
+        paymentDate: effectivePaymentDate,
+        hasPriorPayments: Number(factureData.montantPaye || 0) > 0 || Number(factureData.montantEscompte || 0) > 0,
+      });
+      if (!discount) {
+        throw Object.assign(new Error('Cet escompte n’est pas applicable : il faut régler toute la facture avant sa date limite, sans paiement antérieur.'), { status: 400 });
+      }
+      if (Math.abs(montantPaiement - discount.montantNetTTC) > 0.01) {
+        throw Object.assign(new Error(`Pour appliquer l’escompte, le paiement doit être de ${discount.montantNetTTC.toFixed(2)} XOF.`), { status: 400 });
+      }
+    }
 
-    if (montantPaiement > soldeRestant) {
+    const discountTTC = discount?.montantTTC || 0;
+    if (montantPaiement + discountTTC > soldeRestant + 0.01) {
       throw Object.assign(new Error('Le paiement dépasse le solde restant'), { status: 400 });
     }
     if (factureData.statut === 'annulee') throw Object.assign(new Error('Facture annulée'), { status:400 });
@@ -596,6 +623,9 @@ router.post('/:id/paiement', async (req, res) => {
         factureId: parseInt(id),
         clientId: factureData.clientId,
         montant: montantPaiement.toFixed(2),
+        montantEscompteHT: (discount?.montantHT || 0).toFixed(2),
+        montantEscompteTVA: (discount?.montantTVA || 0).toFixed(2),
+        montantEscompteTTC: discountTTC.toFixed(2),
         modePaiement,
         reference: reference || null,
         datePaiement: datePaiement || new Date().toISOString().split('T')[0],
@@ -608,13 +638,15 @@ router.post('/:id/paiement', async (req, res) => {
 
     // Mettre à jour la facture
     const nouveauMontantPaye = parseFloat(factureData.montantPaye) + montantPaiement;
-    const nouveauSoldeRestant = parseFloat(factureData.totalTTC) - nouveauMontantPaye;
+    const nouveauMontantEscompte = Number(factureData.montantEscompte || 0) + discountTTC;
+    const nouveauSoldeRestant = parseFloat(factureData.totalTTC) - nouveauMontantPaye - nouveauMontantEscompte;
     const nouveauStatut = nouveauSoldeRestant <= 0.01 ? 'payee' : 'envoyee';
 
     await tx
       .update(factures)
       .set({
         montantPaye: nouveauMontantPaye.toFixed(2),
+        montantEscompte: nouveauMontantEscompte.toFixed(2),
         soldeRestant: Math.max(0, nouveauSoldeRestant).toFixed(2),
         statut: nouveauStatut,
         updatedAt: new Date(),
@@ -665,6 +697,8 @@ router.post('/:id/paiement', async (req, res) => {
         clientNom: clientInfo.nom || 'Client',
         clientCompteId: clientInfo.compteComptableId,
         montant: montantPaiement,
+        escompteHT: discount?.montantHT || 0,
+        escompteTVA: discount?.montantTVA || 0,
         modePaiement: modePaiement === 'cheque' ? 'cheque' : modePaiement === 'especes' ? 'especes' : 'banque',
         compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null,
         executor: tx
@@ -1135,6 +1169,207 @@ router.get('/export/csv', async (req, res) => {
   } catch (error) {
     console.error('Erreur export factures:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:id/note-debit', async (req, res) => {
+  try {
+    const factureId = Number(req.params.id);
+    const totalHT = Number(req.body.totalHT);
+    const motif = String(req.body.motif || '').trim();
+    const dateNote = String(req.body.dateNote || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    if (!Number.isSafeInteger(factureId) || factureId <= 0 || !Number.isFinite(totalHT) || totalHT <= 0 || !motif) {
+      return res.status(400).json({ success: false, message: 'Facture, montant HT positif et motif sont obligatoires.' });
+    }
+    const result = await db.transaction(async tx => {
+      const [invoice] = await tx.select().from(factures).where(and(
+        eq(factures.id, factureId),
+        eq(factures.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!invoice || ['brouillon', 'annulee'].includes(String(invoice.statut).toLowerCase())) {
+        throw Object.assign(new Error('Facture validée introuvable.'), { status: 404 });
+      }
+      const [client] = await tx.select().from(clients).where(and(
+        eq(clients.id, invoice.clientId),
+        eq(clients.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!client) throw Object.assign(new Error('Client introuvable.'), { status: 409 });
+      const totalTVA = calculateCreditNoteVat(totalHT, invoice.totalHT, invoice.totalTVA);
+      const totalTTC = Number((totalHT + totalTVA).toFixed(2));
+      const number = await generateCreditNoteNumber(tx, {
+        entrepriseId: req.entrepriseId,
+        type: 'client',
+        operation: 'debit',
+        dateAvoir: dateNote,
+      });
+      const [note] = await tx.insert(notesCredit).values({
+        entrepriseId: req.entrepriseId,
+        type: 'client',
+        operation: 'debit',
+        nature: 'ajustement',
+        ...number,
+        clientId: client.id,
+        factureId: invoice.id,
+        dateAvoir: dateNote,
+        montantHT: totalHT.toFixed(2),
+        montantTVA: totalTVA.toFixed(2),
+        montantTTC: totalTTC.toFixed(2),
+        soldeRestant: totalTTC.toFixed(2),
+        motif,
+        statut: 'validee',
+        userId: req.user.id,
+      }).returning();
+      await tx.insert(notesCreditItems).values({
+        entrepriseId: req.entrepriseId,
+        noteCreditId: note.id,
+        description: motif,
+        quantite: '1',
+        prixUnitaire: totalHT.toFixed(2),
+        totalHT: totalHT.toFixed(2),
+        montantTVA: totalTVA.toFixed(2),
+        coutStock: '0',
+      });
+      const newClientBalance = Number((Number(client.soldeDu || 0) + totalTTC).toFixed(2));
+      await tx.update(clients).set({
+        soldeDu: newClientBalance.toFixed(2),
+        updatedAt: new Date(),
+      }).where(and(eq(clients.id, client.id), eq(clients.entrepriseId, req.entrepriseId)));
+      const entry = await createEcritureNoteDebitClient({
+        entrepriseId: req.entrepriseId,
+        numeroNote: note.numero,
+        dateNote,
+        clientNom: client.nom,
+        clientCompteId: client.compteComptableId,
+        totalHT,
+        totalTVA,
+        totalTTC,
+        sourceId: note.id,
+        executor: tx,
+      });
+      if (!entry) throw new Error('L’écriture comptable de la note de débit n’a pas été créée.');
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'notes_credit',
+        recordId: note.id,
+        nouvelleValeur: { note, ecritureId: entry.id },
+        description: `Note de débit client ${note.numero} créée`,
+        executor: tx,
+        required: true,
+      });
+      return { note, entry };
+    });
+    return res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erreur création note de débit client:', error);
+    return res.status(error.status || 500).json({ success: false, message: error.message || 'Erreur lors de la création de la note de débit.' });
+  }
+});
+
+router.post('/notes-debit/:id/paiement', async (req, res) => {
+  try {
+    const noteId = Number(req.params.id);
+    const amount = Number(req.body.montant);
+    const modePaiement = String(req.body.modePaiement || '');
+    const datePaiement = String(req.body.datePaiement || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    const reference = String(req.body.reference || '').trim();
+    if (!Number.isSafeInteger(noteId) || noteId <= 0 || !Number.isFinite(amount) || amount <= 0 ||
+        !['mobile_money', 'carte_bancaire', 'virement', 'especes', 'cheque'].includes(modePaiement)) {
+      return res.status(400).json({ success: false, message: 'Note, montant et mode de paiement valides obligatoires.' });
+    }
+    if (modePaiement === 'cheque' && !reference) {
+      return res.status(400).json({ success: false, message: 'Le numéro du chèque est obligatoire.' });
+    }
+    const result = await db.transaction(async tx => {
+      const [note] = await tx.select().from(notesCredit).where(and(
+        eq(notesCredit.id, noteId),
+        eq(notesCredit.entrepriseId, req.entrepriseId),
+        eq(notesCredit.type, 'client'),
+        eq(notesCredit.operation, 'debit')
+      )).for('update').limit(1);
+      if (!note) throw Object.assign(new Error('Note de débit introuvable.'), { status: 404 });
+      const balance = Number(note.soldeRestant || 0);
+      if (amount > balance + 0.005) throw Object.assign(new Error('Le paiement dépasse le solde de la note.'), { status: 400 });
+      const [client] = await tx.select().from(clients).where(and(
+        eq(clients.id, note.clientId),
+        eq(clients.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!client) throw Object.assign(new Error('Client introuvable.'), { status: 409 });
+      let bank = null;
+      if (req.body.compteBancaireId && modePaiement !== 'cheque') {
+        [bank] = await tx.select().from(comptesBancaires).where(and(
+          eq(comptesBancaires.id, Number(req.body.compteBancaireId)),
+          eq(comptesBancaires.entrepriseId, req.entrepriseId)
+        )).for('update').limit(1);
+        if (!bank) throw Object.assign(new Error('Compte bancaire introuvable ou non autorisé.'), { status: 400 });
+      }
+      const [payment] = await tx.insert(paiements).values({
+        entrepriseId: req.entrepriseId,
+        factureId: null,
+        noteCreditId: note.id,
+        clientId: client.id,
+        montant: amount.toFixed(2),
+        modePaiement,
+        reference: reference || null,
+        datePaiement,
+        notes: req.body.notes || null,
+        statutCheque: modePaiement === 'cheque' ? 'en_attente' : 'non_applicable',
+        compteBancaireId: req.body.compteBancaireId ? Number(req.body.compteBancaireId) : null,
+        userId: req.user.id,
+      }).returning();
+      const nextBalance = Number(Math.max(0, balance - amount).toFixed(2));
+      await tx.update(notesCredit).set({ soldeRestant: nextBalance.toFixed(2) })
+        .where(and(eq(notesCredit.id, note.id), eq(notesCredit.entrepriseId, req.entrepriseId)));
+      await tx.update(clients).set({
+        soldeDu: sql`${clients.soldeDu} - ${amount}`,
+        updatedAt: new Date(),
+      }).where(and(eq(clients.id, client.id), eq(clients.entrepriseId, req.entrepriseId)));
+      if (bank && modePaiement !== 'cheque') {
+        await tx.insert(transactionsTresorerie).values({
+          entrepriseId: req.entrepriseId,
+          compteBancaireId: bank.id,
+          type: 'entree',
+          montant: amount.toFixed(2),
+          dateTransaction: datePaiement,
+          categorie: 'Vente',
+          description: `Règlement de la note ${note.numero}`,
+          tiersNom: client.nom,
+          numeroPiece: reference || `PAI-${payment.id}`,
+          userId: req.user.id,
+        });
+        await tx.update(comptesBancaires).set({
+          soldeActuel: sql`${comptesBancaires.soldeActuel} + ${amount}`,
+          updatedAt: new Date(),
+        }).where(and(eq(comptesBancaires.id, bank.id), eq(comptesBancaires.entrepriseId, req.entrepriseId)));
+      }
+      const entry = await createEcriturePaiementClient({
+        entrepriseId: req.entrepriseId,
+        reference: reference || `PAI-${payment.id}`,
+        datePaiement,
+        clientNom: client.nom,
+        clientCompteId: client.compteComptableId,
+        montant: amount,
+        modePaiement: modePaiement === 'cheque' ? 'cheque' : modePaiement === 'especes' ? 'especes' : 'banque',
+        compteBancaireId: req.body.compteBancaireId ? Number(req.body.compteBancaireId) : null,
+        executor: tx,
+      });
+      if (!entry) throw new Error('L’écriture comptable du règlement de la note n’a pas été créée.');
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'paiements',
+        recordId: payment.id,
+        nouvelleValeur: { payment, noteId: note.id, nouveauSolde: nextBalance, ecritureId: entry.id },
+        description: `Règlement de la note de débit ${note.numero}`,
+        executor: tx,
+        required: true,
+      });
+      return { payment, soldeRestant: nextBalance };
+    });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erreur paiement note de débit client:', error);
+    return res.status(error.status || 500).json({ success: false, message: error.message || 'Erreur lors du règlement de la note.' });
   }
 });
 

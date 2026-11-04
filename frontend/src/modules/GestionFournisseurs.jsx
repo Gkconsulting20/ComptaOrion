@@ -1076,10 +1076,12 @@ export function GestionFournisseurs() {
         ...item,
         nom: item.nom || item.raisonSociale || '',
         delaiPaiement: item.delaiPaiement ?? 30,
+        escomptePourcentage: Number(item.escomptePourcentage || 0),
+        delaiEscompte: Number(item.delaiEscompte || 0),
         modesPaiementPreferes: item.modesPaiementPreferes || [],
       } : {
         nom: '', email: '', telephone: '', adresse: '', ville: '', pays: 'Côte d\'Ivoire',
-        delaiPaiement: 30, modesPaiementPreferes: [], evaluation: 5
+        delaiPaiement: 30, escomptePourcentage: 0, delaiEscompte: 0, modesPaiementPreferes: [], evaluation: 5
       });
     } else if (type === 'commande') {
       setForm(item || {
@@ -1120,6 +1122,8 @@ export function GestionFournisseurs() {
           ...form,
           raisonSociale: form.raisonSociale || form.nom,
           delaiPaiement: Number(form.delaiPaiement ?? 30),
+          escomptePourcentage: Number(form.escomptePourcentage || 0),
+          delaiEscompte: Number(form.delaiEscompte || 0),
         };
         delete fournisseurPayload.nom;
         if (item) {
@@ -1653,9 +1657,41 @@ export function GestionFournisseurs() {
                     { value: 30, label: '30 jours' },
                     { value: 60, label: '60 jours' },
                   ]} />
+                <FormField
+                  label="Escompte de caisse (%)"
+                  name="escomptePourcentage"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={form.escomptePourcentage ?? 0}
+                  onChange={(e) => {
+                    const escomptePourcentage = Number(e.target.value) || 0;
+                    setForm({
+                      ...form,
+                      escomptePourcentage,
+                      delaiEscompte: escomptePourcentage > 0
+                        ? Math.min(Number(form.delaiEscompte || 15), Math.max(0, Number(form.delaiPaiement || 0) - 1))
+                        : 0,
+                    });
+                  }}
+                />
+                <FormField
+                  label="Délai d’escompte (jours)"
+                  name="delaiEscompte"
+                  type="number"
+                  min="0"
+                  max={Math.max(0, Number(form.delaiPaiement || 0) - 1)}
+                  step="1"
+                  value={form.delaiEscompte ?? 0}
+                  onChange={(e) => setForm({ ...form, delaiEscompte: Number(e.target.value) || 0 })}
+                />
                 <FormField label="Évaluation (1-5)" name="evaluation" type="number" value={form.evaluation}
                   onChange={(e) => setForm({...form, evaluation: parseInt(e.target.value)})} />
               </div>
+              <p style={{ marginTop: 0, color: '#64748b', fontSize: 12 }}>
+                Exemple : 1 % si le règlement est effectué sous 15 jours; sinon, paiement à l’échéance nette.
+              </p>
               <div style={{ marginTop: '15px' }}>
                 <strong>Modes de paiement préférés</strong>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px' }}>

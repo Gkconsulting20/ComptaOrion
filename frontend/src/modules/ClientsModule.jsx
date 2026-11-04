@@ -2414,6 +2414,8 @@ function ParametresTab() {
     pays: 'Sénégal',
     compteComptableId: null,
     delaiPaiement: 30,
+    escomptePourcentage: 0,
+    delaiEscompte: 0,
     limiteCredit: 0,
     modesPaiementPreferes: [],
   });
@@ -2462,6 +2464,8 @@ function ParametresTab() {
       pays: 'Sénégal',
       compteComptableId: null,
       delaiPaiement: 30,
+      escomptePourcentage: 0,
+      delaiEscompte: 0,
       limiteCredit: 0,
       modesPaiementPreferes: [],
     });
@@ -2488,6 +2492,8 @@ function ParametresTab() {
     const { echeancesPersonnalisees: _legacyInstallments, ...clientWithoutLegacyInstallments } = client;
     setClientData({
       ...clientWithoutLegacyInstallments,
+      escomptePourcentage: Number(client.escomptePourcentage || 0),
+      delaiEscompte: Number(client.delaiEscompte || 0),
       modesPaiementPreferes: client.modesPaiementPreferes || [],
     });
     setIsEditing(true);
@@ -2829,12 +2835,42 @@ function ParametresTab() {
                 ]}
               />
               <FormField
+                label="Escompte de caisse (%)"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={clientData.escomptePourcentage ?? 0}
+                onChange={(e) => {
+                  const escomptePourcentage = Number(e.target.value) || 0;
+                  setClientData({
+                    ...clientData,
+                    escomptePourcentage,
+                    delaiEscompte: escomptePourcentage > 0
+                      ? Math.min(Number(clientData.delaiEscompte || 15), Math.max(0, Number(clientData.delaiPaiement || 0) - 1))
+                      : 0,
+                  });
+                }}
+              />
+              <FormField
+                label="Délai d’escompte (jours)"
+                type="number"
+                min="0"
+                max={Math.max(0, Number(clientData.delaiPaiement || 0) - 1)}
+                step="1"
+                value={clientData.delaiEscompte ?? 0}
+                onChange={(e) => setClientData({ ...clientData, delaiEscompte: Number(e.target.value) || 0 })}
+              />
+              <FormField
                 label="Limite de Crédit (XOF)"
                 type="number"
                 value={clientData.limiteCredit}
                 onChange={(e) => setClientData({ ...clientData, limiteCredit: parseFloat(e.target.value) || 0 })}
               />
             </div>
+            <p style={{ marginTop: 0, color: '#64748b', fontSize: 12 }}>
+              Exemple : 1 % si le client règle sous 15 jours; sinon le montant complet reste dû à l’échéance nette.
+            </p>
 
             <div style={{ 
               padding: '10px', 

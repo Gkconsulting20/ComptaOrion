@@ -1,6 +1,9 @@
 import React from 'react';
 
-export function FormField({ label, name, type = 'text', value, onChange, required = false, options = [], placeholder = '' }) {
+export function FormField({
+  label, name, type = 'text', value, onChange, required = false, options = [],
+  placeholder = '', min, max, step,
+}) {
   const inputStyle = {
     width: '100%',
     padding: '10px 12px',
@@ -41,6 +44,9 @@ export function FormField({ label, name, type = 'text', value, onChange, require
           value={value}
           onChange={onChange}
           required={required}
+          min={min}
+          max={max}
+          step={step}
           placeholder={placeholder}
           rows={4}
           style={inputStyle}

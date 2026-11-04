@@ -4,7 +4,7 @@ import { fournisseurs, facturesAchat, paiementsFournisseurs, notesCredit } from 
 import { eq, and, sql, desc, gte, lte, inArray } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import emailService from '../services/emailService.js';
-import { isValidPaymentDelay, isValidPreferredPaymentMethods } from '../services/paymentTerms.js';
+import { isValidPaymentDelay, isValidCashDiscountTerms, isValidPreferredPaymentMethods } from '../services/paymentTerms.js';
 import { buildThirdPartyStatement } from '../services/thirdPartyLedger.js';
 
 const router = express.Router();
@@ -112,6 +112,8 @@ router.post('/', async (req, res) => {
       adresse,
       categorie,
       delaiPaiement,
+      escomptePourcentage,
+      delaiEscompte,
       modesPaiementPreferes,
       compteBancaire,
       banque,
@@ -139,6 +141,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Choisissez un délai de paiement de 0, 15, 30 ou 60 jours'
+      });
+    }
+    if (!isValidCashDiscountTerms(escomptePourcentage ?? 0, delaiEscompte ?? 0, delaiPaiement ?? 30)) {
+      return res.status(400).json({
+        success: false,
+        message: 'L’escompte doit avoir un taux de 0 à 100 % et un délai inférieur à l’échéance nette.'
       });
     }
     if (modesPaiementPreferes !== undefined &&
@@ -185,6 +193,8 @@ router.post('/', async (req, res) => {
         adresse: adresse || null,
         categorie: categorie || null,
         delaiPaiement: delaiPaiement ?? 30,
+        escomptePourcentage: String(escomptePourcentage ?? 0),
+        delaiEscompte: Number(delaiEscompte ?? 0),
         modesPaiementPreferes: modesPaiementPreferes || null,
         compteBancaire: compteBancaire || null,
         banque: banque || null,
@@ -240,6 +250,8 @@ router.put('/:id', async (req, res) => {
       adresse,
       categorie,
       delaiPaiement,
+      escomptePourcentage,
+      delaiEscompte,
       modesPaiementPreferes,
       compteBancaire,
       banque,
@@ -279,6 +291,15 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Choisissez un délai de paiement de 0, 15, 30 ou 60 jours'
+      });
+    }
+    const nextDiscountRate = escomptePourcentage ?? existingFournisseur.escomptePourcentage ?? 0;
+    const nextDiscountDays = delaiEscompte ?? existingFournisseur.delaiEscompte ?? 0;
+    const nextNetDays = delaiPaiement ?? existingFournisseur.delaiPaiement ?? 30;
+    if (!isValidCashDiscountTerms(nextDiscountRate, nextDiscountDays, nextNetDays)) {
+      return res.status(400).json({
+        success: false,
+        message: 'L’escompte doit avoir un taux de 0 à 100 % et un délai inférieur à l’échéance nette.'
       });
     }
     if (modesPaiementPreferes !== undefined &&
@@ -322,6 +343,8 @@ router.put('/:id', async (req, res) => {
     if (adresse !== undefined) updateData.adresse = adresse;
     if (categorie !== undefined) updateData.categorie = categorie;
     if (delaiPaiement !== undefined) updateData.delaiPaiement = delaiPaiement;
+    if (escomptePourcentage !== undefined) updateData.escomptePourcentage = String(escomptePourcentage);
+    if (delaiEscompte !== undefined) updateData.delaiEscompte = Number(delaiEscompte);
     if (modesPaiementPreferes !== undefined) updateData.modesPaiementPreferes = modesPaiementPreferes;
     if (compteBancaire !== undefined) updateData.compteBancaire = compteBancaire;
     if (banque !== undefined) updateData.banque = banque;

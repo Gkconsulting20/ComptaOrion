@@ -8,7 +8,7 @@ import {
   calculateSellingPriceFromMarkup,
   synchronizeActiveProductPrices,
 } from '../services/stockValuation.js';
-import { isValidPaymentDelay, isValidPreferredPaymentMethods } from '../services/paymentTerms.js';
+import { isValidPaymentDelay, isValidCashDiscountTerms, isValidPreferredPaymentMethods } from '../services/paymentTerms.js';
 import { buildThirdPartyStatement } from '../services/thirdPartyLedger.js';
 
 const router = express.Router();
@@ -809,6 +809,8 @@ router.post('/', async (req, res) => {
       categorieClient,
       limiteCredit,
       delaiPaiement,
+      escomptePourcentage,
+      delaiEscompte,
       remise,
       soldeDu,
       actif,
@@ -862,6 +864,12 @@ router.post('/', async (req, res) => {
         message: 'Choisissez un délai de paiement de 0, 15, 30 ou 60 jours',
       });
     }
+    if (!isValidCashDiscountTerms(escomptePourcentage ?? 0, delaiEscompte ?? 0, delaiPaiement ?? 30)) {
+      return res.status(400).json({
+        success: false,
+        message: 'L’escompte doit avoir un taux de 0 à 100 % et un délai inférieur à l’échéance nette.',
+      });
+    }
 
     // Validation des champs JSONB
     if (echeancesPersonnalisees && !Array.isArray(echeancesPersonnalisees)) {
@@ -913,6 +921,8 @@ router.post('/', async (req, res) => {
         categorieClient: categorieClient || 'standard',
         limiteCredit: limiteCredit || '0',
         delaiPaiement: delaiPaiement ?? 30,
+        escomptePourcentage: String(escomptePourcentage ?? 0),
+        delaiEscompte: Number(delaiEscompte ?? 0),
         remise: remise || '0',
         soldeDu: soldeDu || '0',
         actif: actif !== undefined ? actif : true,
@@ -983,6 +993,8 @@ router.put('/:id', async (req, res) => {
       categorieClient,
       limiteCredit,
       delaiPaiement,
+      escomptePourcentage,
+      delaiEscompte,
       remise,
       soldeDu,
       actif,
@@ -1045,6 +1057,15 @@ router.put('/:id', async (req, res) => {
         message: 'Choisissez un délai de paiement de 0, 15, 30 ou 60 jours',
       });
     }
+    const nextDiscountRate = escomptePourcentage ?? existingClient[0].escomptePourcentage ?? 0;
+    const nextDiscountDays = delaiEscompte ?? existingClient[0].delaiEscompte ?? 0;
+    const nextNetDays = delaiPaiement ?? existingClient[0].delaiPaiement ?? 30;
+    if (!isValidCashDiscountTerms(nextDiscountRate, nextDiscountDays, nextNetDays)) {
+      return res.status(400).json({
+        success: false,
+        message: 'L’escompte doit avoir un taux de 0 à 100 % et un délai inférieur à l’échéance nette.',
+      });
+    }
 
     if (soldeDu !== undefined && isNaN(soldeDu)) {
       return res.status(400).json({
@@ -1102,6 +1123,8 @@ router.put('/:id', async (req, res) => {
     if (categorieClient !== undefined) updateData.categorieClient = categorieClient;
     if (limiteCredit !== undefined) updateData.limiteCredit = limiteCredit;
     if (delaiPaiement !== undefined) updateData.delaiPaiement = delaiPaiement;
+    if (escomptePourcentage !== undefined) updateData.escomptePourcentage = String(escomptePourcentage);
+    if (delaiEscompte !== undefined) updateData.delaiEscompte = Number(delaiEscompte);
     if (remise !== undefined) updateData.remise = remise;
     if (soldeDu !== undefined) updateData.soldeDu = soldeDu;
     if (actif !== undefined) updateData.actif = actif;
