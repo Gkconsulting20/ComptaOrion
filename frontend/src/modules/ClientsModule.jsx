@@ -8,6 +8,7 @@ import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 import { formatPeriodeFR } from '../utils/dateUtils';
+import { getCashDiscountPreview } from '../utils/cashDiscount';
 
 export function ClientsModule() {
   const [activeTab, setActiveTab] = useState('devis');
@@ -748,6 +749,7 @@ function FacturesClientTab() {
   const [selectedFacture, setSelectedFacture] = useState(null);
   const [showFactureDetails, setShowFactureDetails] = useState(false);
   const [avoirModal, setAvoirModal] = useState({ open: false, invoice: null, lines: [], motif: '', saving: false });
+  const [debitNoteModal, setDebitNoteModal] = useState({ open: false, invoice: null, montantHT: '', motif: '', saving: false });
   const [factureData, setFactureData] = useState({
     clientId: '',
     dateFacture: new Date().toISOString().split('T')[0],
@@ -834,6 +836,26 @@ function FacturesClientTab() {
     } catch (error) {
       setAvoirModal(current => ({ ...current, saving: false }));
       alert(`Avoir non créé : ${error.message}`);
+    }
+  };
+
+  const handleCreateDebitNote = async () => {
+    const montantHT = Number(debitNoteModal.montantHT);
+    if (!debitNoteModal.invoice || !Number.isFinite(montantHT) || montantHT <= 0 || !debitNoteModal.motif.trim()) {
+      return alert('Indiquez un montant HT positif et le motif de l’ajustement.');
+    }
+    setDebitNoteModal(current => ({ ...current, saving: true }));
+    try {
+      await api.post(`/factures/${debitNoteModal.invoice.id}/note-debit`, {
+        montantHT,
+        motif: debitNoteModal.motif.trim(),
+      });
+      setDebitNoteModal({ open: false, invoice: null, montantHT: '', motif: '', saving: false });
+      await loadData();
+      alert('Note de débit créée. Le solde client et la comptabilité ont été mis à jour.');
+    } catch (error) {
+      setDebitNoteModal(current => ({ ...current, saving: false }));
+      alert(`Note de débit non créée : ${error.message}`);
     }
   };
 
@@ -945,9 +967,16 @@ function FacturesClientTab() {
         customActions={(facture) => (
           <div style={{ display: 'flex', gap: '5px' }}>
             {!['brouillon', 'annulee'].includes(facture.statut) && (
-              <Button size="small" variant="secondary" onClick={() => handleOpenAvoir(facture)}>
-                ↩ Avoir
-              </Button>
+              <>
+                <Button size="small" variant="secondary" onClick={() => handleOpenAvoir(facture)}>
+                  ↩ Avoir / retour
+                </Button>
+                <Button size="small" variant="secondary" onClick={() => setDebitNoteModal({
+                  open: true, invoice: facture, montantHT: '', motif: '', saving: false,
+                })}>
+                  + Note de débit
+                </Button>
+              </>
             )}
             {facture.statut === 'brouillon' && (
               <Button size="small" variant="danger" onClick={() => handleAnnulerFacture(facture.id)}>
@@ -1233,6 +1262,36 @@ function FacturesClientTab() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
             <Button variant="secondary" disabled={avoirModal.saving} onClick={() => setAvoirModal({ open: false, invoice: null, lines: [], motif: '', saving: false })}>Annuler</Button>
             <Button variant="success" disabled={avoirModal.saving} onClick={handleCreateAvoir}>{avoirModal.saving ? 'Création…' : 'Créer l’avoir'}</Button>
+          </div>
+        </Modal>
+      )}
+      {debitNoteModal.open && (
+        <Modal
+          isOpen={debitNoteModal.open}
+          onClose={() => !debitNoteModal.saving && setDebitNoteModal({ open: false, invoice: null, montantHT: '', motif: '', saving: false })}
+          title={`Note de débit client — ${debitNoteModal.invoice?.numeroFacture || ''}`}
+          size="medium"
+        >
+          <p>Utilisez cette note pour facturer un ajustement au client, sans mouvement de stock. La TVA est calculée selon le taux de la facture d’origine.</p>
+          <FormField
+            label="Montant HT à ajouter"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={debitNoteModal.montantHT}
+            onChange={event => setDebitNoteModal(current => ({ ...current, montantHT: event.target.value }))}
+            required
+          />
+          <FormField
+            label="Motif"
+            type="textarea"
+            value={debitNoteModal.motif}
+            onChange={event => setDebitNoteModal(current => ({ ...current, motif: event.target.value }))}
+            required
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <Button variant="secondary" disabled={debitNoteModal.saving} onClick={() => setDebitNoteModal({ open: false, invoice: null, montantHT: '', motif: '', saving: false })}>Annuler</Button>
+            <Button variant="success" disabled={debitNoteModal.saving} onClick={handleCreateDebitNote}>{debitNoteModal.saving ? 'Création…' : 'Créer la note de débit'}</Button>
           </div>
         </Modal>
       )}
@@ -1937,6 +1996,8 @@ function PaiementsTab() {
     numeroTelephone: '',
     banque: '',
     numeroCompte: '',
+    appliquerEscompte: false,
+    compteBancaireId: '',
   });
 
   useEffect(() => {
@@ -2006,6 +2067,8 @@ function PaiementsTab() {
       numeroTelephone: '',
       banque: '',
       numeroCompte: '',
+      appliquerEscompte: false,
+      compteBancaireId: '',
     });
   };
 
@@ -2018,6 +2081,7 @@ function PaiementsTab() {
       factureId: facture.id, 
       montant: facture.soldeRestant ?? facture.totalTTC,
       modePaiement: preferredMode || 'mobile_money',
+      appliquerEscompte: false,
     });
     setShowPaymentModal(true);
   };
@@ -2145,6 +2209,7 @@ function PaiementsTab() {
                       factureId: '',
                       montant: 0,
                       modePaiement: preferredMode || 'mobile_money',
+                      appliquerEscompte: false,
                     });
                   }}
                   options={[
@@ -2169,7 +2234,8 @@ function PaiementsTab() {
                       setPaymentData({ 
                         ...paymentData, 
                         factureId: e.target.value,
-                        montant: facture?.totalTTC || 0
+                        montant: facture?.soldeRestant ?? facture?.totalTTC ?? 0,
+                        appliquerEscompte: false,
                       });
                     }}
                     options={facturesImpayees
@@ -2199,6 +2265,21 @@ function PaiementsTab() {
               ]}
               required
             />
+            {!['especes', 'cheque'].includes(paymentData.modePaiement) && (
+              <FormField
+                label="Compte de trésorerie"
+                type="select"
+                value={paymentData.compteBancaireId}
+                onChange={event => setPaymentData(current => ({ ...current, compteBancaireId: event.target.value }))}
+                options={[
+                  { value: '', label: '-- Choisir un compte (facultatif) --' },
+                  ...bankAccounts.map(account => ({
+                    value: account.id,
+                    label: `${account.nomCompte || account.banque || 'Compte'}${account.numeroCompte ? ` — ${account.numeroCompte}` : ''}`,
+                  })),
+                ]}
+              />
+            )}
 
             {/* CHAMPS MOBILE MONEY */}
             {paymentData.modePaiement === 'mobile_money' && (
@@ -2259,18 +2340,52 @@ function PaiementsTab() {
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              {(() => {
+                const invoice = selectedFacture || facturesImpayees.find(f => String(f.id) === String(paymentData.factureId));
+                const discount = getCashDiscountPreview(invoice, paymentData.datePaiement);
+                if (!discount) return null;
+                return (
+                  <label style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, alignItems: 'flex-start', padding: 12, border: '1px solid #c8dfcf', borderRadius: 8, background: '#f1faf3' }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(paymentData.appliquerEscompte)}
+                      onChange={event => setPaymentData(current => ({
+                        ...current,
+                        appliquerEscompte: event.target.checked,
+                        montant: event.target.checked ? discount.netTTC : (invoice.soldeRestant ?? invoice.totalTTC),
+                      }))}
+                    />
+                    <span>
+                      Appliquer l’escompte de {Number(invoice.escomptePourcentage).toLocaleString('fr-FR')} % avant le {new Date(`${String(invoice.dateLimiteEscompte).slice(0, 10)}T00:00:00`).toLocaleDateString('fr-FR')}.
+                      <br />Escompte de règlement : {discount.discountHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF sur le HT. TVA inchangée : {discount.invoiceTVA.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF; la facture reste inchangée. Montant à régler : <strong>{discount.netTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong>.
+                    </span>
+                  </label>
+                );
+              })()}
               <FormField
                 label="Montant"
                 type="number"
                 value={paymentData.montant}
-                onChange={(e) => setPaymentData({ ...paymentData, montant: parseFloat(e.target.value) })}
+                onChange={(e) => setPaymentData({ ...paymentData, montant: parseFloat(e.target.value), appliquerEscompte: false })}
                 required
               />
               <FormField
                 label="Date de Paiement"
                 type="date"
                 value={paymentData.datePaiement}
-                onChange={(e) => setPaymentData({ ...paymentData, datePaiement: e.target.value })}
+                onChange={(e) => {
+                  const datePaiement = e.target.value;
+                  const invoice = selectedFacture || facturesImpayees.find(f => String(f.id) === String(paymentData.factureId));
+                  const discount = getCashDiscountPreview(invoice, datePaiement);
+                  setPaymentData(current => ({
+                    ...current,
+                    datePaiement,
+                    appliquerEscompte: current.appliquerEscompte && Boolean(discount),
+                    montant: current.appliquerEscompte && discount
+                      ? discount.netTTC
+                      : (invoice?.soldeRestant ?? invoice?.totalTTC ?? current.montant),
+                  }));
+                }}
                 required
               />
             </div>
@@ -3036,6 +3151,7 @@ function ParametresTab() {
 
 function EtatsCompteTab() {
   const [clients, setClients] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [periode, setPeriode] = useState({
     dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
@@ -3044,6 +3160,10 @@ function EtatsCompteTab() {
   const [etatCompte, setEtatCompte] = useState(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [debitNotePayment, setDebitNotePayment] = useState({
+    open: false, movement: null, montant: '', modePaiement: 'virement',
+    datePaiement: new Date().toISOString().slice(0, 10), reference: '', compteBancaireId: '', saving: false,
+  });
 
   useEffect(() => {
     loadClients();
@@ -3051,8 +3171,12 @@ function EtatsCompteTab() {
 
   const loadClients = async () => {
     try {
-      const res = await api.get('/clients');
-      setClients(res.data || []);
+      const [clientsRes, accountsRes] = await Promise.all([
+        api.get('/clients'),
+        api.get('/tresorerie/comptes').catch(() => ({ data: [] })),
+      ]);
+      setClients(clientsRes.data || []);
+      setBankAccounts(accountsRes.data || []);
     } catch (error) {
       console.error('Erreur chargement clients:', error);
     }
@@ -3076,6 +3200,33 @@ function EtatsCompteTab() {
       alert('Erreur lors de la génération: ' + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePayDebitNote = async () => {
+    const movement = debitNotePayment.movement;
+    const montant = Number(debitNotePayment.montant);
+    if (!movement?.sourceId || !Number.isFinite(montant) || montant <= 0) {
+      return alert('Saisissez un montant de règlement valide.');
+    }
+    setDebitNotePayment(current => ({ ...current, saving: true }));
+    try {
+      await api.post(`/factures/notes-debit/${movement.sourceId}/paiement`, {
+        montant,
+        modePaiement: debitNotePayment.modePaiement,
+        datePaiement: debitNotePayment.datePaiement,
+        reference: debitNotePayment.reference,
+        compteBancaireId: debitNotePayment.compteBancaireId || undefined,
+      });
+      setDebitNotePayment({
+        open: false, movement: null, montant: '', modePaiement: 'virement',
+        datePaiement: new Date().toISOString().slice(0, 10), reference: '', compteBancaireId: '', saving: false,
+      });
+      await genererEtatCompte();
+      alert('Règlement de la note de débit enregistré.');
+    } catch (error) {
+      setDebitNotePayment(current => ({ ...current, saving: false }));
+      alert(`Règlement non enregistré : ${error.message}`);
     }
   };
 
@@ -3319,6 +3470,7 @@ function EtatsCompteTab() {
                     <th style={{ padding: '12px', textAlign: 'right' }}>Débit</th>
                     <th style={{ padding: '12px', textAlign: 'right' }}>Crédit</th>
                     <th style={{ padding: '12px', textAlign: 'right' }}>Solde</th>
+                    <th style={{ padding: '12px', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3330,6 +3482,22 @@ function EtatsCompteTab() {
                       <td style={{ padding: '12px', textAlign: 'right' }}>{Number(m.debit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>{Number(m.credit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
                       <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{Number(m.solde || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>
+                        {m.type === 'note_debit_client' && Number(m.soldeRestant) > 0.005 && (
+                          <Button size="small" variant="success" onClick={() => setDebitNotePayment({
+                            open: true,
+                            movement: m,
+                            montant: m.soldeRestant,
+                            modePaiement: 'virement',
+                            datePaiement: new Date().toISOString().slice(0, 10),
+                            reference: '',
+                            compteBancaireId: '',
+                            saving: false,
+                          })}>
+                            Régler
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -3339,6 +3507,71 @@ function EtatsCompteTab() {
             )}
           </div>
         </div>
+      )}
+      {debitNotePayment.open && (
+        <Modal
+          isOpen={debitNotePayment.open}
+          onClose={() => !debitNotePayment.saving && setDebitNotePayment(current => ({ ...current, open: false }))}
+          title={`Règlement — ${debitNotePayment.movement?.reference || 'note de débit'}`}
+          size="medium"
+        >
+          <p>Solde de la note : {Number(debitNotePayment.movement?.soldeRestant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF.</p>
+          <FormField
+            label="Montant"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={debitNotePayment.montant}
+            onChange={event => setDebitNotePayment(current => ({ ...current, montant: event.target.value }))}
+            required
+          />
+          <FormField
+            label="Mode de paiement"
+            type="select"
+            value={debitNotePayment.modePaiement}
+            onChange={event => setDebitNotePayment(current => ({ ...current, modePaiement: event.target.value }))}
+            options={[
+              { value: 'virement', label: 'Virement' },
+              { value: 'cheque', label: 'Chèque' },
+              { value: 'especes', label: 'Espèces' },
+              { value: 'mobile_money', label: 'Mobile Money' },
+              { value: 'carte_bancaire', label: 'Carte bancaire' },
+            ]}
+            required
+          />
+          <FormField
+            label="Date de paiement"
+            type="date"
+            value={debitNotePayment.datePaiement}
+            onChange={event => setDebitNotePayment(current => ({ ...current, datePaiement: event.target.value }))}
+            required
+          />
+          {!['especes', 'cheque'].includes(debitNotePayment.modePaiement) && (
+            <FormField
+              label="Compte de trésorerie"
+              type="select"
+              value={debitNotePayment.compteBancaireId}
+              onChange={event => setDebitNotePayment(current => ({ ...current, compteBancaireId: event.target.value }))}
+              options={[
+                { value: '', label: '-- Compte facultatif --' },
+                ...bankAccounts.map(account => ({
+                  value: account.id,
+                  label: `${account.nomCompte || account.banque || 'Compte'}${account.numeroCompte ? ` — ${account.numeroCompte}` : ''}`,
+                })),
+              ]}
+            />
+          )}
+          <FormField
+            label={debitNotePayment.modePaiement === 'cheque' ? 'Numéro du chèque' : 'Référence'}
+            value={debitNotePayment.reference}
+            onChange={event => setDebitNotePayment(current => ({ ...current, reference: event.target.value }))}
+            required={debitNotePayment.modePaiement === 'cheque'}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <Button variant="secondary" disabled={debitNotePayment.saving} onClick={() => setDebitNotePayment(current => ({ ...current, open: false }))}>Annuler</Button>
+            <Button variant="success" disabled={debitNotePayment.saving} onClick={handlePayDebitNote}>{debitNotePayment.saving ? 'Enregistrement…' : 'Enregistrer le règlement'}</Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

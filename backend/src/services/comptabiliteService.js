@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { journaux, ecritures, lignesEcritures, comptesComptables, comptesBancaires, parametresComptables } from '../schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { formatJournalEntryNumber } from './sequentialNumbering.js';
+import { buildCashSettlementEntryLines } from './cashDiscountAccounting.js';
 
 const JOURNAL_CODES = {
   ACHATS: 'AC',
@@ -568,7 +569,6 @@ export async function createEcriturePaiementFournisseur(params) {
     fournisseurNom,
     montant,
     escompteHT = 0,
-    escompteTVA = 0,
     modePaiement,
     compteBancaireId,
     executor = db
@@ -583,51 +583,23 @@ export async function createEcriturePaiementFournisseur(params) {
   }
   const compteTresorerie = await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
   const discountHT = Number(escompteHT || 0);
-  const discountTVA = Number(escompteTVA || 0);
   const discountAccount = discountHT > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ESCOMPTE_OBTENU, executor)
     : null;
-  const deductibleVat = discountTVA > 0
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor)
-    : null;
-  if ((discountHT > 0 && !discountAccount) || (discountTVA > 0 && !deductibleVat)) {
-    throw new Error('Configurez les comptes 773 (escomptes obtenus) et 445 (TVA déductible) avant d’appliquer un escompte fournisseur.');
+  if (discountHT > 0 && !discountAccount) {
+    throw new Error('Configurez le compte 773 (escomptes obtenus) avant d’appliquer un escompte fournisseur.');
   }
 
-  const ecrituresLignes = [];
-
-  ecrituresLignes.push({
-    compteComptableId: compte401.id,
-    debit: Number(montant) + discountHT + discountTVA,
-    credit: 0,
-    libelle: `Règlement ${fournisseurNom}`
+  const ecrituresLignes = buildCashSettlementEntryLines({
+    side: 'supplier',
+    thirdPartyAccountId: compte401.id,
+    treasuryAccountId: compteTresorerie?.id,
+    discountAccountId: discountAccount?.id,
+    paymentAmount: montant,
+    discountHT,
+    thirdPartyName: fournisseurNom,
+    reference,
   });
-
-  if (compteTresorerie) {
-    ecrituresLignes.push({
-      compteComptableId: compteTresorerie.id,
-      debit: 0,
-      credit: montant,
-      libelle: `Décaissement ${modePaiement} - ${reference}`
-    });
-  }
-  if (discountAccount) {
-    ecrituresLignes.push({
-      compteComptableId: discountAccount.id,
-      debit: 0,
-      credit: discountHT,
-      libelle: `Escompte obtenu - ${reference}`,
-    });
-  }
-  if (deductibleVat) {
-    ecrituresLignes.push({
-      compteComptableId: deductibleVat.id,
-      debit: 0,
-      credit: discountTVA,
-      libelle: `Réduction de TVA déductible sur escompte - ${reference}`,
-    });
-  }
-
   if (ecrituresLignes.length < 2 || Math.abs(
     ecrituresLignes.reduce((sum, line) => sum + Number(line.debit || 0), 0) -
     ecrituresLignes.reduce((sum, line) => sum + Number(line.credit || 0), 0)
@@ -659,7 +631,6 @@ export async function createEcriturePaiementClient(params) {
     clientCompteId,
     montant,
     escompteHT = 0,
-    escompteTVA = 0,
     modePaiement,
     compteBancaireId,
     executor = db
@@ -673,53 +644,23 @@ export async function createEcriturePaiementClient(params) {
     ? await ensureChequeAccount(entrepriseId, executor)
     : await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
   const discountHT = Number(escompteHT || 0);
-  const discountTVA = Number(escompteTVA || 0);
   const discountAccount = discountHT > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ESCOMPTE_ACCORDE, executor)
     : null;
-  const collectedVat = discountTVA > 0
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor)
-    : null;
-  if ((discountHT > 0 && !discountAccount) || (discountTVA > 0 && !collectedVat)) {
-    throw new Error('Configurez les comptes 673 (escomptes accordés) et 443 (TVA collectée) avant d’appliquer un escompte client.');
+  if (discountHT > 0 && !discountAccount) {
+    throw new Error('Configurez le compte 673 (escomptes accordés) avant d’appliquer un escompte client.');
   }
 
-  const ecrituresLignes = [];
-
-  if (compteTresorerie) {
-    ecrituresLignes.push({
-      compteComptableId: compteTresorerie.id,
-      debit: montant,
-      credit: 0,
-      libelle: `Encaissement ${modePaiement} - ${reference}`
-    });
-  }
-
-  if (compte411) {
-    ecrituresLignes.push({
-      compteComptableId: compte411.id,
-      debit: 0,
-      credit: Number(montant) + discountHT + discountTVA,
-      libelle: `Règlement ${clientNom}`
-    });
-  }
-  if (discountAccount) {
-    ecrituresLignes.push({
-      compteComptableId: discountAccount.id,
-      debit: discountHT,
-      credit: 0,
-      libelle: `Escompte accordé - ${reference}`,
-    });
-  }
-  if (collectedVat) {
-    ecrituresLignes.push({
-      compteComptableId: collectedVat.id,
-      debit: discountTVA,
-      credit: 0,
-      libelle: `Réduction de TVA collectée sur escompte - ${reference}`,
-    });
-  }
-
+  const ecrituresLignes = buildCashSettlementEntryLines({
+    side: 'client',
+    thirdPartyAccountId: compte411?.id,
+    treasuryAccountId: compteTresorerie?.id,
+    discountAccountId: discountAccount?.id,
+    paymentAmount: montant,
+    discountHT,
+    thirdPartyName: clientNom,
+    reference,
+  });
   if (ecrituresLignes.length < 2 || Math.abs(
     ecrituresLignes.reduce((sum, line) => sum + Number(line.debit || 0), 0) -
     ecrituresLignes.reduce((sum, line) => sum + Number(line.credit || 0), 0)

@@ -37,6 +37,7 @@ function fromCents(value) {
 export function calculateCashDiscount({
   totalHT,
   totalTVA,
+  totalTTC,
   rate,
   discountDeadline,
   paymentDate,
@@ -44,6 +45,7 @@ export function calculateCashDiscount({
 }) {
   const htCents = toCents(totalHT);
   const vatCents = toCents(totalTVA);
+  const ttcCents = totalTTC == null ? htCents + vatCents : toCents(totalTTC);
   const percent = Number(rate || 0);
   const deadline = String(discountDeadline || '').slice(0, 10);
   const paidOn = String(paymentDate || '').slice(0, 10);
@@ -53,19 +55,13 @@ export function calculateCashDiscount({
       paidOn > deadline || hasPriorPayments) return null;
 
   const discountHTCents = Math.min(htCents, Math.round(htCents * percent / 100));
-  const discountedHTCents = htCents - discountHTCents;
-  const discountedVatCents = htCents > 0
-    ? Math.round(discountedHTCents * vatCents / htCents)
-    : 0;
-  const discountVatCents = Math.max(0, vatCents - discountedVatCents);
-  const discountTtcCents = discountHTCents + discountVatCents;
   return {
     montantHT: fromCents(discountHTCents),
-    montantTVA: fromCents(discountVatCents),
-    montantTTC: fromCents(discountTtcCents),
-    montantNetHT: fromCents(discountedHTCents),
-    montantNetTVA: fromCents(discountedVatCents),
-    montantNetTTC: fromCents(discountedHTCents + discountedVatCents),
+    montantTVA: 0,
+    montantTTC: fromCents(discountHTCents),
+    montantNetHT: fromCents(htCents),
+    montantNetTVA: fromCents(vatCents),
+    montantNetTTC: fromCents(Math.max(0, ttcCents - discountHTCents)),
   };
 }
 

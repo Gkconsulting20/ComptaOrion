@@ -31,20 +31,21 @@ test('valide un escompte avant l’échéance nette', () => {
   assert.equal(isValidCashDiscountTerms(101, 15, 30), false);
 });
 
-test('calcule l’escompte sur le HT puis recalcule la TVA sur le HT net', () => {
+test('calcule l’escompte de règlement sur le HT sans modifier la TVA', () => {
   assert.deepEqual(calculateCashDiscount({
     totalHT: 10000,
     totalTVA: 1800,
+    totalTTC: 11800,
     rate: 1,
     discountDeadline: '2026-01-15',
     paymentDate: '2026-01-15',
   }), {
     montantHT: 100,
-    montantTVA: 18,
-    montantTTC: 118,
-    montantNetHT: 9900,
-    montantNetTVA: 1782,
-    montantNetTTC: 11682,
+    montantTVA: 0,
+    montantTTC: 100,
+    montantNetHT: 10000,
+    montantNetTVA: 1800,
+    montantNetTTC: 11700,
   });
   assert.equal(calculateCashDiscount({
     totalHT: 10000,

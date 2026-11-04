@@ -147,6 +147,10 @@ export function buildThirdPartyStatement({
       debit: centsToMoney(movement.debitCents),
       credit: centsToMoney(movement.creditCents),
       solde: centsToMoney(balanceCents),
+      sourceId: movement.source?.id ?? null,
+      soldeRestant: movement.type === 'note_debit_client'
+        ? centsToMoney(moneyToCents(movement.source?.soldeRestant))
+        : null,
     };
   });
 

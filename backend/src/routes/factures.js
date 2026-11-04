@@ -589,6 +589,7 @@ router.post('/:id/paiement', async (req, res) => {
       discount = calculateCashDiscount({
         totalHT: factureData.totalHT,
         totalTVA: factureData.totalTVA,
+        totalTTC: factureData.totalTTC,
         rate: factureData.escomptePourcentage,
         discountDeadline: factureData.dateLimiteEscompte,
         paymentDate: effectivePaymentDate,
@@ -698,7 +699,6 @@ router.post('/:id/paiement', async (req, res) => {
         clientCompteId: clientInfo.compteComptableId,
         montant: montantPaiement,
         escompteHT: discount?.montantHT || 0,
-        escompteTVA: discount?.montantTVA || 0,
         modePaiement: modePaiement === 'cheque' ? 'cheque' : modePaiement === 'especes' ? 'especes' : 'banque',
         compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null,
         executor: tx

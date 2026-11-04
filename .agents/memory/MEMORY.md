@@ -13,7 +13,7 @@
 - [Interface ComptaOrion](comptaorion-interface.md) — garder la navigation regroupée et la barre latérale sombre, avec ComptaOrion distinct de l’entreprise NERU.
 - [Piste d’audit](audit-trail-policy.md) — les traces de création, modification et suppression sont une exigence de sécurité pour les clients.
 - [Séquences comptables](accounting-sequences.md) — compteurs par journal, 6 chiffres pour achats et 8 pour ventes, sans réutilisation après suppression.
-- [Retours et chèques](credit-notes-cheques.md) — retour client au coût historique de vente; chèque reçu en 5112 puis transféré en banque à l’encaissement.
+- [Avoirs, ajustements et chèques](credit-notes-cheques.md) — distinguer retours physiques, notes d’ajustement et échéancier des chèques reçus.
 - [Priorité fiscale Togo](togo-tax-priority.md) — commencer par les déclarations togolaises et ne pas prétendre qu’un brouillon est un dépôt officiel.
 - [Tests PostgreSQL RLS](postgres-rls-testing.md) — tester avec un rôle qui ne contourne pas RLS, jamais uniquement avec un superutilisateur.
 - [Recettes multi-tenant](tenant-functional-tests.md) — isoler les sessions par identité et attendre les statuts réellement imposés par les contrôles.

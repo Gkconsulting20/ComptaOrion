@@ -89,3 +89,49 @@ test('un avoir fournisseur diminue le solde dû et apparaît au débit du relev�
     ['Avoir fournisseur', 23.6, 0, 94.4],
   ]);
 });
+
+test('une note de débit client augmente le solde et expose son solde pour règlement partiel', () => {
+  const statement = buildThirdPartyStatement({
+    side: 'client',
+    dateDebut: '2026-04-01',
+    dateFin: '2026-04-30',
+    invoices: [{ id: 11, statut: 'envoyee', dateFacture: '2026-04-02', totalTTC: '118.00', numeroFacture: 'V-011' }],
+    creditNotes: [{
+      id: 12, operation: 'debit', nature: 'ajustement', statut: 'validee',
+      dateAvoir: '2026-04-03', montantTTC: '59.00', soldeRestant: '59.00', numero: 'NDC-012',
+    }],
+    payments: [{
+      id: 13, noteCreditId: 12, factureId: null, datePaiement: '2026-04-10',
+      montant: '20.00', reference: 'REG-013',
+    }],
+  });
+
+  assert.equal(statement.totalNoteDebit, 59);
+  assert.equal(statement.soldeCloture, 157);
+  assert.deepEqual(statement.mouvements.map(row => [
+    row.type, row.debit, row.credit, row.solde, row.sourceId, row.soldeRestant,
+  ]), [
+    ['facture_client', 118, 0, 118, 11, null],
+    ['note_debit_client', 59, 0, 177, 12, 59],
+    ['reglement_note_debit_client', 0, 20, 157, 13, null],
+  ]);
+});
+
+test('un escompte fournisseur réduit le solde par le paiement et la remise HT', () => {
+  const statement = buildThirdPartyStatement({
+    side: 'fournisseur',
+    dateDebut: '2026-05-01',
+    dateFin: '2026-05-31',
+    invoices: [{ id: 21, statut: 'partiellement_payee', dateFacture: '2026-05-01', totalTTC: '11800.00', numeroFacture: 'A-021' }],
+    payments: [{
+      id: 22, factureId: 21, datePaiement: '2026-05-10', montant: '11700.00',
+      montantEscompteTTC: '100.00', montantEscompteHT: '100.00', montantEscompteTVA: '0.00',
+      reference: 'PF-022',
+    }],
+  });
+
+  assert.equal(statement.totalPaye, 11800);
+  assert.equal(statement.totalEscompte, 100);
+  assert.equal(statement.soldeCloture, 0);
+  assert.equal(statement.mouvements[1].debit, 11800);
+});

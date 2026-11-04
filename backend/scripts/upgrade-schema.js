@@ -15,6 +15,10 @@ const migrationScopes = new Map([
   ['accountant-invitations', new Set(['users', 'accountant_invitations'])],
   ['party-payment-settings', new Set(['fournisseurs'])],
   ['credit-notes-cheques', new Set(['facture_items', 'facture_achat_items', 'paiements', 'notes_credit', 'notes_credit_items'])],
+  ['commercial-adjustments', new Set([
+    'clients', 'fournisseurs', 'factures', 'factures_achat',
+    'paiements', 'paiements_fournisseurs', 'notes_credit', 'notes_credit_items',
+  ])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
@@ -51,7 +55,8 @@ try {
     const [, name, body] = table;
     if (scopedTables && !scopedTables.has(name)) continue;
     if (!present.has(name)) {
-      if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations' && scope !== 'credit-notes-cheques') {
+      if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations' &&
+          scope !== 'credit-notes-cheques' && scope !== 'commercial-adjustments') {
         throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
       }
       actions.push(statement);
@@ -173,6 +178,8 @@ try {
         ? ['accountant_invitations_one_live_per_company']
         : scope === 'credit-notes-cheques'
           ? ['notes_credit_sequence_unique', 'notes_credit_number_unique']
+          : scope === 'commercial-adjustments'
+            ? ['notes_credit_sequence_unique', 'notes_credit_number_unique']
         : [])
     : permittedIndexes;
   const existingIndexes = new Set((await client.query(

@@ -8,6 +8,7 @@ import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 import { formatPeriodeFR } from '../utils/dateUtils';
+import { getCashDiscountPreview } from '../utils/cashDiscount';
 import {
   convertPriceBetweenUnits,
   convertQuantityBetweenUnits,
@@ -825,6 +826,14 @@ export function GestionFournisseurs() {
   const [supplierAvoirModal, setSupplierAvoirModal] = useState({
     open: false, invoice: null, lines: [], motif: '', saving: false,
   });
+  const [supplierQualityCreditModal, setSupplierQualityCreditModal] = useState({
+    open: false, invoice: null, lines: [], motif: '', saving: false,
+  });
+  const [supplierPaymentModal, setSupplierPaymentModal] = useState({
+    open: false, invoice: null, montant: '', modePaiement: 'virement',
+    datePaiement: new Date().toISOString().slice(0, 10), reference: '', notes: '',
+    compteBancaireId: '', appliquerEscompte: false, saving: false,
+  });
 
   const nombreEnLettres = (n) => {
     const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
@@ -910,6 +919,84 @@ export function GestionFournisseurs() {
     } catch (error) {
       setSupplierAvoirModal(current => ({ ...current, saving: false }));
       alert(`Avoir fournisseur non créé : ${error.message}`);
+    }
+  };
+
+  const loadSupplierInvoiceLines = async invoice => {
+    const response = await api.get(`/achats/factures/${invoice.id}`);
+    const payload = response.data || response;
+    const detail = payload.data || payload;
+    const facture = detail.facture || detail;
+    return { facture, items: detail.items || facture.items || [] };
+  };
+
+  const handleOpenSupplierQualityCredit = async invoice => {
+    try {
+      const { facture, items } = await loadSupplierInvoiceLines(invoice);
+      setSupplierQualityCreditModal({
+        open: true,
+        invoice: facture,
+        motif: '',
+        saving: false,
+        lines: items.map(item => ({
+          factureAchatItemId: item.id,
+          description: item.description,
+          totalHTOriginal: Number(item.totalLigne || Number(item.quantite || 0) * Number(item.prixUnitaire || 0)),
+          montantHT: '',
+        })),
+      });
+    } catch (error) {
+      alert(`Impossible de charger la facture fournisseur : ${error.message}`);
+    }
+  };
+
+  const handleSubmitSupplierQualityCredit = async () => {
+    const items = supplierQualityCreditModal.lines
+      .filter(line => Number(line.montantHT) > 0)
+      .map(line => ({ factureAchatItemId: line.factureAchatItemId, montantHT: Number(line.montantHT) }));
+    if (!items.length || !supplierQualityCreditModal.motif.trim()) {
+      return alert('Indiquez un montant HT sur au moins une ligne et le motif qualité.');
+    }
+    setSupplierQualityCreditModal(current => ({ ...current, saving: true }));
+    try {
+      await api.post(`/achats/factures/${supplierQualityCreditModal.invoice.id}/avoir-qualite`, {
+        items,
+        motif: supplierQualityCreditModal.motif.trim(),
+      });
+      setSupplierQualityCreditModal({ open: false, invoice: null, lines: [], motif: '', saving: false });
+      await loadAllData();
+      alert('Avoir qualité créé. Aucun mouvement de quantité en stock n’a été enregistré.');
+    } catch (error) {
+      setSupplierQualityCreditModal(current => ({ ...current, saving: false }));
+      alert(`Avoir qualité non créé : ${error.message}`);
+    }
+  };
+
+  const handleSubmitSupplierPayment = async () => {
+    const invoice = supplierPaymentModal.invoice;
+    const amount = Number(supplierPaymentModal.montant);
+    if (!invoice || !Number.isFinite(amount) || amount <= 0) return alert('Saisissez un montant de paiement valide.');
+    setSupplierPaymentModal(current => ({ ...current, saving: true }));
+    try {
+      await api.post(`/achats/factures/${invoice.id}/paiement`, {
+        montant: amount,
+        modePaiement: supplierPaymentModal.modePaiement,
+        datePaiement: supplierPaymentModal.datePaiement,
+        reference: supplierPaymentModal.reference,
+        notes: supplierPaymentModal.notes,
+        compteBancaireId: supplierPaymentModal.compteBancaireId || undefined,
+        appliquerEscompte: supplierPaymentModal.appliquerEscompte,
+      });
+      setSupplierPaymentModal({
+        open: false, invoice: null, montant: '', modePaiement: 'virement',
+        datePaiement: new Date().toISOString().slice(0, 10), reference: '', notes: '',
+        compteBancaireId: '', appliquerEscompte: false, saving: false,
+      });
+      await loadAllData();
+      alert('Paiement fournisseur enregistré.');
+    } catch (error) {
+      setSupplierPaymentModal(current => ({ ...current, saving: false }));
+      alert(`Paiement non enregistré : ${error.message}`);
     }
   };
 
@@ -1041,11 +1128,13 @@ export function GestionFournisseurs() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [fournisseursRes, commandesRes, facturesRes] = await Promise.all([
+      const [fournisseursRes, commandesRes, facturesRes, accountsRes] = await Promise.all([
         api.get('/fournisseurs'),
         api.get('/commandes-achat'),
-        api.get('/achats/factures').catch(() => ({ data: [] }))
+        api.get('/achats/factures').catch(() => ({ data: [] })),
+        api.get('/tresorerie/comptes').catch(() => ({ data: [] })),
       ]);
+      setComptesBancaires(accountsRes.data || []);
       setData({
         fournisseurs: fournisseursRes.data || [],
         commandes: commandesRes.data || [],
@@ -1391,14 +1480,44 @@ export function GestionFournisseurs() {
               data={data.factures}
               actions={true}
               customActions={facture => (
-                <Button
-                  size="small"
-                  variant="secondary"
-                  disabled={['brouillon', 'annulee'].includes(String(facture.statut).toLowerCase())}
-                  onClick={() => handleOpenSupplierAvoir(facture)}
-                >
-                  ↩ Avoir
-                </Button>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    disabled={['brouillon', 'annulee'].includes(String(facture.statut).toLowerCase())}
+                    onClick={() => handleOpenSupplierAvoir(facture)}
+                  >
+                    ↩ Retour
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    disabled={['brouillon', 'annulee'].includes(String(facture.statut).toLowerCase())}
+                    onClick={() => handleOpenSupplierQualityCredit(facture)}
+                  >
+                    Avoir qualité
+                  </Button>
+                  {Number(facture.soldeRestant || 0) > 0 && !['brouillon', 'annulee'].includes(String(facture.statut).toLowerCase()) && (
+                    <Button
+                      size="small"
+                      variant="success"
+                      onClick={() => setSupplierPaymentModal({
+                        open: true,
+                        invoice: facture,
+                        montant: facture.soldeRestant,
+                        modePaiement: 'virement',
+                        datePaiement: new Date().toISOString().slice(0, 10),
+                        reference: '',
+                        notes: '',
+                        compteBancaireId: '',
+                        appliquerEscompte: false,
+                        saving: false,
+                      })}
+                    >
+                      Payer
+                    </Button>
+                  )}
+                </div>
               )}
             />
           )}
@@ -1441,6 +1560,142 @@ export function GestionFournisseurs() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
                 <Button variant="secondary" disabled={supplierAvoirModal.saving} onClick={() => setSupplierAvoirModal({ open: false, invoice: null, lines: [], motif: '', saving: false })}>Annuler</Button>
                 <Button variant="success" disabled={supplierAvoirModal.saving} onClick={handleSubmitSupplierAvoir}>{supplierAvoirModal.saving ? 'Création…' : 'Créer l’avoir'}</Button>
+              </div>
+            </Modal>
+          )}
+          {supplierQualityCreditModal.open && (
+            <Modal
+              isOpen={supplierQualityCreditModal.open}
+              onClose={() => !supplierQualityCreditModal.saving && setSupplierQualityCreditModal({ open: false, invoice: null, lines: [], motif: '', saving: false })}
+              title={`Avoir fournisseur — ajustement qualité`}
+              size="large"
+            >
+              <p>En cas de défaut ou de baisse de qualité sans retour physique, indiquez le crédit HT par ligne. La quantité en stock ne change pas; le coût des articles encore en stock est corrigé, et le reste est imputé en ajustement de coût.</p>
+              {supplierQualityCreditModal.lines.map(line => (
+                <div key={line.factureAchatItemId} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) 140px 160px', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+                  <span>{line.description}</span>
+                  <span>HT d’origine : {Number(line.totalHTOriginal).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={line.totalHTOriginal}
+                    step="0.01"
+                    value={line.montantHT}
+                    disabled={supplierQualityCreditModal.saving}
+                    onChange={event => setSupplierQualityCreditModal(current => ({
+                      ...current,
+                      lines: current.lines.map(item => item.factureAchatItemId === line.factureAchatItemId
+                        ? { ...item, montantHT: event.target.value }
+                        : item),
+                    }))}
+                    aria-label={`Ajustement HT : ${line.description}`}
+                  />
+                </div>
+              ))}
+              <label style={{ display: 'block', margin: '16px 0 6px', fontWeight: 600 }}>Motif de qualité</label>
+              <textarea
+                value={supplierQualityCreditModal.motif}
+                onChange={event => setSupplierQualityCreditModal(current => ({ ...current, motif: event.target.value }))}
+                rows={3}
+                style={{ width: '100%' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <Button variant="secondary" disabled={supplierQualityCreditModal.saving} onClick={() => setSupplierQualityCreditModal({ open: false, invoice: null, lines: [], motif: '', saving: false })}>Annuler</Button>
+                <Button variant="success" disabled={supplierQualityCreditModal.saving} onClick={handleSubmitSupplierQualityCredit}>{supplierQualityCreditModal.saving ? 'Création…' : 'Créer l’avoir qualité'}</Button>
+              </div>
+            </Modal>
+          )}
+          {supplierPaymentModal.open && (
+            <Modal
+              isOpen={supplierPaymentModal.open}
+              onClose={() => !supplierPaymentModal.saving && setSupplierPaymentModal(current => ({ ...current, open: false }))}
+              title={`Règlement fournisseur — ${supplierPaymentModal.invoice?.numeroFacture || ''}`}
+              size="medium"
+            >
+              <p>Solde restant : {Number(supplierPaymentModal.invoice?.soldeRestant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF.</p>
+              {(() => {
+                const discount = getCashDiscountPreview(supplierPaymentModal.invoice, supplierPaymentModal.datePaiement);
+                if (!discount) return null;
+                return (
+                  <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: 12, marginBottom: 14, border: '1px solid #c8dfcf', borderRadius: 8, background: '#f1faf3' }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(supplierPaymentModal.appliquerEscompte)}
+                      onChange={event => setSupplierPaymentModal(current => ({
+                        ...current,
+                        appliquerEscompte: event.target.checked,
+                        montant: event.target.checked ? discount.netTTC : (current.invoice?.soldeRestant ?? ''),
+                      }))}
+                    />
+                    <span>
+                      Escompte de règlement {Number(supplierPaymentModal.invoice.escomptePourcentage).toLocaleString('fr-FR')} % : {discount.discountHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF sur le HT. TVA inchangée : {discount.invoiceTVA.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF; la facture reste inchangée. Montant à régler : <strong>{discount.netTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong>.
+                    </span>
+                  </label>
+                );
+              })()}
+              <FormField
+                label="Date du règlement"
+                type="date"
+                value={supplierPaymentModal.datePaiement}
+                onChange={event => {
+                  const datePaiement = event.target.value;
+                  const discount = getCashDiscountPreview(supplierPaymentModal.invoice, datePaiement);
+                  setSupplierPaymentModal(current => ({
+                    ...current,
+                    datePaiement,
+                    appliquerEscompte: current.appliquerEscompte && Boolean(discount),
+                    montant: current.appliquerEscompte && discount ? discount.netTTC : (current.invoice?.soldeRestant ?? ''),
+                  }));
+                }}
+                required
+              />
+              <FormField
+                label="Mode de paiement"
+                type="select"
+                value={supplierPaymentModal.modePaiement}
+                onChange={event => setSupplierPaymentModal(current => ({ ...current, modePaiement: event.target.value }))}
+                options={[
+                  { value: 'virement', label: 'Virement' },
+                  { value: 'cheque', label: 'Chèque' },
+                  { value: 'especes', label: 'Espèces' },
+                  { value: 'mobile_money', label: 'Mobile Money' },
+                ]}
+                required
+              />
+              {!['especes', 'cheque'].includes(supplierPaymentModal.modePaiement) && (
+                <FormField
+                  label="Compte de trésorerie"
+                  type="select"
+                  value={supplierPaymentModal.compteBancaireId}
+                  onChange={event => setSupplierPaymentModal(current => ({ ...current, compteBancaireId: event.target.value }))}
+                  options={[
+                    { value: '', label: '-- Sélectionner un compte --' },
+                    ...comptesBancaires.map(account => ({
+                      value: account.id,
+                      label: `${account.nomCompte || account.banque || 'Compte'}${account.numeroCompte ? ` — ${account.numeroCompte}` : ''}`,
+                    })),
+                  ]}
+                  required
+                />
+              )}
+              <FormField
+                label="Montant à payer"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={supplierPaymentModal.montant}
+                onChange={event => setSupplierPaymentModal(current => ({ ...current, montant: event.target.value, appliquerEscompte: false }))}
+                required
+              />
+              <FormField
+                label="Référence du paiement"
+                value={supplierPaymentModal.reference}
+                onChange={event => setSupplierPaymentModal(current => ({ ...current, reference: event.target.value }))}
+                required={supplierPaymentModal.modePaiement === 'cheque'}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <Button variant="secondary" disabled={supplierPaymentModal.saving} onClick={() => setSupplierPaymentModal(current => ({ ...current, open: false }))}>Annuler</Button>
+                <Button variant="success" disabled={supplierPaymentModal.saving} onClick={handleSubmitSupplierPayment}>{supplierPaymentModal.saving ? 'Enregistrement…' : 'Enregistrer le règlement'}</Button>
               </div>
             </Modal>
           )}
