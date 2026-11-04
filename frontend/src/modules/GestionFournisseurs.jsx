@@ -1024,9 +1024,14 @@ export function GestionFournisseurs() {
   const openModal = (type, item = null) => {
     setModal({ open: true, type, item });
     if (type === 'fournisseur') {
-      setForm(item || {
+      setForm(item ? {
+        ...item,
+        nom: item.nom || item.raisonSociale || '',
+        delaiPaiement: item.delaiPaiement ?? 30,
+        modesPaiementPreferes: item.modesPaiementPreferes || [],
+      } : {
         nom: '', email: '', telephone: '', adresse: '', ville: '', pays: 'Côte d\'Ivoire',
-        delaiPaiement: 30, evaluation: 5
+        delaiPaiement: 30, modesPaiementPreferes: [], evaluation: 5
       });
     } else if (type === 'commande') {
       setForm(item || {
@@ -1063,10 +1068,16 @@ export function GestionFournisseurs() {
     try {
       const { type, item } = modal;
       if (type === 'fournisseur') {
+        const fournisseurPayload = {
+          ...form,
+          raisonSociale: form.raisonSociale || form.nom,
+          delaiPaiement: Number(form.delaiPaiement ?? 30),
+        };
+        delete fournisseurPayload.nom;
         if (item) {
-          await api.put(`/fournisseurs/${item.id}`, form);
+          await api.put(`/fournisseurs/${item.id}`, fournisseurPayload);
         } else {
-          await api.post('/fournisseurs', form);
+          await api.post('/fournisseurs', fournisseurPayload);
         }
       } else if (type === 'commande') {
         await api.post('/commandes-achat', form);
@@ -1117,7 +1128,7 @@ export function GestionFournisseurs() {
         fournisseurId: fournisseur?.id,
         numeroFactureFournisseur: `F-${commande.commande?.numeroCommande}`,
         dateFacture: new Date().toISOString().split('T')[0],
-        dateEcheance: new Date(Date.now() + (fournisseur?.delaiPaiement || 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        dateEcheance: new Date(Date.now() + (fournisseur?.delaiPaiement ?? 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         totalHT,
         totalTVA,
         totalTTC,
@@ -1245,11 +1256,11 @@ export function GestionFournisseurs() {
               <Table
                 columns={[
                   { key: 'codeAuxiliaire', label: 'ID Fournisseur' },
-                  { key: 'nom', label: 'Nom' },
+                  { key: 'raisonSociale', label: 'Nom' },
                   { key: 'email', label: 'Email' },
                   { key: 'telephone', label: 'Téléphone' },
                   { key: 'ville', label: 'Ville' },
-                  { key: 'delaiPaiement', label: 'Échéance', render: (val) => `${val || 30} jours` },
+                  { key: 'delaiPaiement', label: 'Échéance', render: (val) => Number(val ?? 30) === 0 ? 'À réception' : `${val ?? 30} jours` },
                   { key: 'evaluation', label: 'Évaluation', render: (val) => '⭐'.repeat(val || 3) }
                 ]}
                 data={data.fournisseurs}
@@ -1534,10 +1545,45 @@ export function GestionFournisseurs() {
                   onChange={(e) => setForm({...form, ville: e.target.value})} />
                 <FormField label="Pays" name="pays" value={form.pays}
                   onChange={(e) => setForm({...form, pays: e.target.value})} />
-                <FormField label="Délai de paiement (jours)" name="delaiPaiement" type="number" value={form.delaiPaiement}
-                  onChange={(e) => setForm({...form, delaiPaiement: parseInt(e.target.value)})} />
+                <FormField label="Échéance de paiement" name="delaiPaiement" type="select" value={form.delaiPaiement ?? 30}
+                  onChange={(e) => setForm({...form, delaiPaiement: Number(e.target.value)})}
+                  options={[
+                    { value: 0, label: 'À réception' },
+                    { value: 15, label: '15 jours' },
+                    { value: 30, label: '30 jours' },
+                    { value: 60, label: '60 jours' },
+                  ]} />
                 <FormField label="Évaluation (1-5)" name="evaluation" type="number" value={form.evaluation}
                   onChange={(e) => setForm({...form, evaluation: parseInt(e.target.value)})} />
+              </div>
+              <div style={{ marginTop: '15px' }}>
+                <strong>Modes de paiement préférés</strong>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px' }}>
+                  {[
+                    ['virement', 'Virement'],
+                    ['cheque', 'Chèque'],
+                    ['mobile_money', 'Mobile Money'],
+                    ['especes', 'Espèces'],
+                    ['credit', 'Achat à crédit'],
+                  ].map(([value, label]) => (
+                    <label key={value} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <input
+                        type="checkbox"
+                        checked={(form.modesPaiementPreferes || []).includes(value)}
+                        onChange={(e) => {
+                          const current = form.modesPaiementPreferes || [];
+                          setForm({
+                            ...form,
+                            modesPaiementPreferes: e.target.checked
+                              ? [...current, value]
+                              : current.filter(mode => mode !== value),
+                          });
+                        }}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
@@ -1551,7 +1597,7 @@ export function GestionFournisseurs() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                 <FormField label="Fournisseur" name="fournisseurId" type="select" value={form.fournisseurId}
                   onChange={(e) => setForm({...form, fournisseurId: e.target.value})}
-                  options={data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))} required />
+                  options={data.fournisseurs.map(f => ({ value: f.id, label: f.nom || f.raisonSociale }))} required />
                 <FormField label="Date Commande" name="dateCommande" type="date" value={form.dateCommande}
                   onChange={(e) => setForm({...form, dateCommande: e.target.value})} required />
                 <FormField label="Date Livraison Prévue" name="dateLivraisonPrevue" type="date" value={form.dateLivraisonPrevue}
@@ -1639,7 +1685,7 @@ export function GestionFournisseurs() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <FormField label="Fournisseur" name="fournisseurId" type="select" value={form.fournisseurId}
                   onChange={(e) => setForm({...form, fournisseurId: e.target.value})}
-                  options={data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))} required />
+                  options={data.fournisseurs.map(f => ({ value: f.id, label: f.nom || f.raisonSociale }))} required />
                 <FormField label="N° facture fournisseur" name="numeroFactureFournisseur" value={form.numeroFactureFournisseur}
                   onChange={(e) => setForm({...form, numeroFactureFournisseur: e.target.value})} required />
                 <FormField label="Date Facture" name="dateFacture" type="date" value={form.dateFacture}
@@ -1694,7 +1740,19 @@ export function GestionFournisseurs() {
                   );
                   return (
                     <FormField label="1️⃣ Sélectionner le Fournisseur (avec factures impayées)" name="fournisseurId" type="select" value={form.fournisseurId}
-                      onChange={(e) => setForm({...form, fournisseurId: e.target.value, factureId: '', montant: 0})}
+                  onChange={(e) => {
+                    const fournisseur = data.fournisseurs.find(item => String(item.id) === e.target.value);
+                    const preferred = (fournisseur?.modesPaiementPreferes || []).find(mode =>
+                      ['virement', 'cheque', 'especes', 'mobile_money', 'carte_bancaire'].includes(mode)
+                    );
+                    setForm({
+                      ...form,
+                      fournisseurId: e.target.value,
+                      factureId: '',
+                      montant: 0,
+                      modePaiement: preferred === 'carte_bancaire' ? 'carte' : preferred || 'virement',
+                    });
+                  }}
                       options={[
                         { value: '', label: fournisseursAvecFacturesImpayees.length > 0 ? '-- Choisir un fournisseur --' : '-- Aucun fournisseur avec facture impayée --' },
                         ...fournisseursAvecFacturesImpayees.map(f => {
@@ -1702,7 +1760,7 @@ export function GestionFournisseurs() {
                           const montantTotal = facturesImpayees.reduce((sum, fact) => sum + parseFloat(fact.montantTotal || fact.montantHT || 0), 0);
                           return { 
                             value: f.id, 
-                            label: `${f.nom} (${facturesImpayees.length} facture${facturesImpayees.length > 1 ? 's' : ''} - ${Number(montantTotal || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF)`
+                            label: `${f.nom || f.raisonSociale} (${facturesImpayees.length} facture${facturesImpayees.length > 1 ? 's' : ''} - ${Number(montantTotal || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF)`
                           };
                         })
                       ]} required />
@@ -1734,11 +1792,12 @@ export function GestionFournisseurs() {
                     onChange={(e) => setForm({...form, datePaiement: e.target.value})} required />
                   <FormField label="Mode de Paiement" name="modePaiement" type="select" value={form.modePaiement}
                     onChange={(e) => setForm({...form, modePaiement: e.target.value})}
-                    options={[
+                      options={[
                       { value: 'virement', label: 'Virement' },
                       { value: 'cheque', label: 'Chèque' },
                       { value: 'especes', label: 'Espèces' },
-                      { value: 'carte', label: 'Carte Bancaire' }
+                        { value: 'carte', label: 'Carte Bancaire' },
+                        { value: 'mobile_money', label: 'Mobile Money' },
                     ]} required />
                   <FormField label="Référence" name="reference" value={form.reference}
                     onChange={(e) => setForm({...form, reference: e.target.value})} />
@@ -1797,13 +1856,13 @@ export function GestionFournisseurs() {
         <DetailsModal
           isOpen={showFournisseurDetails}
           onClose={() => { setShowFournisseurDetails(false); setSelectedFournisseur(null); }}
-          title={`Détails Fournisseur - ${selectedFournisseur.nom}`}
+          title={`Détails Fournisseur - ${selectedFournisseur.nom || selectedFournisseur.raisonSociale}`}
           sections={[
             {
               title: 'Informations Générales',
               fields: [
                 { label: 'N° Fournisseur', value: selectedFournisseur.numeroFournisseur },
-                { label: 'Nom', value: selectedFournisseur.nom },
+                { label: 'Nom', value: selectedFournisseur.nom || selectedFournisseur.raisonSociale },
                 { label: 'Email', value: selectedFournisseur.email || '-' },
                 { label: 'Téléphone', value: selectedFournisseur.telephone || '-' }
               ]
@@ -1819,7 +1878,7 @@ export function GestionFournisseurs() {
             {
               title: 'Paramètres',
               fields: [
-                { label: 'Délai Paiement', value: `${selectedFournisseur.delaiPaiement || 30} jours` },
+                { label: 'Échéance', value: Number(selectedFournisseur.delaiPaiement ?? 30) === 0 ? 'À réception' : `${selectedFournisseur.delaiPaiement ?? 30} jours` },
                 { label: 'Évaluation', value: '⭐'.repeat(selectedFournisseur.evaluation || 3) }
               ]
             }
@@ -2040,7 +2099,7 @@ export function GestionFournisseurs() {
                 >
                   <option value="">-- Sélectionner --</option>
                   {data.fournisseurs.map(f => (
-                    <option key={f.id} value={f.id}>{f.nom}</option>
+                    <option key={f.id} value={f.id}>{f.nom || f.raisonSociale}</option>
                   ))}
                 </select>
               </div>
@@ -2205,19 +2264,14 @@ function EtatsCompteFournisseurTab() {
   const imprimerEtatCompte = () => {
     if (!etatCompte || !selectedFournisseur) return;
 
-    const facturesRows = (etatCompte.factures || []).map(f => {
-      const statut = f.statut === 'payee' ? 'Payée' : f.statut === 'validee' ? 'Validée' : f.statut;
-      const montant = Number(f.totalTTC || f.montantTotal || f.montantHT || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      return '<tr><td>' + (f.numeroFacture || 'N/A') + '</td><td>' + new Date(f.dateFacture).toLocaleDateString('fr-FR') + '</td><td class="text-right amount">' + montant + ' XOF</td><td class="text-center"><span class="status status-' + f.statut + '">' + statut + '</span></td></tr>';
+    const mouvementsRows = (etatCompte.mouvements || []).map(m => {
+      const amount = value => Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const type = m.type === 'facture_fournisseur' ? 'Facture fournisseur' : m.type === 'paiement_fournisseur' ? 'Règlement' : m.type;
+      return '<tr><td>' + new Date(`${m.date}T00:00:00`).toLocaleDateString('fr-FR') + '</td><td>' + type + '</td><td>' + (m.reference || '-') + '</td><td class="text-right">' + amount(m.debit) + ' XOF</td><td class="text-right">' + amount(m.credit) + ' XOF</td><td class="text-right amount">' + amount(m.solde) + ' XOF</td></tr>';
     }).join('');
-
-    const paiementsRows = (etatCompte.paiements || []).map(p => {
-      const montant = Number(p.montant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      return '<tr><td>' + new Date(p.datePaiement).toLocaleDateString('fr-FR') + '</td><td>' + (p.reference || '-') + '</td><td>' + (p.modePaiement || '-') + '</td><td class="text-right amount" style="color: #388e3c;">' + montant + ' XOF</td></tr>';
-    }).join('');
-
-    const facturesTable = facturesRows ? '<table><thead><tr><th>N° Facture</th><th>Date</th><th class="text-right">Montant TTC</th><th class="text-center">Statut</th></tr></thead><tbody>' + facturesRows + '</tbody></table>' : '<div class="no-data">Aucune facture sur cette période</div>';
-    const paiementsTable = paiementsRows ? '<table><thead><tr><th>Date</th><th>Référence</th><th>Mode</th><th class="text-right">Montant</th></tr></thead><tbody>' + paiementsRows + '</tbody></table>' : '<div class="no-data">Aucun paiement sur cette période</div>';
+    const mouvementsTable = mouvementsRows
+      ? '<table><thead><tr><th>Date</th><th>Opération</th><th>Référence</th><th class="text-right">Débit</th><th class="text-right">Crédit</th><th class="text-right">Solde dû</th></tr></thead><tbody>' + mouvementsRows + '</tbody></table>'
+      : '<div class="no-data">Aucune opération sur cette période</div>';
 
     const printWindow = window.open('', '_blank');
     const printContent = '<!DOCTYPE html><html><head><title>État de Compte Fournisseur - ' + selectedFournisseur.raisonSociale + '</title><style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: "Segoe UI", Arial, sans-serif; padding: 30px; color: #333; } .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #1976d2; } .header h1 { color: #1976d2; font-size: 24px; margin-bottom: 15px; } .fournisseur-info { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px; } .fournisseur-info h3 { margin-bottom: 10px; color: #1976d2; } .fournisseur-info p { margin: 5px 0; font-size: 13px; } .periode { color: #666; font-style: italic; margin-top: 10px; } .summary { display: flex; justify-content: space-between; margin-bottom: 30px; } .summary-box { flex: 1; padding: 15px; margin: 0 10px; border-radius: 8px; text-align: center; } .summary-box:first-child { margin-left: 0; } .summary-box:last-child { margin-right: 0; } .summary-box.facture { background: #e3f2fd; } .summary-box.paye { background: #e8f5e9; } .summary-box.solde { background: #fff3e0; } .summary-box .label { color: #666; font-size: 12px; margin-bottom: 5px; } .summary-box .value { font-size: 20px; font-weight: bold; } .summary-box.facture .value { color: #1976d2; } .summary-box.paye .value { color: #388e3c; } .summary-box.solde .value { color: #e65100; } .section { margin-bottom: 25px; } .section h3 { margin-bottom: 15px; color: #333; font-size: 16px; } table { width: 100%; border-collapse: collapse; } th { background: #f8f9fa; padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size: 12px; } td { padding: 10px; border-bottom: 1px solid #dee2e6; font-size: 12px; } .text-right { text-align: right; } .text-center { text-align: center; } .amount { font-weight: bold; } .status { padding: 3px 8px; border-radius: 4px; font-size: 11px; } .status-payee { background: #d4edda; color: #155724; } .status-validee { background: #fff3cd; color: #856404; } .status-brouillon { background: #e2e3e5; color: #383d41; } .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 11px; } .no-data { color: #999; font-style: italic; padding: 20px; text-align: center; } @media print { body { padding: 15px; } }</style></head><body>' +
@@ -2228,11 +2282,11 @@ function EtatsCompteFournisseurTab() {
       (selectedFournisseur.email ? '<p><strong>Email:</strong> ' + selectedFournisseur.email + '</p>' : '') +
       (selectedFournisseur.telephone ? '<p><strong>Téléphone:</strong> ' + selectedFournisseur.telephone + '</p>' : '') +
       '<p class="periode"><strong>Période:</strong> ' + formatPeriodeFR(periode.dateDebut, periode.dateFin) + '</p></div>' +
-      '<div class="summary"><div class="summary-box facture"><div class="label">Total Facturé</div><div class="value">' + Number(etatCompte.totalFacture || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' XOF</div></div>' +
-      '<div class="summary-box paye"><div class="label">Total Payé</div><div class="value">' + Number(etatCompte.totalPaye || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' XOF</div></div>' +
-      '<div class="summary-box solde"><div class="label">Solde Dû</div><div class="value">' + Number(etatCompte.solde || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' XOF</div></div></div>' +
-      '<div class="section"><h3>Factures</h3>' + facturesTable + '</div>' +
-      '<div class="section"><h3>Paiements</h3>' + paiementsTable + '</div>' +
+      '<div class="summary"><div class="summary-box facture"><div class="label">Solde d’ouverture</div><div class="value">' + Number(etatCompte.soldeOuverture || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' XOF</div></div>' +
+      '<div class="summary-box facture"><div class="label">Factures période</div><div class="value">' + Number(etatCompte.totalFacture || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' XOF</div></div>' +
+      '<div class="summary-box paye"><div class="label">Règlements période</div><div class="value">' + Number(etatCompte.totalPaye || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' XOF</div></div>' +
+      '<div class="summary-box solde"><div class="label">Solde de clôture</div><div class="value">' + Number(etatCompte.soldeCloture ?? etatCompte.solde ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' XOF</div></div></div>' +
+      '<div class="section"><h3>Grand livre auxiliaire fournisseur</h3>' + mouvementsTable + '</div>' +
       '<div class="footer"><p>Document généré le ' + new Date().toLocaleDateString('fr-FR') + ' à ' + new Date().toLocaleTimeString('fr-FR') + '</p><p>ComptaOrion - Système de Gestion Comptable</p></div>' +
       '</body></html>';
 

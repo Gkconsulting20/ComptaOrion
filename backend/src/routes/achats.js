@@ -14,6 +14,7 @@ import {
 } from '../schema.js';
 import { eq, and, inArray, sql, desc } from 'drizzle-orm';
 import { createEcritureFactureAchat, createEcriturePaiementFournisseur } from '../services/comptabiliteService.js';
+import { addDaysToIsoDate } from '../services/paymentTerms.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import {
   allocateLogisticsByWeight,
@@ -314,6 +315,7 @@ router.post('/factures', async (req, res) => {
     }
 
     const { newFacture, insertedItems } = await db.transaction(async (tx) => {
+      const effectiveDateFacture = dateFacture || new Date().toISOString().slice(0, 10);
       const [created] = await tx.insert(facturesAchat).values({
         entrepriseId: req.entrepriseId,
         numeroFacture,
@@ -321,8 +323,8 @@ router.post('/factures', async (req, res) => {
         fournisseurId: parseInt(fournisseurId),
         commandeId: commandeId ? parseInt(commandeId) : null,
         statut: 'brouillon',
-        dateFacture: dateFacture || new Date().toISOString().split('T')[0],
-        dateEcheance: dateEcheance || null,
+        dateFacture: effectiveDateFacture,
+        dateEcheance: dateEcheance || addDaysToIsoDate(effectiveDateFacture, fournisseur.delaiPaiement ?? 30),
         totalHT: totalHT.toFixed(2),
         totalTVA: totalTVA.toFixed(2),
         totalTTC: totalTTC.toFixed(2),
@@ -695,7 +697,10 @@ router.post('/factures/:id/paiement', async (req, res) => {
           executor: tx
         });
       } catch (comptaError) {
-        console.warn('Avertissement: Écriture comptable paiement fournisseur non générée:', comptaError.message);
+        throw new Error(`Paiement annulé : l’écriture comptable n’a pas pu être créée. ${comptaError.message}`);
+      }
+      if (!accountingEntry) {
+        throw new Error('Paiement annulé : aucune écriture comptable n’a été créée.');
       }
 
       await logAudit({
@@ -1005,7 +1010,7 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     // Créer la facture
     const factureResult = await db.execute(sql`
       INSERT INTO factures_achat (entreprise_id, numero_facture, numero_facture_fournisseur, fournisseur_id, statut, date_facture, date_echeance, total_ht, total_tva, total_ttc, montant_paye, solde_restant, notes, user_id)
-      VALUES (${req.entrepriseId}, ${numeroFacture}, ${numeroFactureFournisseur || null}, ${parseInt(fournisseurId)}, 'brouillon', ${dateFacture || new Date().toISOString().split('T')[0]}, ${dateEcheance || null}, ${totalHT.toFixed(2)}, ${totalTVA.toFixed(2)}, ${totalTTC.toFixed(2)}, '0', ${totalTTC.toFixed(2)}, ${notes || null}, ${req.user?.id || null})
+      VALUES (${req.entrepriseId}, ${numeroFacture}, ${numeroFactureFournisseur || null}, ${parseInt(fournisseurId)}, 'brouillon', ${dateFacture || new Date().toISOString().split('T')[0]}, ${dateEcheance || addDaysToIsoDate(dateFacture || new Date().toISOString().split('T')[0], fournisseur.delai_paiement ?? 30)}, ${totalHT.toFixed(2)}, ${totalTVA.toFixed(2)}, ${totalTTC.toFixed(2)}, '0', ${totalTTC.toFixed(2)}, ${notes || null}, ${req.user?.id || null})
       RETURNING *
     `);
     const newFacture = factureResult.rows[0];

@@ -1898,10 +1898,13 @@ function PaiementsTab() {
 
   const handleOpenPaymentModal = (facture) => {
     setSelectedFacture(facture);
+    const preferredMode = (facture.client?.modesPaiementPreferes || [])
+      .find(mode => ['mobile_money', 'carte_bancaire', 'virement', 'especes'].includes(mode));
     setPaymentData({ 
       ...paymentData, 
       factureId: facture.id, 
-      montant: facture.totalTTC 
+      montant: facture.soldeRestant ?? facture.totalTTC,
+      modePaiement: preferredMode || 'mobile_money',
     });
     setShowPaymentModal(true);
   };
@@ -1999,7 +2002,15 @@ function PaiementsTab() {
                   value={selectedClientId}
                   onChange={(e) => {
                     setSelectedClientId(e.target.value);
-                    setPaymentData({ ...paymentData, factureId: '', montant: 0 });
+                    const client = clients.find(item => String(item.id) === e.target.value);
+                    const preferredMode = (client?.modesPaiementPreferes || [])
+                      .find(mode => ['mobile_money', 'carte_bancaire', 'virement', 'especes'].includes(mode));
+                    setPaymentData({
+                      ...paymentData,
+                      factureId: '',
+                      montant: 0,
+                      modePaiement: preferredMode || 'mobile_money',
+                    });
                   }}
                   options={[
                     { value: '', label: '-- Choisir un client --' },
@@ -2232,7 +2243,6 @@ function ParametresTab() {
     compteComptableId: null,
     delaiPaiement: 30,
     limiteCredit: 0,
-    echeancesPersonnalisees: [],
     modesPaiementPreferes: [],
   });
   const [taxeData, setTaxeData] = useState({ nom: '', taux: 0, codeComptable: '' });
@@ -2281,7 +2291,6 @@ function ParametresTab() {
       compteComptableId: null,
       delaiPaiement: 30,
       limiteCredit: 0,
-      echeancesPersonnalisees: [],
       modesPaiementPreferes: [],
     });
     setIsEditing(false);
@@ -2304,9 +2313,9 @@ function ParametresTab() {
   };
 
   const handleEditClient = (client) => {
+    const { echeancesPersonnalisees: _legacyInstallments, ...clientWithoutLegacyInstallments } = client;
     setClientData({
-      ...client,
-      echeancesPersonnalisees: client.echeancesPersonnalisees || [],
+      ...clientWithoutLegacyInstallments,
       modesPaiementPreferes: client.modesPaiementPreferes || [],
     });
     setIsEditing(true);
@@ -2357,26 +2366,6 @@ function ParametresTab() {
     } catch (error) {
       alert('Erreur: ' + error.message);
     }
-  };
-
-  const addEcheance = () => {
-    setClientData({
-      ...clientData,
-      echeancesPersonnalisees: [...clientData.echeancesPersonnalisees, { jours: 30, pourcentage: 100 }]
-    });
-  };
-
-  const removeEcheance = (index) => {
-    setClientData({
-      ...clientData,
-      echeancesPersonnalisees: clientData.echeancesPersonnalisees.filter((_, i) => i !== index)
-    });
-  };
-
-  const updateEcheance = (index, field, value) => {
-    const newEcheances = [...clientData.echeancesPersonnalisees];
-    newEcheances[index][field] = value;
-    setClientData({ ...clientData, echeancesPersonnalisees: newEcheances });
   };
 
   const toggleModePaiement = (mode) => {
@@ -2656,10 +2645,16 @@ function ParametresTab() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '15px' }}>
               <FormField
-                label="Délai de Paiement (jours)"
-                type="number"
-                value={clientData.delaiPaiement}
-                onChange={(e) => setClientData({ ...clientData, delaiPaiement: parseInt(e.target.value) || 30 })}
+                label="Échéance de paiement"
+                type="select"
+                value={clientData.delaiPaiement ?? 30}
+                onChange={(e) => setClientData({ ...clientData, delaiPaiement: Number(e.target.value) })}
+                options={[
+                  { value: 0, label: 'À réception' },
+                  { value: 15, label: '15 jours' },
+                  { value: 30, label: '30 jours' },
+                  { value: 60, label: '60 jours' },
+                ]}
               />
               <FormField
                 label="Limite de Crédit (XOF)"
@@ -2682,78 +2677,7 @@ function ParametresTab() {
             </div>
           </div>
 
-          {/* SECTION 3: ÉCHÉANCES PERSONNALISÉES */}
-          <div style={{ 
-            padding: '15px', 
-            backgroundColor: '#fff3e0', 
-            borderRadius: '8px',
-            marginBottom: '20px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h4 style={{ marginTop: 0 }}>📅 Échéances Personnalisées</h4>
-              <Button size="small" variant="primary" onClick={addEcheance}>
-                ➕ Ajouter une échéance
-              </Button>
-            </div>
-
-            {clientData.echeancesPersonnalisees.length === 0 ? (
-              <div style={{ 
-                padding: '20px', 
-                textAlign: 'center',
-                backgroundColor: '#fff',
-                borderRadius: '8px',
-                border: '2px dashed #dee2e6'
-              }}>
-                <p style={{ color: '#999', margin: 0 }}>
-                  Aucune échéance personnalisée. Cliquez sur "Ajouter une échéance" pour créer des échéances de paiement spécifiques.
-                </p>
-              </div>
-            ) : (
-              <div style={{ marginTop: '15px' }}>
-                {clientData.echeancesPersonnalisees.map((echeance, index) => (
-                  <div key={index} style={{ 
-                    display: 'flex', 
-                    gap: '10px', 
-                    alignItems: 'center',
-                    marginBottom: '10px',
-                    padding: '10px',
-                    backgroundColor: '#fff',
-                    borderRadius: '8px',
-                    border: '1px solid #dee2e6'
-                  }}>
-                    <div style={{ flex: 1 }}>
-                      <FormField
-                        label="Jours"
-                        type="number"
-                        value={echeance.jours}
-                        onChange={(e) => updateEcheance(index, 'jours', parseInt(e.target.value) || 0)}
-                        placeholder="30"
-                      />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <FormField
-                        label="Pourcentage (%)"
-                        type="number"
-                        value={echeance.pourcentage}
-                        onChange={(e) => updateEcheance(index, 'pourcentage', parseInt(e.target.value) || 0)}
-                        placeholder="100"
-                      />
-                    </div>
-                    <Button 
-                      size="small" 
-                      variant="danger" 
-                      onClick={() => removeEcheance(index)}
-                      style={{ marginTop: '20px' }}
-                    >
-                      🗑️
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* SECTION 4: MODES DE PAIEMENT PRÉFÉRÉS */}
+          {/* Modes de paiement préférés */}
           <div style={{ 
             padding: '15px', 
             backgroundColor: '#e3f2fd', 
@@ -2880,7 +2804,7 @@ function ParametresTab() {
                   const compte = comptesComptables.find(c => c.id === selectedClient.compteComptableId);
                   return compte ? `${compte.numero} - ${compte.nom}` : 'Non configuré';
                 })() },
-                { label: 'Délai Paiement', value: `${selectedClient.delaiPaiement || 30} jours` },
+                { label: 'Échéance', value: Number(selectedClient.delaiPaiement ?? 30) === 0 ? 'À réception' : `${selectedClient.delaiPaiement ?? 30} jours` },
                 { label: 'Limite Crédit', value: `${Number(selectedClient.limiteCredit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { label: 'Catégorie', value: selectedClient.categorieClient || 'Standard' }
               ]
@@ -2976,6 +2900,15 @@ function EtatsCompteTab() {
   const imprimerEtatCompte = () => {
     if (!etatCompte || !selectedClient) return;
 
+    const mouvementsRows = (etatCompte.mouvements || []).map(m => {
+      const amount = value => Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const type = m.type === 'facture_client' ? 'Facture client' : m.type === 'encaissement_client' ? 'Encaissement' : m.type;
+      return `<tr><td>${new Date(`${m.date}T00:00:00`).toLocaleDateString('fr-FR')}</td><td>${type}</td><td>${m.reference || '-'}</td><td class="text-right">${amount(m.debit)} XOF</td><td class="text-right">${amount(m.credit)} XOF</td><td class="text-right amount">${amount(m.solde)} XOF</td></tr>`;
+    }).join('');
+    const mouvementsTable = mouvementsRows
+      ? `<table><thead><tr><th>Date</th><th>Opération</th><th>Référence</th><th class="text-right">Débit</th><th class="text-right">Crédit</th><th class="text-right">Solde</th></tr></thead><tbody>${mouvementsRows}</tbody></table>`
+      : '<div class="no-data">Aucune opération sur cette période</div>';
+
     const printWindow = window.open('', '_blank');
     const printContent = `
       <!DOCTYPE html>
@@ -3027,71 +2960,26 @@ function EtatsCompteTab() {
 
         <div class="summary">
           <div class="summary-box facture">
-            <div class="label">Total Facturé</div>
+            <div class="label">Solde d’ouverture</div>
+            <div class="value">${Number(etatCompte.soldeOuverture || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
+          </div>
+          <div class="summary-box facture">
+            <div class="label">Factures de la période</div>
             <div class="value">${Number(etatCompte.totalFacture || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
           </div>
           <div class="summary-box paye">
-            <div class="label">Total Payé</div>
+            <div class="label">Encaissements de la période</div>
             <div class="value">${Number(etatCompte.totalPaye || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
           </div>
           <div class="summary-box solde">
-            <div class="label">Solde Restant</div>
-            <div class="value">${Number(etatCompte.solde || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
+            <div class="label">Solde de clôture</div>
+            <div class="value">${Number(etatCompte.soldeCloture ?? etatCompte.solde ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
           </div>
         </div>
 
         <div class="section">
-          <h3>Factures</h3>
-          ${etatCompte.factures && etatCompte.factures.length > 0 ? `
-            <table>
-              <thead>
-                <tr>
-                  <th>N° Facture</th>
-                  <th>Date</th>
-                  <th class="text-right">Montant TTC</th>
-                  <th class="text-center">Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${etatCompte.factures.map(f => `
-                  <tr>
-                    <td>${f.numeroFacture}</td>
-                    <td>${new Date(f.dateFacture).toLocaleDateString('fr-FR')}</td>
-                    <td class="text-right amount">${Number(f.totalTTC || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
-                    <td class="text-center">
-                      <span class="status status-${f.statut}">${f.statut === 'payee' ? 'Payée' : f.statut === 'envoyee' ? 'Envoyée' : f.statut === 'retard' ? 'En retard' : f.statut}</span>
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          ` : '<div class="no-data">Aucune facture sur cette période</div>'}
-        </div>
-
-        <div class="section">
-          <h3>Paiements</h3>
-          ${etatCompte.paiements && etatCompte.paiements.length > 0 ? `
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Référence</th>
-                  <th>Mode</th>
-                  <th class="text-right">Montant</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${etatCompte.paiements.map(p => `
-                  <tr>
-                    <td>${new Date(p.datePaiement).toLocaleDateString('fr-FR')}</td>
-                    <td>${p.reference || '-'}</td>
-                    <td>${p.modePaiement}</td>
-                    <td class="text-right amount" style="color: #27ae60;">${Number(p.montant || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          ` : '<div class="no-data">Aucun paiement sur cette période</div>'}
+          <h3>Grand livre auxiliaire client</h3>
+          ${mouvementsTable}
         </div>
 
         <div class="footer">

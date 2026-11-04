@@ -13,6 +13,7 @@ const migrationScopes = new Map([
   ['expense-tracking', new Set(['projets_associatifs', 'categories_depenses', 'depenses'])],
   ['user-access', new Set(['users'])],
   ['accountant-invitations', new Set(['users', 'accountant_invitations'])],
+  ['party-payment-settings', new Set(['fournisseurs'])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);

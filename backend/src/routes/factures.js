@@ -11,6 +11,7 @@ import {
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { consumeStockValuation } from '../services/stockValuation.js';
+import { addDaysToIsoDate } from '../services/paymentTerms.js';
 
 const router = express.Router();
 
@@ -217,9 +218,11 @@ router.post('/lite-sale', async (req, res) => {
         throw Object.assign(new Error('Le paiement initial est invalide'), { status: 400 });
       }
       const status = requestedPayment >= totalTTC - 0.01 ? 'payee' : 'envoyee';
+      const effectiveDateFacture = dateFacture || new Date().toISOString().slice(0, 10);
       const [invoice] = await tx.insert(factures).values({
         entrepriseId: req.entrepriseId, numeroFacture, clientId: effectiveClientId, statut: status,
-        dateFacture: dateFacture || new Date().toISOString().slice(0, 10), dateEcheance: dateEcheance || null,
+        dateFacture: effectiveDateFacture,
+        dateEcheance: dateEcheance || addDaysToIsoDate(effectiveDateFacture, client.delaiPaiement ?? 30),
         totalHT: totalHT.toFixed(2), totalTVA: totalTVA.toFixed(2), totalTTC: totalTTC.toFixed(2),
         montantPaye: requestedPayment.toFixed(2), soldeRestant: Math.max(0, totalTTC - requestedPayment).toFixed(2),
         notes: notes || null, userId: req.user.id,
@@ -367,7 +370,10 @@ router.post('/', async (req, res) => {
         message: 'Client et au moins un article sont obligatoires',
       });
     }
-    const [ownedClient] = await db.select({ id: clients.id }).from(clients)
+    const [ownedClient] = await db.select({
+      id: clients.id,
+      delaiPaiement: clients.delaiPaiement,
+    }).from(clients)
       .where(and(eq(clients.id, parseInt(clientId)), eq(clients.entrepriseId, req.entrepriseId))).limit(1);
     if (!ownedClient) return res.status(400).json({ success: false, message: 'Client non trouvé ou non autorisé' });
     const productIds = [...new Set(items.filter(item => item.produitId).map(item => parseInt(item.produitId)))];
@@ -411,6 +417,7 @@ router.post('/', async (req, res) => {
     // Serialize numbering for this company; header, lines and accounting commit together.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${req.entrepriseId}::integer, 42)`);
     const numeroFacture = await genererNumeroFacture(req.entrepriseId, tx);
+    const effectiveDateFacture = dateFacture || new Date().toISOString().slice(0, 10);
 
     // Créer la facture
     const [newFacture] = await tx
@@ -420,8 +427,8 @@ router.post('/', async (req, res) => {
         numeroFacture,
         clientId: parseInt(clientId),
         statut: 'brouillon',
-        dateFacture: dateFacture || new Date().toISOString().split('T')[0],
-        dateEcheance: dateEcheance || null,
+        dateFacture: effectiveDateFacture,
+        dateEcheance: dateEcheance || addDaysToIsoDate(effectiveDateFacture, ownedClient.delaiPaiement ?? 30),
         totalHT: totalHT.toFixed(2),
         totalTVA: totalTVA.toFixed(2),
         totalTTC: totalTTC.toFixed(2),

@@ -177,6 +177,7 @@ export const fournisseurs = pgTable('fournisseurs', {
   adresse: text('adresse'),
   categorie: varchar('categorie', { length: 100 }),
   delaiPaiement: integer('delai_paiement').default(30),
+  modesPaiementPreferes: jsonb('modes_paiement_preferes'),
   compteBancaire: varchar('compte_bancaire', { length: 100 }),
   banque: varchar('banque', { length: 255 }),
   soldeDu: decimal('solde_du', { precision: 15, scale: 2 }).default('0'),

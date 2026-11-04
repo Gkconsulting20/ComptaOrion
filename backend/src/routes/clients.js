@@ -8,6 +8,8 @@ import {
   calculateSellingPriceFromMarkup,
   synchronizeActiveProductPrices,
 } from '../services/stockValuation.js';
+import { isValidPaymentDelay, isValidPreferredPaymentMethods } from '../services/paymentTerms.js';
+import { buildThirdPartyStatement } from '../services/thirdPartyLedger.js';
 
 const router = express.Router();
 
@@ -854,10 +856,10 @@ router.post('/', async (req, res) => {
       });
     }
 
-    if (delaiPaiement && (isNaN(delaiPaiement) || delaiPaiement < 0)) {
+    if (delaiPaiement !== undefined && !isValidPaymentDelay(delaiPaiement)) {
       return res.status(400).json({
         success: false,
-        message: 'Le délai de paiement doit être un nombre positif',
+        message: 'Choisissez un délai de paiement de 0, 15, 30 ou 60 jours',
       });
     }
 
@@ -886,10 +888,12 @@ router.post('/', async (req, res) => {
       }
     }
 
-    if (modesPaiementPreferes && !Array.isArray(modesPaiementPreferes)) {
+    if (modesPaiementPreferes !== undefined &&
+        modesPaiementPreferes !== null &&
+        !isValidPreferredPaymentMethods(modesPaiementPreferes)) {
       return res.status(400).json({
         success: false,
-        message: 'Les modes de paiement doivent être un tableau',
+        message: 'Un ou plusieurs modes de paiement préférés sont invalides',
       });
     }
 
@@ -908,7 +912,7 @@ router.post('/', async (req, res) => {
         pays: pays || null,
         categorieClient: categorieClient || 'standard',
         limiteCredit: limiteCredit || '0',
-        delaiPaiement: delaiPaiement || 30,
+        delaiPaiement: delaiPaiement ?? 30,
         remise: remise || '0',
         soldeDu: soldeDu || '0',
         actif: actif !== undefined ? actif : true,
@@ -1035,10 +1039,10 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    if (delaiPaiement !== undefined && (isNaN(delaiPaiement) || delaiPaiement < 0)) {
+    if (delaiPaiement !== undefined && !isValidPaymentDelay(delaiPaiement)) {
       return res.status(400).json({
         success: false,
-        message: 'Le délai de paiement doit être un nombre positif',
+        message: 'Choisissez un délai de paiement de 0, 15, 30 ou 60 jours',
       });
     }
 
@@ -1073,10 +1077,12 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    if (modesPaiementPreferes !== undefined && !Array.isArray(modesPaiementPreferes)) {
+    if (modesPaiementPreferes !== undefined &&
+        modesPaiementPreferes !== null &&
+        !isValidPreferredPaymentMethods(modesPaiementPreferes)) {
       return res.status(400).json({
         success: false,
-        message: 'Les modes de paiement doivent être un tableau',
+        message: 'Un ou plusieurs modes de paiement préférés sont invalides',
       });
     }
 
@@ -1247,45 +1253,37 @@ router.post('/etat-compte', async (req, res) => {
       });
     }
 
-    const facturesList = await db
+    const allFactures = await db
       .select()
       .from(factures)
       .where(and(
         eq(factures.clientId, parseInt(clientId)),
-        eq(factures.entrepriseId, req.entrepriseId),
-        gte(factures.dateFacture, dateDebut),
-        lte(factures.dateFacture, dateFin)
-      ))
-      .orderBy(factures.dateFacture);
+        eq(factures.entrepriseId, req.entrepriseId)
+      ));
 
     const paiementsList = await db
       .select()
       .from(paiements)
       .where(and(
+        eq(paiements.clientId, parseInt(clientId)),
         eq(paiements.entrepriseId, req.entrepriseId),
-        gte(paiements.datePaiement, dateDebut),
-        lte(paiements.datePaiement, dateFin)
       ))
       .orderBy(paiements.datePaiement);
 
-    const paiementsClient = paiementsList.filter(p => {
-      const facture = facturesList.find(f => f.id === p.factureId);
-      return !!facture;
+    const statement = buildThirdPartyStatement({
+      side: 'client',
+      invoices: allFactures,
+      payments: paiementsList,
+      dateDebut,
+      dateFin,
+      openingBalance: client[0].soldeDu || 0,
     });
-
-    const totalFacture = facturesList.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
-    const totalPaye = paiementsClient.reduce((sum, p) => sum + parseFloat(p.montant || 0), 0);
-    const solde = totalFacture - totalPaye;
 
     res.json({
       success: true,
       data: {
         client: client[0],
-        factures: facturesList,
-        paiements: paiementsClient,
-        totalFacture,
-        totalPaye,
-        solde,
+        ...statement,
         periode: { dateDebut, dateFin }
       }
     });
@@ -1338,35 +1336,32 @@ router.post('/etat-compte/email', async (req, res) => {
       });
     }
 
-    const facturesList = await db
+    const allFactures = await db
       .select()
       .from(factures)
       .where(and(
         eq(factures.clientId, parseInt(clientId)),
-        eq(factures.entrepriseId, req.entrepriseId),
-        gte(factures.dateFacture, dateDebut),
-        lte(factures.dateFacture, dateFin)
-      ))
-      .orderBy(factures.dateFacture);
+        eq(factures.entrepriseId, req.entrepriseId)
+      ));
 
     const paiementsList = await db
       .select()
       .from(paiements)
       .where(and(
+        eq(paiements.clientId, parseInt(clientId)),
         eq(paiements.entrepriseId, req.entrepriseId),
-        gte(paiements.datePaiement, dateDebut),
-        lte(paiements.datePaiement, dateFin)
       ))
       .orderBy(paiements.datePaiement);
 
-    const paiementsClient = paiementsList.filter(p => {
-      const facture = facturesList.find(f => f.id === p.factureId);
-      return !!facture;
+    const statement = buildThirdPartyStatement({
+      side: 'client',
+      invoices: allFactures,
+      payments: paiementsList,
+      dateDebut,
+      dateFin,
+      openingBalance: client[0].soldeDu || 0,
     });
-
-    const totalFacture = facturesList.reduce((sum, f) => sum + parseFloat(f.totalTTC || 0), 0);
-    const totalPaye = paiementsClient.reduce((sum, p) => sum + parseFloat(p.montant || 0), 0);
-    const solde = totalFacture - totalPaye;
+    const { factures: facturesList, paiements: paiementsClient, totalFacture, totalPaye, solde, soldeOuverture, soldeCloture } = statement;
 
     const dateDebutFr = new Date(dateDebut).toLocaleDateString('fr-FR');
     const dateFinFr = new Date(dateFin).toLocaleDateString('fr-FR');
