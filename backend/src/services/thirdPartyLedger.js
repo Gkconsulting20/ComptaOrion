@@ -18,6 +18,7 @@ export function buildThirdPartyStatement({
   side,
   invoices = [],
   payments = [],
+  creditNotes = [],
   dateDebut,
   dateFin,
   openingBalance = 0,
@@ -37,6 +38,9 @@ export function buildThirdPartyStatement({
     if (payment.factureId == null) return side === 'client';
     return invoiceById.has(Number(payment.factureId));
   });
+  const eligibleCreditNotes = creditNotes.filter(note =>
+    String(note.statut || 'validee').toLowerCase() === 'validee'
+  );
 
   const invoiceMovement = (invoice, inPeriod) => {
     const amountCents = moneyToCents(invoice.totalTTC);
@@ -69,16 +73,32 @@ export function buildThirdPartyStatement({
       inPeriod,
     };
   };
+  const creditNoteMovement = (note, inPeriod) => {
+    const amountCents = moneyToCents(note.montantTTC);
+    return {
+      date: dateKey(note.dateAvoir),
+      type: side === 'client' ? 'avoir_client' : 'avoir_fournisseur',
+      reference: note.numero || `#${note.id}`,
+      description: note.motif || null,
+      debitCents: side === 'fournisseur' ? amountCents : 0,
+      creditCents: side === 'client' ? amountCents : 0,
+      source: note,
+      inPeriod,
+    };
+  };
 
   const allMovements = [
     ...eligibleInvoices.map(invoice => invoiceMovement(invoice, false)),
     ...eligiblePayments.map(payment => paymentMovement(payment, false)),
+    ...eligibleCreditNotes.map(note => creditNoteMovement(note, false)),
   ].sort((a, b) => {
     const byDate = a.date.localeCompare(b.date);
     if (byDate) return byDate;
     const aIsInvoice = a.type.startsWith('facture');
     const bIsInvoice = b.type.startsWith('facture');
     if (aIsInvoice !== bIsInvoice) return aIsInvoice ? -1 : 1;
+    const order = { facture_client: 0, facture_fournisseur: 0, avoir_client: 1, avoir_fournisseur: 1 };
+    if ((order[a.type] ?? 2) !== (order[b.type] ?? 2)) return (order[a.type] ?? 2) - (order[b.type] ?? 2);
     return String(a.reference).localeCompare(String(b.reference));
   });
 
@@ -117,15 +137,22 @@ export function buildThirdPartyStatement({
     const date = dateKey(payment.datePaiement);
     return date >= dateDebut && date <= dateFin;
   });
+  const periodCreditNotes = eligibleCreditNotes.filter(note => {
+    const date = dateKey(note.dateAvoir);
+    return date >= dateDebut && date <= dateFin;
+  });
   const totalFactureCents = periodInvoices.reduce((sum, invoice) => sum + moneyToCents(invoice.totalTTC), 0);
   const totalPayeCents = periodPayments.reduce((sum, payment) => sum + moneyToCents(payment.montant), 0);
+  const totalAvoirCents = periodCreditNotes.reduce((sum, note) => sum + moneyToCents(note.montantTTC), 0);
 
   return {
     factures: periodInvoices,
     paiements: periodPayments,
+    avoirs: periodCreditNotes,
     mouvements: movements,
     totalFacture: centsToMoney(totalFactureCents),
     totalPaye: centsToMoney(totalPayeCents),
+    totalAvoir: centsToMoney(totalAvoirCents),
     soldeOuverture: centsToMoney(openingAtStart),
     soldeCloture: centsToMoney(balanceCents),
     solde: centsToMoney(balanceCents),

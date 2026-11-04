@@ -111,6 +111,7 @@ const PLAN_SYSCOHADA = [
   { numero: '502', nom: 'Actions propres', categorie: 'Actif', classe: '5' },
   { numero: '506', nom: 'Obligations', categorie: 'Actif', classe: '5' },
   { numero: '51', nom: 'Banques, établissements financiers et assimilés', categorie: 'Actif', classe: '5' },
+  { numero: '5112', nom: 'Chèques à encaisser', categorie: 'Actif', classe: '5' },
   { numero: '52', nom: 'Banques (compte principal)', categorie: 'Actif', classe: '5' },
   { numero: '512', nom: 'Banques', categorie: 'Actif', classe: '5' },
   { numero: '5121', nom: 'Banque principale', categorie: 'Actif', classe: '5' },

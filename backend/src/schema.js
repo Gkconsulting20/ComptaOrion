@@ -256,6 +256,8 @@ export const factureAchatItems = pgTable('facture_achat_items', {
   prixUnitaireSaisi: decimal('prix_unitaire_saisi', { precision: 15, scale: 2 }),
   remise: decimal('remise', { precision: 5, scale: 2 }).default('0'),
   totalLigne: decimal('total_ligne', { precision: 15, scale: 2 }).notNull(),
+  coutUnitaireFinal: decimal('cout_unitaire_final', { precision: 15, scale: 4 }),
+  mouvementStockId: integer('mouvement_stock_id').references(() => mouvementsStock.id),
 });
 
 export const paiementsFournisseurs = pgTable('paiements_fournisseurs', {
@@ -633,6 +635,7 @@ export const factureItems = pgTable('facture_items', {
   prixUnitaire: decimal('prix_unitaire', { precision: 15, scale: 2 }).notNull(),
   remise: decimal('remise', { precision: 5, scale: 2 }).default('0'),
   totalLigne: decimal('total_ligne', { precision: 15, scale: 2 }).notNull(),
+  coutUnitaireCMV: decimal('cout_unitaire_cmv', { precision: 15, scale: 4 }),
 });
 
 export const paiements = pgTable('paiements', {
@@ -645,8 +648,51 @@ export const paiements = pgTable('paiements', {
   reference: varchar('reference', { length: 255 }),
   datePaiement: date('date_paiement').defaultNow(),
   notes: text('notes'),
+  statutCheque: varchar('statut_cheque', { length: 30 }).default('non_applicable'),
+  compteBancaireId: integer('compte_bancaire_id').references(() => comptesBancaires.id),
+  dateEncaissementCheque: date('date_encaissement_cheque'),
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const notesCredit = pgTable('notes_credit', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  type: varchar('type', { length: 20 }).notNull(),
+  numero: varchar('numero', { length: 40 }).notNull(),
+  annee: integer('annee').notNull(),
+  sequence: integer('sequence').notNull(),
+  clientId: integer('client_id').references(() => clients.id),
+  fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id),
+  factureId: integer('facture_id').references(() => factures.id),
+  factureAchatId: integer('facture_achat_id').references(() => facturesAchat.id),
+  dateAvoir: date('date_avoir').notNull(),
+  montantHT: decimal('montant_ht', { precision: 15, scale: 2 }).notNull(),
+  montantTVA: decimal('montant_tva', { precision: 15, scale: 2 }).notNull(),
+  montantTTC: decimal('montant_ttc', { precision: 15, scale: 2 }).notNull(),
+  motif: text('motif'),
+  statut: varchar('statut', { length: 30 }).default('validee').notNull(),
+  userId: integer('user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => [
+  uniqueIndex('notes_credit_sequence_unique').on(table.entrepriseId, table.type, table.annee, table.sequence),
+  uniqueIndex('notes_credit_number_unique').on(table.entrepriseId, table.numero),
+]);
+
+export const notesCreditItems = pgTable('notes_credit_items', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  noteCreditId: integer('note_credit_id').references(() => notesCredit.id).notNull(),
+  factureItemId: integer('facture_item_id').references(() => factureItems.id),
+  factureAchatItemId: integer('facture_achat_item_id').references(() => factureAchatItems.id),
+  produitId: integer('produit_id').references(() => produits.id),
+  description: text('description').notNull(),
+  quantite: decimal('quantite', { precision: 15, scale: 3).notNull(),
+  prixUnitaire: decimal('prix_unitaire', { precision: 15, scale: 4).notNull(),
+  totalHT: decimal('total_ht', { precision: 15, scale: 2).notNull(),
+  montantTVA: decimal('montant_tva', { precision: 15, scale: 2).notNull(),
+  coutStock: decimal('cout_stock', { precision: 15, scale: 2 }),
+  mouvementStockId: integer('mouvement_stock_id').references(() => mouvementsStock.id),
 });
 
 // ==========================================

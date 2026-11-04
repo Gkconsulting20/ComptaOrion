@@ -493,6 +493,13 @@ router.put('/factures/:id/valider', async (req, res) => {
           productSnapshot: product,
           ensureOpening: false,
         });
+        await tx.update(factureAchatItems).set({
+          coutUnitaireFinal: Number(item.quantite) > 0 ? (landedCost / Number(item.quantite)).toFixed(4) : '0.0000',
+          mouvementStockId: movement.id,
+        }).where(and(
+          eq(factureAchatItems.id, item.id),
+          eq(factureAchatItems.entrepriseId, req.entrepriseId)
+        ));
         await tx.update(produits).set({
           quantite: sql`${produits.quantite} + ${item.quantite}`,
           updatedAt: new Date()
@@ -519,6 +526,7 @@ router.put('/factures/:id/valider', async (req, res) => {
         console.error('Erreur création de l’écriture de facture fournisseur:', accountingError.message);
         throw accountingError;
       }
+      if (!accountingEntry) throw Object.assign(new Error('Écriture comptable de la facture fournisseur impossible.'), { status: 409 });
 
       await logAudit({
         ...extractAuditInfo(req),

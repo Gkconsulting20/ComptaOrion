@@ -1,17 +1,21 @@
 import express from 'express';
 import { db } from '../db.js';
-import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables, mouvementsStock, entreprises, liteIdempotency } from '../schema.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { factures, factureItems, paiements, clients, produits, transactionsTresorerie, comptesBancaires, ecritures, lignesEcritures, journaux, comptesComptables, mouvementsStock, entreprises, liteIdempotency, notesCredit, notesCreditItems } from '../schema.js';
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import emailService from '../services/emailService.js';
 import {
   createEcritureCoutVente,
   createEcritureFactureVente,
   createEcriturePaiementClient,
+  createEcritureAvoirClient,
+  createEcritureEncaissementCheque,
 } from '../services/comptabiliteService.js';
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
-import { consumeStockValuation } from '../services/stockValuation.js';
+import { consumeStockValuation, createStockValuationLayer } from '../services/stockValuation.js';
 import { addDaysToIsoDate } from '../services/paymentTerms.js';
+import { calculateCreditNoteVat, calculateReturnedLine } from '../services/creditNoteCalculations.js';
+import { generateCreditNoteNumber } from '../services/creditNoteNumbering.js';
 
 const router = express.Router();
 
@@ -228,8 +232,9 @@ router.post('/lite-sale', async (req, res) => {
         notes: notes || null, userId: req.user.id,
       }).returning();
       const itemRows = normalized.map(i => ({ entrepriseId: req.entrepriseId, factureId: invoice.id, produitId: i.produitId, description: i.description, quantite: i.quantite.toString(), prixUnitaire: i.prixUnitaire.toFixed(2), remise: i.remise.toFixed(2), totalLigne: (i.quantite * i.prixUnitaire * (1 - i.remise / 100)).toFixed(2) }));
-      await tx.insert(factureItems).values(itemRows);
+      const insertedItems = await tx.insert(factureItems).values(itemRows).returning();
       let totalCMV = 0;
+      const unitCostByProduct = new Map();
       for (const [productId, quantity] of requested) {
         const costing = await consumeStockValuation(tx, {
           entrepriseId: req.entrepriseId,
@@ -240,16 +245,26 @@ router.post('/lite-sale', async (req, res) => {
           throw Object.assign(new Error('Le coût de revient d’une partie du stock est introuvable; vente annulée pour éviter un CMV incorrect.'), { status: 409 });
         }
         totalCMV += costing.coutConsomme;
+        unitCostByProduct.set(productId, quantity > 0 ? costing.coutConsomme / quantity : 0);
 
         const [updated] = await tx.update(produits).set({ quantite: sql`${produits.quantite} - ${quantity}`, updatedAt: new Date() }).where(and(eq(produits.id, productId), eq(produits.entrepriseId, req.entrepriseId), sql`${produits.quantite} >= ${quantity}`)).returning();
         if (!updated) throw Object.assign(new Error('Le stock a changé, veuillez réessayer'), { status: 409 });
         await tx.insert(mouvementsStock).values({ entrepriseId: req.entrepriseId, produitId: productId, type: 'sortie', quantite: quantity.toString(), prixUnitaire: String(productRows.find(p => p.id === productId)?.prixVente || 0), reference: numeroFacture, notes: 'Vente ComptaOrion Lite', userId: req.user.id });
       }
+      const costedItems = [];
+      for (const item of insertedItems) {
+        const unitCost = item.produitId ? unitCostByProduct.get(item.produitId) : null;
+        if (unitCost != null) {
+          await tx.update(factureItems).set({ coutUnitaireCMV: unitCost.toFixed(4) })
+            .where(and(eq(factureItems.id, item.id), eq(factureItems.entrepriseId, req.entrepriseId)));
+        }
+        costedItems.push({ ...item, coutUnitaireCMV: unitCost == null ? null : unitCost.toFixed(4) });
+      }
       let payment = null;
       if (requestedPayment > 0) {
-        [payment] = await tx.insert(paiements).values({ entrepriseId: req.entrepriseId, factureId: invoice.id, clientId: effectiveClientId, montant: requestedPayment.toFixed(2), modePaiement: paiement?.modePaiement || 'especes', reference: paiement?.reference || null, datePaiement: paiement?.datePaiement || new Date().toISOString().slice(0, 10), notes: paiement?.notes || null, userId: req.user.id }).returning();
+        [payment] = await tx.insert(paiements).values({ entrepriseId: req.entrepriseId, factureId: invoice.id, clientId: effectiveClientId, montant: requestedPayment.toFixed(2), modePaiement: paiement?.modePaiement || 'especes', reference: paiement?.reference || null, datePaiement: paiement?.datePaiement || new Date().toISOString().slice(0, 10), notes: paiement?.notes || null, statutCheque: paiement?.modePaiement === 'cheque' ? 'en_attente' : 'non_applicable', compteBancaireId: paiement?.compteBancaireId ? Number(paiement.compteBancaireId) : null, userId: req.user.id }).returning();
       }
-      await createEcritureFactureVente({
+      const salesEntry = await createEcritureFactureVente({
         entrepriseId: req.entrepriseId,
         numeroFacture,
         dateFacture: dateFacture || new Date().toISOString().slice(0, 10),
@@ -260,6 +275,7 @@ router.post('/lite-sale', async (req, res) => {
         totalTTC,
         executor: tx,
       });
+      if (!salesEntry) throw Object.assign(new Error('Écriture comptable de vente impossible; vérifiez le plan comptable.'), { status: 409 });
       await createEcritureCoutVente({
         entrepriseId: req.entrepriseId,
         numeroFacture,
@@ -268,7 +284,7 @@ router.post('/lite-sale', async (req, res) => {
         executor: tx,
       });
       if (payment) {
-        await createEcriturePaiementClient({
+        const paymentEntry = await createEcriturePaiementClient({
           entrepriseId: req.entrepriseId,
           reference: payment.reference || `PAI-${payment.id}`,
           datePaiement: payment.datePaiement,
@@ -279,8 +295,9 @@ router.post('/lite-sale', async (req, res) => {
           compteBancaireId: paiement?.compteBancaireId ? Number(paiement.compteBancaireId) : null,
           executor: tx,
         });
+        if (!paymentEntry) throw Object.assign(new Error('Écriture comptable de l’encaissement impossible.'), { status: 409 });
       }
-      const body = { success: true, message: 'Vente Lite enregistrée', data: { ...invoice, client, items: itemRows, paiement: payment, montantCMV: Number(totalCMV.toFixed(2)) } };
+      const body = { success: true, message: 'Vente Lite enregistrée', data: { ...invoice, client, items: costedItems, paiement: payment, montantCMV: Number(totalCMV.toFixed(2)) } };
       if (req.idempotencyKey) await tx.update(liteIdempotency).set({ status: 'completed', responseStatus: 201, responseBody: body, updatedAt: new Date() }).where(and(eq(liteIdempotency.entrepriseId, req.entrepriseId), eq(liteIdempotency.idempotencyKey, req.idempotencyKey)));
       return { body, status: 201 };
     });
@@ -535,6 +552,9 @@ router.post('/:id/paiement', async (req, res) => {
         message: 'Le mode de paiement est obligatoire',
       });
     }
+    if (modePaiement === 'cheque' && !String(reference || '').trim()) {
+      return res.status(400).json({ success: false, message: 'Le numéro du chèque est obligatoire.' });
+    }
 
     const result = await db.transaction(async tx => {
     // Lock before checking the balance, so concurrent payments cannot overpay.
@@ -559,7 +579,7 @@ router.post('/:id/paiement', async (req, res) => {
     }
     if (factureData.statut === 'annulee') throw Object.assign(new Error('Facture annulée'), { status:400 });
     let compte;
-    if (compteBancaireId) {
+    if (compteBancaireId && modePaiement !== 'cheque') {
       [compte] = await tx.select().from(comptesBancaires)
         .where(and(eq(comptesBancaires.id, Number(compteBancaireId)), eq(comptesBancaires.entrepriseId, req.entrepriseId)))
         .limit(1).for('update');
@@ -578,6 +598,8 @@ router.post('/:id/paiement', async (req, res) => {
         reference: reference || null,
         datePaiement: datePaiement || new Date().toISOString().split('T')[0],
         notes: notes || null,
+        statutCheque: modePaiement === 'cheque' ? 'en_attente' : 'non_applicable',
+        compteBancaireId: modePaiement === 'cheque' && compteBancaireId ? parseInt(compteBancaireId) : null,
         userId: req.user.id,
       })
       .returning();
@@ -601,7 +623,7 @@ router.post('/:id/paiement', async (req, res) => {
       ));
 
     // Impact automatique sur TRÉSORERIE
-    if (compteBancaireId) {
+    if (compteBancaireId && modePaiement !== 'cheque') {
       // Enregistrer la transaction de trésorerie
       await tx.insert(transactionsTresorerie).values({
         entrepriseId: req.entrepriseId,
@@ -641,7 +663,7 @@ router.post('/:id/paiement', async (req, res) => {
         clientNom: clientInfo.nom || 'Client',
         clientCompteId: clientInfo.compteComptableId,
         montant: montantPaiement,
-        modePaiement: modePaiement === 'especes' ? 'especes' : 'banque',
+        modePaiement: modePaiement === 'cheque' ? 'cheque' : modePaiement === 'especes' ? 'especes' : 'banque',
         compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null,
         executor: tx
       });
@@ -871,6 +893,12 @@ router.put('/:id', async (req, res) => {
               throw Object.assign(new Error(`Le CMV du stock restant de ${product.nom} ne peut pas être établi; vente annulée.`), { status: 409 });
             }
             totalCMV += costing.coutConsomme;
+            await tx.update(factureItems).set({
+              coutUnitaireCMV: quantity > 0 ? (costing.coutConsomme / quantity).toFixed(4) : '0.0000',
+            }).where(and(
+              eq(factureItems.id, item.id),
+              eq(factureItems.entrepriseId, req.entrepriseId)
+            ));
 
             await tx.insert(mouvementsStock).values({
               entrepriseId: req.entrepriseId,
@@ -1105,6 +1133,278 @@ router.get('/export/csv', async (req, res) => {
   } catch (error) {
     console.error('Erreur export factures:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:id/avoir', async (req, res) => {
+  try {
+    const factureId = Number(req.params.id);
+    const dateAvoir = String(req.body.dateAvoir || new Date().toISOString().slice(0, 10));
+    const requestedLines = Array.isArray(req.body.items) ? req.body.items : [];
+    if (!Number.isInteger(factureId) || requestedLines.length === 0) {
+      return res.status(400).json({ success: false, message: 'Sélectionnez au moins une ligne à retourner.' });
+    }
+
+    const result = await db.transaction(async tx => {
+      const [facture] = await tx.select().from(factures).where(and(
+        eq(factures.id, factureId),
+        eq(factures.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!facture) throw Object.assign(new Error('Facture client introuvable.'), { status: 404 });
+      if (['brouillon', 'annulee'].includes(String(facture.statut).toLowerCase())) {
+        throw Object.assign(new Error('Un avoir ne peut viser qu’une facture envoyée ou payée.'), { status: 409 });
+      }
+
+      const invoiceLines = await tx.select().from(factureItems).where(and(
+        eq(factureItems.factureId, factureId),
+        eq(factureItems.entrepriseId, req.entrepriseId)
+      )).for('update');
+      const lineById = new Map(invoiceLines.map(line => [Number(line.id), line]));
+      const itemIds = requestedLines.map(line => Number(line.factureItemId));
+      if (itemIds.some(id => !Number.isInteger(id)) || new Set(itemIds).size !== itemIds.length) {
+        throw Object.assign(new Error('Les lignes du retour sont invalides ou répétées.'), { status: 400 });
+      }
+      const priorReturns = await tx.select({
+        factureItemId: notesCreditItems.factureItemId,
+        quantite: notesCreditItems.quantite,
+      }).from(notesCreditItems).where(and(
+        eq(notesCreditItems.entrepriseId, req.entrepriseId),
+        inArray(notesCreditItems.factureItemId, itemIds)
+      ));
+      const returnedByItemId = new Map();
+      for (const row of priorReturns) {
+        const id = Number(row.factureItemId);
+        returnedByItemId.set(id, (returnedByItemId.get(id) || 0) + Number(row.quantite || 0));
+      }
+
+      const computedLines = requestedLines.map(request => {
+        const original = lineById.get(Number(request.factureItemId));
+        if (!original) throw Object.assign(new Error('Une ligne ne fait pas partie de cette facture.'), { status: 400 });
+        if (!original.produitId) throw Object.assign(new Error(`La ligne « ${original.description} » n’est pas un article stockable.`), { status: 409 });
+        if (original.coutUnitaireCMV == null || !Number.isFinite(Number(original.coutUnitaireCMV))) {
+          throw Object.assign(new Error(`Le coût historique de « ${original.description} » n’est pas enregistré. Cet ancien article ne peut pas être retourné automatiquement.`), { status: 409 });
+        }
+        return {
+          original,
+          ...calculateReturnedLine({
+            quantityOriginal: original.quantite,
+            quantityAlreadyReturned: returnedByItemId.get(Number(original.id)) || 0,
+            quantityRequested: request.quantite,
+            totalOriginalHT: original.totalLigne,
+            historicalUnitCost: original.coutUnitaireCMV,
+          }),
+        };
+      });
+      const totalHT = Number(computedLines.reduce((sum, line) => sum + line.totalHT, 0).toFixed(2));
+      if (totalHT <= 0) throw Object.assign(new Error('Le montant de l’avoir doit être positif.'), { status: 400 });
+      const totalTVA = calculateCreditNoteVat(totalHT, facture.totalHT, facture.totalTVA);
+      const totalTTC = Number((totalHT + totalTVA).toFixed(2));
+      const [client] = await tx.select().from(clients).where(and(
+        eq(clients.id, facture.clientId),
+        eq(clients.entrepriseId, req.entrepriseId)
+      )).limit(1);
+      if (!client) throw Object.assign(new Error('Client de la facture introuvable.'), { status: 409 });
+
+      const number = await generateCreditNoteNumber(tx, { entrepriseId: req.entrepriseId, type: 'client', dateAvoir });
+      const [note] = await tx.insert(notesCredit).values({
+        entrepriseId: req.entrepriseId,
+        type: 'client',
+        ...number,
+        clientId: client.id,
+        factureId: facture.id,
+        dateAvoir,
+        montantHT: totalHT.toFixed(2),
+        montantTVA: totalTVA.toFixed(2),
+        montantTTC: totalTTC.toFixed(2),
+        motif: req.body.motif || null,
+        statut: 'validee',
+        userId: req.user.id,
+      }).returning();
+
+      const noteLines = [];
+      for (const line of computedLines) {
+        const [product] = await tx.select().from(produits).where(and(
+          eq(produits.id, line.original.produitId),
+          eq(produits.entrepriseId, req.entrepriseId)
+        )).for('update').limit(1);
+        if (!product) throw Object.assign(new Error('Produit retourné introuvable dans cette entreprise.'), { status: 409 });
+        const [movement] = await tx.insert(mouvementsStock).values({
+          entrepriseId: req.entrepriseId,
+          produitId: product.id,
+          type: 'entree',
+          quantite: line.quantite.toFixed(3),
+          prixUnitaire: (Number(line.coutStock || 0) / line.quantite).toFixed(4),
+          reference: note.numero,
+          notes: `Retour client lié à la facture ${facture.numeroFacture}`,
+          userId: req.user.id,
+        }).returning();
+        await createStockValuationLayer(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: product.id,
+          mouvementId: movement.id,
+          quantity: line.quantite,
+          totalCost: line.coutStock,
+          unitCost: Number(line.coutStock || 0) / line.quantite,
+          productSnapshot: product,
+        });
+        await tx.update(produits).set({
+          quantite: sql`${produits.quantite} + ${line.quantite}`,
+          updatedAt: new Date(),
+        }).where(and(eq(produits.id, product.id), eq(produits.entrepriseId, req.entrepriseId)));
+        noteLines.push({
+          entrepriseId: req.entrepriseId,
+          noteCreditId: note.id,
+          factureItemId: line.original.id,
+          produitId: product.id,
+          description: line.original.description,
+          quantite: line.quantite.toFixed(3),
+          prixUnitaire: (line.totalHT / line.quantite).toFixed(4),
+          totalHT: line.totalHT.toFixed(2),
+          montantTVA: '0.00',
+          coutStock: Number(line.coutStock || 0).toFixed(2),
+          mouvementStockId: movement.id,
+        });
+      }
+      let taxAllocatedCents = 0;
+      noteLines.forEach((line, index) => {
+        const taxCents = index === noteLines.length - 1
+          ? Math.round(totalTVA * 100) - taxAllocatedCents
+          : Math.round(totalTVA * 100 * (Number(line.totalHT) / totalHT));
+        line.montantTVA = (taxCents / 100).toFixed(2);
+        taxAllocatedCents += taxCents;
+      });
+      await tx.insert(notesCreditItems).values(noteLines);
+
+      const oldBalance = Number(facture.soldeRestant || 0);
+      const updatedBalance = Math.max(0, oldBalance - totalTTC);
+      await tx.update(factures).set({
+        soldeRestant: updatedBalance.toFixed(2),
+        updatedAt: new Date(),
+      }).where(and(eq(factures.id, facture.id), eq(factures.entrepriseId, req.entrepriseId)));
+
+      const entry = await createEcritureAvoirClient({
+        entrepriseId: req.entrepriseId,
+        numeroAvoir: note.numero,
+        dateAvoir,
+        clientNom: client.nom,
+        clientCompteId: client.compteComptableId,
+        totalHT,
+        totalTVA,
+        totalTTC,
+        sourceId: note.id,
+        executor: tx,
+      });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'notes_credit',
+        recordId: note.id,
+        nouvelleValeur: { note, lignes: noteLines, ecritureId: entry?.id },
+        description: `Avoir client ${note.numero} créé pour la facture ${facture.numeroFacture}`,
+        executor: tx,
+        required: true,
+      });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'factures',
+        recordId: facture.id,
+        ancienneValeur: { soldeRestant: facture.soldeRestant },
+        nouvelleValeur: { soldeRestant: updatedBalance.toFixed(2), avoirId: note.id },
+        description: `Solde réduit par l’avoir ${note.numero}`,
+        executor: tx,
+        required: true,
+      });
+      return { note, lignes: noteLines, ecritureId: entry?.id };
+    });
+    res.status(201).json({ success: true, message: 'Avoir client créé; stock et comptabilité mis à jour.', data: result });
+  } catch (error) {
+    console.error('Erreur création avoir client:', error);
+    res.status(error.status || 500).json({ success: false, message: error.message || 'Erreur lors de la création de l’avoir client.' });
+  }
+});
+
+router.get('/paiements/cheques/en-attente', async (req, res) => {
+  try {
+    const data = await db.select().from(paiements).where(and(
+      eq(paiements.entrepriseId, req.entrepriseId),
+      eq(paiements.modePaiement, 'cheque'),
+      eq(paiements.statutCheque, 'en_attente')
+    )).orderBy(desc(paiements.datePaiement));
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Impossible de charger les chèques en attente.' });
+  }
+});
+
+router.post('/paiements/:id/encaisser-cheque', async (req, res) => {
+  try {
+    const paymentId = Number(req.params.id);
+    const bankAccountId = Number(req.body.compteBancaireId);
+    const dateEncaissement = String(req.body.dateEncaissement || new Date().toISOString().slice(0, 10));
+    if (!Number.isInteger(paymentId) || !Number.isInteger(bankAccountId) || !/^\d{4}-\d{2}-\d{2}$/.test(dateEncaissement)) {
+      return res.status(400).json({ success: false, message: 'Sélectionnez un compte bancaire et une date valides.' });
+    }
+    const result = await db.transaction(async tx => {
+      const [payment] = await tx.select().from(paiements).where(and(
+        eq(paiements.id, paymentId),
+        eq(paiements.entrepriseId, req.entrepriseId),
+        eq(paiements.modePaiement, 'cheque')
+      )).for('update').limit(1);
+      if (!payment) throw Object.assign(new Error('Chèque client introuvable.'), { status: 404 });
+      if (payment.statutCheque !== 'en_attente') throw Object.assign(new Error('Ce chèque a déjà été traité.'), { status: 409 });
+      const [bank] = await tx.select().from(comptesBancaires).where(and(
+        eq(comptesBancaires.id, bankAccountId),
+        eq(comptesBancaires.entrepriseId, req.entrepriseId),
+        eq(comptesBancaires.actif, true)
+      )).for('update').limit(1);
+      if (!bank) throw Object.assign(new Error('Compte bancaire introuvable ou inactif.'), { status: 409 });
+
+      const entry = await createEcritureEncaissementCheque({
+        entrepriseId: req.entrepriseId,
+        reference: payment.reference || `CHEQUE-${payment.id}`,
+        dateEncaissement,
+        montant: Number(payment.montant),
+        compteBancaireId: bankAccountId,
+        sourceId: payment.id,
+        executor: tx,
+      });
+      const [updated] = await tx.update(paiements).set({
+        statutCheque: 'encaisse',
+        compteBancaireId: bankAccountId,
+        dateEncaissementCheque: dateEncaissement,
+      }).where(and(eq(paiements.id, payment.id), eq(paiements.entrepriseId, req.entrepriseId))).returning();
+      await tx.insert(transactionsTresorerie).values({
+        entrepriseId: req.entrepriseId,
+        compteBancaireId: bankAccountId,
+        type: 'encaissement',
+        montant: payment.montant,
+        dateTransaction: dateEncaissement,
+        categorie: 'Encaissement chèque client',
+        description: `Encaissement du chèque ${payment.reference || payment.id}`,
+        numeroPiece: payment.reference || `CHEQUE-${payment.id}`,
+        userId: req.user.id,
+      });
+      await tx.update(comptesBancaires).set({
+        soldeActuel: sql`${comptesBancaires.soldeActuel} + ${payment.montant}`,
+        updatedAt: new Date(),
+      }).where(and(eq(comptesBancaires.id, bankAccountId), eq(comptesBancaires.entrepriseId, req.entrepriseId)));
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'paiements',
+        recordId: payment.id,
+        ancienneValeur: payment,
+        nouvelleValeur: { ...updated, ecritureEncaissementId: entry?.id },
+        description: `Chèque ${payment.reference || payment.id} encaissé en banque`,
+        executor: tx,
+        required: true,
+      });
+      return { paiement: updated, ecritureId: entry?.id };
+    });
+    res.json({ success: true, message: 'Chèque encaissé et transféré au compte bancaire.', data: result });
+  } catch (error) {
+    res.status(error.status || 500).json({ success: false, message: error.message || 'Impossible d’encaisser ce chèque.' });
   }
 });
 

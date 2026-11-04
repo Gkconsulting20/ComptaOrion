@@ -14,6 +14,7 @@ const migrationScopes = new Map([
   ['user-access', new Set(['users'])],
   ['accountant-invitations', new Set(['users', 'accountant_invitations'])],
   ['party-payment-settings', new Set(['fournisseurs'])],
+  ['credit-notes-cheques', new Set(['facture_items', 'facture_achat_items', 'paiements', 'notes_credit', 'notes_credit_items'])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
@@ -50,7 +51,7 @@ try {
     const [, name, body] = table;
     if (scopedTables && !scopedTables.has(name)) continue;
     if (!present.has(name)) {
-      if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations') {
+      if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations' && scope !== 'credit-notes-cheques') {
         throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
       }
       actions.push(statement);

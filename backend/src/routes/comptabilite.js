@@ -89,6 +89,7 @@ const PLAN_SYSCOHADA = [
   
   // Classe 5 - Comptes de trésorerie
   { numero: '512', nom: 'Banques', categorie: 'Actif', classe: '5' },
+  { numero: '5112', nom: 'Chèques à encaisser', categorie: 'Actif', classe: '5' },
   { numero: '513', nom: 'Chèques à encaisser', categorie: 'Actif', classe: '5' },
   { numero: '514', nom: 'Chèques à l\'encaissement', categorie: 'Actif', classe: '5' },
   { numero: '515', nom: 'Caisse', categorie: 'Actif', classe: '5' },

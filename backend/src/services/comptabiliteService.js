@@ -16,6 +16,7 @@ const COMPTES_SYSCOHADA = {
   FOURNISSEURS: '401',
   FOURNISSEURS_FACTURES_NON_PARVENUES: '408',
   CLIENTS: '411',
+  CHEQUES_A_ENCAISSER: '5112',
   PERSONNEL_AVANCES: '421',
   ETAT_TVA_DUE: '4434',
   ETAT_IMPOTS: '44',
@@ -613,7 +614,9 @@ export async function createEcriturePaiementClient(params) {
   const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
 
   const compte411 = clientCompteId ? await getCompteById(clientCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
-  const compteTresorerie = await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
+  const compteTresorerie = modePaiement === 'cheque'
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CHEQUES_A_ENCAISSER, executor)
+    : await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
 
   const ecrituresLignes = [];
 
@@ -651,6 +654,116 @@ export async function createEcriturePaiementClient(params) {
     lignes: ecrituresLignes,
     valide: false,
     executor
+  });
+}
+
+export async function createEcritureAvoirClient({
+  entrepriseId, numeroAvoir, dateAvoir, clientNom, clientCompteId,
+  totalHT, totalTVA, totalTTC, sourceId, executor = db,
+}) {
+  const clientAccount = clientCompteId
+    ? await getCompteById(clientCompteId, executor)
+    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
+  const salesReturns = await getCompteByNumero(entrepriseId, '709', executor);
+  const vatCollected = Number(totalTVA) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor)
+    : null;
+  if (!clientAccount || !salesReturns || (Number(totalTVA) > 0 && !vatCollected)) {
+    throw new Error('Configurez les comptes 411, 709 et 443 avant de créer un avoir client.');
+  }
+
+  const lines = [
+    { compteComptableId: salesReturns.id, debit: totalHT, credit: 0, libelle: `Retour marchandises - ${numeroAvoir}` },
+  ];
+  if (Number(totalTVA) > 0) {
+    lines.push({ compteComptableId: vatCollected.id, debit: totalTVA, credit: 0, libelle: `Annulation TVA collectée - ${numeroAvoir}` });
+  }
+  lines.push({ compteComptableId: clientAccount.id, debit: 0, credit: totalTTC, libelle: `Avoir client ${clientNom} - ${numeroAvoir}` });
+
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode: JOURNAL_CODES.VENTES,
+    journalNom: 'Journal des Ventes',
+    journalType: 'ventes',
+    dateEcriture: dateAvoir,
+    libelle: `Avoir client ${clientNom} - ${numeroAvoir}`,
+    numeroPiece: numeroAvoir,
+    sourceType: 'note_credit',
+    sourceId,
+    lignes: lines,
+    valide: false,
+    executor,
+  });
+}
+
+export async function createEcritureAvoirFournisseur({
+  entrepriseId, numeroAvoir, dateAvoir, fournisseurNom, totalHT, totalTVA,
+  totalTTC, coutStock, fraisTransportNonRecuperable = 0, sourceId, executor = db,
+}) {
+  const supplier = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS, executor);
+  const stock = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES, executor);
+  const transport = Number(fraisTransportNonRecuperable) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_SERVICES, executor)
+    : null;
+  const vatDeductible = Number(totalTVA) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor)
+    : null;
+  if (!supplier || !stock || (Number(totalTVA) > 0 && !vatDeductible) ||
+      (Number(fraisTransportNonRecuperable) > 0 && !transport)) {
+    throw new Error('Configurez les comptes 401, 31, 445 et 61 avant de créer un avoir fournisseur.');
+  }
+
+  const lines = [
+    { compteComptableId: supplier.id, debit: totalTTC, credit: 0, libelle: `Avoir fournisseur ${fournisseurNom} - ${numeroAvoir}` },
+  ];
+  if (Number(fraisTransportNonRecuperable) > 0) {
+    lines.push({ compteComptableId: transport.id, debit: fraisTransportNonRecuperable, credit: 0, libelle: `Transport non récupérable - ${numeroAvoir}` });
+  }
+  lines.push({ compteComptableId: stock.id, debit: 0, credit: coutStock, libelle: `Sortie de stock retourné - ${numeroAvoir}` });
+  if (Number(totalTVA) > 0) {
+    lines.push({ compteComptableId: vatDeductible.id, debit: 0, credit: totalTVA, libelle: `Annulation TVA déductible - ${numeroAvoir}` });
+  }
+
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode: JOURNAL_CODES.ACHATS,
+    journalNom: 'Journal des Achats',
+    journalType: 'achats',
+    dateEcriture: dateAvoir,
+    libelle: `Avoir fournisseur ${fournisseurNom} - ${numeroAvoir}`,
+    numeroPiece: numeroAvoir,
+    sourceType: 'note_credit',
+    sourceId,
+    lignes: lines,
+    valide: false,
+    executor,
+  });
+}
+
+export async function createEcritureEncaissementCheque({
+  entrepriseId, reference, dateEncaissement, montant, compteBancaireId, sourceId, executor = db,
+}) {
+  const bank = await getCompteTresorerie(entrepriseId, 'banque', compteBancaireId, executor);
+  const checks = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CHEQUES_A_ENCAISSER, executor);
+  if (!bank || !checks) {
+    throw new Error('Configurez le compte bancaire et le compte 5112 des chèques à encaisser.');
+  }
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode: JOURNAL_CODES.BANQUE,
+    journalNom: 'Journal de Banque',
+    journalType: 'banque',
+    dateEcriture: dateEncaissement,
+    libelle: `Encaissement du chèque ${reference}`,
+    numeroPiece: reference,
+    sourceType: 'paiement_cheque',
+    sourceId,
+    lignes: [
+      { compteComptableId: bank.id, debit: montant, credit: 0, libelle: `Dépôt du chèque ${reference}` },
+      { compteComptableId: checks.id, debit: 0, credit: montant, libelle: `Transfert du compte 5112 - ${reference}` },
+    ],
+    valide: false,
+    executor,
   });
 }
 
