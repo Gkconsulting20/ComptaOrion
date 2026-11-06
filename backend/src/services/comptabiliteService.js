@@ -16,7 +16,7 @@ const COMPTES_SYSCOHADA = {
   STOCK_MARCHANDISES: '31',
   FOURNISSEURS: '401',
   FOURNISSEURS_FACTURES_NON_PARVENUES: '408',
-  CLIENTS: '411',
+  CLIENTS: '4111',
   CHEQUES_A_ENCAISSER: '5112',
   ACHATS_RETOUR: '609',
   PERSONNEL_AVANCES: '421',
@@ -64,6 +64,16 @@ export async function getCompteByNumero(entrepriseId, numero, executor = db) {
     ))
     .limit(1);
   return comptes[0] || null;
+}
+
+async function getCompteByNumeroExact(entrepriseId, numero, executor = db) {
+  const [compte] = await executor.select().from(comptesComptables)
+    .where(and(
+      eq(comptesComptables.entrepriseId, entrepriseId),
+      eq(comptesComptables.numero, numero)
+    ))
+    .limit(1);
+  return compte || null;
 }
 
 async function ensureChequeAccount(entrepriseId, executor = db) {
@@ -451,27 +461,29 @@ export async function createEcritureFactureVente(params) {
     numeroFacture,
     dateFacture,
     clientNom,
-    clientCompteId,
     totalHT,
     totalTVA = 0,
     totalTTC,
     executor = db
   } = params;
 
-  const compte411 = clientCompteId ? await getCompteById(clientCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
+  const compte411 = await getCompteByNumeroExact(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
   const compteVentes = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.VENTES_MARCHANDISES, executor);
   const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor);
 
+  if (!compte411 || !compteVentes || (Number(totalTVA) > 0 && !compteTVA)) {
+    console.warn('Comptes collectifs requis manquants pour créer une écriture de facture client');
+    return null;
+  }
+
   const ecrituresLignes = [];
 
-  if (compte411) {
-    ecrituresLignes.push({
-      compteComptableId: compte411.id,
-      debit: totalTTC,
-      credit: 0,
-      libelle: `Client ${clientNom} - ${numeroFacture}`
-    });
-  }
+  ecrituresLignes.push({
+    compteComptableId: compte411.id,
+    debit: totalTTC,
+    credit: 0,
+    libelle: `Client ${clientNom} - ${numeroFacture}`
+  });
 
   if (compteVentes) {
     ecrituresLignes.push({
@@ -628,7 +640,6 @@ export async function createEcriturePaiementClient(params) {
     reference,
     datePaiement,
     clientNom,
-    clientCompteId,
     montant,
     escompteHT = 0,
     modePaiement,
@@ -639,7 +650,10 @@ export async function createEcriturePaiementClient(params) {
   const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
   const journalNom = modePaiement === 'especes' ? 'Journal de Caisse' : 'Journal de Banque';
 
-  const compte411 = clientCompteId ? await getCompteById(clientCompteId, executor) : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
+  const compte411 = await getCompteByNumeroExact(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
+  if (!compte411) {
+    throw new Error('Le compte collectif client 4111 est requis pour comptabiliser un encaissement client.');
+  }
   const compteTresorerie = modePaiement === 'cheque'
     ? await ensureChequeAccount(entrepriseId, executor)
     : await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
@@ -684,12 +698,10 @@ export async function createEcriturePaiementClient(params) {
 }
 
 export async function createEcritureAvoirClient({
-  entrepriseId, numeroAvoir, dateAvoir, clientNom, clientCompteId,
+  entrepriseId, numeroAvoir, dateAvoir, clientNom,
   totalHT, totalTVA, totalTTC, coutStock = 0, sourceId, executor = db,
 }) {
-  const clientAccount = clientCompteId
-    ? await getCompteById(clientCompteId, executor)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
+  const clientAccount = await getCompteByNumeroExact(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
   const salesReturns = await getCompteByNumero(entrepriseId, '709', executor);
   const vatCollected = Number(totalTVA) > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor)
@@ -702,7 +714,7 @@ export async function createEcritureAvoirClient({
     : null;
   if (!clientAccount || !salesReturns || (Number(totalTVA) > 0 && !vatCollected) ||
       (Number(coutStock) > 0 && (!stock || !costOfGoods))) {
-    throw new Error('Configurez les comptes 411, 709, 443, 31 et 603 avant de créer un avoir client.');
+    throw new Error('Configurez les comptes 4111, 709, 443, 31 et 603 avant de créer un avoir client.');
   }
 
   const lines = [
@@ -736,18 +748,16 @@ export async function createEcritureAvoirClient({
 }
 
 export async function createEcritureNoteDebitClient({
-  entrepriseId, numeroNote, dateNote, clientNom, clientCompteId,
+  entrepriseId, numeroNote, dateNote, clientNom,
   totalHT, totalTVA, totalTTC, sourceId, executor = db,
 }) {
-  const clientAccount = clientCompteId
-    ? await getCompteById(clientCompteId, executor)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
+  const clientAccount = await getCompteByNumeroExact(entrepriseId, COMPTES_SYSCOHADA.CLIENTS, executor);
   const sales = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.VENTES_MARCHANDISES, executor);
   const vatCollected = Number(totalTVA) > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor)
     : null;
   if (!clientAccount || !sales || (Number(totalTVA) > 0 && !vatCollected)) {
-    throw new Error('Configurez les comptes 411, 701 et 443 avant de créer une note de débit client.');
+    throw new Error('Configurez les comptes 4111, 701 et 443 avant de créer une note de débit client.');
   }
   const lines = [
     { compteComptableId: clientAccount.id, debit: totalTTC, credit: 0, libelle: `Note de débit client ${clientNom} - ${numeroNote}` },

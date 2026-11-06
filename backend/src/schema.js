@@ -136,6 +136,7 @@ export const accountantInvitations = pgTable('accountant_invitations', {
 export const clients = pgTable('clients', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  // Historique seulement : toutes les écritures clients utilisent le compte collectif 4111.
   compteComptableId: integer('compte_comptable_id'),
   codeAuxiliaire: varchar('code_auxiliaire', { length: 20 }),
   numeroClient: varchar('numero_client', { length: 50 }).unique(),

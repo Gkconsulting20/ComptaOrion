@@ -10,6 +10,7 @@ import {
 } from '../services/stockValuation.js';
 import { isValidPaymentDelay, isValidCashDiscountTerms, isValidPreferredPaymentMethods } from '../services/paymentTerms.js';
 import { buildThirdPartyStatement } from '../services/thirdPartyLedger.js';
+import { formatClientNumberFromId } from '../services/clientIdentity.js';
 
 const router = express.Router();
 
@@ -798,7 +799,6 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      numeroClient,
       nom,
       type,
       email,
@@ -814,7 +814,6 @@ router.post('/', async (req, res) => {
       remise,
       soldeDu,
       actif,
-      compteComptableId,
       echeancesPersonnalisees,
       modesPaiementPreferes,
     } = req.body;
@@ -905,55 +904,77 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Créer le client avec l'entrepriseId automatique
-    const newClient = await db
-      .insert(clients)
-      .values({
-        entrepriseId: req.entrepriseId,
-        numeroClient: numeroClient || null,
-        nom: nom.trim(),
-        type: type || 'particulier',
-        email: email || null,
-        telephone: telephone || null,
-        adresse: adresse || null,
-        ville: ville || null,
-        pays: pays || null,
-        categorieClient: categorieClient || 'standard',
-        limiteCredit: limiteCredit || '0',
-        delaiPaiement: delaiPaiement ?? 30,
-        escomptePourcentage: String(escomptePourcentage ?? 0),
-        delaiEscompte: Number(delaiEscompte ?? 0),
-        remise: remise || '0',
-        soldeDu: soldeDu || '0',
-        actif: actif !== undefined ? actif : true,
-        compteComptableId: compteComptableId || null,
-        echeancesPersonnalisees: echeancesPersonnalisees || null,
-        modesPaiementPreferes: modesPaiementPreferes || null,
-      })
-      .returning();
-
-    // Générer et assigner le code auxiliaire automatiquement
-    const codeAuxiliaire = 'CLI' + String(newClient[0].id).padStart(5, '0');
-    await db.update(clients)
-      .set({ codeAuxiliaire })
-      .where(eq(clients.id, newClient[0].id));
-    newClient[0].codeAuxiliaire = codeAuxiliaire;
-
-    // Audit log
     const auditInfo = extractAuditInfo(req);
-    await logAudit({
-      ...auditInfo,
-      action: 'CREATE',
-      table: 'clients',
-      recordId: newClient[0].id,
-      nouvelleValeur: newClient[0],
-      description: `Client créé: ${nom}`
+    const [newClient] = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(clients)
+        .values({
+          entrepriseId: req.entrepriseId,
+          numeroClient: null,
+          nom: nom.trim(),
+          type: type || 'particulier',
+          email: email || null,
+          telephone: telephone || null,
+          adresse: adresse || null,
+          ville: ville || null,
+          pays: pays || null,
+          categorieClient: categorieClient || 'standard',
+          limiteCredit: limiteCredit || '0',
+          delaiPaiement: delaiPaiement ?? 30,
+          escomptePourcentage: String(escomptePourcentage ?? 0),
+          delaiEscompte: Number(delaiEscompte ?? 0),
+          remise: remise || '0',
+          soldeDu: soldeDu || '0',
+          actif: actif !== undefined ? actif : true,
+          compteComptableId: null,
+          echeancesPersonnalisees: echeancesPersonnalisees || null,
+          modesPaiementPreferes: modesPaiementPreferes || null,
+        })
+        .returning();
+
+      const codeAuxiliaire = formatClientNumberFromId(created.id);
+      let numeroClient = codeAuxiliaire;
+      let suffix = 0;
+      while (suffix <= 100) {
+        const [existingNumber] = await tx
+          .select({ id: clients.id })
+          .from(clients)
+          .where(eq(clients.numeroClient, numeroClient))
+          .limit(1);
+        if (!existingNumber) break;
+        suffix += 1;
+        if (suffix > 100) {
+          throw new Error('Impossible de générer un numéro client unique.');
+        }
+        numeroClient = `${codeAuxiliaire}-${suffix}`;
+      }
+
+      const [savedClient] = await tx
+        .update(clients)
+        .set({ codeAuxiliaire, numeroClient })
+        .where(and(
+          eq(clients.id, created.id),
+          eq(clients.entrepriseId, req.entrepriseId)
+        ))
+        .returning();
+
+      await logAudit({
+        ...auditInfo,
+        action: 'CREATE',
+        table: 'clients',
+        recordId: savedClient.id,
+        nouvelleValeur: savedClient,
+        description: `Client créé: ${nom}`,
+        executor: tx,
+        required: true,
+      });
+      return [savedClient];
     });
 
     res.status(201).json({
       success: true,
       message: 'Client créé avec succès',
-      data: newClient[0],
+      data: newClient,
     });
   } catch (error) {
     console.error('Erreur POST /api/clients:', error);
@@ -982,7 +1003,6 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      numeroClient,
       nom,
       type,
       email,
@@ -998,7 +1018,6 @@ router.put('/:id', async (req, res) => {
       remise,
       soldeDu,
       actif,
-      compteComptableId,
       echeancesPersonnalisees,
       modesPaiementPreferes,
     } = req.body;
@@ -1112,7 +1131,6 @@ router.put('/:id', async (req, res) => {
       updatedAt: new Date(),
     };
 
-    if (numeroClient !== undefined) updateData.numeroClient = numeroClient;
     if (nom !== undefined) updateData.nom = nom.trim();
     if (type !== undefined) updateData.type = type;
     if (email !== undefined) updateData.email = email;
@@ -1128,7 +1146,6 @@ router.put('/:id', async (req, res) => {
     if (remise !== undefined) updateData.remise = remise;
     if (soldeDu !== undefined) updateData.soldeDu = soldeDu;
     if (actif !== undefined) updateData.actif = actif;
-    if (compteComptableId !== undefined) updateData.compteComptableId = compteComptableId;
     if (echeancesPersonnalisees !== undefined) updateData.echeancesPersonnalisees = echeancesPersonnalisees;
     if (modesPaiementPreferes !== undefined) updateData.modesPaiementPreferes = modesPaiementPreferes;
 

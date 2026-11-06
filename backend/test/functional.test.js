@@ -264,8 +264,16 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       '/comptabilite/plans','/comptabilite/comptes','/comptabilite/balance']) {
       await api(path);
     }
-    const clientRecord=await api('/clients','POST',{nom:'Client recette'},201);
+    const clientRecord=await api('/clients','POST',{
+      nom:'Client recette',
+      compteComptableId:999999,
+    },201);
     const clientId=clientRecord.data.id;
+    assert.match(clientRecord.data.numeroClient,/^CLI\d{5}(?:-\d+)?$/,
+      'Un numéro client auxiliaire doit être attribué automatiquement');
+    assert.equal(clientRecord.data.codeAuxiliaire.slice(0,3),'CLI');
+    assert.equal(clientRecord.data.compteComptableId,null,
+      'La fiche client ne doit pas pouvoir choisir un compte général individuel');
     const unscopedClients=await pool.query('SELECT id FROM clients');
     assert.equal(unscopedClients.rowCount,0,'Sans contexte tenant, RLS doit masquer toutes les lignes');
     const productRecord=await api('/produits','POST',{reference:'TEST-ERP',nom:'Produit recette',
@@ -277,7 +285,16 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const f=invoice.data;
     assert.equal(Number(f.totalHT),2000);
     assert.equal(Number(f.totalTTC),2360);
+    const accounts=await api('/comptabilite/comptes');
+    const clientCollectiveAccount=accounts.find(account=>account.numero==='4111');
+    assert.ok(clientCollectiveAccount,'Le compte collectif client 4111 doit être configuré');
+    const clientMovements=await api(`/comptabilite/compte/${clientCollectiveAccount.id}/ecritures`);
+    assert.ok(clientMovements.some(movement=>movement.reference===f.numeroFacture && Number(movement.debit)===2360),
+      'La facture client doit débiter le compte collectif 4111');
     await api(`/factures/${f.id}/paiement`,'POST',{montant:2360,modePaiement:'especes'},201);
+    const paidClientMovements=await api(`/comptabilite/compte/${clientCollectiveAccount.id}/ecritures`);
+    assert.ok(paidClientMovements.some(movement=>Number(movement.credit)===2360),
+      'Le règlement client doit créditer le compte collectif 4111');
     const paid=await api(`/factures/${f.id}`);
     assert.equal(Number(paid.data.soldeRestant),0);
     assert.equal(paid.data.statut,'payee');
@@ -419,6 +436,8 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const secondClient=await api('/clients','POST',{
       nom:'Autre client',entrepriseId:signup.user.entrepriseId,userId:signup.user.id,
     },201);
+    assert.notEqual(secondClient.data.numeroClient,clientRecord.data.numeroClient,
+      'Chaque client doit recevoir un numéro auxiliaire unique');
     assert.notEqual(Number(secondClient.data.entrepriseId),Number(signup.user.entrepriseId),
       'La création doit ignorer le tenant fourni par le client');
     const tenantBClients=await api('/clients');

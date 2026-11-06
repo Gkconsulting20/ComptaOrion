@@ -2509,7 +2509,6 @@ function RelancesTab() {
 function ParametresTab() {
   const [subTab, setSubTab] = useState('clients');
   const [clients, setClients] = useState([]);
-  const [comptesComptables, setComptesComptables] = useState([]);
   const [taxes, setTaxes] = useState([]);
   const [codesComptables, setCodesComptables] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2527,7 +2526,6 @@ function ParametresTab() {
     adresse: '',
     ville: '',
     pays: 'Sénégal',
-    compteComptableId: null,
     delaiPaiement: 30,
     escomptePourcentage: 0,
     delaiEscompte: 0,
@@ -2543,12 +2541,8 @@ function ParametresTab() {
 
   const loadData = async () => {
     try {
-      const [clientsRes, comptesRes] = await Promise.all([
-        api.get('/clients'),
-        api.get('/comptabilite/comptes')
-      ]);
+      const clientsRes = await api.get('/clients');
       setClients(clientsRes.data || []);
-      setComptesComptables(comptesRes.data || []);
       setTaxes([
         { id: 1, nom: 'TVA 18%', taux: 18, codeComptable: '4431' },
         { id: 2, nom: 'TVA 9%', taux: 9, codeComptable: '4432' },
@@ -2577,7 +2571,6 @@ function ParametresTab() {
       adresse: '',
       ville: '',
       pays: 'Sénégal',
-      compteComptableId: null,
       delaiPaiement: 30,
       escomptePourcentage: 0,
       delaiEscompte: 0,
@@ -2604,7 +2597,11 @@ function ParametresTab() {
   };
 
   const handleEditClient = (client) => {
-    const { echeancesPersonnalisees: _legacyInstallments, ...clientWithoutLegacyInstallments } = client;
+    const {
+      echeancesPersonnalisees: _legacyInstallments,
+      compteComptableId: _legacyLedgerAccount,
+      ...clientWithoutLegacyInstallments
+    } = client;
     setClientData({
       ...clientWithoutLegacyInstallments,
       escomptePourcentage: Number(client.escomptePourcentage || 0),
@@ -2677,18 +2674,18 @@ function ParametresTab() {
   };
 
   const columns = [
-    { key: 'numeroClient', label: 'N° Client' },
+    {
+      key: 'codeAuxiliaire',
+      label: 'N° Client',
+      render: (value, row) => value || row?.numeroClient || '-',
+    },
     { key: 'nom', label: 'Nom' },
     { key: 'email', label: 'Email' },
     { key: 'type', label: 'Type' },
     { 
-      key: 'compteComptableId', 
-      label: 'Compte Comptable',
-      render: (val) => {
-        if (!val) return <span style={{ color: '#e74c3c', fontStyle: 'italic' }}>Non configuré</span>;
-        const compte = comptesComptables.find(c => c.id === val);
-        return compte ? `${compte.numero} - ${compte.nom}` : 'N/A';
-      }
+      key: 'compteCollectif',
+      label: 'Compte général',
+      render: () => '4111 - Clients - Ventes de biens'
     },
   ];
 
@@ -2911,30 +2908,18 @@ function ParametresTab() {
             </div>
           </div>
 
-          {/* SECTION 2: CONFIGURATION COMPTABLE */}
+          {/* SECTION 2: COMPTE COLLECTIF CLIENT */}
           <div style={{ 
             padding: '15px', 
             backgroundColor: '#e8f5e9', 
             borderRadius: '8px',
             marginBottom: '20px'
           }}>
-            <h4 style={{ marginTop: 0 }}>💰 Configuration Comptable</h4>
-            
-            <FormField
-              label="Compte Comptable (SYSCOHADA/IFRS/PCG)"
-              type="select"
-              value={clientData.compteComptableId || ''}
-              onChange={(e) => setClientData({ ...clientData, compteComptableId: parseInt(e.target.value) || null })}
-              options={[
-                { value: '', label: '-- Sélectionner un compte --' },
-                ...comptesComptables
-                  .filter(c => c.actif)
-                  .map(c => ({
-                    value: c.id,
-                    label: `${c.numero} - ${c.nom} (${c.type})`
-                  }))
-              ]}
-            />
+            <h4 style={{ marginTop: 0 }}>💰 Compte collectif client</h4>
+            <p style={{ margin: '0 0 15px', color: '#334155', fontSize: 14 }}>
+              <strong>4111 — Clients - Ventes de biens</strong><br />
+              Tous les clients utilisent ce compte général. Un numéro auxiliaire unique est attribué automatiquement à chaque client.
+            </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '15px' }}>
               <FormField
@@ -2995,7 +2980,7 @@ function ParametresTab() {
               border: '1px solid #ffc107'
             }}>
               <div style={{ fontSize: '12px', color: '#856404' }}>
-                💡 <strong>Conseil:</strong> Pour les clients, utilisez généralement un compte de classe 4 (Comptes de tiers): 411 - Clients, 4111 - Clients ordinaires, 4117 - Créances douteuses
+                💡 Les échéances et l’escompte restent propres à chaque client; seul le compte général est commun.
               </div>
             </div>
           </div>
@@ -3105,7 +3090,7 @@ function ParametresTab() {
             {
               title: 'Informations Générales',
               fields: [
-                { label: 'N° Client', value: selectedClient.numeroClient },
+                { label: 'N° Client', value: selectedClient.numeroClient || selectedClient.codeAuxiliaire || '-' },
                 { label: 'Nom', value: selectedClient.nom },
                 { label: 'Email', value: selectedClient.email || '-' },
                 { label: 'Téléphone', value: selectedClient.telephone || '-' },
@@ -3123,10 +3108,7 @@ function ParametresTab() {
             {
               title: 'Paramètres Commerciaux',
               fields: [
-                { label: 'Compte Comptable', value: (() => {
-                  const compte = comptesComptables.find(c => c.id === selectedClient.compteComptableId);
-                  return compte ? `${compte.numero} - ${compte.nom}` : 'Non configuré';
-                })() },
+                { label: 'Compte général', value: '4111 - Clients - Ventes de biens' },
                 { label: 'Échéance', value: Number(selectedClient.delaiPaiement ?? 30) === 0 ? 'À réception' : `${selectedClient.delaiPaiement ?? 30} jours` },
                 { label: 'Limite Crédit', value: `${Number(selectedClient.limiteCredit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { label: 'Catégorie', value: selectedClient.categorieClient || 'Standard' }

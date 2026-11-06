@@ -270,7 +270,6 @@ router.post('/lite-sale', async (req, res) => {
         numeroFacture,
         dateFacture: dateFacture || new Date().toISOString().slice(0, 10),
         clientNom: client.nom || 'Client',
-        clientCompteId: client.compteComptableId,
         totalHT,
         totalTVA,
         totalTTC,
@@ -290,7 +289,6 @@ router.post('/lite-sale', async (req, res) => {
           reference: payment.reference || `PAI-${payment.id}`,
           datePaiement: payment.datePaiement,
           clientNom: client.nom || 'Client',
-          clientCompteId: client.compteComptableId,
           montant: requestedPayment,
           modePaiement: payment.modePaiement === 'cheque'
             ? 'cheque'
@@ -495,13 +493,12 @@ router.post('/', async (req, res) => {
         numeroFacture,
         dateFacture: dateFacture || new Date().toISOString().split('T')[0],
         clientNom: clientInfo.nom || 'Client',
-        clientCompteId: clientInfo.compteComptableId,
         totalHT,
         totalTVA,
         totalTTC,
         executor: tx
       });
-      if (!ecriture) throw new Error('Configurez les comptes clients, ventes et TVA avant de facturer');
+      if (!ecriture) throw new Error('Configurez les comptes 4111, ventes et TVA avant de facturer.');
       await logAudit({
         ...extractAuditInfo(req),
         action: 'CREATE',
@@ -696,14 +693,13 @@ router.post('/:id/paiement', async (req, res) => {
         reference: reference || `PAI-${newPaiement.id}`,
         datePaiement: datePaiement || new Date().toISOString().split('T')[0],
         clientNom: clientInfo.nom || 'Client',
-        clientCompteId: clientInfo.compteComptableId,
         montant: montantPaiement,
         escompteHT: discount?.montantHT || 0,
         modePaiement: modePaiement === 'cheque' ? 'cheque' : modePaiement === 'especes' ? 'especes' : 'banque',
         compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null,
         executor: tx
       });
-      if (!ecriture) throw new Error('Configurez les comptes de trésorerie et clients avant de payer');
+      if (!ecriture) throw new Error('Configurez les comptes de trésorerie et 4111 avant de payer.');
       await logAudit({
         ...extractAuditInfo(req),
         action: 'CREATE',
@@ -1239,7 +1235,6 @@ router.post('/:id/note-debit', async (req, res) => {
         numeroNote: note.numero,
         dateNote,
         clientNom: client.nom,
-        clientCompteId: client.compteComptableId,
         totalHT,
         totalTVA,
         totalTTC,
@@ -1347,7 +1342,6 @@ router.post('/notes-debit/:id/paiement', async (req, res) => {
         reference: reference || `PAI-${payment.id}`,
         datePaiement,
         clientNom: client.nom,
-        clientCompteId: client.compteComptableId,
         montant: amount,
         modePaiement: modePaiement === 'cheque' ? 'cheque' : modePaiement === 'especes' ? 'especes' : 'banque',
         compteBancaireId: req.body.compteBancaireId ? Number(req.body.compteBancaireId) : null,
@@ -1544,7 +1538,6 @@ router.post('/:id/avoir', async (req, res) => {
         numeroAvoir: note.numero,
         dateAvoir,
         clientNom: client.nom,
-        clientCompteId: client.compteComptableId,
         totalHT,
         totalTVA,
         totalTTC,
