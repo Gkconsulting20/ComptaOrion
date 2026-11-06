@@ -15,6 +15,7 @@ import {
   convertQuantityBetweenUnits,
   getMeasurementUnitOptions,
 } from '../utils/measurementUnits';
+import { readApiList } from '../utils/apiList';
 import SupplierInvoiceOcr from './SupplierInvoiceOcr';
 
 function FacturationTab({ fournisseurs }) {
@@ -54,9 +55,9 @@ function FacturationTab({ fournisseurs }) {
         api.get(`/stock/rapports/logistique-non-facturee?${params}`).catch(() => ({ data: { items: [], totaux: {}, parType: [], parFournisseur: [] } })),
         api.get('/produits').catch(() => ({ data: [] }))
       ]);
-      setStockPending(stockRes.data || { items: [], totaux: {}, parFournisseur: [] });
-      setLogistiquePending(logRes.data || { items: [], totaux: {}, parType: [], parFournisseur: [] });
-      setProduits(produitsRes.data || []);
+      setStockPending(Array.isArray(stockRes?.items) ? stockRes : { items: [], totaux: {}, parFournisseur: [] });
+      setLogistiquePending(Array.isArray(logRes?.items) ? logRes : { items: [], totaux: {}, parType: [], parFournisseur: [] });
+      setProduits(readApiList(produitsRes));
     } catch (err) {
       console.error('Erreur chargement données:', err);
       setStockPending({ items: [], totaux: {}, parFournisseur: [] });
@@ -93,7 +94,7 @@ function FacturationTab({ fournisseurs }) {
     }
     try {
       const res = await api.get(`/achats/receptions-en-attente?fournisseurId=${fournisseurId}`);
-      setReceptionsEnAttente(res.data.data || []);
+      setReceptionsEnAttente(readApiList(res, 'data'));
     } catch (err) {
       console.error('Erreur chargement réceptions:', err);
     }
