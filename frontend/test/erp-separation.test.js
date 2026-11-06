@@ -85,3 +85,8 @@ test('la fiche client accepte un nom saisi et propose les comptes collectifs bie
   assert.match(clients, /Ventes de biens — 4111/);
   assert.match(clients, /Prestations de services — 4112/);
 });
+
+test('le rapprochement propose les types SYSCOHADA singuliers et pluriels', async () => {
+  const suppliers = await read('../src/modules/GestionFournisseurs.jsx');
+  assert.match(suppliers, /\['charge', 'charges', 'produit', 'produits'\]\.includes/);
+});

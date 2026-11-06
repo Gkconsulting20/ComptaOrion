@@ -716,9 +716,10 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.equal(logisticsPendingReport.items.length, 2,
       'Le rapport doit exposer les frais logistiques non facturés des réceptions');
     const varianceAccount = await admin.query(
-      `SELECT id FROM "${schema}".comptes_comptables
-       WHERE entreprise_id = $1 AND actif = true AND type IN ('charge', 'produit')
-       ORDER BY numero LIMIT 1`,
+      `INSERT INTO "${schema}".comptes_comptables
+         (entreprise_id, numero, nom, type, categorie, actif)
+       VALUES ($1, 'TEST-ECART-CHARGE', 'Compte test écart achat', 'charges', 'Charges', true)
+       RETURNING id`,
       [signup.user.entrepriseId],
     );
     assert.ok(varianceAccount.rows[0]?.id,

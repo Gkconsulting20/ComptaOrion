@@ -23,6 +23,8 @@ export const ACCOUNTING_ACCOUNT_ROLES = [
   { key: 'sales_returns', label: 'Retours et réductions sur ventes', defaultNumber: '709' },
 ];
 
+export const PRICE_VARIANCE_ACCOUNT_TYPES = ['charge', 'charges', 'produit', 'produits'];
+
 export const ACCOUNTING_ACCOUNT_ROLE_BY_KEY = new Map(
   ACCOUNTING_ACCOUNT_ROLES.map((role) => [role.key, role]),
 );

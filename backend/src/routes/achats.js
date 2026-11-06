@@ -39,6 +39,7 @@ import {
 import { calculateCreditNoteVat, calculateReturnedLine } from '../services/creditNoteCalculations.js';
 import { generateCreditNoteNumber } from '../services/creditNoteNumbering.js';
 import { getPlanCapabilities } from '../services/planEntitlements.js';
+import { PRICE_VARIANCE_ACCOUNT_TYPES } from '../services/accountingAccountMappings.js';
 
 const router = express.Router();
 
@@ -969,7 +970,7 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
         eq(comptesComptables.id, varianceAccountId),
         eq(comptesComptables.entrepriseId, req.entrepriseId),
         eq(comptesComptables.actif, true),
-        inArray(comptesComptables.type, ['charge', 'produit']),
+        inArray(comptesComptables.type, PRICE_VARIANCE_ACCOUNT_TYPES),
       ))
       .limit(1);
     if (!varianceAccount) {

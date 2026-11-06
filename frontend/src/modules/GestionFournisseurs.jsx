@@ -91,7 +91,7 @@ function FacturationTab({ fournisseurs }) {
         ]);
         const company = companyRes?.data?.data ?? companyRes?.data ?? {};
         const accounts = readApiList(accountsRes).filter((account) =>
-          account.actif !== false && ['charge', 'produit'].includes(String(account.type || '').toLowerCase())
+          account.actif !== false && ['charge', 'charges', 'produit', 'produits'].includes(String(account.type || '').toLowerCase())
         );
         const mappings = mappingsRes?.data?.mappings ?? mappingsRes?.mappings ?? {};
         const roles = mappingsRes?.data?.roles ?? mappingsRes?.roles ?? [];
