@@ -1,5 +1,7 @@
 # Checklist avant la vente des abonnements
 
+> Document interne de développement conservé dans le projet Replit. Il n’est pas destiné à l’interface publique et cette mise à jour ne publie rien sur Cloudflare. Une case non cochée signifie que le point reste à vérifier; cela ne prouve pas à elle seule que la fonction est absente du code.
+
 ## Règle de lancement
 
 ComptaOrion reste en phase de test client. Attendre les retours de plusieurs entreprises, ajouter leurs problèmes à cette liste, puis fermer les blocages de sécurité et de fonctionnement avant de commencer à vendre des abonnements payants.
@@ -22,12 +24,13 @@ Cette liste distingue les fonctions non terminées des fonctions présentes qui 
 ## Priorité 2 — Abonnements et paiements
 
 - [ ] Choisir les moyens de paiement à offrir pour les abonnements.
-- [ ] FedaPay : le code existe, mais Cloudflare est actuellement configuré en mode sandbox; tester le parcours complet en mode réel avant de vendre.
-- [ ] Stripe : aucune intégration de paiement opérationnelle n’a été repérée dans le code consulté; décider si elle doit être créée.
+- [ ] Après les tests clients, décider et intégrer les paiements d’abonnement par FedaPay et Stripe; ils ne bloquent pas la phase de test gratuite actuelle.
 - [ ] Tester chaque étape nécessaire du paiement retenu : paiement accepté ou refusé, notification signée, notification répétée, renouvellement, expiration et résiliation; vérifier que l’accès et le statut d’abonnement restent cohérents.
 - [ ] Faire respecter côté serveur les limites de chaque forfait : modules prévus, trois utilisateurs inclus, utilisateurs supplémentaires et accès gratuit séparé du comptable invité.
 - [ ] Vérifier de bout en bout l’essai de 30 jours : le délai commence à la création de l’organisation et l’accès est bloqué à son expiration.
+- [ ] Définir et tester le traitement des données de l’entreprise après l’expiration de l’essai.
 - [ ] Confirmer que les prix, la périodicité, les taxes éventuelles et les fonctionnalités affichées sont cohérents entre l’offre commerciale, l’inscription, les factures et l’accès réel.
+- [ ] Confirmer l’accès au calcul automatique du coût de revient pendant l’essai et dans le forfait Premium; les forfaits Base et Standard gardent la saisie manuelle des coûts et prix.
 
 ## Priorité 3 — Parcours clients et fonctions métier
 
@@ -38,12 +41,20 @@ Cette liste distingue les fonctions non terminées des fonctions présentes qui 
 - [ ] Trésorerie : vérifier le cycle de conversion avec l’historique réel du stock et des paiements.
 - [ ] Catalogue clients : vérifier que les tarifs propres à chaque client sont appliqués dans les devis et les factures.
 - [ ] Comptes clients et fournisseurs : fournir un relevé auxiliaire débit/crédit complet, avec les soldes d’ouverture et de clôture, toutes les factures, notes de crédit et tous les règlements.
+- [ ] Vérifier que chaque client et fournisseur possède un identifiant auxiliaire unique, tandis que les écritures utilisent les comptes collectifs prévus au grand livre.
 - [ ] Relevés de comptes : inclure un paiement dans sa période de paiement même si la facture est d’une période antérieure; calculer les dettes fournisseurs sur le TTC, pas seulement le HT.
 - [ ] Retours clients : permettre un retour total ou partiel lié à la facture d’origine, créer l’avoir, diminuer la créance et corriger ventes, TVA, stock et CMV de façon équilibrée.
 - [ ] Retours fournisseurs : enregistrer l’avoir reçu du fournisseur, diminuer la dette et corriger achats/stock, TVA déductible et éventuel remboursement ou crédit fournisseur.
+- [ ] Notes d’ajustement : vérifier la note de débit client et l’avoir fournisseur lié à la qualité, sans les confondre avec un retour physique.
+- [ ] Conditions de règlement : tester les échéances disponibles côté client et fournisseur ainsi que les escomptes configurés sur leurs comptes.
+- [ ] Escomptes : vérifier la distinction entre escompte de règlement et remise sur achat; l’escompte reçu d’un client ne modifie ni la facture d’origine ni sa taxe, tandis que l’escompte d’achat réduit le coût du bien et sa base taxable.
 - [ ] Chèques reçus des clients : ajouter la saisie du chèque et son suivi jusqu’à l’encaissement bancaire, puis gérer les rejets sans laisser le compte client ni la trésorerie erronés. Confirmer le circuit comptable avant implémentation.
+- [ ] Bons de commande fournisseurs : vérifier les coûts logistiques prévisionnels, la réception qui crée le stock et les coûts logistiques non facturés, le verrouillage des modifications après réception, et la saisie directe des factures sans stock.
 - [ ] Garantir l’atomicité des paiements : si l’écriture comptable ne peut pas être créée, ne pas valider le paiement ni modifier le solde. Le contrôle du code a repéré un chemin de paiement fournisseur qui peut continuer après une erreur d’écriture.
 - [ ] Confirmer le traitement des écritures automatiques : elles sont créées en brouillon; les états financiers ne retiennent que les écritures validées. Définir clairement quand et par qui elles sont validées.
+- [ ] Vérifier l’unicité et l’ordre des numéros séquentiels par journal, y compris après suppression ou importation.
+- [ ] SYSCOHADA : conserver le plan par défaut, tester la personnalisation facultative par entreprise et la correspondance des comptes collectifs.
+- [ ] Import : tester l’import d’un plan comptable et des données provenant d’un logiciel existant, avec validation des erreurs avant enregistrement.
 - [ ] Coût de revient : valider tout le parcours achat, poids et conversions d’unités, frais logistiques répartis au poids, coût moyen pondéré et CMV lors de la vente.
 - [ ] OCR fournisseurs : faire tester des photos réelles de factures et contrôler les champs reconnus et leur correction avant validation comptable.
 - [ ] Format des montants : vérifier partout le format XOF avec deux décimales, y compris les états et les écrans récemment ajoutés.
@@ -52,7 +63,7 @@ Cette liste distingue les fonctions non terminées des fonctions présentes qui 
 ## Priorité 4 — Production et fiabilité
 
 - [ ] Vérifier sur Cloudflare les parcours réels avec plusieurs comptes de test, y compris les données et fichiers persistants.
-- [ ] Rétablir le build automatique Cloudflare : le dernier build GitHub a échoué pendant l’installation de Node.js; le déploiement de cette version a été fait directement avec Wrangler.
+- [ ] Confirmer que les changements validés sur Replit sont bien intégrés au processus de publication Cloudflare et que le build automatique fonctionne.
 - [ ] Contrôler les alertes, les erreurs de production et la procédure de réponse à un incident.
 
 ## Fonctions volontairement hors périmètre de lancement
