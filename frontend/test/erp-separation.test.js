@@ -90,4 +90,7 @@ test('le rapprochement charge les comptes via l’API achats dédiée', async ()
   const suppliers = await read('../src/modules/GestionFournisseurs.jsx');
   assert.match(suppliers, /api\.get\('\/achats\/comptes-ecarts'\)/);
   assert.doesNotMatch(suppliers, /api\.get\('\/comptabilite\/comptes'\)/);
+  assert.match(suppliers, /required=\{hasVariance\}/);
+  assert.match(suppliers, /if \(hasVariance && !factureForm\.compteEcartId\)/);
+  assert.match(suppliers, /compteEcartId: factureForm\.compteEcartId \? Number\(factureForm\.compteEcartId\) : null/);
 });

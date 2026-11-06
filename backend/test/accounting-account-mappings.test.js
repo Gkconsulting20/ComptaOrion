@@ -8,5 +8,7 @@ test('recognizes expense and income accounts across SYSCOHADA naming variants', 
   assert.equal(isPriceVarianceAccount({ numero: '600', type: 'expense' }), true);
   assert.equal(isPriceVarianceAccount({ numero: '700', type: 'income' }), true);
   assert.equal(isPriceVarianceAccount({ numero: '640', type: 'other' }), true);
+  assert.equal(isPriceVarianceAccount({ numero: 'FRAIS-02', type: 'other', categorie: 'Résultat' }), true);
+  assert.equal(isPriceVarianceAccount({ numero: '801', type: 'capitaux', categorie: 'Résultat' }), false);
   assert.equal(isPriceVarianceAccount({ numero: '401', type: 'passif' }), false);
 });

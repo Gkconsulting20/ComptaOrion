@@ -16,9 +16,11 @@ import {
   notesCreditItems,
   comptesComptables,
   comptesAutomatiques,
+  stockPending,
+  logistiquePending,
   entreprises,
 } from '../schema.js';
-import { eq, and, inArray, sql, desc } from 'drizzle-orm';
+import { eq, and, inArray, sql, desc, sum } from 'drizzle-orm';
 import {
   createEcritureFactureAchat,
   createEcriturePaiementFournisseur,
@@ -50,17 +52,15 @@ router.get('/comptes-ecarts', async (req, res) => {
     if (!Number.isSafeInteger(entrepriseId) || entrepriseId <= 0) {
       return res.status(400).json({ success: false, message: 'Entreprise non identifiée.' });
     }
-    const [activeAccounts, [varianceMapping], [company]] = await Promise.all([
+    const [allAccounts, [varianceMapping], [company]] = await Promise.all([
       db.select({
         id: comptesComptables.id,
         numero: comptesComptables.numero,
         nom: comptesComptables.nom,
         type: comptesComptables.type,
+        categorie: comptesComptables.categorie,
         actif: comptesComptables.actif,
-      }).from(comptesComptables).where(and(
-        eq(comptesComptables.entrepriseId, entrepriseId),
-        eq(comptesComptables.actif, true),
-      )),
+      }).from(comptesComptables).where(eq(comptesComptables.entrepriseId, entrepriseId)),
       db.select({ compteComptableId: comptesAutomatiques.compteComptableId })
         .from(comptesAutomatiques)
         .where(and(
@@ -73,7 +73,8 @@ router.get('/comptes-ecarts', async (req, res) => {
         .where(eq(entreprises.id, entrepriseId))
         .limit(1),
     ]);
-    const accounts = activeAccounts.filter(isPriceVarianceAccount);
+    const accounts = allAccounts.filter((account) => account.actif === true && isPriceVarianceAccount(account));
+    const inactiveEligibleCount = allAccounts.filter((account) => account.actif !== true && isPriceVarianceAccount(account)).length;
     const mappedId = varianceMapping?.compteComptableId;
     const defaultAccount = accounts.find((account) => String(account.id) === String(mappedId))
       || accounts.find((account) => String(account.numero) === '603');
@@ -81,6 +82,8 @@ router.get('/comptes-ecarts', async (req, res) => {
       accounts,
       defaultAccountId: defaultAccount ? String(defaultAccount.id) : '',
       tauxTva: company?.tauxTva ?? null,
+      totalAccountCount: allAccounts.length,
+      inactiveEligibleCount,
     });
   } catch (error) {
     console.error('Erreur GET /achats/comptes-ecarts:', error);
@@ -981,8 +984,9 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     if (!Array.isArray(lignes) || lignes.length === 0) {
       return res.status(400).json({ success: false, message: 'Ajoutez au moins une ligne d’article à la facture.' });
     }
-    const varianceAccountId = Number(compteEcartId);
-    if (!Number.isSafeInteger(varianceAccountId) || varianceAccountId <= 0) {
+    const varianceAccountId = compteEcartId == null || compteEcartId === '' ? null : Number(compteEcartId);
+    if (compteEcartId != null && compteEcartId !== ''
+      && (!Number.isSafeInteger(varianceAccountId) || varianceAccountId <= 0)) {
       return res.status(400).json({ success: false, message: 'Choisissez un compte comptable pour les écarts de prix.' });
     }
     const ligneInvalide = lignes.some((ligne) => {
@@ -1009,19 +1013,21 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Fournisseur non trouvé' });
     }
     const fournisseur = fournisseurResult.rows[0];
-    const [varianceAccount] = await db.select()
-      .from(comptesComptables)
-      .where(and(
-        eq(comptesComptables.id, varianceAccountId),
-        eq(comptesComptables.entrepriseId, req.entrepriseId),
-        eq(comptesComptables.actif, true),
-      ))
-      .limit(1);
-    if (!varianceAccount || !isPriceVarianceAccount(varianceAccount)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Le compte d’écart doit être un compte actif de charge ou de produit de cette entreprise.',
-      });
+    if (varianceAccountId) {
+      const [varianceAccount] = await db.select()
+        .from(comptesComptables)
+        .where(and(
+          eq(comptesComptables.id, varianceAccountId),
+          eq(comptesComptables.entrepriseId, req.entrepriseId),
+          eq(comptesComptables.actif, true),
+        ))
+        .limit(1);
+      if (!varianceAccount || !isPriceVarianceAccount(varianceAccount)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Le compte d’écart doit être un compte actif de charge ou de produit de cette entreprise.',
+        });
+      }
     }
 
     // Vérifier que les réceptions existent et appartiennent au fournisseur
@@ -1115,6 +1121,29 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       ? 0
       : Math.round((totalHT * tauxTva / 100) * 100) / 100;
     const totalTTC = Math.round((totalHT + totalTVA) * 100) / 100;
+    if (!varianceAccountId) {
+      const receiptIds = receptionsIds.map((id) => Number.parseInt(id, 10));
+      const [pendingStock, pendingLogistics] = await Promise.all([
+        db.select({ total: sum(stockPending.valeurEstimee) }).from(stockPending).where(and(
+          eq(stockPending.entrepriseId, Number(req.entrepriseId)),
+          inArray(stockPending.bonReceptionId, receiptIds),
+          eq(stockPending.statut, 'pending'),
+        )),
+        db.select({ total: sum(logistiquePending.montantEstime) }).from(logistiquePending).where(and(
+          eq(logistiquePending.entrepriseId, Number(req.entrepriseId)),
+          inArray(logistiquePending.bonReceptionId, receiptIds),
+          eq(logistiquePending.statut, 'pending'),
+        )),
+      ]);
+      const estimatedHT = Number(pendingStock[0]?.total || 0) + Number(pendingLogistics[0]?.total || 0);
+      const variance = Math.round((totalHT - estimatedHT) * 100) / 100;
+      if (Math.abs(variance) >= 0.01) {
+        return res.status(400).json({
+          success: false,
+          message: 'Un écart de prix existe. Choisissez un compte de charge ou de produit avant de créer la facture.',
+        });
+      }
+    }
     const lignesArticles = lignesProcessed.filter((ligne) => Number.isSafeInteger(parseInt(ligne.produitId, 10)) && parseInt(ligne.produitId, 10) > 0);
     const lignesPourRepartition = lignesArticles.map((ligne) => ({
       ...ligne,

@@ -729,13 +729,23 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       availableVarianceAccounts.accounts.some(account => Number(account.id) === Number(varianceAccount.rows[0].id)),
       'L’API achats doit rendre le compte de charge au pluriel disponible au rapprochement',
     );
+    await api('/achats/factures-avec-rapprochement', 'POST', {
+      fournisseurId: supplierRecord.data.id,
+      numeroFactureFournisseur: 'FACT-FOURN-SANS-COMPTE-ECART',
+      dateFacture: new Date().toISOString().slice(0, 10),
+      receptionsIds: pendingReceipts.data.map(receipt => receipt.id),
+      lignes: [
+        { produitId: productId, quantite: 10, uniteSaisie: 'pièce', prixUnitaireReel: 501, description: 'Produit recette' },
+        { produitId: secondCostProduct.data.id, quantite: 10, uniteSaisie: 'pièce', prixUnitaireReel: 2000, description: 'Produit léger recette' },
+      ],
+      coutsLogistiques: [{ type: 'transport', montantReel: 100, description: 'Transport commun' }],
+    }, 400);
     const matchedInvoice = await api('/achats/factures-avec-rapprochement', 'POST', {
       fournisseurId: supplierRecord.data.id,
       numeroFactureFournisseur: 'FACT-FOURN-TEST',
       dateFacture: new Date().toISOString().slice(0, 10),
       dateEcheance: '1999-01-01',
       receptionsIds: pendingReceipts.data.map(receipt => receipt.id),
-      compteEcartId: varianceAccount.rows[0].id,
       lignes: [
         { produitId: productId, quantite: 10, uniteSaisie: 'pièce', prixUnitaireReel: 500, description: 'Produit recette' },
         { produitId: secondCostProduct.data.id, quantite: 10, uniteSaisie: 'pièce', prixUnitaireReel: 2000, description: 'Produit léger recette' },

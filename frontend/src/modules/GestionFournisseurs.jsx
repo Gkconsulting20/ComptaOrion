@@ -35,6 +35,10 @@ function FacturationTab({ fournisseurs }) {
   const [comptesEcart, setComptesEcart] = useState([]);
   const [compteEcartParDefaut, setCompteEcartParDefaut] = useState('');
   const [comptesEcartError, setComptesEcartError] = useState('');
+  const [totalComptesPlan, setTotalComptesPlan] = useState(null);
+  const [comptesEcartInactifs, setComptesEcartInactifs] = useState(0);
+  const [chargementComptesEcart, setChargementComptesEcart] = useState(true);
+  const [initialisationPlan, setInitialisationPlan] = useState(false);
   const [tauxTva, setTauxTva] = useState(18);
   const [factureForm, setFactureForm] = useState({
     fournisseurId: '',
@@ -82,33 +86,51 @@ function FacturationTab({ fournisseurs }) {
 
   useEffect(() => { loadData(); }, [filters]);
 
-  useEffect(() => {
-    const loadAccountingSettings = async () => {
-      setComptesEcartError('');
-      try {
-        const accountsResponse = await api.get('/achats/comptes-ecarts');
-        const accounts = Array.isArray(accountsResponse.accounts) ? accountsResponse.accounts : [];
-        const defaultAccountId = String(accountsResponse.defaultAccountId || '');
-        if (accountsResponse.tauxTva !== null
-          && accountsResponse.tauxTva !== undefined
-          && Number.isFinite(Number(accountsResponse.tauxTva))) {
-          setTauxTva(Number(accountsResponse.tauxTva));
-        }
-        setComptesEcart(accounts);
-        setCompteEcartParDefaut(defaultAccountId);
-        setFactureForm((current) => ({
-          ...current,
-          compteEcartId: current.compteEcartId || defaultAccountId,
-        }));
-      } catch (error) {
-        const message = error?.message || 'Impossible de charger les comptes d’écart.';
-        setComptesEcart([]);
-        setComptesEcartError(message);
-        console.error('Impossible de charger les comptes d’écart:', error);
+  const loadAccountingSettings = async () => {
+    setChargementComptesEcart(true);
+    setComptesEcartError('');
+    try {
+      const accountsResponse = await api.get('/achats/comptes-ecarts');
+      const accounts = Array.isArray(accountsResponse.accounts) ? accountsResponse.accounts : [];
+      const defaultAccountId = String(accountsResponse.defaultAccountId || '');
+      if (accountsResponse.tauxTva !== null
+        && accountsResponse.tauxTva !== undefined
+        && Number.isFinite(Number(accountsResponse.tauxTva))) {
+        setTauxTva(Number(accountsResponse.tauxTva));
       }
-    };
-    loadAccountingSettings();
-  }, []);
+      setComptesEcart(accounts);
+      setCompteEcartParDefaut(defaultAccountId);
+      setTotalComptesPlan(Number(accountsResponse.totalAccountCount || 0));
+      setComptesEcartInactifs(Number(accountsResponse.inactiveEligibleCount || 0));
+      setFactureForm((current) => ({
+        ...current,
+        compteEcartId: current.compteEcartId || defaultAccountId,
+      }));
+    } catch (error) {
+      const message = error?.message || 'Impossible de charger les comptes d’écart.';
+      setComptesEcart([]);
+      setComptesEcartError(message);
+      console.error('Impossible de charger les comptes d’écart:', error);
+    } finally {
+      setChargementComptesEcart(false);
+    }
+  };
+
+  useEffect(() => { loadAccountingSettings(); }, []);
+
+  const initialiserPlanSyscohada = async () => {
+    if (!window.confirm('Aucun compte n’existe pour cette entreprise. Ajouter le plan SYSCOHADA standard ?')) return;
+    setInitialisationPlan(true);
+    try {
+      const result = await api.post('/comptabilite/init-syscohada', {});
+      await loadAccountingSettings();
+      alert(`Plan comptable initialisé : ${result.comptesCreés || 0} comptes créés.`);
+    } catch (error) {
+      alert(`Impossible d’initialiser le plan comptable : ${error.message}`);
+    } finally {
+      setInitialisationPlan(false);
+    }
+  };
 
   const typeLabels = { transport: 'Transport', douane: 'Douane', manutention: 'Manutention', assurance: 'Assurance', autre: 'Autres' };
 
@@ -258,7 +280,7 @@ function FacturationTab({ fournisseurs }) {
   };
 
   const submitFacture = async () => {
-    if (!factureForm.compteEcartId) {
+    if (hasVariance && !factureForm.compteEcartId) {
       alert('Sélectionnez un compte comptable pour enregistrer les écarts de prix.');
       return;
     }
@@ -268,7 +290,7 @@ function FacturationTab({ fournisseurs }) {
         fournisseurId: factureForm.fournisseurId,
         numeroFactureFournisseur: factureForm.numeroFactureFournisseur,
         dateFacture: factureForm.dateFacture,
-        compteEcartId: Number(factureForm.compteEcartId),
+        compteEcartId: factureForm.compteEcartId ? Number(factureForm.compteEcartId) : null,
         tvaExoneree: factureForm.tvaExoneree,
         receptionsIds: selectedReceptions,
         lignes: factureForm.lignes.map(l => ({
@@ -306,6 +328,7 @@ function FacturationTab({ fournisseurs }) {
     sum + Number(line.quantite || 0) * Number(line.prixEstime || 0), 0
   ) + factureForm.coutsLogistiques.reduce((sum, cost) => sum + Number(cost.montantEstime || 0), 0);
   const totalVariance = totals.totalHT - estimatedHT;
+  const hasVariance = Math.abs(totalVariance) >= 0.01;
   const totalTTC = totals.totalHT + totals.totalTVA;
   const fournisseursAvecReception = [...new Map(
     allReceptionsEnAttente
@@ -682,12 +705,16 @@ function FacturationTab({ fournisseurs }) {
                 </label>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 5 }}>Compte comptable des écarts *</label>
+                <label style={{ display: 'block', marginBottom: 5 }}>
+                  Compte comptable des écarts{hasVariance ? ' *' : ''}
+                </label>
                 <select value={factureForm.compteEcartId}
                   onChange={(e) => setFactureForm((current) => ({ ...current, compteEcartId: e.target.value }))}
-                  required
+                  required={hasVariance}
                   style={{ width: '100%', maxWidth: 520, padding: 8, borderRadius: 4, border: '1px solid #ddd' }}>
-                  <option value="">Sélectionner un compte de charge ou de produit</option>
+                  <option value="">
+                    {hasVariance ? 'Sélectionner un compte de charge ou de produit' : 'Aucun compte requis si l’écart est nul'}
+                  </option>
                   {comptesEcart.map((account) => (
                     <option key={account.id} value={account.id}>
                       {account.numero} — {account.nom}{String(account.id) === compteEcartParDefaut ? ' (compte par défaut)' : ''}
@@ -697,14 +724,35 @@ function FacturationTab({ fournisseurs }) {
                 <p style={{ color: '#52606d', fontSize: 13, margin: '6px 0 0' }}>
                   Écart HT constaté : {totalVariance.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF. Il sera débité si défavorable, crédité si favorable.
                 </p>
+                {!hasVariance && (
+                  <p style={{ color: '#247a45', fontSize: 13, margin: '6px 0 0' }}>
+                    Aucun écart à comptabiliser : la facture peut être créée sans choisir de compte d’écart.
+                  </p>
+                )}
                 {comptesEcartError && (
                   <p style={{ color: '#b42318', fontSize: 13, margin: '6px 0 0' }}>
                     Chargement des comptes impossible : {comptesEcartError}
                   </p>
                 )}
-                {!comptesEcartError && !comptesEcart.length && (
-                  <p style={{ color: '#b42318', fontSize: 13, margin: '6px 0 0' }}>
-                    Aucun compte actif de charge ou de produit n’est disponible dans le plan comptable. Vérifiez qu’un compte de charges ou de produits est actif.
+                {chargementComptesEcart && (
+                  <p style={{ color: '#52606d', fontSize: 13, margin: '6px 0 0' }}>Chargement des comptes comptables…</p>
+                )}
+                {!chargementComptesEcart && !comptesEcartError && !comptesEcart.length && totalComptesPlan === 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <p style={{ color: hasVariance ? '#b42318' : '#52606d', fontSize: 13, margin: '6px 0' }}>
+                      Le plan comptable ne contient aucun compte. Pour enregistrer un écart, initialisez le plan SYSCOHADA ou créez/importez le plan de l’entreprise.
+                    </p>
+                    <button type="button" onClick={initialiserPlanSyscohada} disabled={initialisationPlan}
+                      style={{ padding: '7px 12px', border: 0, borderRadius: 5, background: '#2563eb', color: '#fff', cursor: 'pointer' }}>
+                      {initialisationPlan ? 'Initialisation…' : 'Initialiser le plan SYSCOHADA'}
+                    </button>
+                  </div>
+                )}
+                {!chargementComptesEcart && !comptesEcartError && !comptesEcart.length && totalComptesPlan > 0 && (
+                  <p style={{ color: hasVariance ? '#b42318' : '#52606d', fontSize: 13, margin: '6px 0 0' }}>
+                    {comptesEcartInactifs > 0
+                      ? `${comptesEcartInactifs} compte(s) de charge ou de produit sont inactifs. Réactivez le compte voulu dans Comptabilité → Charte des comptes.`
+                      : 'Aucun compte actif de charge ou de produit n’a été reconnu. Activez ou classez les comptes concernés dans Comptabilité → Charte des comptes.'}
                   </p>
                 )}
               </div>

@@ -39,8 +39,15 @@ export function isPriceVarianceAccount(account) {
     .replace(/\p{Diacritic}/gu, '')
     .trim()
     .toLowerCase();
+  const category = String(account?.categorie || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim()
+    .toLowerCase();
   const number = String(account?.numero || '').trim();
-  return PRICE_VARIANCE_ACCOUNT_TYPE_SET.has(type) || /^[67]/.test(number);
+  if (PRICE_VARIANCE_ACCOUNT_TYPE_SET.has(type) || /^[67]/.test(number)) return true;
+  return ['charge', 'charges', 'produit', 'produits', 'resultat', 'results'].includes(category)
+    && !/^[89]/.test(number);
 }
 
 export const ACCOUNTING_ACCOUNT_ROLE_BY_KEY = new Map(
