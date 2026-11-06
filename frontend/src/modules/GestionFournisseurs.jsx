@@ -559,10 +559,12 @@ function FacturationTab({ fournisseurs }) {
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '5px' }}>N° Facture Fournisseur *</label>
-                  <input type="text" value={factureForm.numeroFactureFournisseur}
+                  <label htmlFor="supplier-invoice-number" style={{ display: 'block', marginBottom: '5px' }}>
+                    N° Facture Fournisseur *
+                  </label>
+                  <input id="supplier-invoice-number" name="numeroFactureFournisseur" type="text"
+                    defaultValue={factureForm.numeroFactureFournisseur || ''}
                     required
-                    aria-invalid={!String(factureForm.numeroFactureFournisseur || '').trim()}
                     onChange={(e) => {
                       const value = e.currentTarget.value;
                       setFactureSubmitError('');
