@@ -195,7 +195,7 @@ export default function PeriodFilter({
   loading = false,
   showTitle = true,
   compact = false,
-  compactSelector = false,
+  compactSelector = true,
   showFiscalPeriods = true
 }) {
   const [periodeActive, setPeriodeActive] = useState('fiscal_courant');
@@ -249,6 +249,14 @@ export default function PeriodFilter({
   const allPeriodes = showFiscalPeriods 
     ? [...PERIODES_CALENDAIRES, ...PERIODES_FISCALES]
     : PERIODES_CALENDAIRES;
+
+  useEffect(() => {
+    const matchingPeriod = allPeriodes.find((period) => {
+      const dates = getPeriodeDates(period.id, fiscalStart);
+      return dates.dateDebut === dateDebut && dates.dateFin === dateFin;
+    });
+    setPeriodeActive(matchingPeriod?.id || 'custom');
+  }, [dateDebut, dateFin, fiscalStart, showFiscalPeriods]);
 
   const displayedPeriodes = compact && !expanded 
     ? allPeriodes.slice(0, 4) 

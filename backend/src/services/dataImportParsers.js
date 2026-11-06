@@ -135,6 +135,31 @@ export function parseCSV(buffer, delimiter) {
   return recordsToRows(parseDelimitedRecords(text, selectedDelimiter));
 }
 
+export function parseLocalizedNumber(value) {
+  const input = String(value ?? '').trim();
+  if (!input) return null;
+
+  let normalized = input.replace(/[\s\u00A0\u202F]/g, '').replace(/[’']/g, '');
+  const comma = normalized.lastIndexOf(',');
+  const dot = normalized.lastIndexOf('.');
+
+  if (comma >= 0 && dot >= 0) {
+    const decimalSeparator = comma > dot ? ',' : '.';
+    const groupingSeparator = decimalSeparator === ',' ? '.' : ',';
+    normalized = normalized.split(groupingSeparator).join('');
+    if (decimalSeparator === ',') normalized = normalized.replace(',', '.');
+  } else if (comma >= 0) {
+    normalized = normalized.replace(',', '.');
+  }
+
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(normalized)) {
+    throw new Error(`Montant ou taux invalide : « ${input} »`);
+  }
+  const number = Number(normalized);
+  if (!Number.isFinite(number)) throw new Error(`Montant ou taux invalide : « ${input} »`);
+  return number;
+}
+
 export async function parseExcel(buffer) {
   const arrayBuffer = buffer.buffer.slice(
     buffer.byteOffset,

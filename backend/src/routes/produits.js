@@ -180,6 +180,12 @@ router.post('/', async (req, res) => {
         message: 'Le prix de vente doit être un nombre positif',
       });
     }
+    if (Number(prixVente || 0) > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Le prix de vente sera calculé après une réception fournisseur, à partir du coût moyen réel. Le coût standard ne sert pas à établir ce prix.',
+      });
+    }
     const normalizedWeight = poidsParUnite === undefined || poidsParUnite === null || poidsParUnite === ''
       ? null
       : Number(poidsParUnite);
@@ -207,8 +213,8 @@ router.post('/', async (req, res) => {
         unitePoids: unitePoids || 'kg',
         quantite: quantite || '0',
         stockMinimum: stockMinimum || '0',
-        prixAchat: prixAchat || '0',
-        prixVente: prixVente || '0',
+        prixAchat: prixAchat || '0', // Coût standard : devis fournisseur, non utilisé comme CMV.
+        prixVente: '0',
         fournisseurId: fournisseurId || null,
         emplacement: emplacement || null,
         actif: actif !== undefined ? actif : true,
@@ -290,6 +296,12 @@ router.put('/:id', async (req, res) => {
         message: 'Produit non trouvé ou accès non autorisé',
       });
     }
+    if (prixVente !== undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le prix de vente est géré par la bibliothèque de prix et calculé depuis le coût moyen réel.',
+      });
+    }
 
     // Validations
     if (quantite !== undefined && (isNaN(quantite) || quantite < 0)) {
@@ -354,7 +366,6 @@ router.put('/:id', async (req, res) => {
     if (quantite !== undefined) updateData.quantite = quantite;
     if (stockMinimum !== undefined) updateData.stockMinimum = stockMinimum;
     if (prixAchat !== undefined) updateData.prixAchat = prixAchat;
-    if (prixVente !== undefined) updateData.prixVente = prixVente;
     if (fournisseurId !== undefined) updateData.fournisseurId = fournisseurId;
     if (emplacement !== undefined) updateData.emplacement = emplacement;
     if (actif !== undefined) updateData.actif = actif;
@@ -522,6 +533,12 @@ router.post('/:id/ajuster-stock', async (req, res) => {
       }
       const stockDelta = nouvelleQuantite - parseFloat(product.quantite || 0);
       if (stockDelta > 0) {
+        if (Number(product.coutMoyen || 0) <= 0) {
+          throw Object.assign(
+            new Error('Réceptionnez d’abord le produit via un bon de réception fournisseur pour établir son coût réel.'),
+            { status: 409 }
+          );
+        }
         await ensureOpeningValuationLayer(tx, {
           entrepriseId: req.entrepriseId,
           produitId: product.id,
@@ -547,7 +564,7 @@ router.post('/:id/ajuster-stock', async (req, res) => {
       }).returning();
 
       if (stockDelta > 0) {
-        const unitCost = Number(product.coutMoyen || product.prixAchat || 0);
+        const unitCost = Number(product.coutMoyen || 0);
         await createStockValuationLayer(tx, {
           entrepriseId: req.entrepriseId,
           produitId: product.id,

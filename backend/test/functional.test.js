@@ -155,6 +155,43 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       assert.equal(res.status,expected,`${method} ${path}: ${JSON.stringify(json).slice(0,400)}`);
       return json;
     }
+    async function apiMultipart(path, fields, file, expected=200) {
+      const cookie = requestCookieHeader(path);
+      const boundary = `----ComptaOrionTest${randomUUID().replaceAll('-', '')}`;
+      const parts = [];
+      for (const [name, value] of Object.entries(fields)) {
+        parts.push(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
+        );
+      }
+      parts.push(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${file.filename}"\r\n` +
+        `Content-Type: ${file.contentType || 'application/octet-stream'}\r\n\r\n${file.content}\r\n`,
+      );
+      parts.push(`--${boundary}--\r\n`);
+      const body = Buffer.from(parts.join(''), 'utf8');
+      const res = worker
+        ? await worker.dispatchFetch(origin + '/api' + path, {
+          method: 'POST',
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
+          body,
+        })
+        : await fetch(origin + '/api' + path, {
+          method: 'POST',
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            ...(cookie ? { Cookie: cookie } : {}),
+          },
+          body,
+        });
+      storeResponseCookies(res);
+      const json = await res.json();
+      assert.equal(res.status, expected, `POST ${path}: ${JSON.stringify(json).slice(0, 400)}`);
+      return json;
+    }
     async function queryAsTenant(tenantId, query, params = []) {
       const client = await pool.connect();
       let transactionOpen = false;
@@ -256,6 +293,131 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.ok(refreshBeforeRotation && refreshAfterRotation && refreshBeforeRotation !== refreshAfterRotation,
       'Le refresh token doit tourner sans être exposé dans le JSON');
     await api('/auth-security/session');
+    const importEntityTypes = await api('/import/entity-types');
+    assert.deepEqual(importEntityTypes.data.map(item => item.id), [
+      'clients', 'fournisseurs', 'plan_comptable', 'produits',
+    ], 'L’API ne doit pas annoncer les imports factures/écritures non implémentés');
+    const importAndCommit = async ({ source, entityType, filename, csv, mapping }) => {
+      const upload = await apiMultipart('/import/upload', {
+        sourceLogiciel: source,
+        typeEntite: entityType,
+      }, {
+        filename,
+        content: csv,
+        contentType: 'text/csv',
+      });
+      await api(`/import/batches/${upload.data.batchId}/mapping`, 'POST', {
+        mappingColonnes: mapping,
+        optionsImport: {},
+      });
+      const validation = await api(`/import/batches/${upload.data.batchId}/validate`, 'POST', {});
+      assert.equal(validation.data.valides, 1, `La ligne ${entityType} synthétique doit être valide`);
+      const commit = await api(`/import/batches/${upload.data.batchId}/commit`, 'POST', {});
+      assert.equal(commit.data.importes, 1, `La ligne ${entityType} synthétique doit être importée`);
+      return { batchId: upload.data.batchId, preview: upload.data.previewRows[0] };
+    };
+    const importedClient = await importAndCommit({
+      source: 'sage100',
+      entityType: 'clients',
+      filename: 'clients-sage.csv',
+      csv: '\uFEFFNom;Email;Téléphone;Ville;Pays\r\n"Client; Démo";import-client@example.invalid;90000001;Lomé;Togo',
+      mapping: {
+        Nom: 'nom',
+        Email: 'email',
+        Téléphone: 'telephone',
+        Ville: 'ville',
+        Pays: 'pays',
+      },
+    });
+    assert.equal(importedClient.preview.data.Nom, 'Client; Démo',
+      'Le CSV Sage doit préserver les séparateurs placés entre guillemets');
+    const importedClientRow = (await admin.query(
+      `SELECT numero_client, code_auxiliaire, pays FROM "${schema}".clients WHERE entreprise_id = $1 AND email = $2`,
+      [signup.user.entrepriseId, 'import-client@example.invalid'],
+    )).rows[0];
+    assert.match(importedClientRow.numero_client, /^CLI\d{5}(?:-\d+)?$/);
+    assert.equal(importedClientRow.code_auxiliaire, importedClientRow.numero_client);
+    assert.equal(importedClientRow.pays, 'Togo');
+
+    await importAndCommit({
+      source: 'excel',
+      entityType: 'fournisseurs',
+      filename: 'fournisseurs.csv',
+      csv: 'Raison sociale,Email,Téléphone\n"Fournisseur, Démo",import-supplier@example.invalid,90000002',
+      mapping: {
+        'Raison sociale': 'raisonSociale',
+        Email: 'email',
+        Téléphone: 'telephone',
+      },
+    });
+    const importedSupplierRow = (await admin.query(
+      `SELECT numero_fournisseur, code_auxiliaire FROM "${schema}".fournisseurs WHERE entreprise_id = $1 AND email = $2`,
+      [signup.user.entrepriseId, 'import-supplier@example.invalid'],
+    )).rows[0];
+    assert.match(importedSupplierRow.numero_fournisseur, /^FOU\d{5}$/);
+    assert.equal(importedSupplierRow.code_auxiliaire, importedSupplierRow.numero_fournisseur);
+
+    await importAndCommit({
+      source: 'excel',
+      entityType: 'plan_comptable',
+      filename: 'plan-comptable.csv',
+      csv: 'N° compte,Libellé,Type,Classe\n889912,Compte de test,charge,8',
+      mapping: {
+        'N° compte': 'numeroCompte',
+        Libellé: 'libelle',
+        Type: 'typeCompte',
+        Classe: 'classe',
+      },
+    });
+    const importedAccountRow = (await admin.query(
+      `SELECT numero, nom, type, categorie FROM "${schema}".comptes_comptables WHERE entreprise_id = $1 AND numero = $2`,
+      [signup.user.entrepriseId, '889912'],
+    )).rows[0];
+    assert.deepEqual(importedAccountRow, {
+      numero: '889912',
+      nom: 'Compte de test',
+      type: 'charge',
+      categorie: 'résultat',
+    });
+
+    await importAndCommit({
+      source: 'sage100',
+      entityType: 'produits',
+      filename: 'produits.csv',
+      csv: 'Nom;Prix de vente;Prix d’achat;Référence;Unité;Poids;Unité poids\r\n"Pompe; agricole";"1 250,50";"900,25";PMP-TEST;pièce;2,5;kg',
+      mapping: {
+        Nom: 'nom',
+        'Prix de vente': 'prixVente',
+        'Prix d’achat': 'prixAchat',
+        Référence: 'reference',
+        Unité: 'uniteMesure',
+        Poids: 'poidsParUnite',
+        'Unité poids': 'unitePoids',
+      },
+    });
+    const importedProductRow = (await admin.query(
+      `SELECT nom, prix_vente, prix_achat, reference, unite_mesure, poids_par_unite, unite_poids
+       FROM "${schema}".produits WHERE entreprise_id = $1 AND reference = $2`,
+      [signup.user.entrepriseId, 'PMP-TEST'],
+    )).rows[0];
+    assert.equal(importedProductRow.nom, 'Pompe; agricole');
+    assert.equal(Number(importedProductRow.prix_vente), 0,
+      'Le prix historique importé ne devient pas un prix de vente avant coût réel');
+    assert.equal(Number(importedProductRow.prix_achat), 900.25);
+    assert.equal(Number(importedProductRow.poids_par_unite), 2.5);
+    assert.equal(importedProductRow.unite_mesure, 'pièce');
+    assert.equal(importedProductRow.unite_poids, 'kg');
+
+    const unsupportedResult = await apiMultipart('/import/upload', {
+      sourceLogiciel: 'excel',
+      typeEntite: 'factures',
+    }, {
+      filename: 'factures.csv',
+      content: 'x,y\n1,2',
+      contentType: 'text/csv',
+    }, 400);
+    assert.match(unsupportedResult.error, /pas encore pris en charge/i);
+
     const platformSubscriptions = await api('/saas-admin/abonnements');
     assert.ok(Array.isArray(platformSubscriptions),
       'Le rôle admin plateforme conserve l’accès SaaS via le contexte RLS privilégié');
@@ -287,6 +449,73 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     },201);
     assert.notEqual(supplierRecord.data.numeroFournisseur,secondSupplierRecord.data.numeroFournisseur,
       'Chaque fournisseur doit recevoir un numéro distinct');
+    const [{ rows: salaryJournalRows }, { rows: salaryAccountRows }] = await Promise.all([
+      admin.query(
+        `SELECT id FROM "${schema}".journaux WHERE entreprise_id = $1 AND code = 'SA' LIMIT 1`,
+        [signup.user.entrepriseId],
+      ),
+      admin.query(
+        `SELECT id, numero FROM "${schema}".comptes_comptables
+         WHERE entreprise_id = $1 AND numero IN ('421', '5121')`,
+        [signup.user.entrepriseId],
+      ),
+    ]);
+    const salaryJournal = salaryJournalRows[0];
+    const salaryAccount = salaryAccountRows.find((account) => account.numero === '421');
+    const bankAccount = salaryAccountRows.find((account) => account.numero === '5121');
+    assert.ok(salaryJournal && salaryAccount && bankAccount,
+      'Le journal de salaires et les comptes de personnel et banque doivent être initialisés');
+    const manualSalaryEntry = await api('/comptabilite/ecritures','POST',{
+      journalId:salaryJournal.id,
+      dateEcriture:`${testYear}-11-06`,
+      reference:'TEST-ECRITURE-MANUELLE',
+      description:'Salaire comptable de recette',
+      lignes:[
+        {compteComptableId:salaryAccount.id,debit:'550000.00',credit:'0.00',libelle:'Salaire comptable'},
+        {compteComptableId:bankAccount.id,debit:'0.00',credit:'550000.00',libelle:'Paiement salaire'},
+      ],
+    },201);
+    assert.ok(manualSalaryEntry.id,'La création atomique doit retourner l’identifiant de l’écriture');
+    const validatedSalaryEntry = await api(
+      `/comptabilite/ecritures/${manualSalaryEntry.id}/valider`,'POST',{},
+    );
+    assert.equal(validatedSalaryEntry.totalDebit,550000);
+    assert.equal(validatedSalaryEntry.totalCredit,550000);
+    const legacyDraft = await api('/comptabilite/ecritures','POST',{
+      journalId:salaryJournal.id,
+      dateEcriture:`${testYear}-11-06`,
+      reference:'TEST-ECRITURE-ANCIEN-CLIENT',
+      description:'Compatibilité ancienne saisie',
+    },201);
+    await api('/comptabilite/lignes','POST',{
+      ecritureId:legacyDraft.id,
+      compteId:salaryAccount.id,
+      montant:100,
+      type:'debit',
+      description:'Ligne débit ancienne interface',
+    },201);
+    await api('/comptabilite/lignes','POST',{
+      ecritureId:legacyDraft.id,
+      compteId:bankAccount.id,
+      montant:100,
+      type:'credit',
+      description:'Ligne crédit ancienne interface',
+    },201);
+    const validatedLegacyEntry = await api(
+      `/comptabilite/ecritures/${legacyDraft.id}/valider`,'POST',{},
+    );
+    assert.equal(validatedLegacyEntry.totalDebit,100);
+    assert.equal(validatedLegacyEntry.totalCredit,100,
+      'L’ancien format compteId/montant/type reste accepté pour les pages déjà ouvertes');
+    const savedSalaryEntry = await admin.query(
+      `SELECT valide, numero_ecriture FROM "${schema}".ecritures
+       WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId,manualSalaryEntry.id],
+    );
+    assert.equal(savedSalaryEntry.rows[0]?.valide,true,
+      'L’écriture manuelle équilibrée doit être validée');
+    assert.ok(savedSalaryEntry.rows[0]?.numero_ecriture,
+      'L’écriture manuelle doit recevoir son numéro séquentiel');
     const supplierStatement = await api('/fournisseurs/etat-compte','POST',{
       fournisseurId:supplierRecord.data.numeroFournisseur,
       dateDebut:`${testYear}-01-01`,
@@ -297,23 +526,141 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const unscopedClients=await pool.query('SELECT id FROM clients');
     assert.equal(unscopedClients.rowCount,0,'Sans contexte tenant, RLS doit masquer toutes les lignes');
     const productRecord=await api('/produits','POST',{reference:'TEST-ERP',nom:'Produit recette',
-      quantite:10,prixVente:1000,prixAchat:500},201);
+      quantite:10,prixVente:0,prixAchat:900,poidsParUnite:2,unitePoids:'kg'},201);
     const productId=productRecord.data.id;
+    const warehouseRecord = await api('/stock/entrepots','POST',{
+      nom:'Entrepôt test temporaire',
+    });
+    const listedWarehouses = await api('/stock/entrepots');
+    assert.ok(listedWarehouses.some(warehouse => warehouse.id === warehouseRecord.id),
+      'La création d’un entrepôt doit le rendre immédiatement visible dans la liste');
+    const secondCostProduct = await api('/produits','POST',{
+      reference:'TEST-ERP-2',nom:'Produit léger recette',quantite:0,prixVente:0,
+      prixAchat:3000,poidsParUnite:1,unitePoids:'kg',
+    },201);
+    assert.equal(Number(productRecord.data.prixVente),0,
+      'Un nouveau produit sans réception ne doit pas avoir de prix de vente');
+    await api('/clients/prix-produits/calculer','POST',{
+      produitId:productId,margeBruteCible:30,
+    },409);
+    await api('/clients/prix-produits','POST',{
+      produitId:productId,margeBruteCible:30,
+    },409);
+    const uncostedDraft=await api('/factures','POST',{
+      clientId,items:[{produitId:productId,quantite:1,prixUnitaire:1000}],
+    },201);
+    await api(`/factures/${uncostedDraft.data.id}`,'PUT',{statut:'envoyee'},409);
+
+    const purchaseOrder = await api('/commandes-achat','POST',{
+      fournisseurId:supplierRecord.data.id,
+      dateCommande:new Date().toISOString().slice(0,10),
+      items:[
+        {produitId:productId,description:'Produit recette',quantite:10,prixUnitaire:500},
+        {produitId:secondCostProduct.data.id,description:'Produit léger recette',quantite:10,prixUnitaire:2000},
+      ],
+      coutsLogistiques:[{type:'transport',description:'Transport commun',montant:100}],
+    },201);
+    const editedPurchaseOrder = await api(`/commandes-achat/${purchaseOrder.data.id}`,'PUT',{
+      fournisseurId:supplierRecord.data.id,
+      dateCommande:new Date().toISOString().slice(0,10),
+      notes:'Bon modifié avant réception',
+      items:purchaseOrder.data.items.map(line=>({
+        produitId:line.produitId,
+        description:line.description,
+        quantite:Number(line.quantite),
+        prixUnitaire:Number(line.prixUnitaire),
+        remise:Number(line.remise || 0),
+      })),
+      coutsLogistiques:[{type:'transport',description:'Transport commun',montant:100}],
+    });
+    await api(`/commandes-achat/${purchaseOrder.data.id}/confirmer`,'PUT',{});
+    const receivePart = (quantity) => api('/receptions','POST',{
+      commandeId:purchaseOrder.data.id,
+      dateReception:new Date().toISOString().slice(0,10),
+      entrepotId:warehouseRecord.id,
+      items:editedPurchaseOrder.data.items.map(line=>({
+        commandeItemId:line.id,
+        quantiteRecue:quantity,
+      })),
+    });
+    const firstReceipt = await receivePart(5);
+    await api(`/commandes-achat/${purchaseOrder.data.id}`,'PUT',{
+      fournisseurId:supplierRecord.data.id,
+      items:editedPurchaseOrder.data.items.map(line=>({
+        produitId:line.produitId,
+        description:line.description,
+        quantite:Number(line.quantite),
+        prixUnitaire:Number(line.prixUnitaire),
+        remise:Number(line.remise || 0),
+      })),
+      coutsLogistiques:[{type:'transport',description:'Transport modifié',montant:100}],
+    },409);
+    await receivePart(5);
+    const pendingStockTotals = await admin.query(
+      `SELECT COUNT(*)::int AS row_count, SUM(valeur_estimee)::numeric AS amount
+       FROM "${schema}".stock_pending WHERE entreprise_id = $1 AND statut = 'pending'`,
+      [signup.user.entrepriseId],
+    );
+    assert.equal(pendingStockTotals.rows[0].row_count,4,
+      'Chaque ligne produit de chaque réception doit être suivie comme stock non facturé');
+    assert.equal(Number(pendingStockTotals.rows[0].amount),25000,
+      'Le stock non facturé conserve le prix des articles, séparément des frais logistiques');
+    const pendingLogisticsTotal = await admin.query(
+      `SELECT COUNT(*)::int AS row_count, SUM(montant_estime)::numeric AS amount
+       FROM "${schema}".logistique_pending WHERE entreprise_id = $1 AND statut = 'pending'`,
+      [signup.user.entrepriseId],
+    );
+    assert.equal(pendingLogisticsTotal.rows[0].row_count,2,
+      'Les frais logistiques doivent être suivis une fois par type et par réception partielle');
+    assert.equal(Number(pendingLogisticsTotal.rows[0].amount),100,
+      'Les frais logistiques prévisionnels sont répartis sans doublon entre les réceptions partielles');
+    const warehouseStock = await admin.query(
+      `SELECT quantite_presente FROM "${schema}".stock_par_entrepot
+       WHERE entreprise_id = $1 AND produit_id = $2 AND entrepot_id = $3`,
+      [signup.user.entrepriseId, productId, warehouseRecord.id],
+    );
+    assert.equal(Number(warehouseStock.rows[0]?.quantite_presente || 0),10,
+      'La réception met aussi à jour la quantité dans l’entrepôt choisi');
+    assert.ok(firstReceipt.data.receptionNumero,
+      'Chaque réception issue d’une commande reçoit un numéro de bon');
+    const receivedProduct = (await admin.query(
+      `SELECT prix_achat, cout_moyen, prix_vente FROM "${schema}".produits WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId,productId],
+    )).rows[0];
+    const receivedSecondProduct = (await admin.query(
+      `SELECT prix_achat, cout_moyen FROM "${schema}".produits WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId,secondCostProduct.data.id],
+    )).rows[0];
+    assert.equal(Number(receivedProduct.prix_achat),900,
+      'Le coût standard conserve le devis initial du fournisseur');
+    assert.ok(Math.abs(Number(receivedProduct.cout_moyen) - 506.67) < 0.02,
+      'Le coût système inclut la part du transport répartie selon le poids, sans reprendre le devis standard');
+    assert.ok(Math.abs(Number(receivedSecondProduct.cout_moyen) - 2003.33) < 0.02,
+      'Le produit plus léger reçoit une part de transport proportionnelle à son poids, pas à sa valeur');
+    const pricePreview = await api('/clients/prix-produits/calculer','POST',{
+      produitId:productId,margeBruteCible:30,
+    });
+    assert.equal(Number(pricePreview.data.prixVenteCalcule),658.67,
+      'Le prix de vente est calculé à partir du coût système reçu');
+    const productPrice = await api('/clients/prix-produits','POST',{
+      produitId:productId,margeBruteCible:30,
+    },201);
+    assert.equal(Number(productPrice.data.prixVenteCalcule),658.67);
     const invoice=await api('/factures','POST',{
-      clientId,dateFacture:`${testYear}-01-16`,items:[{produitId:productId,quantite:2,prixUnitaire:1000}],
+      clientId,dateFacture:`${testYear}-01-16`,items:[{produitId:productId,quantite:2,prixUnitaire:658.67}],
     },201);
     const f=invoice.data;
-    assert.equal(Number(f.totalHT),2000);
-    assert.equal(Number(f.totalTTC),2360);
+    assert.equal(Number(f.totalHT),1317.34);
+    assert.equal(Number(f.totalTTC),1554.46);
     const accounts=await api('/comptabilite/comptes');
     const clientCollectiveAccount=accounts.find(account=>account.numero==='4111');
     assert.ok(clientCollectiveAccount,'Le compte collectif client 4111 doit être configuré');
     const clientMovements=await api(`/comptabilite/compte/${clientCollectiveAccount.id}/ecritures`);
-    assert.ok(clientMovements.some(movement=>movement.reference===f.numeroFacture && Number(movement.debit)===2360),
+    assert.ok(clientMovements.some(movement=>movement.reference===f.numeroFacture && Number(movement.debit)===1554.46),
       'La facture client doit débiter le compte collectif 4111');
-    await api(`/factures/${f.id}/paiement`,'POST',{montant:2360,modePaiement:'especes'},201);
+    await api(`/factures/${f.id}/paiement`,'POST',{montant:1554.46,modePaiement:'especes'},201);
     const paidClientMovements=await api(`/comptabilite/compte/${clientCollectiveAccount.id}/ecritures`);
-    assert.ok(paidClientMovements.some(movement=>Number(movement.credit)===2360),
+    assert.ok(paidClientMovements.some(movement=>Number(movement.credit)===1554.46),
       'Le règlement client doit créditer le compte collectif 4111');
     const clientStatement = await api('/clients/etat-compte','POST',{
       clientId:clientRecord.data.numeroClient,
@@ -322,26 +669,26 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     });
     assert.equal(clientStatement.data.client.numeroClient,clientRecord.data.numeroClient,
       'L’état de compte client doit résoudre la fiche par son numéro auxiliaire');
-    assert.equal(Number(clientStatement.data.totalFacture),2360,
+    assert.equal(Number(clientStatement.data.totalFacture),1554.46,
       'L’état de compte doit inclure les opérations du client identifié');
     const paid=await api(`/factures/${f.id}`);
     assert.equal(Number(paid.data.soldeRestant),0);
     assert.equal(paid.data.statut,'payee');
     const another=await api('/factures','POST',{
-      clientId,items:[{produitId:productId,quantite:1,prixUnitaire:1000}],
+      clientId,items:[{produitId:productId,quantite:1,prixUnitaire:658.67}],
     },201);
     const monthlySales=await api(`/dashboard/ventes-mensuelles?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`);
     assert.equal(monthlySales.length,new Date().getMonth()+1,'Une entrée doit exister pour chaque mois écoulé');
-    assert.equal(monthlySales.reduce((total,row)=>total+Number(row.ventes),0),2360,
+    assert.equal(monthlySales.reduce((total,row)=>total+Number(row.ventes),0),1554.46,
       'La série mensuelle doit inclure les ventes valides et exclure le brouillon');
-    assert.equal(Number(monthlySales[0].ventes),2360,
+    assert.equal(Number(monthlySales[0].ventes),1554.46,
       'La première facture doit rester comptée dans le bon mois');
     if(new Date().getMonth()>0) {
       assert.equal(Number(monthlySales.at(-1).ventes),0,'La facture brouillon ne doit pas apparaître dans les ventes');
     }
     const paymentCookie = requestCookieHeader(`/factures/${another.data.id}/paiement`);
     const paymentRequest={method:'POST',headers:{'Content-Type':'application/json',Cookie:paymentCookie},
-      body:JSON.stringify({montant:1180,modePaiement:'especes'})};
+      body:JSON.stringify({montant:Number(another.data.totalTTC),modePaiement:'especes'})};
     const paymentUrl=origin+`/api/factures/${another.data.id}/paiement`;
     const results=await Promise.all([0,1].map(()=>worker ?
       worker.dispatchFetch(paymentUrl,paymentRequest) : fetch(paymentUrl,paymentRequest)));
@@ -474,7 +821,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       'La liste client ne doit retourner que les données du tenant connecté');
     const secondProduct=await api('/produits','POST',{
       reference:'TEST-TENANT-B',nom:'Produit autre entreprise',quantite:1,
-      prixVente:100,prixAchat:50,entrepriseId:signup.user.entrepriseId,
+      prixVente:0,prixAchat:50,entrepriseId:signup.user.entrepriseId,
     },201);
     assert.notEqual(Number(secondProduct.data.entrepriseId),Number(signup.user.entrepriseId),
       'La création produit doit ignorer le tenant fourni par le client');

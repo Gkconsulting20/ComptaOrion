@@ -160,14 +160,19 @@ router.get('/produits', async (req, res) => {
 
 router.post('/produits', async (req, res) => {
   try {
-    const { entrepriseId, reference, nom, categoriId, prixAchat, prixVente, valorisationMethod } = req.body;
+    const { reference, nom, categoriId, prixAchat, prixVente, valorisationMethod } = req.body;
+    if (Number(prixVente || 0) > 0) {
+      return res.status(409).json({
+        error: 'Le prix de vente sera calculé après une réception fournisseur, à partir du coût réel du système.',
+      });
+    }
     const result = await db.insert(produits).values({
-      entrepriseId: parseInt(entrepriseId),
+      entrepriseId: req.entrepriseId,
       reference,
       nom,
       categoriId: categoriId ? parseInt(categoriId) : null,
       prixAchat: parseFloat(prixAchat) || 0,
-      prixVente: parseFloat(prixVente) || 0,
+      prixVente: 0,
       valorisationMethod: valorisationMethod || 'FIFO'
     }).returning();
 
@@ -203,11 +208,15 @@ router.get('/entrepots', async (req, res) => {
 router.post('/entrepots', async (req, res) => {
   try {
     const { nom, adresse, responsable } = req.body;
+    const normalizedName = String(nom || '').trim();
+    if (!normalizedName) {
+      return res.status(400).json({ error: 'Le nom de l’entrepôt est obligatoire.' });
+    }
     const result = await db.insert(entrepots).values({
       entrepriseId: req.entrepriseId,
-      nom,
-      adresse,
-      responsable
+      nom: normalizedName,
+      adresse: adresse ? String(adresse).trim() : null,
+      responsable: responsable ? String(responsable).trim() : null
     }).returning();
 
     // Audit log
@@ -218,7 +227,7 @@ router.post('/entrepots', async (req, res) => {
       table: 'entrepots',
       recordId: result[0].id,
       nouvelleValeur: result[0],
-      description: `Entrepôt créé: ${nom}`
+      description: `Entrepôt créé: ${normalizedName}`
     });
 
     res.json(result[0]);
@@ -316,6 +325,12 @@ router.post('/mouvements', async (req, res) => {
     if (!productSnapshot) {
       return res.status(404).json({ success: false, error: 'Produit non trouvé pour cette entreprise' });
     }
+    if (type === 'entree' && Number(productSnapshot.coutMoyen || 0) <= 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'La première entrée doit passer par un bon de réception fournisseur pour calculer le coût réel.',
+      });
+    }
 
     const [movement] = await db.transaction(async (tx) => {
       if (type === 'entree') {
@@ -337,7 +352,7 @@ router.post('/mouvements', async (req, res) => {
       }).returning();
 
       if (type === 'entree') {
-        const unitCost = prix ?? Number(productSnapshot.coutMoyen || productSnapshot.prixAchat || 0);
+        const unitCost = prix ?? Number(productSnapshot.coutMoyen || 0);
         await createStockValuationLayer(tx, {
           entrepriseId: entId,
           produitId: prodId,
@@ -737,14 +752,33 @@ router.post('/receptions/:id/valider', async (req, res) => {
         `);
 
         if (bon.entrepot_id) {
+          const warehouseStockKey = `${req.entrepriseId}:${ligne.produit_id}:${bon.entrepot_id}`;
           await tx.execute(sql`
-            INSERT INTO stock_par_entrepot (entreprise_id, produit_id, entrepot_id, quantite_presente, quantite_disponible)
-            VALUES (${req.entrepriseId}, ${ligne.produit_id}, ${bon.entrepot_id}, ${ligne.quantite_recue}, ${ligne.quantite_recue})
-            ON CONFLICT (produit_id, entrepot_id) DO UPDATE
-            SET quantite_presente = stock_par_entrepot.quantite_presente + ${ligne.quantite_recue},
-                quantite_disponible = stock_par_entrepot.quantite_disponible + ${ligne.quantite_recue},
-                updated_at = NOW()
+            SELECT pg_advisory_xact_lock(hashtextextended(${warehouseStockKey}, 0))
           `);
+          const [warehouseStock] = await tx.select().from(stockParEntrepot).where(and(
+            eq(stockParEntrepot.entrepriseId, req.entrepriseId),
+            eq(stockParEntrepot.produitId, ligne.produit_id),
+            eq(stockParEntrepot.entrepotId, bon.entrepot_id)
+          )).for('update').limit(1);
+          if (warehouseStock) {
+            await tx.update(stockParEntrepot).set({
+              quantitePresente: sql`${stockParEntrepot.quantitePresente} + ${ligne.quantite_recue}`,
+              quantiteDisponible: sql`${stockParEntrepot.quantiteDisponible} + ${ligne.quantite_recue}`,
+              updatedAt: new Date(),
+            }).where(and(
+              eq(stockParEntrepot.id, warehouseStock.id),
+              eq(stockParEntrepot.entrepriseId, req.entrepriseId)
+            ));
+          } else {
+            await tx.insert(stockParEntrepot).values({
+              entrepriseId: req.entrepriseId,
+              produitId: ligne.produit_id,
+              entrepotId: bon.entrepot_id,
+              quantitePresente: ligne.quantite_recue,
+              quantiteDisponible: ligne.quantite_recue,
+            });
+          }
         }
 
         await tx.execute(sql`
@@ -829,10 +863,10 @@ router.post('/receptions/:id/valider', async (req, res) => {
       );
       const ecritureResult = await tx.execute(sql`
         INSERT INTO ecritures
-          (entreprise_id, journal_id, numero_ecriture, numero_piece, date_ecriture, libelle, statut)
+          (entreprise_id, journal_id, numero_ecriture, numero_piece, date_ecriture, libelle, valide)
         VALUES
           (${req.entrepriseId}, ${journalId}, ${numeroEcriture}, ${numeroPiece}, ${bon.date_reception},
-           ${'Réception marchandises ' + bon.numero}, 'brouillon')
+           ${'Réception marchandises ' + bon.numero}, TRUE)
         RETURNING id
       `);
       const createdId = ecritureResult.rows[0].id;
@@ -958,17 +992,17 @@ router.get('/rapports/etat-stocks', async (req, res) => {
   try {
     const result = await db.execute(sql`
       SELECT 
-        p.id, p.reference, p.nom, p.unite_mesure, p.prix_achat, p.prix_vente,
+        p.id, p.reference, p.nom, p.unite_mesure, p.prix_achat, p.cout_moyen, p.prix_vente,
         COALESCE(SUM(spe.quantite_presente), 0) as quantite_totale,
         COALESCE(SUM(spe.quantite_disponible), 0) as quantite_disponible,
         COALESCE(SUM(spe.quantite_reservee), 0) as quantite_reservee,
-        COALESCE(SUM(spe.quantite_presente), 0) * COALESCE(p.prix_achat, 0) as valeur_stock,
+        COALESCE(SUM(spe.quantite_presente), 0) * COALESCE(p.cout_moyen, 0) as valeur_stock,
         c.nom as categorie_nom
       FROM produits p
       LEFT JOIN stock_par_entrepot spe ON p.id = spe.produit_id
       LEFT JOIN categories_stock c ON p.categorie_id = c.id
       WHERE p.entreprise_id = ${req.entrepriseId} AND p.actif = true
-      GROUP BY p.id, p.reference, p.nom, p.unite_mesure, p.prix_achat, p.prix_vente, c.nom
+      GROUP BY p.id, p.reference, p.nom, p.unite_mesure, p.prix_achat, p.cout_moyen, p.prix_vente, c.nom
       ORDER BY p.nom
     `);
     
@@ -995,22 +1029,21 @@ router.get('/rapports/valorisation', async (req, res) => {
             COALESCE(
               vs_totals.valeur / NULLIF(vs_totals.quantite, 0),
               NULLIF(p.cout_moyen, 0),
-              p.prix_achat,
               0
             )
           )
-          ELSE COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
+          ELSE COALESCE(NULLIF(p.cout_moyen, 0), 0)
         END as cout_unitaire,
         CASE 
           WHEN p.valorisation_method = 'FIFO' THEN (
             SELECT COALESCE(
               NULLIF(vs_totals.valeur, 0),
               COALESCE(NULLIF(vs_totals.quantite, 0), p.quantite, 0) *
-                COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
+                COALESCE(NULLIF(p.cout_moyen, 0), 0)
             )
           )
           ELSE COALESCE(NULLIF(vs_totals.quantite, 0), p.quantite, 0) *
-            COALESCE(NULLIF(p.cout_moyen, 0), p.prix_achat, 0)
+            COALESCE(NULLIF(p.cout_moyen, 0), 0)
         END as valeur_totale
       FROM produits p
       LEFT JOIN (

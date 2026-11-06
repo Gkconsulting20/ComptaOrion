@@ -46,16 +46,13 @@ const FIELD_LABELS = {
     telephone: 'Téléphone',
     adresse: 'Adresse',
     ville: 'Ville',
-    pays: 'Pays',
-    numeroTva: 'N° TVA'
+    pays: 'Pays'
   },
   fournisseurs: {
     raisonSociale: 'Raison sociale',
     email: 'Email',
     telephone: 'Téléphone',
-    adresse: 'Adresse',
-    ville: 'Ville',
-    pays: 'Pays'
+    adresse: 'Adresse'
   },
   plan_comptable: {
     numeroCompte: 'N° de compte',
@@ -66,10 +63,12 @@ const FIELD_LABELS = {
   produits: {
     nom: 'Nom du produit',
     description: 'Description',
-    prixVente: 'Prix de vente',
+    prixVente: 'Prix de vente historique (non repris avant coût réel)',
     prixAchat: 'Prix d\'achat',
-    tva: 'Taux TVA (%)',
-    reference: 'Référence'
+    reference: 'Référence',
+    uniteMesure: 'Unité de vente',
+    poidsParUnite: 'Poids par unité',
+    unitePoids: 'Unité de poids'
   }
 };
 
@@ -325,7 +324,7 @@ export default function ImportWizard({ onClose }) {
         <div style={cardStyle}>
           <h3 style={{ marginTop: 0 }}>Téléchargez votre fichier</h3>
           <p style={{ color: '#666' }}>
-            Formats acceptés : CSV, Excel (.xlsx), ou fichier IIF (QuickBooks)
+            Formats acceptés : CSV, Excel (.xlsx), ou fichier IIF (QuickBooks). Les fichiers XLS anciens doivent être convertis en XLSX.
           </p>
           
           <div style={{ 
@@ -338,7 +337,7 @@ export default function ImportWizard({ onClose }) {
           }}>
             <input 
               type="file" 
-              accept=".csv,.xlsx,.xls,.iif"
+              accept=".csv,.xlsx,.iif"
               onChange={(e) => setFile(e.target.files[0])}
               style={{ display: 'none' }}
               id="file-upload"

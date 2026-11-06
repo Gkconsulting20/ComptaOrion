@@ -214,6 +214,8 @@ export function calculateWeightedAverageSaleCost(cmv, quantity) {
 }
 
 export async function synchronizeActiveProductPrices(executor, entrepriseId, produitId, cmv) {
+  if (!Number.isFinite(Number(cmv)) || Number(cmv) <= 0) return;
+
   const activePrices = await executor.select().from(produitPrix).where(and(
     eq(produitPrix.entrepriseId, entrepriseId),
     eq(produitPrix.produitId, produitId),
@@ -303,7 +305,8 @@ export async function ensureOpeningValuationLayer(executor, { entrepriseId, prod
   const quantity = Math.max(0, productQuantity - Number(layerTotals?.quantity || 0));
   if (quantity <= 0) return false;
 
-  const unitCost = Math.max(0, Number(product.coutMoyen || product.prixAchat || 0));
+  const unitCost = Math.max(0, Number(product.coutMoyen || 0));
+  if (unitCost <= 0) return false;
   await executor.insert(valorisationsStock).values({
     entrepriseId,
     produitId,

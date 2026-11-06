@@ -3607,11 +3607,11 @@ function TablePrixTab() {
   };
 
   const handleCalculPreview = async () => {
-    if (formData.coutAchat === '' || formData.coutAchat === undefined || formData.margeBruteCible === '') return;
+    if (!formData.produitId || formData.margeBruteCible === '') return;
     
     try {
       const res = await api.post('/clients/prix-produits/calculer', {
-        coutAchat: parseFloat(formData.coutAchat),
+        produitId: Number(formData.produitId),
         margeBruteCible: parseFloat(formData.margeBruteCible)
       });
       setCalculPreview(res.data);
@@ -3621,11 +3621,11 @@ function TablePrixTab() {
   };
 
   useEffect(() => {
-    if (formData.coutAchat !== '' && formData.coutAchat !== undefined && formData.margeBruteCible !== '') {
+    if (formData.produitId && formData.margeBruteCible !== '') {
       const timer = setTimeout(handleCalculPreview, 300);
       return () => clearTimeout(timer);
     }
-  }, [formData.coutAchat, formData.margeBruteCible]);
+  }, [formData.produitId, formData.margeBruteCible]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -3649,7 +3649,7 @@ function TablePrixTab() {
     const product = produits.find((item) => Number(item.id) === Number(prix.produitId));
     setFormData({
       produitId: prix.produitId,
-      coutAchat: prix.coutCMV ?? product?.coutMoyen ?? product?.prixAchat ?? prix.coutAchat,
+      coutAchat: Number(prix.coutCMV ?? product?.coutMoyen ?? 0),
       margeBruteCible: prix.margeBruteCible,
       prixVenteManuel: prix.prixVenteManuel || '',
       categorieClient: prix.categorieClient || 'standard',
@@ -3712,7 +3712,10 @@ function TablePrixTab() {
           columns={[
             { key: 'produitNom', label: 'Produit' },
             { key: 'produitReference', label: 'Référence' },
-            { key: 'coutCMV', label: 'CMV actuel', render: (val, row) => `${Number(val ?? row.coutAchat ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
+            { key: 'coutStandard', label: 'Coût standard', render: (val) => `${Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
+            { key: 'coutCMV', label: 'Coût calculé (CMV)', render: (val) => Number(val || 0) > 0
+              ? `${Number(val).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
+              : 'En attente de réception' },
             { key: 'margeBruteCible', label: 'Majoration CMV', render: (val) => `${val}%` },
             { key: 'prixVenteCalcule', label: 'Prix Calculé', render: (val) => `${Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
             { key: 'prixVenteManuel', label: 'Prix Manuel', render: (val) => val ? `${Number(val).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : '-' },
@@ -3745,14 +3748,17 @@ function TablePrixTab() {
             value={formData.produitId}
             onChange={(e) => {
               const product = produits.find((item) => Number(item.id) === Number(e.target.value));
-              const cmv = product?.coutMoyen || product?.prixAchat || 0;
+              const cmv = product?.coutMoyen || 0;
               setFormData({ ...formData, produitId: e.target.value, coutAchat: String(cmv) });
             }}
             required
             disabled={!!editingPrix}
           >
             <option value="">Sélectionner un produit</option>
-            {produits.map(p => (
+            {produits.filter(p =>
+              Number(p.coutMoyen || 0) > 0 ||
+              (editingPrix && Number(p.id) === Number(formData.produitId))
+            ).map(p => (
               <option key={p.id} value={p.id}>{p.reference} - {p.nom}</option>
             ))}
           </FormField>
@@ -3763,7 +3769,9 @@ function TablePrixTab() {
                 CMV actuel (XOF)
               </label>
               <div style={{ border: '1px solid #ced4da', borderRadius: 4, padding: '10px 12px', minHeight: 20 }}>
-                {Number(formData.coutAchat || 0).toLocaleString('fr-FR')}
+                {Number(formData.coutAchat || 0) > 0
+                  ? `${Number(formData.coutAchat).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
+                  : 'En attente de réception fournisseur'}
               </div>
               <small style={{ color: '#777' }}>Calculé depuis le coût moyen pondéré du stock.</small>
             </div>

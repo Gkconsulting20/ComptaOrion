@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, onRowClick, actions = true }) {
+export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, onRowClick, customActions, actions = true }) {
   const safeData = Array.isArray(data) ? data : [];
   
   return (
@@ -77,6 +77,7 @@ export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, onRow
                     padding: '12px 15px',
                     textAlign: 'right',
                   }}>
+                    {customActions?.(row)}
                     {onEdit && (
                       <button onClick={() => onEdit(row)} style={{
                         padding: '6px 12px',

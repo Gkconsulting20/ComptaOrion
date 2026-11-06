@@ -1685,14 +1685,36 @@ router.post('/ecritures', async (req, res) => {
       return res.status(400).json({ error: 'Journal non trouvé ou n\'appartient pas à l\'entreprise' });
     }
 
-    // Valider l'équilibre des lignes si fournies
-    if (lignes && lignes.length > 0) {
-      let totalDebit = 0, totalCredit = 0;
-      for (const l of lignes) {
-        totalDebit += parseFloat(l.debit || 0);
-        totalCredit += parseFloat(l.credit || 0);
+    if (lignes !== undefined && !Array.isArray(lignes)) {
+      return res.status(400).json({ error: 'Les lignes de l’écriture doivent être une liste' });
+    }
+
+    // Valider toutes les lignes avant de créer l'en-tête pour éviter les brouillons partiels.
+    if (Array.isArray(lignes)) {
+      if (lignes.length < 2) {
+        return res.status(400).json({ error: 'Une écriture doit contenir au moins deux lignes' });
       }
-      if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      let totalDebitCentimes = 0;
+      let totalCreditCentimes = 0;
+      for (const ligne of lignes) {
+        const accountId = Number(ligne.compteComptableId);
+        const debit = Number(ligne.debit || 0);
+        const credit = Number(ligne.credit || 0);
+        if (!Number.isInteger(accountId) || accountId <= 0) {
+          return res.status(400).json({ error: 'Chaque ligne doit avoir un compte comptable valide' });
+        }
+        if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0) {
+          return res.status(400).json({ error: 'Les montants de chaque ligne doivent être positifs ou nuls' });
+        }
+        if ((debit === 0 && credit === 0) || (debit > 0 && credit > 0)) {
+          return res.status(400).json({ error: 'Chaque ligne doit contenir un débit ou un crédit, mais pas les deux' });
+        }
+        totalDebitCentimes += Math.round(debit * 100);
+        totalCreditCentimes += Math.round(credit * 100);
+      }
+      if (totalDebitCentimes !== totalCreditCentimes) {
+        const totalDebit = totalDebitCentimes / 100;
+        const totalCredit = totalCreditCentimes / 100;
         return res.status(400).json({ 
           error: 'L\'écriture n\'est pas équilibrée', 
           totalDebit, 
@@ -1703,6 +1725,21 @@ router.post('/ecritures', async (req, res) => {
     }
 
     const ecriture = await db.transaction(async (tx) => {
+      if (Array.isArray(lignes)) {
+        for (const ligne of lignes) {
+          const [compte] = await tx.select({ id: comptesComptables.id })
+            .from(comptesComptables)
+            .where(and(
+              eq(comptesComptables.id, Number(ligne.compteComptableId)),
+              eq(comptesComptables.entrepriseId, Number(entrepriseId))
+            ))
+            .limit(1);
+          if (!compte) {
+            throw Object.assign(new Error('Un compte comptable de l’écriture est introuvable dans cette entreprise'), { status: 400 });
+          }
+        }
+      }
+
       const numeroEcriture = await generateNumeroEcriture(
         Number(entrepriseId),
         journal,
@@ -1754,7 +1791,7 @@ router.post('/ecritures', async (req, res) => {
 
     res.status(201).json(ecriture);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -2049,7 +2086,21 @@ router.post('/ecritures/:id/valider', async (req, res) => {
 router.post('/lignes', async (req, res) => {
   try {
     const entrepriseId = req.entrepriseId;
-    const { ecritureId, compteComptableId, debit, credit, libelle } = req.body;
+    const {
+      ecritureId,
+      compteComptableId: compteComptableIdBody,
+      compteId,
+      debit: debitBody,
+      credit: creditBody,
+      montant,
+      type,
+      libelle: libelleBody,
+      description,
+    } = req.body;
+    const compteComptableId = compteComptableIdBody ?? compteId;
+    const debit = debitBody ?? (type === 'debit' ? montant : 0);
+    const credit = creditBody ?? (type === 'credit' ? montant : 0);
+    const libelle = libelleBody ?? description;
 
     if (!entrepriseId) {
       return res.status(400).json({ error: 'entrepriseId requis' });
@@ -2061,7 +2112,7 @@ router.post('/lignes', async (req, res) => {
     // Validation : debit et credit doivent être non-négatifs
     const debitVal = parseFloat(debit || 0);
     const creditVal = parseFloat(credit || 0);
-    if (debitVal < 0 || creditVal < 0) {
+    if (!Number.isFinite(debitVal) || !Number.isFinite(creditVal) || debitVal < 0 || creditVal < 0) {
       return res.status(400).json({ error: 'Les montants débit et crédit doivent être positifs' });
     }
     // Une ligne doit avoir soit débit soit crédit (pas les deux ou aucun)

@@ -226,7 +226,7 @@ function FacturationTab({ fournisseurs }) {
             Convertir les stocks et coûts logistiques non facturés en facture fournisseur.
           </p>
         </div>
-        <Button onClick={openFactureModal} variant="success">+ Créer Facture Fournisseur</Button>
+        <Button onClick={openFactureModal} variant="success">+ Rapprocher une facture de stock</Button>
       </div>
 
       <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
@@ -1318,8 +1318,8 @@ export function GestionFournisseurs() {
   };
 
   const tabs = [
-    { id: 'facturation', label: '📄 Facturation', icon: '📄' },
-    { id: 'factures', label: '🧾 Factures', icon: '🧾' },
+    { id: 'facturation', label: '📥 Réceptions & factures de stock', icon: '📥' },
+    { id: 'factures', label: '🧾 Factures fournisseurs', icon: '🧾' },
     { id: 'paiements', label: '💰 Paiements', icon: '💰' },
     { id: 'etats-compte', label: '📋 États de Compte', icon: '📋' },
     { id: 'rapports', label: '📊 Rapports', icon: '📊' },
@@ -1463,8 +1463,11 @@ export function GestionFournisseurs() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h3>🧾 Factures Fournisseurs</h3>
-            <Button onClick={() => openModal('facture')}>+ Nouvelle Facture</Button>
+            <Button onClick={() => openModal('facture')}>+ Facture directe hors stock</Button>
           </div>
+          <p style={{ marginTop: -10, color: '#64717d', fontSize: 13 }}>
+            Utilisez cette saisie pour les services et autres achats sans stock. Pour les marchandises, réceptionnez le bon de commande puis rapprochez la facture dans « Réceptions & factures de stock ».
+          </p>
           {data.factures.length === 0 ? (
             <div style={{ padding: '40px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px', color: '#52606d' }}>
               Aucune facture fournisseur enregistrée.
@@ -1885,7 +1888,7 @@ export function GestionFournisseurs() {
           modal.type === 'fournisseur' ? (modal.item ? 'Modifier Fournisseur' : 'Nouveau Fournisseur') :
           modal.type === 'commande' ? 'Nouvelle Commande d\'Achat' :
           modal.type === 'reception' ? 'Nouvelle Réception' :
-          modal.type === 'facture' ? 'Nouvelle Facture Fournisseur' :
+          modal.type === 'facture' ? (modal.item ? 'Modifier une facture fournisseur' : 'Facture directe hors stock') :
           modal.type === 'paiement' ? 'Nouveau Paiement' :
           modal.type === 'taxe' ? (modal.item ? 'Modifier Taxe' : 'Nouvelle Taxe') :
           modal.type === 'codeComptable' ? (modal.item ? 'Modifier Code' : 'Nouveau Code Comptable') : ''
@@ -2059,6 +2062,9 @@ export function GestionFournisseurs() {
 
           {modal.type === 'facture' && (
             <>
+              <div style={{ marginBottom: 16, padding: 12, color: '#315f78', background: '#eef6fa', borderRadius: 8 }}>
+                Saisie directe réservée aux services et achats sans stock. Pour une marchandise, créez un bon de commande, réceptionnez-la, puis rapprochez sa facture avec les réceptions.
+              </div>
               {!modal.item && (
                 <SupplierInvoiceOcr
                   onExtract={(extracted) => setForm(current => {

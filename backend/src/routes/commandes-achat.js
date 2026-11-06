@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db.js';
-import { commandesAchat, commandesAchatItems, produits, fournisseurs, mouvementsStock, coutsLogistiquesCommande } from '../schema.js';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { commandesAchat, commandesAchatItems, produits, fournisseurs, mouvementsStock, coutsLogistiquesCommande, bonsReception } from '../schema.js';
+import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
@@ -170,11 +170,28 @@ router.post('/', async (req, res) => {
       });
     }
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Au moins un article est obligatoire'
       });
+    }
+    if (items.some((item) => {
+      const quantity = Number(item.quantite);
+      const unitPrice = Number(item.prixUnitaire);
+      const discount = Number(item.remise || 0);
+      return !Number.isFinite(quantity) || quantity <= 0 ||
+        !Number.isFinite(unitPrice) || unitPrice < 0 ||
+        !Number.isFinite(discount) || discount < 0 || discount > 100 ||
+        (!item.produitId && !String(item.description || '').trim());
+    })) {
+      return res.status(400).json({ success: false, message: 'Une ligne de commande contient des valeurs invalides.' });
+    }
+    if (coutsLogistiques && (!Array.isArray(coutsLogistiques) || coutsLogistiques.some((cost) =>
+      !['transport', 'douane', 'manutention', 'assurance', 'autre'].includes(cost.type) ||
+      !Number.isFinite(Number(cost.montant)) || Number(cost.montant) < 0
+    ))) {
+      return res.status(400).json({ success: false, message: 'Un coût logistique est invalide.' });
     }
 
     // Vérifier que le fournisseur existe
@@ -194,6 +211,16 @@ router.post('/', async (req, res) => {
         success: false,
         message: 'Fournisseur non trouvé'
       });
+    }
+    const productIds = [...new Set(items.map((item) => Number(item.produitId)).filter(Number.isSafeInteger))];
+    if (productIds.length) {
+      const validProducts = await db.select({ id: produits.id }).from(produits).where(and(
+        eq(produits.entrepriseId, req.entrepriseId),
+        inArray(produits.id, productIds)
+      ));
+      if (validProducts.length !== productIds.length) {
+        return res.status(400).json({ success: false, message: 'Un produit de la commande est introuvable dans cette entreprise.' });
+      }
     }
 
     // Générer numéro de commande
@@ -300,6 +327,158 @@ router.post('/', async (req, res) => {
       message: 'Erreur lors de la création de la commande',
       error: error.message
     });
+  }
+});
+
+// PUT /api/commandes-achat/:id - Modifier un bon tant qu’aucune marchandise n’a été reçue
+router.put('/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { fournisseurId, dateCommande, dateLivraisonPrevue, items, coutsLogistiques, notes, conditionsLivraison, modeLivraison } = req.body;
+    if (!Number.isSafeInteger(id) || id < 1) {
+      return res.status(400).json({ success: false, message: 'Identifiant de commande invalide.' });
+    }
+    if (!fournisseurId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Le fournisseur et au moins un article sont obligatoires.' });
+    }
+    if (items.some((item) => {
+      const quantity = Number(item.quantite);
+      const unitPrice = Number(item.prixUnitaire);
+      const discount = Number(item.remise || 0);
+      return !Number.isFinite(quantity) || quantity <= 0 ||
+        !Number.isFinite(unitPrice) || unitPrice < 0 ||
+        !Number.isFinite(discount) || discount < 0 || discount > 100 ||
+        (!item.produitId && !String(item.description || '').trim());
+    })) {
+      return res.status(400).json({ success: false, message: 'Une ligne de commande contient des valeurs invalides.' });
+    }
+    if (coutsLogistiques && (!Array.isArray(coutsLogistiques) || coutsLogistiques.some((cost) =>
+      !['transport', 'douane', 'manutention', 'assurance', 'autre'].includes(cost.type) ||
+      !Number.isFinite(Number(cost.montant)) || Number(cost.montant) < 0
+    ))) {
+      return res.status(400).json({ success: false, message: 'Un coût logistique est invalide.' });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [order] = await tx.select().from(commandesAchat).where(and(
+        eq(commandesAchat.id, id),
+        eq(commandesAchat.entrepriseId, req.entrepriseId)
+      )).for('update').limit(1);
+      if (!order) return { status: 404 };
+      if (['annulee', 'livree'].includes(String(order.statut).toLowerCase())) {
+        return { status: 409, message: 'Une commande annulée ou réceptionnée ne peut plus être modifiée.' };
+      }
+
+      const [receipt] = await tx.select({ id: bonsReception.id }).from(bonsReception).where(and(
+        eq(bonsReception.commandeAchatId, order.id),
+        eq(bonsReception.entrepriseId, req.entrepriseId)
+      )).limit(1);
+      const existingItems = await tx.select().from(commandesAchatItems).where(and(
+        eq(commandesAchatItems.commandeId, order.id),
+        eq(commandesAchatItems.entrepriseId, req.entrepriseId)
+      )).for('update');
+      if (receipt || existingItems.some((line) => Number(line.quantiteRecue || 0) > 0)) {
+        return { status: 409, message: 'Le bon de commande est verrouillé dès la première réception.' };
+      }
+
+      const [supplier] = await tx.select({ id: fournisseurs.id }).from(fournisseurs).where(and(
+        eq(fournisseurs.id, Number(fournisseurId)),
+        eq(fournisseurs.entrepriseId, req.entrepriseId)
+      )).limit(1);
+      if (!supplier) return { status: 400, message: 'Le fournisseur sélectionné est invalide.' };
+
+      const productIds = [...new Set(items.map((item) => Number(item.produitId)).filter(Number.isSafeInteger))];
+      if (productIds.length) {
+        const validProducts = await tx.select({ id: produits.id }).from(produits).where(and(
+          eq(produits.entrepriseId, req.entrepriseId),
+          inArray(produits.id, productIds)
+        ));
+        if (validProducts.length !== productIds.length) {
+          return { status: 400, message: 'Un produit de la commande est introuvable dans cette entreprise.' };
+        }
+      }
+
+      const existingCosts = await tx.select().from(coutsLogistiquesCommande).where(and(
+        eq(coutsLogistiquesCommande.commandeAchatId, order.id),
+        eq(coutsLogistiquesCommande.entrepriseId, req.entrepriseId)
+      ));
+      const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+      const totalArticlesHT = roundMoney(items.reduce((sum, item) =>
+        sum + Number(item.quantite) * Number(item.prixUnitaire) * (1 - Number(item.remise || 0) / 100), 0));
+      const totalLogistique = roundMoney((coutsLogistiques || []).reduce((sum, cost) => sum + Number(cost.montant), 0));
+      const totalTVA = roundMoney(totalArticlesHT * 0.18);
+      const [updatedOrder] = await tx.update(commandesAchat).set({
+        fournisseurId: Number(fournisseurId),
+        dateCommande: dateCommande || order.dateCommande,
+        dateLivraisonPrevue: dateLivraisonPrevue || null,
+        totalArticlesHT: totalArticlesHT.toFixed(2),
+        totalLogistique: totalLogistique.toFixed(2),
+        totalHT: (totalArticlesHT + totalLogistique).toFixed(2),
+        totalTVA: totalTVA.toFixed(2),
+        totalTTC: (totalArticlesHT + totalLogistique + totalTVA).toFixed(2),
+        notes: notes || null,
+        conditionsLivraison: conditionsLivraison || null,
+        modeLivraison: modeLivraison || null,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(commandesAchat.id, order.id),
+        eq(commandesAchat.entrepriseId, req.entrepriseId)
+      )).returning();
+
+      await tx.delete(commandesAchatItems).where(and(
+        eq(commandesAchatItems.commandeId, order.id),
+        eq(commandesAchatItems.entrepriseId, req.entrepriseId)
+      ));
+      const updatedItems = await tx.insert(commandesAchatItems).values(items.map((item) => {
+        const quantity = Number(item.quantite);
+        const price = Number(item.prixUnitaire);
+        const discount = Number(item.remise || 0);
+        return {
+          entrepriseId: req.entrepriseId,
+          commandeId: order.id,
+          produitId: item.produitId ? Number(item.produitId) : null,
+          description: String(item.description || '').trim(),
+          quantite: String(quantity),
+          quantiteRecue: '0',
+          prixUnitaire: price.toFixed(2),
+          remise: discount.toFixed(2),
+          totalLigne: (quantity * price * (1 - discount / 100)).toFixed(2),
+        };
+      })).returning();
+      await tx.delete(coutsLogistiquesCommande).where(and(
+        eq(coutsLogistiquesCommande.commandeAchatId, order.id),
+        eq(coutsLogistiquesCommande.entrepriseId, req.entrepriseId)
+      ));
+      const updatedCosts = coutsLogistiques?.length
+        ? await tx.insert(coutsLogistiquesCommande).values(coutsLogistiques.map((cost) => ({
+          entrepriseId: req.entrepriseId,
+          commandeAchatId: order.id,
+          type: cost.type,
+          description: cost.description || null,
+          montant: Number(cost.montant).toFixed(2),
+        }))).returning()
+        : [];
+
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'commandes_achat',
+        recordId: order.id,
+        ancienneValeur: { commande: order, items: existingItems, coutsLogistiques: existingCosts },
+        nouvelleValeur: { commande: updatedOrder, items: updatedItems, coutsLogistiques: updatedCosts },
+        description: `Bon de commande modifié avant réception: ${order.numeroCommande}`,
+        executor: tx,
+        required: true,
+      });
+      return { status: 200, data: { ...updatedOrder, items: updatedItems, coutsLogistiques: updatedCosts } };
+    });
+    if (result.status !== 200) {
+      return res.status(result.status).json({ success: false, message: result.message || 'Commande non trouvée.' });
+    }
+    return res.json({ success: true, message: 'Bon de commande mis à jour.', data: result.data });
+  } catch (error) {
+    console.error('Erreur lors de la modification du bon de commande:', error);
+    return res.status(500).json({ success: false, message: 'Erreur lors de la modification du bon de commande.', error: error.message });
   }
 });
 

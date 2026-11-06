@@ -745,8 +745,29 @@ export function ModuleComptabilite() {
         }
       } else if (type === 'ecriture') {
         const totaux = calculateTotaux();
-        if (totaux.difference !== 0) {
+        if (Math.abs(totaux.difference) > 0.001) {
           alert('L\'écriture doit être équilibrée (Débit = Crédit)');
+          return;
+        }
+        const lignesEcriture = (form.lignes || []).map((ligne) => ({
+          compteComptableId: parseInt(ligne.compteId, 10),
+          debit: Number(ligne.debit || 0).toFixed(2),
+          credit: Number(ligne.credit || 0).toFixed(2),
+          libelle: ligne.libelle || form.libelle,
+        }));
+        const ligneInvalide = lignesEcriture.some((ligne) => {
+          const debit = Number(ligne.debit);
+          const credit = Number(ligne.credit);
+          return !Number.isInteger(ligne.compteComptableId)
+            || !Number.isFinite(debit)
+            || !Number.isFinite(credit)
+            || debit < 0
+            || credit < 0
+            || (debit === 0 && credit === 0)
+            || (debit > 0 && credit > 0);
+        });
+        if (lignesEcriture.length < 2 || ligneInvalide) {
+          alert('Chaque ligne doit avoir un compte et un seul montant positif (débit ou crédit).');
           return;
         }
         
@@ -755,31 +776,9 @@ export function ModuleComptabilite() {
           dateEcriture: form.date,
           reference: form.reference,
           description: form.libelle,
-          userId: 1,
-          ipAddress: '127.0.0.1'
+          lignes: lignesEcriture,
         };
         const ecritureCreated = await api.post('/comptabilite/ecritures', ecritureData);
-        
-        for (const ligne of form.lignes) {
-          if (ligne.debit > 0) {
-            await api.post('/comptabilite/lignes', {
-              ecritureId: ecritureCreated.id,
-              compteId: parseInt(ligne.compteId),
-              montant: parseFloat(ligne.debit),
-              type: 'debit',
-              description: ligne.libelle
-            });
-          }
-          if (ligne.credit > 0) {
-            await api.post('/comptabilite/lignes', {
-              ecritureId: ecritureCreated.id,
-              compteId: parseInt(ligne.compteId),
-              montant: parseFloat(ligne.credit),
-              type: 'credit',
-              description: ligne.libelle
-            });
-          }
-        }
         
         await api.post(`/comptabilite/ecritures/${ecritureCreated.id}/valider`, {});
       } else if (type === 'recurrente') {
@@ -816,9 +815,11 @@ export function ModuleComptabilite() {
 
   const calculateTotaux = () => {
     if (!form.lignes) return { totalDebit: 0, totalCredit: 0, difference: 0 };
-    const totalDebit = form.lignes.reduce((sum, l) => sum + parseFloat(l.debit || 0), 0);
-    const totalCredit = form.lignes.reduce((sum, l) => sum + parseFloat(l.credit || 0), 0);
-    return { totalDebit, totalCredit, difference: totalDebit - totalCredit };
+    const totalDebitCentimes = form.lignes.reduce((sum, l) => sum + Math.round((Number(l.debit) || 0) * 100), 0);
+    const totalCreditCentimes = form.lignes.reduce((sum, l) => sum + Math.round((Number(l.credit) || 0) * 100), 0);
+    const totalDebit = totalDebitCentimes / 100;
+    const totalCredit = totalCreditCentimes / 100;
+    return { totalDebit, totalCredit, difference: (totalDebitCentimes - totalCreditCentimes) / 100 };
   };
 
   const tabs = [

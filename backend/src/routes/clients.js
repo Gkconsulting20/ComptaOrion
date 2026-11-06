@@ -493,7 +493,8 @@ router.get('/prix-produits', async (req, res) => {
         produitId: produitPrix.produitId,
         produitNom: produits.nom,
         produitReference: produits.reference,
-        coutCMV: sql`COALESCE(NULLIF(${produits.coutMoyen}, 0), ${produits.prixAchat}, 0)`,
+        coutCMV: produits.coutMoyen,
+        coutStandard: produits.prixAchat,
         coutAchat: produitPrix.coutAchat,
         margeBruteCible: produitPrix.margeBruteCible,
         prixVenteCalcule: produitPrix.prixVenteCalcule,
@@ -531,25 +532,33 @@ router.get('/prix-produits', async (req, res) => {
  */
 router.post('/prix-produits/calculer', async (req, res) => {
   try {
-    const { coutAchat, margeBruteCible } = req.body;
+    const { produitId, margeBruteCible } = req.body;
     
-    if (coutAchat === undefined || margeBruteCible === undefined) {
+    if (!produitId || margeBruteCible === undefined) {
       return res.status(400).json({ 
         success: false, 
-        error: 'coutAchat et margeBruteCible sont requis' 
+        error: 'produitId et margeBruteCible sont requis'
       });
     }
     
     const marge = Number(margeBruteCible);
-    const cout = Number(coutAchat);
     if (!Number.isFinite(marge) || marge < 0 || marge > 1000) {
       return res.status(400).json({ 
         success: false, 
         error: 'La majoration du CMV doit être comprise entre 0% et 1000%.'
       });
     }
-    if (!Number.isFinite(cout) || cout < 0) {
-      return res.status(400).json({ success: false, error: 'Le CMV doit être un montant positif ou nul.' });
+    const [product] = await db.select().from(produits).where(and(
+      eq(produits.id, parseInt(produitId, 10)),
+      eq(produits.entrepriseId, req.entrepriseId)
+    )).limit(1);
+    if (!product) return res.status(404).json({ success: false, error: 'Produit non trouvé dans cette entreprise.' });
+    const cout = Number(product.coutMoyen);
+    if (!Number.isFinite(cout) || cout <= 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'Le prix de vente sera calculable après la première réception fournisseur, quand le système aura établi le coût de revient réel.'
+      });
     }
 
     const prixVenteCalcule = calculateSellingPriceFromMarkup(cout, marge);
@@ -558,7 +567,9 @@ router.post('/prix-produits/calculer', async (req, res) => {
     res.json({
       success: true,
       data: {
+        produitId: product.id,
         coutAchat: cout,
+        coutStandard: Number(product.prixAchat || 0),
         margeBruteCible: marge,
         prixVenteCalcule: Math.round(prixVenteCalcule * 100) / 100,
         beneficeBrut: Math.round(beneficeBrut * 100) / 100,
@@ -609,10 +620,13 @@ router.post('/prix-produits', async (req, res) => {
     )).limit(1);
     if (!product) return res.status(404).json({ success: false, error: 'Produit non trouvé dans cette entreprise.' });
 
-    const currentAverageCost = Number(product.coutMoyen);
-    const cout = Math.max(0, currentAverageCost > 0
-      ? currentAverageCost
-      : Number(product.prixAchat) || 0);
+    const cout = Number(product.coutMoyen);
+    if (!Number.isFinite(cout) || cout <= 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'Impossible de calculer un prix de vente avant la première réception fournisseur. Le coût standard sert de référence d’achat, pas de CMV.'
+      });
+    }
     const prixVenteCalcule = calculateSellingPriceFromMarkup(cout, marge);
     const manualPrice = prixVenteManuel === undefined || prixVenteManuel === null || prixVenteManuel === ''
       ? null
@@ -709,7 +723,13 @@ router.put('/prix-produits/:id', async (req, res) => {
         return { status: 400, error: 'Le prix manuel doit être positif ou nul.' };
       }
 
-      const cmv = Math.max(0, Number(product.coutMoyen || product.prixAchat || 0));
+      const cmv = Number(product.coutMoyen);
+      if (!Number.isFinite(cmv) || cmv <= 0) {
+        return {
+          status: 409,
+          error: 'Impossible de recalculer le prix de vente : aucune réception fournisseur n’a encore établi le coût de revient réel.'
+        };
+      }
       const calculatedPrice = calculateSellingPriceFromMarkup(cmv, margin);
       const updates = {
         coutAchat: cmv.toFixed(2),

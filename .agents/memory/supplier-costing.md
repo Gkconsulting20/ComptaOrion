@@ -27,8 +27,20 @@ Pour la bibliothèque de prix client, calculer le prix de vente par `PV = CMV ×
 
 **How to apply:** Utiliser le CMV courant révisé par les achats pour calculer les prix; une vente consomme ce coût sans recalculer le CMV unitaire.
 
+Distinguer le coût standard (devis fournisseur) du coût de revient calculé par le système. Le coût standard ne doit jamais servir de remplacement silencieux au CMV réel ni créer une valorisation de stock. Sans réception fournisseur validée et coût système positif, ne pas calculer de prix de vente et bloquer la vente.
+
+**Why:** L’utilisateur a demandé que le prix de vente repose uniquement sur le coût réel incluant les coûts logistiques, et non sur le devis initial.
+
+**How to apply:** Conserver le devis comme référence standard. Alimenter le CMV depuis les réceptions et leurs frais imputés; utiliser ensuite ce CMV pour valoriser le stock et calculer le prix de vente selon la majoration choisie.
+
 Pour les factures fournisseurs, débiter le compte de charge correspondant à la nature de la ligne (notamment transport au compte 61) et créditer le compte collectif fournisseur 401. Garder un identifiant auxiliaire unique par fournisseur pour le suivi détaillé, sans créer un compte général distinct pour chaque fournisseur.
 
 **Why:** L’utilisateur a demandé un seul compte fournisseur au passif, tout en conservant l’imputation par nature et l’identification individuelle des fournisseurs.
 
 **How to apply:** Les factures et paiements fournisseurs utilisent le compte 401 commun; relier les lignes opérationnelles au fournisseur par son identifiant auxiliaire. Ne pas supprimer les anciens comptes personnalisés sans audit des soldes.
+
+Les achats destinés au stock passent par un bon de commande qui contient les frais logistiques prévisionnels. Le bon reste modifiable jusqu’à sa première réception; la réception crée le stock et le suivi des coûts de stock et de logistique non facturés. Une facture sans marchandise en stock (service, loyer, etc.) garde une saisie directe distincte.
+
+**Why:** L’utilisateur a demandé de séparer le cycle d’achat de stock du simple enregistrement d’une facture de charge, tout en préparant l’imputation des frais de transport au coût des articles.
+
+**How to apply:** Au premier mouvement de réception lié, verrouiller le bon et ses lignes. Suivre les montants reçus et les coûts logistiques estimés comme non facturés jusqu’au rapprochement de la facture réelle; ne pas forcer les achats hors stock dans le processus de réception.

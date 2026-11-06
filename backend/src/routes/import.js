@@ -1,13 +1,15 @@
 import express from 'express';
 import multer from 'multer';
-import readXlsxFile from 'read-excel-file/web-worker';
 import { db } from '../db.js';
 import { 
   importBatches, importRecords, importMappingTemplates,
-  clients, fournisseurs, comptesComptables, produits, factures, factureItems, paiements, ecritures, lignesEcritures
+  clients, fournisseurs, comptesComptables, produits
 } from '../schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { formatClientNumberFromId } from '../services/clientIdentity.js';
+import { formatSupplierNumberFromId } from '../services/supplierIdentity.js';
+import { parseCSV, parseExcel, parseIIF, parseLocalizedNumber } from '../services/dataImportParsers.js';
 
 const router = express.Router();
 
@@ -23,13 +25,49 @@ const SUPPORTED_SOURCES = [
 ];
 
 const ENTITY_TYPES = [
-  { id: 'clients', name: 'Clients', champsRequis: ['nom'], champsOptionnels: ['email', 'telephone', 'adresse', 'ville', 'pays', 'numeroTva'] },
-  { id: 'fournisseurs', name: 'Fournisseurs', champsRequis: ['raisonSociale'], champsOptionnels: ['email', 'telephone', 'adresse', 'ville', 'pays'] },
+  { id: 'clients', name: 'Clients', champsRequis: ['nom'], champsOptionnels: ['email', 'telephone', 'adresse', 'ville', 'pays'] },
+  { id: 'fournisseurs', name: 'Fournisseurs', champsRequis: ['raisonSociale'], champsOptionnels: ['email', 'telephone', 'adresse'] },
   { id: 'plan_comptable', name: 'Plan Comptable', champsRequis: ['numeroCompte', 'libelle'], champsOptionnels: ['typeCompte', 'classe'] },
-  { id: 'produits', name: 'Produits/Services', champsRequis: ['nom'], champsOptionnels: ['description', 'prixVente', 'prixAchat', 'tva', 'reference'] },
-  { id: 'factures', name: 'Factures Clients', champsRequis: ['numeroFacture', 'clientId', 'montantTotal'], champsOptionnels: ['dateFacture', 'dateEcheance', 'statut'] },
-  { id: 'ecritures', name: 'Écritures Comptables', champsRequis: ['dateEcriture', 'libelle'], champsOptionnels: ['journal', 'reference'] }
+  { id: 'produits', name: 'Produits/Services', champsRequis: ['nom'], champsOptionnels: ['description', 'prixVente', 'prixAchat', 'reference', 'uniteMesure', 'poidsParUnite', 'unitePoids'] }
 ];
+const AUDIT_TABLE_BY_ENTITY = {
+  clients: 'clients',
+  fournisseurs: 'fournisseurs',
+  plan_comptable: 'comptes_comptables',
+  produits: 'produits',
+};
+
+function inferAccountType(accountNumber, accountClass) {
+  if (accountClass === 1) return 'capitaux';
+  if ([2, 3, 5].includes(accountClass)) return 'actif';
+  if (accountClass === 4) {
+    if (/^40/.test(accountNumber)) return 'passif';
+    if (/^41/.test(accountNumber)) return 'actif';
+    throw new Error('Pour un compte de classe 4, indiquez son type (actif ou passif) dans le fichier.');
+  }
+  if (accountClass === 6 || accountClass === 8) return 'charge';
+  if (accountClass === 7) return 'produit';
+  return 'passif';
+}
+
+function normalizeAccountType(value, accountNumber, accountClass) {
+  const aliases = {
+    actif: 'actif',
+    asset: 'actif',
+    passif: 'passif',
+    liability: 'passif',
+    produit: 'produit',
+    revenue: 'produit',
+    charge: 'charge',
+    expense: 'charge',
+    capitaux: 'capitaux',
+    equity: 'capitaux',
+  };
+  if (!value) return inferAccountType(accountNumber, accountClass);
+  const normalized = aliases[String(value).trim().toLocaleLowerCase()];
+  if (!normalized) throw new Error(`Type de compte non reconnu : « ${value} »`);
+  return normalized;
+}
 
 router.get('/sources', (req, res) => {
   res.json({ success: true, data: SUPPORTED_SOURCES });
@@ -54,87 +92,6 @@ router.get('/batches', async (req, res) => {
   }
 });
 
-function parseCSV(buffer, delimiter = ',') {
-  const content = buffer.toString('utf-8');
-  const lines = content.split(/\r?\n/).filter(line => line.trim());
-  
-  if (lines.length === 0) return { headers: [], rows: [] };
-  
-  const headers = lines[0].split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
-  const rows = [];
-  
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(delimiter).map(v => v.trim().replace(/^["']|["']$/g, ''));
-    const row = {};
-    headers.forEach((h, idx) => {
-      row[h] = values[idx] || '';
-    });
-    rows.push({ ligne: i + 1, data: row });
-  }
-  
-  return { headers, rows };
-}
-
-async function parseExcel(buffer) {
-  const jsonData = await readXlsxFile(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
-  
-  if (jsonData.length === 0) return { headers: [], rows: [] };
-  
-  const headers = jsonData[0].map(h => String(h || '').trim());
-  const rows = [];
-  
-  for (let i = 1; i < jsonData.length; i++) {
-    const row = {};
-    headers.forEach((h, idx) => {
-      row[h] = jsonData[i][idx] !== undefined ? String(jsonData[i][idx]) : '';
-    });
-    if (Object.values(row).some(v => v !== '')) {
-      rows.push({ ligne: i + 1, data: row });
-    }
-  }
-  
-  return { headers, rows };
-}
-
-function parseIIF(buffer) {
-  const content = buffer.toString('utf-8');
-  const lines = content.split(/\r?\n/);
-  
-  const sections = {};
-  let currentSection = null;
-  let currentHeaders = [];
-  
-  for (const line of lines) {
-    if (line.startsWith('!')) {
-      const parts = line.substring(1).split('\t');
-      currentSection = parts[0];
-      currentHeaders = parts.slice(1);
-      sections[currentSection] = { headers: currentHeaders, rows: [] };
-    } else if (currentSection && line.trim()) {
-      const values = line.split('\t');
-      const sectionType = values[0];
-      if (sectionType === currentSection) {
-        const row = {};
-        currentHeaders.forEach((h, idx) => {
-          row[h] = values[idx + 1] || '';
-        });
-        sections[currentSection].rows.push({ ligne: sections[currentSection].rows.length + 2, data: row });
-      }
-    }
-  }
-  
-  const mainSection = Object.keys(sections)[0];
-  if (mainSection) {
-    return { 
-      headers: sections[mainSection].headers, 
-      rows: sections[mainSection].rows,
-      allSections: sections
-    };
-  }
-  
-  return { headers: [], rows: [] };
-}
-
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -146,53 +103,76 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     if (!sourceLogiciel || !typeEntite) {
       return res.status(400).json({ success: false, error: 'Source et type d\'entité requis' });
     }
+
+    const source = SUPPORTED_SOURCES.find(item => item.id === sourceLogiciel);
+    if (!source) {
+      return res.status(400).json({ success: false, error: 'Logiciel source non supporté' });
+    }
+    if (!ENTITY_TYPES.some(item => item.id === typeEntite)) {
+      return res.status(400).json({ success: false, error: 'Ce type de données n’est pas encore pris en charge par l’import' });
+    }
     
     const fileName = req.file.originalname;
     const ext = fileName.split('.').pop().toLowerCase();
+    if (!source.formats.includes(ext) || ext === 'xls') {
+      return res.status(400).json({
+        success: false,
+        error: 'Format non pris en charge pour cette source. Utilisez CSV ou XLSX; les anciens fichiers XLS doivent être convertis en XLSX.'
+      });
+    }
     
     let parsed;
-    if (ext === 'csv') {
-      const delimiter = req.body.delimiter || (sourceLogiciel === 'sage100' ? ';' : ',');
-      parsed = parseCSV(req.file.buffer, delimiter);
-    } else if (ext === 'xlsx' || ext === 'xls') {
-      parsed = await parseExcel(req.file.buffer);
-    } else if (ext === 'iif') {
-      parsed = parseIIF(req.file.buffer);
-    } else {
-      return res.status(400).json({ success: false, error: 'Format de fichier non supporté. Utilisez CSV, Excel ou IIF.' });
+    try {
+      if (ext === 'csv') {
+        const delimiter = req.body.delimiter || undefined;
+        parsed = parseCSV(req.file.buffer, delimiter);
+      } else if (ext === 'xlsx') {
+        parsed = await parseExcel(req.file.buffer);
+      } else if (ext === 'iif') {
+        parsed = parseIIF(req.file.buffer, typeEntite);
+      }
+    } catch (parseError) {
+      return res.status(400).json({ success: false, error: parseError.message });
     }
     
     if (parsed.rows.length === 0) {
       return res.status(400).json({ success: false, error: 'Le fichier est vide ou n\'a pas pu être lu' });
     }
     
-    const [batch] = await db.insert(importBatches).values({
-      entrepriseId: req.entrepriseId,
-      userId: req.userId,
-      sourceLogiciel,
-      formatFichier: ext,
-      nomFichier: fileName,
-      tailleFichier: req.file.size,
-      typeEntite,
-      nombreLignesTotal: parsed.rows.length,
-      statut: 'brouillon'
-    }).returning();
-    
-    for (const row of parsed.rows) {
-      await db.insert(importRecords).values({
-        batchId: batch.id,
-        ligneFichier: row.ligne,
-        donneesOriginales: row.data,
-        statut: 'en_attente'
+    const auditInfo = extractAuditInfo(req);
+    const batch = await db.transaction(async tx => {
+      const [createdBatch] = await tx.insert(importBatches).values({
+        entrepriseId: req.entrepriseId,
+        userId: req.userId,
+        sourceLogiciel,
+        formatFichier: ext,
+        nomFichier: fileName,
+        tailleFichier: req.file.size,
+        typeEntite,
+        nombreLignesTotal: parsed.rows.length,
+        statut: 'brouillon'
+      }).returning();
+
+      const chunkSize = 250;
+      for (let start = 0; start < parsed.rows.length; start += chunkSize) {
+        await tx.insert(importRecords).values(parsed.rows.slice(start, start + chunkSize).map(row => ({
+          batchId: createdBatch.id,
+          ligneFichier: row.ligne,
+          donneesOriginales: row.data,
+          statut: 'en_attente'
+        })));
+      }
+
+      await logAudit({
+        ...auditInfo,
+        action: 'IMPORT_UPLOAD',
+        table: 'import_batches',
+        recordId: createdBatch.id,
+        newValues: { sourceLogiciel, typeEntite, nomFichier: fileName, lignes: parsed.rows.length },
+        executor: tx,
+        required: true
       });
-    }
-    
-    await logAudit({
-      ...extractAuditInfo(req),
-      action: 'IMPORT_UPLOAD',
-      table: 'import_batches',
-      recordId: batch.id,
-      newValues: { sourceLogiciel, typeEntite, nomFichier: fileName, lignes: parsed.rows.length }
+      return createdBatch;
     });
     
     res.json({ 
@@ -324,8 +304,44 @@ router.post('/batches/:id/validate', async (req, res) => {
       }
       
       for (const champ of champsRequis) {
-        if (!donneesTransformees[champ] || donneesTransformees[champ].trim() === '') {
+        if (donneesTransformees[champ] === undefined ||
+            donneesTransformees[champ] === null ||
+            String(donneesTransformees[champ]).trim() === '') {
           erreursValidation.push({ champ, message: `Le champ "${champ}" est requis` });
+        }
+      }
+
+      if (donneesTransformees.email &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(donneesTransformees.email).trim())) {
+        erreursValidation.push({ champ: 'email', message: 'Adresse e-mail invalide' });
+      }
+
+      if (batch.typeEntite === 'produits') {
+        for (const champ of ['prixVente', 'prixAchat', 'poidsParUnite']) {
+          if (donneesTransformees[champ] === undefined || String(donneesTransformees[champ]).trim() === '') continue;
+          try {
+            const valeur = parseLocalizedNumber(donneesTransformees[champ]);
+            if (valeur < 0 || (champ === 'poidsParUnite' && valeur === 0)) {
+              throw new Error(champ === 'poidsParUnite' ? 'Le poids par unité doit être supérieur à zéro' : 'Le montant ne peut pas être négatif');
+            }
+          } catch (error) {
+            erreursValidation.push({ champ, message: error.message });
+          }
+        }
+      }
+
+      if (batch.typeEntite === 'plan_comptable') {
+        try {
+          const classe = donneesTransformees.classe
+            ? parseLocalizedNumber(donneesTransformees.classe)
+            : parseInt(String(donneesTransformees.numeroCompte || '').charAt(0), 10);
+          if (!Number.isInteger(classe) || classe < 1 || classe > 9) {
+            erreursValidation.push({ champ: 'classe', message: 'La classe comptable doit être un entier de 1 à 9' });
+          } else {
+            normalizeAccountType(donneesTransformees.typeCompte, donneesTransformees.numeroCompte, classe);
+          }
+        } catch (error) {
+          erreursValidation.push({ champ: 'typeCompte', message: error.message });
         }
       }
       
@@ -395,6 +411,7 @@ router.post('/batches/:id/commit', async (req, res) => {
     
     let importes = 0;
     const errors = [];
+    const auditInfo = extractAuditInfo(req);
     
     for (const record of records) {
       try {
@@ -402,66 +419,123 @@ router.post('/batches/:id/commit', async (req, res) => {
           ? JSON.parse(record.donneesTransformees)
           : record.donneesTransformees;
         
-        let entiteCreee;
-        
-        switch (batch.typeEntite) {
-          case 'clients':
-            [entiteCreee] = await db.insert(clients).values({
-              entrepriseId: req.entrepriseId,
-              nom: donnees.nom,
-              email: donnees.email || null,
-              telephone: donnees.telephone || null,
-              adresse: donnees.adresse || null,
-              ville: donnees.ville || null,
-              pays: donnees.pays || 'Côte d\'Ivoire'
-            }).returning();
-            break;
-            
-          case 'fournisseurs':
-            [entiteCreee] = await db.insert(fournisseurs).values({
-              entrepriseId: req.entrepriseId,
-              raisonSociale: donnees.raisonSociale,
-              email: donnees.email || null,
-              telephone: donnees.telephone || null,
-              adresse: donnees.adresse || null,
-              ville: donnees.ville || null,
-              pays: donnees.pays || 'Côte d\'Ivoire'
-            }).returning();
-            break;
-            
-          case 'plan_comptable':
-            [entiteCreee] = await db.insert(comptesComptables).values({
-              entrepriseId: req.entrepriseId,
-              numeroCompte: donnees.numeroCompte,
-              libelle: donnees.libelle,
-              typeCompte: donnees.typeCompte || 'actif',
-              classe: donnees.classe ? parseInt(donnees.classe) : parseInt(donnees.numeroCompte.charAt(0))
-            }).returning();
-            break;
-            
-          case 'produits':
-            [entiteCreee] = await db.insert(produits).values({
-              entrepriseId: req.entrepriseId,
-              nom: donnees.nom,
-              description: donnees.description || null,
-              prixVente: donnees.prixVente ? parseFloat(donnees.prixVente) : 0,
-              prixAchat: donnees.prixAchat ? parseFloat(donnees.prixAchat) : 0,
-              tauxTva: donnees.tva ? parseFloat(donnees.tva) : 18,
-              reference: donnees.reference || null
-            }).returning();
-            break;
-            
-          default:
-            throw new Error(`Type d'entité non supporté: ${batch.typeEntite}`);
-        }
-        
-        await db.update(importRecords)
-          .set({
-            entiteCreeeId: entiteCreee.id,
-            entiteCreeeType: batch.typeEntite,
-            statut: 'importe'
-          })
-          .where(eq(importRecords.id, record.id));
+        const entiteCreee = await db.transaction(async tx => {
+          let created;
+
+          switch (batch.typeEntite) {
+            case 'clients': {
+              [created] = await tx.insert(clients).values({
+                entrepriseId: req.entrepriseId,
+                numeroClient: null,
+                compteComptableId: null,
+                nom: donnees.nom,
+                email: donnees.email || null,
+                telephone: donnees.telephone || null,
+                adresse: donnees.adresse || null,
+                ville: donnees.ville || null,
+                pays: donnees.pays || null
+              }).returning();
+
+              const codeAuxiliaire = formatClientNumberFromId(created.id);
+              let numeroClient = codeAuxiliaire;
+              let suffix = 0;
+              while (suffix <= 100) {
+                const [existing] = await tx.select({ id: clients.id })
+                  .from(clients)
+                  .where(eq(clients.numeroClient, numeroClient))
+                  .limit(1);
+                if (!existing) break;
+                suffix += 1;
+                if (suffix > 100) throw new Error('Impossible de générer un numéro client unique.');
+                numeroClient = `${codeAuxiliaire}-${suffix}`;
+              }
+
+              const [saved] = await tx.update(clients)
+                .set({ codeAuxiliaire, numeroClient })
+                .where(eq(clients.id, created.id))
+                .returning();
+              created = saved;
+              break;
+            }
+
+            case 'fournisseurs': {
+              [created] = await tx.insert(fournisseurs).values({
+                entrepriseId: req.entrepriseId,
+                numeroFournisseur: null,
+                compteComptableId: null,
+                raisonSociale: donnees.raisonSociale,
+                email: donnees.email || null,
+                telephone: donnees.telephone || null,
+                adresse: donnees.adresse || null
+              }).returning();
+
+              const numeroFournisseur = formatSupplierNumberFromId(created.id);
+              const [saved] = await tx.update(fournisseurs)
+                .set({ codeAuxiliaire: numeroFournisseur, numeroFournisseur })
+                .where(eq(fournisseurs.id, created.id))
+                .returning();
+              created = saved;
+              break;
+            }
+
+            case 'plan_comptable':
+              {
+                const numero = String(donnees.numeroCompte).trim();
+                const classe = donnees.classe
+                  ? parseLocalizedNumber(donnees.classe)
+                  : parseInt(numero.charAt(0), 10);
+              [created] = await tx.insert(comptesComptables).values({
+                entrepriseId: req.entrepriseId,
+                numero,
+                nom: donnees.libelle,
+                type: normalizeAccountType(donnees.typeCompte, numero, classe),
+                categorie: classe >= 6 ? 'résultat' : 'bilan'
+              }).returning();
+              break;
+              }
+
+            case 'produits':
+              [created] = await tx.insert(produits).values({
+                entrepriseId: req.entrepriseId,
+                nom: donnees.nom,
+                description: donnees.description || null,
+                prixVente: 0,
+                prixAchat: parseLocalizedNumber(donnees.prixAchat) ?? 0,
+                reference: donnees.reference || null,
+                uniteMesure: donnees.uniteMesure || 'pièce',
+                poidsParUnite: parseLocalizedNumber(donnees.poidsParUnite),
+                unitePoids: donnees.unitePoids || 'kg'
+              }).returning();
+              break;
+
+            default:
+              throw new Error(`Type d'entité non supporté: ${batch.typeEntite}`);
+          }
+
+          await tx.update(importRecords)
+            .set({
+              entiteCreeeId: created.id,
+              entiteCreeeType: batch.typeEntite,
+              statut: 'importe'
+            })
+            .where(and(
+              eq(importRecords.id, record.id),
+              eq(importRecords.batchId, parseInt(id, 10))
+            ));
+
+          await logAudit({
+            ...auditInfo,
+            action: 'CREATE',
+            table: AUDIT_TABLE_BY_ENTITY[batch.typeEntite],
+            recordId: created.id,
+            nouvelleValeur: created,
+            description: `Import ${batch.typeEntite}: ligne ${record.ligneFichier}`,
+            executor: tx,
+            required: true
+          });
+
+          return created;
+        });
         
         importes++;
       } catch (err) {

@@ -59,6 +59,9 @@ export function FormField({
           onChange={onChange}
           required={required}
           placeholder={placeholder}
+          min={min}
+          max={max}
+          step={step ?? (type === 'number' ? 'any' : undefined)}
           style={inputStyle}
         />
       )}

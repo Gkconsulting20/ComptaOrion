@@ -197,6 +197,8 @@ export function StockInventaire() {
   
   const [modal, setModal] = useState({ open: false, type: null, item: null });
   const [form, setForm] = useState({});
+  const [formError, setFormError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [selectedProduit, setSelectedProduit] = useState(null);
   const [showProduitDetails, setShowProduitDetails] = useState(false);
   const [periode, setPeriode] = useState({
@@ -254,6 +256,7 @@ export function StockInventaire() {
   };
 
   const openModal = (type, item = null) => {
+    setFormError('');
     setModal({ open: true, type, item });
     if (type === 'produit') {
       setForm(item || {
@@ -288,26 +291,97 @@ export function StockInventaire() {
         dateCommande: new Date().toISOString().split('T')[0],
         dateLivraisonPrevue: '',
         notes: '',
-        lignes: [{ produitId: '', quantite: 1, prixUnitaire: 0 }]
+        items: [{ produitId: '', description: '', quantite: 1, prixUnitaire: 0 }],
+        coutsLogistiques: { transport: 0, douane: 0, manutention: 0, assurance: 0, autre: 0 }
       });
+    }
+  };
+
+  const handleEditCommande = async (order) => {
+    try {
+      const response = await api.get(`/commandes-achat/${order.id}`);
+      const details = response.data;
+      const logistics = { transport: 0, douane: 0, manutention: 0, assurance: 0, autre: 0 };
+      (details.coutsLogistiques || []).forEach((cost) => {
+        logistics[cost.type] = (Number(logistics[cost.type]) || 0) + Number(cost.montant || 0);
+      });
+      setModal({ open: true, type: 'commande', item: details });
+      setForm({
+        fournisseurId: String(details.fournisseurId || ''),
+        dateCommande: String(details.dateCommande || '').slice(0, 10),
+        dateLivraisonPrevue: String(details.dateLivraisonPrevue || '').slice(0, 10),
+        notes: details.notes || '',
+        items: (details.items || []).map((line) => ({
+          id: line.id,
+          produitId: line.produitId || '',
+          description: line.description || line.produit?.nom || '',
+          quantite: Number(line.quantite || 0),
+          prixUnitaire: Number(line.prixUnitaire || 0),
+          remise: Number(line.remise || 0),
+        })),
+        coutsLogistiques: logistics,
+      });
+      setFormError('');
+    } catch (error) {
+      alert(`Impossible d’ouvrir le bon de commande : ${error.message}`);
+    }
+  };
+
+  const handleOpenCommandeReception = async (order) => {
+    try {
+      const response = await api.get(`/commandes-achat/${order.id}`);
+      const details = response.data;
+      setModal({ open: true, type: 'commandeReception', item: details });
+      setForm({
+        commandeId: details.id,
+        dateReception: new Date().toISOString().slice(0, 10),
+        entrepotId: '',
+        numeroLivraison: '',
+        notes: '',
+        items: (details.items || [])
+          .filter((line) => line.produitId)
+          .map((line) => ({
+            commandeItemId: line.id,
+            description: line.description || line.produit?.nom || 'Article',
+            quantiteRestante: Math.max(0, Number(line.quantite || 0) - Number(line.quantiteRecue || 0)),
+            quantiteRecue: 0,
+          })),
+      });
+      setFormError('');
+    } catch (error) {
+      alert(`Impossible d’ouvrir la réception : ${error.message}`);
+    }
+  };
+
+  const handleConfirmerCommande = async (order) => {
+    try {
+      await api.put(`/commandes-achat/${order.id}/confirmer`, {});
+      await reload('commandes');
+    } catch (error) {
+      alert(`Impossible de confirmer le bon : ${error.message}`);
     }
   };
 
   const closeModal = () => {
     setModal({ open: false, type: null, item: null });
     setForm({});
+    setFormError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError('');
+    setIsSaving(true);
     try {
       const { type, item } = modal;
       
       if (type === 'produit') {
+        const productData = { ...form };
+        delete productData.prixVente;
         if (item) {
-          await api.put(`/produits/${item.id}`, form);
+          await api.put(`/produits/${item.id}`, productData);
         } else {
-          await api.post('/produits', form);
+          await api.post('/produits', productData);
         }
         await reload('produits');
       } else if (type === 'categorie') {
@@ -366,29 +440,73 @@ export function StockInventaire() {
         await reload('receptions');
         alert('Bon de reception cree avec succes. Validez-le pour mettre a jour le stock.');
       } else if (type === 'commande') {
-        const lignesValides = form.lignes.filter(l => l.produitId && parseFloat(l.quantite) > 0);
-        if (!form.fournisseurId || lignesValides.length === 0) {
+        const itemsValides = (form.items || []).filter(l => l.produitId && Number(l.quantite) > 0);
+        if (!form.fournisseurId || itemsValides.length === 0) {
           return alert('Veuillez saisir un fournisseur et au moins une ligne valide');
         }
-        await api.post('/commandes-achat', {
+        const logisticsLabels = {
+          transport: 'Transport',
+          douane: 'Douane',
+          manutention: 'Manutention',
+          assurance: 'Assurance',
+          autre: 'Autres frais',
+        };
+        const orderPayload = {
           fournisseurId: parseInt(form.fournisseurId),
           dateCommande: form.dateCommande,
           dateLivraisonPrevue: form.dateLivraisonPrevue || null,
           notes: form.notes,
-          items: lignesValides.map(l => ({
+          items: itemsValides.map(l => ({
             produitId: parseInt(l.produitId),
-            description: data.produits.find(p => p.id === parseInt(l.produitId))?.nom || '',
+            description: l.description || data.produits.find(p => p.id === parseInt(l.produitId))?.nom || '',
             quantite: parseFloat(l.quantite),
-            prixUnitaire: parseFloat(l.prixUnitaire)
-          }))
-        });
+            prixUnitaire: parseFloat(l.prixUnitaire),
+            remise: parseFloat(l.remise || 0),
+          })),
+          coutsLogistiques: Object.entries(form.coutsLogistiques || {})
+            .map(([type, montant]) => ({
+              type,
+              description: logisticsLabels[type],
+              montant: Number(montant || 0),
+            }))
+            .filter((cost) => cost.montant > 0),
+        };
+        if (item) {
+          await api.put(`/commandes-achat/${item.id}`, orderPayload);
+        } else {
+          await api.post('/commandes-achat', orderPayload);
+        }
         await reload('commandes');
-        alert('Commande d\'achat creee avec succes.');
+      } else if (type === 'commandeReception') {
+        const receivedItems = (form.items || [])
+          .filter(line => Number(line.quantiteRecue) > 0)
+          .map(line => ({
+            commandeItemId: Number(line.commandeItemId),
+            quantiteRecue: Number(line.quantiteRecue),
+          }));
+        if (!receivedItems.length) {
+          return alert('Saisissez au moins une quantité reçue.');
+        }
+        if (!form.entrepotId) {
+          return alert('Sélectionnez un entrepôt pour enregistrer le stock reçu.');
+        }
+        await api.post('/receptions', {
+          commandeId: Number(form.commandeId),
+          dateReception: form.dateReception,
+          entrepotId: Number(form.entrepotId),
+          numeroLivraison: form.numeroLivraison || null,
+          notes: form.notes || null,
+          items: receivedItems,
+        });
+        await Promise.all([reload('commandes'), reload('produits'), reload('receptions')]);
       }
       
       closeModal();
     } catch (err) {
-      alert('Erreur: ' + (err.response?.data?.error || err.message));
+      console.error('Échec de l’enregistrement du formulaire Stock:', err);
+      setFormError(err.message || 'Enregistrement impossible. Réessayez.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -414,7 +532,7 @@ export function StockInventaire() {
   const totalStock = data.produits.reduce((s, p) => s + parseFloat(p.quantite || 0), 0);
   const valorisation = data.produits.reduce((s, p) => {
     const qty = parseFloat(p.quantite || 0);
-    const coutUnit = parseFloat(p.coutMoyen || p.prixAchat || 0);
+    const coutUnit = parseFloat(p.coutMoyen || 0);
     return s + (qty * coutUnit);
   }, 0);
 
@@ -476,7 +594,13 @@ export function StockInventaire() {
                       {val || 0} {row.uniteMesure || 'pièce'} {low && '⚠️'}
                     </span>;
                   }},
-                  { key: 'prixVente', label: 'Prix', render: (val) => `${Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` }
+                  { key: 'prixAchat', label: 'Coût standard', render: (val) => `${Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
+                  { key: 'coutMoyen', label: 'Coût calculé', render: (val) => Number(val || 0) > 0
+                    ? `${Number(val).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
+                    : 'En attente de réception' },
+                  { key: 'prixVente', label: 'Prix de vente', render: (val, row) => Number(row.coutMoyen || 0) > 0
+                    ? `${Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
+                    : 'Non calculé' }
                 ]}
                 data={data.produits}
                 onRowClick={(item) => { setSelectedProduit(item); setShowProduitDetails(true); }}
@@ -529,7 +653,7 @@ export function StockInventaire() {
         <div>
           <h3>📦 Commandes d'Achat</h3>
           <p style={{ color: '#7f8c8d', marginBottom: '15px' }}>
-            Créez des commandes d'achat pour vos fournisseurs. Vous pourrez ensuite créer des réceptions à leur arrivée.
+            Créez un bon avec ses coûts logistiques prévisionnels. Confirmez-le avant réception : la réception met à jour le stock et les coûts non facturés. Le bon reste modifiable jusqu’à la première réception.
           </p>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
@@ -554,14 +678,35 @@ export function StockInventaire() {
                 { key: 'totalHT', label: 'Total HT', render: (val) => `${Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { key: 'statut', label: 'Statut', render: (val) => {
                   const statut = val || 'brouillon';
-                  const colors = { brouillon: '#95a5a6', validee: '#3498db', recue: '#27ae60', annulee: '#e74c3c' };
+                  const colors = { brouillon: '#95a5a6', confirmee: '#3498db', preparee: '#f0ad4e', livree: '#27ae60', annulee: '#e74c3c' };
+                  const labels = { brouillon: 'Brouillon', confirmee: 'Confirmée', preparee: 'Réception partielle', livree: 'Réceptionnée', annulee: 'Annulée' };
                   return <span style={{ 
                     padding: '4px 8px', borderRadius: '4px', backgroundColor: colors[statut] || '#999',
                     color: 'white', fontSize: '11px'
-                  }}>{statut}</span>;
+                  }}>{labels[statut] || statut}</span>;
                 }}
               ]}
               data={data.commandes}
+              actions={true}
+              customActions={(order) => (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {order.statut === 'brouillon' && (
+                    <Button size="small" variant="success" onClick={() => handleConfirmerCommande(order)}>
+                      Confirmer
+                    </Button>
+                  )}
+                  {!['preparee', 'livree', 'annulee'].includes(order.statut) && (
+                    <Button size="small" variant="outline" onClick={() => handleEditCommande(order)}>
+                      Modifier
+                    </Button>
+                  )}
+                  {['confirmee', 'preparee'].includes(order.statut) && (
+                    <Button size="small" onClick={() => handleOpenCommandeReception(order)}>
+                      Réceptionner
+                    </Button>
+                  )}
+                </div>
+              )}
             />
           )}
         </div>
@@ -812,12 +957,12 @@ export function StockInventaire() {
                 }},
                 { key: 'quantite', label: 'Quantité', render: (val, row) => `${val || 0} ${row.uniteMesure || 'pièce'}` },
                 { key: 'coutMoyen', label: 'Coût Moyen (CMP)', render: (val, row) => {
-                  const cmp = parseFloat(val || row.prixAchat || 0);
+                  const cmp = parseFloat(val || 0);
                   return `${Number(cmp || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`;
                 }},
                 { key: 'valorisation', label: 'Valorisation Totale', render: (_, row) => {
-                  const coutUnit = parseFloat(row.coutMoyen || row.prixAchat || 0);
-                  const val = Math.round(parseFloat(row.quantite || 0) * coutUnit);
+                  const coutUnit = parseFloat(row.coutMoyen || 0);
+                  const val = parseFloat(row.quantite || 0) * coutUnit;
                   return <strong style={{ color: '#388e3c' }}>{Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong>;
                 }}
               ]}
@@ -844,9 +989,9 @@ export function StockInventaire() {
                   return total.toFixed(0);
                 }},
                 { key: 'valorisation', label: 'Valorisation', render: (_, row) => {
-                  const val = Math.round(data.produits
+                  const val = data.produits
                     .filter(p => p.categorieId === row.id)
-                    .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.coutMoyen || p.prixAchat || 0)), 0));
+                    .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.coutMoyen || 0)), 0);
                   return <strong style={{ color: '#388e3c' }}>{Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong>;
                 }}
               ]}
@@ -863,7 +1008,8 @@ export function StockInventaire() {
                modal.type === 'entrepot' ? (modal.item ? 'Modifier' : 'Nouvel Entrepôt') :
                modal.type === 'inventaire' ? 'Comptage Physique' : 
                modal.type === 'reception' ? 'Nouveau Bon de Réception' :
-               modal.type === 'commande' ? 'Nouvelle Commande d\'Achat' : ''}>
+               modal.type === 'commandeReception' ? `Réception — ${modal.item?.numeroCommande || ''}` :
+               modal.type === 'commande' ? (modal.item ? 'Modifier le bon de commande' : 'Nouveau Bon de Commande Fournisseur') : ''}>
         <form onSubmit={handleSubmit}>
           {modal.type === 'produit' && (
             <>
@@ -917,8 +1063,24 @@ export function StockInventaire() {
                   </small>
                 </>
               )}
-              <FormField label="Prix Achat" type="number" value={form.prixAchat || 0} onChange={(e) => setForm({...form, prixAchat: parseFloat(e.target.value) || 0})} />
-              <FormField label="Prix Vente" type="number" value={form.prixVente || 0} onChange={(e) => setForm({...form, prixVente: parseFloat(e.target.value) || 0})} required />
+              <FormField
+                label="Coût standard (devis fournisseur)"
+                type="number"
+                value={form.prixAchat || 0}
+                onChange={(e) => setForm({...form, prixAchat: parseFloat(e.target.value) || 0})}
+              />
+              <small style={{ display: 'block', margin: '-8px 0 12px', color: '#666' }}>
+                Référence de devis uniquement. Ce montant n’est pas le CMV et ne calcule pas le prix de vente.
+              </small>
+              <div style={{ padding: '12px', marginBottom: '12px', borderRadius: '6px', background: Number(form.coutMoyen || 0) > 0 ? '#eef7ee' : '#fff7e6' }}>
+                <strong>Coût calculé par le système :</strong>{' '}
+                {Number(form.coutMoyen || 0) > 0
+                  ? `${Number(form.coutMoyen).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
+                  : 'disponible après validation d’une réception fournisseur'}
+                <div style={{ marginTop: 6, fontSize: 12, color: '#666' }}>
+                  Le prix de vente se calcule ensuite depuis ce coût réel et la majoration choisie dans la bibliothèque de prix.
+                </div>
+              </div>
               <FormField label="Stock Min" type="number" value={form.stockMinimum || 10} onChange={(e) => setForm({...form, stockMinimum: parseFloat(e.target.value) || 0})} />
               <FormField label="Méthode de Valorisation" type="select" value={form.valorisationMethod || 'FIFO'} 
                 onChange={(e) => setForm({...form, valorisationMethod: e.target.value})}
@@ -1106,9 +1268,12 @@ export function StockInventaire() {
 
           {modal.type === 'commande' && (
             <>
+              <div style={{ marginBottom: 16, padding: 12, color: '#315f78', background: '#eef6fa', borderRadius: 8, fontSize: 13 }}>
+                Le bon est modifiable jusqu’à la première réception. Sa réception met à jour le stock et crée le suivi des coûts logistiques non facturés.
+              </div>
               <FormField label="Fournisseur" type="select" value={form.fournisseurId || ''} 
                 onChange={(e) => setForm({...form, fournisseurId: e.target.value})}
-                options={[{ value: '', label: '-- Sélectionner --' }, ...data.fournisseurs.map(f => ({ value: f.id, label: f.nom }))]}
+                options={[{ value: '', label: '-- Sélectionner --' }, ...data.fournisseurs.map(f => ({ value: f.id, label: f.nom || f.raisonSociale }))]}
                 required />
               <FormField label="Date Commande" type="date" value={form.dateCommande || ''} 
                 onChange={(e) => setForm({...form, dateCommande: e.target.value})} required />
@@ -1122,27 +1287,28 @@ export function StockInventaire() {
                   <h4 style={{ margin: 0 }}>Lignes de Commande</h4>
                   <button type="button" onClick={() => setForm({
                     ...form, 
-                    lignes: [...(form.lignes || []), { produitId: '', quantite: 1, prixUnitaire: 0 }]
+                    items: [...(form.items || []), { produitId: '', description: '', quantite: 1, prixUnitaire: 0 }]
                   })} style={{ padding: '5px 10px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                     + Ajouter Ligne
                   </button>
                 </div>
                 
-                {(form.lignes || []).map((ligne, index) => (
+                {(form.items || []).map((ligne, index) => (
                   <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', padding: '10px', background: '#f8f9fa', borderRadius: '4px' }}>
                     <div>
                       <label style={{ fontSize: '12px', color: '#666' }}>Produit</label>
                       <select 
                         value={ligne.produitId || ''} 
                         onChange={(e) => {
-                          const newLignes = [...form.lignes];
+                          const newLignes = [...form.items];
                           const produit = data.produits.find(p => p.id === parseInt(e.target.value));
                           newLignes[index] = { 
                             ...newLignes[index], 
                             produitId: e.target.value,
+                            description: produit?.nom || '',
                             prixUnitaire: produit ? produit.prixAchat || 0 : 0
                           };
-                          setForm({...form, lignes: newLignes});
+                          setForm({...form, items: newLignes});
                         }}
                         style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
                       >
@@ -1156,11 +1322,13 @@ export function StockInventaire() {
                       <label style={{ fontSize: '12px', color: '#666' }}>Quantité</label>
                       <input 
                         type="number" 
+                        min="0.001"
+                        step="0.001"
                         value={ligne.quantite || ''} 
                         onChange={(e) => {
-                          const newLignes = [...form.lignes];
+                          const newLignes = [...form.items];
                           newLignes[index] = { ...newLignes[index], quantite: e.target.value };
-                          setForm({...form, lignes: newLignes});
+                          setForm({...form, items: newLignes});
                         }}
                         style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
                       />
@@ -1169,19 +1337,21 @@ export function StockInventaire() {
                       <label style={{ fontSize: '12px', color: '#666' }}>Prix Unitaire</label>
                       <input 
                         type="number" 
+                        min="0"
+                        step="0.01"
                         value={ligne.prixUnitaire || ''} 
                         onChange={(e) => {
-                          const newLignes = [...form.lignes];
+                          const newLignes = [...form.items];
                           newLignes[index] = { ...newLignes[index], prixUnitaire: e.target.value };
-                          setForm({...form, lignes: newLignes});
+                          setForm({...form, items: newLignes});
                         }}
                         style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
                       />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                       <button type="button" onClick={() => {
-                        const newLignes = form.lignes.filter((_, i) => i !== index);
-                        setForm({...form, lignes: newLignes.length > 0 ? newLignes : [{ produitId: '', quantite: 1, prixUnitaire: 0 }]});
+                        const newItems = form.items.filter((_, i) => i !== index);
+                        setForm({...form, items: newItems.length > 0 ? newItems : [{ produitId: '', description: '', quantite: 1, prixUnitaire: 0 }]});
                       }} style={{ padding: '8px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                         X
                       </button>
@@ -1189,17 +1359,101 @@ export function StockInventaire() {
                   </div>
                 ))}
                 
+                <h4 style={{ marginTop: 20 }}>Frais logistiques prévisionnels</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 15 }}>
+                  {[
+                    ['transport', 'Transport'],
+                    ['douane', 'Douane'],
+                    ['manutention', 'Manutention'],
+                    ['assurance', 'Assurance'],
+                    ['autre', 'Autres frais'],
+                  ].map(([type, label]) => (
+                    <FormField
+                      key={type}
+                      label={label}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.coutsLogistiques?.[type] ?? 0}
+                      onChange={(event) => setForm({
+                        ...form,
+                        coutsLogistiques: { ...(form.coutsLogistiques || {}), [type]: event.target.value },
+                      })}
+                    />
+                  ))}
+                </div>
                 <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px', textAlign: 'right' }}>
-                  <strong>Total HT: </strong>
-                  {(form.lignes || []).reduce((sum, l) => sum + (parseFloat(l.quantite || 0) * parseFloat(l.prixUnitaire || 0)), 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF
+                  <div>Articles HT : <strong>{(form.items || []).reduce((sum, l) => sum + (parseFloat(l.quantite || 0) * parseFloat(l.prixUnitaire || 0)), 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong></div>
+                  <div>Logistique prévisionnelle : <strong>{Object.values(form.coutsLogistiques || {}).reduce((sum, value) => sum + (Number(value) || 0), 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong></div>
+                  <div>Total prévisionnel : <strong>{(
+                    (form.items || []).reduce((sum, l) => sum + (parseFloat(l.quantite || 0) * parseFloat(l.prixUnitaire || 0)), 0) +
+                    Object.values(form.coutsLogistiques || {}).reduce((sum, value) => sum + (Number(value) || 0), 0)
+                  ).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong></div>
                 </div>
               </div>
             </>
           )}
 
+          {modal.type === 'commandeReception' && (
+            <>
+              <div style={{ marginBottom: 16, padding: 12, background: '#eef6fa', borderRadius: 8 }}>
+                <strong>{modal.item?.fournisseur?.raisonSociale || modal.item?.fournisseur?.nom || 'Fournisseur'}</strong>
+                <div>Bon {modal.item?.numeroCommande} · réception partielle ou complète</div>
+                <div>Coûts logistiques prévisionnels : {Number(modal.item?.totalLogistique || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
+              </div>
+              <FormField
+                label="Entrepôt de réception"
+                type="select"
+                value={form.entrepotId || ''}
+                onChange={(event) => setForm({ ...form, entrepotId: event.target.value })}
+                options={[
+                  { value: '', label: '-- Sélectionner --' },
+                  ...data.entrepots.map((warehouse) => ({ value: warehouse.id, label: warehouse.nom })),
+                ]}
+                required
+              />
+              <FormField label="Date de réception" type="date" value={form.dateReception || ''}
+                onChange={(event) => setForm({ ...form, dateReception: event.target.value })} required />
+              <FormField label="N° du bon de livraison" value={form.numeroLivraison || ''}
+                onChange={(event) => setForm({ ...form, numeroLivraison: event.target.value })} />
+              <FormField label="Notes" type="textarea" value={form.notes || ''}
+                onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+              <div style={{ marginTop: 12 }}>
+                {(form.items || []).map((line, index) => (
+                  <div key={line.commandeItemId} style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 1fr) 120px 140px', gap: 10, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #e5e9ed' }}>
+                    <span>{line.description}</span>
+                    <span style={{ fontSize: 12, color: '#60717d' }}>Reste : {line.quantiteRestante}</span>
+                    <input
+                      aria-label={`Quantité reçue ${line.description}`}
+                      type="number"
+                      min="0"
+                      max={line.quantiteRestante}
+                      step="0.001"
+                      value={line.quantiteRecue}
+                      disabled={line.quantiteRestante <= 0}
+                      onChange={(event) => {
+                        const items = [...form.items];
+                        items[index] = { ...items[index], quantiteRecue: event.target.value };
+                        setForm({ ...form, items });
+                      }}
+                      style={{ width: '100%', padding: 8, border: '1px solid #d4dce2', borderRadius: 5 }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {formError && (
+            <div role="alert" style={{ marginTop: 16, padding: 12, color: '#842029', background: '#f8d7da', border: '1px solid #f5c2c7', borderRadius: 6 }}>
+              {formError}
+            </div>
+          )}
           <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-            <Button type="submit" variant="success">{modal.item ? 'Mettre à jour' : 'Créer'}</Button>
+            <Button type="submit" variant="success" disabled={isSaving}>
+              {isSaving ? 'Enregistrement…' : modal.type === 'commandeReception' ? 'Enregistrer la réception' : modal.item ? 'Mettre à jour' : 'Créer'}
+            </Button>
           </div>
         </form>
       </Modal>
@@ -1237,9 +1491,10 @@ export function StockInventaire() {
                 { label: 'Stock Actuel', value: `${selectedProduit.quantite || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
                 { label: 'Stock Minimum', value: `${selectedProduit.stockMinimum || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
                 { label: 'Méthode de Valorisation', value: selectedProduit.valorisationMethod || 'FIFO' },
-                { label: 'Prix Achat', value: `${Number(selectedProduit.prixAchat || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
-                { label: 'Prix Vente', value: `${Number(selectedProduit.prixVente || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
-                { label: 'Marge', value: `${(Number(selectedProduit.prixVente || 0) - Number(selectedProduit.prixAchat || 0)).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` }
+                { label: 'Coût standard (devis)', value: `${Number(selectedProduit.prixAchat || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
+                { label: 'Coût calculé (CMV)', value: Number(selectedProduit.coutMoyen || 0) > 0 ? `${Number(selectedProduit.coutMoyen).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : 'En attente de réception fournisseur' },
+                { label: 'Prix de vente', value: Number(selectedProduit.coutMoyen || 0) > 0 ? `${Number(selectedProduit.prixVente || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : 'Non calculé' },
+                { label: 'Marge ajoutée', value: Number(selectedProduit.coutMoyen || 0) > 0 ? `${(Number(selectedProduit.prixVente || 0) - Number(selectedProduit.coutMoyen || 0)).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : '—' }
               ]
             }
           ]}
