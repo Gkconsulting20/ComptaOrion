@@ -27,6 +27,9 @@ function FacturationTab({ fournisseurs }) {
   
   const [showFactureModal, setShowFactureModal] = useState(false);
   const [receptionsEnAttente, setReceptionsEnAttente] = useState([]);
+  const [allReceptionsEnAttente, setAllReceptionsEnAttente] = useState([]);
+  const [loadingReceptions, setLoadingReceptions] = useState(false);
+  const [receptionsLoadError, setReceptionsLoadError] = useState('');
   const [selectedReceptions, setSelectedReceptions] = useState([]);
   const [produits, setProduits] = useState([]);
   const [comptesEcart, setComptesEcart] = useState([]);
@@ -113,34 +116,74 @@ function FacturationTab({ fournisseurs }) {
 
   const typeLabels = { transport: 'Transport', douane: 'Douane', manutention: 'Manutention', assurance: 'Assurance', autre: 'Autres' };
 
-  const openFactureModal = () => {
+  const openFactureModal = async () => {
     setShowFactureModal(true);
     setStep(1);
     setSelectedReceptions([]);
-    setFactureForm({
+    setReceptionsEnAttente([]);
+    setAllReceptionsEnAttente([]);
+    setReceptionsLoadError('');
+    const dateFacture = new Date().toISOString().split('T')[0];
+    const initialForm = {
       fournisseurId: '',
       numeroFactureFournisseur: '',
-      dateFacture: new Date().toISOString().split('T')[0],
+      dateFacture,
       dateEcheance: '',
       compteEcartId: compteEcartParDefaut,
       tvaExoneree: false,
       lignes: [],
       coutsLogistiques: [],
       notes: ''
-    });
+    };
+    setFactureForm(initialForm);
+    setLoadingReceptions(true);
+    try {
+      const response = await api.get('/achats/receptions-en-attente');
+      const pendingReceptions = readApiList(response, 'data');
+      setAllReceptionsEnAttente(pendingReceptions);
+
+      const supplierIds = [...new Set(
+        pendingReceptions
+          .map((reception) => reception.fournisseur_id)
+          .filter((id) => id != null)
+          .map(String)
+      )];
+
+      // Quand une seule réception est à rapprocher, la présélection évite
+      // de bloquer l’utilisateur sur un bouton « Suivant » désactivé.
+      if (supplierIds.length === 1) {
+        const fournisseurId = supplierIds[0];
+        const supplierReceptions = pendingReceptions.filter(
+          (reception) => String(reception.fournisseur_id) === fournisseurId
+        );
+        setFactureForm({
+          ...initialForm,
+          fournisseurId,
+          dateEcheance: getSupplierDueDate(fournisseurId, dateFacture),
+        });
+        setReceptionsEnAttente(supplierReceptions);
+        if (supplierReceptions.length === 1) {
+          setSelectedReceptions([supplierReceptions[0].id]);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur chargement des réceptions à rapprocher:', error);
+      setReceptionsLoadError('Impossible de charger les réceptions. Réessayez après avoir actualisé la page.');
+    } finally {
+      setLoadingReceptions(false);
+    }
   };
 
-  const loadReceptionsForFournisseur = async (fournisseurId) => {
+  const loadReceptionsForFournisseur = (fournisseurId) => {
     if (!fournisseurId) {
       setReceptionsEnAttente([]);
-      return;
+      return [];
     }
-    try {
-      const res = await api.get(`/achats/receptions-en-attente?fournisseurId=${fournisseurId}`);
-      setReceptionsEnAttente(readApiList(res, 'data'));
-    } catch (err) {
-      console.error('Erreur chargement réceptions:', err);
-    }
+    const supplierReceptions = allReceptionsEnAttente.filter(
+      (reception) => String(reception.fournisseur_id) === String(fournisseurId)
+    );
+    setReceptionsEnAttente(supplierReceptions);
+    return supplierReceptions;
   };
 
   const toggleReception = (recId) => {
@@ -268,6 +311,18 @@ function FacturationTab({ fournisseurs }) {
   ) + factureForm.coutsLogistiques.reduce((sum, cost) => sum + Number(cost.montantEstime || 0), 0);
   const totalVariance = totals.totalHT - estimatedHT;
   const totalTTC = totals.totalHT + totals.totalTVA;
+  const fournisseursAvecReception = [...new Map(
+    allReceptionsEnAttente
+      .filter((reception) => reception.fournisseur_id != null)
+      .map((reception) => {
+        const id = String(reception.fournisseur_id);
+        const supplier = fournisseurs.find((item) => String(item.id) === id);
+        return [id, supplier || {
+          id,
+          raisonSociale: reception.fournisseur_nom || `Fournisseur ${id}`,
+        }];
+      })
+  ).values()];
 
   return (
     <div>
@@ -393,7 +448,7 @@ function FacturationTab({ fournisseurs }) {
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Fournisseur *</label>
                 <select 
-                  disabled={fournisseurs.length === 0}
+                  disabled={loadingReceptions || fournisseursAvecReception.length === 0}
                   value={factureForm.fournisseurId} 
                   onChange={(e) => {
                     const fournisseurId = e.target.value;
@@ -402,18 +457,29 @@ function FacturationTab({ fournisseurs }) {
                       fournisseurId,
                       dateEcheance: getSupplierDueDate(fournisseurId, prev.dateFacture),
                     }));
-                    loadReceptionsForFournisseur(e.target.value);
-                    setSelectedReceptions([]);
+                    const supplierReceptions = loadReceptionsForFournisseur(fournisseurId);
+                    setSelectedReceptions(
+                      supplierReceptions.length === 1 ? [supplierReceptions[0].id] : []
+                    );
                   }}
                   style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd' }}>
                   <option value="">
-                    {fournisseurs.length ? '-- Sélectionner un fournisseur --' : '-- Aucun fournisseur disponible --'}
+                    {loadingReceptions
+                      ? '-- Chargement des réceptions --'
+                      : fournisseursAvecReception.length
+                        ? '-- Sélectionner un fournisseur --'
+                        : '-- Aucune réception à rapprocher --'}
                   </option>
-                  {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom || f.raisonSociale}</option>)}
+                  {fournisseursAvecReception.map(f => <option key={f.id} value={f.id}>{f.nom || f.raisonSociale}</option>)}
                 </select>
-                {!fournisseurs.length && (
+                {receptionsLoadError && (
                   <p role="alert" style={{ color: '#b42318', marginTop: 8 }}>
-                    Aucun fournisseur n’a été chargé. Vérifiez la connexion ou créez un fournisseur dans Paramètres → Fournisseurs.
+                    {receptionsLoadError}
+                  </p>
+                )}
+                {!loadingReceptions && !receptionsLoadError && !allReceptionsEnAttente.length && (
+                  <p style={{ color: '#52606d', marginTop: 8 }}>
+                    Aucune réception validée n’attend actuellement une facture. Vérifiez que la réception du bon de commande est validée.
                   </p>
                 )}
               </div>
