@@ -267,6 +267,7 @@ router.post('/lite-sale', async (req, res) => {
       }
       const salesEntry = await createEcritureFactureVente({
         entrepriseId: req.entrepriseId,
+        clientId: effectiveClientId,
         numeroFacture,
         dateFacture: dateFacture || new Date().toISOString().slice(0, 10),
         clientNom: client.nom || 'Client',
@@ -286,6 +287,7 @@ router.post('/lite-sale', async (req, res) => {
       if (payment) {
         const paymentEntry = await createEcriturePaiementClient({
           entrepriseId: req.entrepriseId,
+          clientId: effectiveClientId,
           reference: payment.reference || `PAI-${payment.id}`,
           datePaiement: payment.datePaiement,
           clientNom: client.nom || 'Client',
@@ -490,6 +492,7 @@ router.post('/', async (req, res) => {
       
       const ecriture = await createEcritureFactureVente({
         entrepriseId: req.entrepriseId,
+        clientId: Number(clientId),
         numeroFacture,
         dateFacture: dateFacture || new Date().toISOString().split('T')[0],
         clientNom: clientInfo.nom || 'Client',
@@ -498,7 +501,7 @@ router.post('/', async (req, res) => {
         totalTTC,
         executor: tx
       });
-      if (!ecriture) throw new Error('Configurez les comptes 4111, ventes et TVA avant de facturer.');
+      if (!ecriture) throw new Error('Configurez le compte collectif client 4111/4112, les ventes et la TVA avant de facturer.');
       await logAudit({
         ...extractAuditInfo(req),
         action: 'CREATE',
@@ -690,6 +693,7 @@ router.post('/:id/paiement', async (req, res) => {
       
       const ecriture = await createEcriturePaiementClient({
         entrepriseId: req.entrepriseId,
+        clientId: factureData.clientId,
         reference: reference || `PAI-${newPaiement.id}`,
         datePaiement: datePaiement || new Date().toISOString().split('T')[0],
         clientNom: clientInfo.nom || 'Client',
@@ -699,7 +703,7 @@ router.post('/:id/paiement', async (req, res) => {
         compteBancaireId: compteBancaireId ? parseInt(compteBancaireId) : null,
         executor: tx
       });
-      if (!ecriture) throw new Error('Configurez les comptes de trésorerie et 4111 avant de payer.');
+      if (!ecriture) throw new Error('Configurez les comptes de trésorerie et le compte collectif client 4111/4112 avant de payer.');
       await logAudit({
         ...extractAuditInfo(req),
         action: 'CREATE',
@@ -1232,6 +1236,7 @@ router.post('/:id/note-debit', async (req, res) => {
       }).where(and(eq(clients.id, client.id), eq(clients.entrepriseId, req.entrepriseId)));
       const entry = await createEcritureNoteDebitClient({
         entrepriseId: req.entrepriseId,
+        clientId: client.id,
         numeroNote: note.numero,
         dateNote,
         clientNom: client.nom,
@@ -1339,6 +1344,7 @@ router.post('/notes-debit/:id/paiement', async (req, res) => {
       }
       const entry = await createEcriturePaiementClient({
         entrepriseId: req.entrepriseId,
+        clientId: client.id,
         reference: reference || `PAI-${payment.id}`,
         datePaiement,
         clientNom: client.nom,
@@ -1535,6 +1541,7 @@ router.post('/:id/avoir', async (req, res) => {
 
       const entry = await createEcritureAvoirClient({
         entrepriseId: req.entrepriseId,
+        clientId: client.id,
         numeroAvoir: note.numero,
         dateAvoir,
         clientNom: client.nom,

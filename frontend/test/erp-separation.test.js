@@ -77,3 +77,11 @@ test('l’ancien écran Factures autonome est retiré, les factures restent dans
   assert.match(clients, /FacturesClientTab/);
   await assert.rejects(access(new URL('../src/modules/FacturesModule.jsx', import.meta.url)));
 });
+
+test('la fiche client accepte un nom saisi et propose les comptes collectifs biens/services', async () => {
+  const clients = await read('../src/modules/ClientsModule.jsx');
+  assert.match(clients, /id="client-name"[\s\S]*?value=\{clientData\.nom \|\| ''\}[\s\S]*?const nom = event\.target\.value;[\s\S]*?setClientData\(\(current\) => \(\{ \.\.\.current, nom \}\)\)/);
+  assert.match(clients, /compteClientNumero: '4111'/);
+  assert.match(clients, /Ventes de biens — 4111/);
+  assert.match(clients, /Prestations de services — 4112/);
+});

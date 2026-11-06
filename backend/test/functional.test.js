@@ -503,8 +503,12 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.match(clientRecord.data.numeroClient,/^CLI\d{5}(?:-\d+)?$/,
       'Un numéro client auxiliaire doit être attribué automatiquement');
     assert.equal(clientRecord.data.codeAuxiliaire.slice(0,3),'CLI');
-    assert.equal(clientRecord.data.compteComptableId,null,
-      'La fiche client ne doit pas pouvoir choisir un compte général individuel');
+    const goodsCollectiveAccount = await admin.query(
+      `SELECT id FROM "${schema}".comptes_comptables WHERE entreprise_id = $1 AND numero = '4111'`,
+      [signup.user.entrepriseId],
+    );
+    assert.equal(clientRecord.data.compteComptableId, Number(goodsCollectiveAccount.rows[0]?.id),
+      'Les clients de biens doivent partager le compte collectif 4111');
     const supplierRecord = await api('/fournisseurs','POST',{
       raisonSociale:'Fournisseur recette',
       numeroFournisseur:'FOURNI_PAR_CLIENT',
@@ -881,6 +885,34 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       worker.dispatchFetch(paymentUrl,paymentRequest) : fetch(paymentUrl,paymentRequest)));
     assert.deepEqual(results.map(r=>r.status).sort(),[201,400],'Deux paiements concurrents ne doivent pas dépasser le solde');
     await Promise.all(results.map(r=>r.arrayBuffer()));
+    const serviceClientAccount = accounts.find(account => account.numero === '4112');
+    assert.ok(serviceClientAccount, 'Le compte collectif client 4112 doit être configuré');
+    const serviceClient = await api('/clients', 'POST', {
+      nom: 'Client de prestations de recette',
+      type: 'entreprise',
+      compteClientNumero: '4112',
+    }, 201);
+    assert.equal(serviceClient.data.compteComptableId, serviceClientAccount.id,
+      'La fiche d’un client de services doit conserver le compte collectif 4112');
+    const serviceInvoice = await api('/factures', 'POST', {
+      clientId: serviceClient.data.id,
+      dateFacture: `${testYear}-01-20`,
+      items: [{ description: 'Prestation de service de recette', quantite: 1, prixUnitaire: 1000 }],
+    }, 201);
+    await api(`/clients/${serviceClient.data.id}`, 'PUT', {
+      compteClientNumero: '4111',
+    }, 409);
+    const serviceInvoiceMovements = await api(`/comptabilite/compte/${serviceClientAccount.id}/ecritures`);
+    assert.ok(serviceInvoiceMovements.some(
+      movement => movement.reference === serviceInvoice.data.numeroFacture && Number(movement.debit) === 1180
+    ), 'La facture d’un client de services doit débiter le compte collectif 4112');
+    await api(`/factures/${serviceInvoice.data.id}/paiement`, 'POST', {
+      montant: 1180,
+      modePaiement: 'especes',
+    }, 201);
+    const servicePaidMovements = await api(`/comptabilite/compte/${serviceClientAccount.id}/ecritures`);
+    assert.ok(servicePaidMovements.some(movement => Number(movement.credit) === 1180),
+      'Le règlement d’un client de services doit créditer le compte collectif 4112');
     const { rows:[balance] }=await queryAsTenant(signup.user.entrepriseId,
       'SELECT COALESCE(SUM(debit),0) AS debit,COALESCE(SUM(credit),0) AS credit,COUNT(*)::int AS n FROM lignes_ecriture');
     assert.ok(balance.n>0,'Des lignes comptables doivent avoir été créées');

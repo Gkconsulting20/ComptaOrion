@@ -21,6 +21,6 @@
 - [Immobilisations en pause](immobilisations-paused.md) — garder le registre caché tant qu’il ne suit pas les emplacements et ne génère pas d’écritures comptables.
 - [Affichage des devises](currency-display.md) — afficher XOF groupé par espaces avec deux décimales, sans conversion ni modification des montants enregistrés.
 - [Éditeur ComptaOrion](publisher-identity.md) — ORIONEXA édite ComptaOrion; utiliser ses coordonnées uniquement pour les contacts éditeur.
-- [Compte collectif clients](collective-client-account.md) — numéro auxiliaire unique par client, mais toutes les écritures au compte général collectif 4111.
+- [Compte collectif clients](collective-client-account.md) — ID auxiliaire unique; 4111 pour les ventes de biens, 4112 pour les services.
 - [Identifiants auxiliaires des tiers](third-party-identifiers.md) — numéro client/fournisseur unique affiché et utilisé pour retrouver l’état de compte.
 - [Rapprochement des factures fournisseur](supplier-invoice-reconciliation.md) — tester ensemble le schéma, les réceptions en attente et l’écriture comptable du rapprochement.

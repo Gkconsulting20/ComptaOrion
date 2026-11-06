@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { clients, factures, paiements, produitPrix, produits, notesCredit } from '../schema.js';
+import { clients, comptesComptables, factures, paiements, produitPrix, produits, notesCredit } from '../schema.js';
 import { eq, and, desc, sql, gte, lte, between, gt, isNull, or } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import emailService from '../services/emailService.js';
@@ -14,6 +14,21 @@ import { formatClientNumberFromId } from '../services/clientIdentity.js';
 import { getPlanCapabilities } from '../services/planEntitlements.js';
 
 const router = express.Router();
+const ALLOWED_CLIENT_COLLECTIVE_ACCOUNTS = new Set(['4111', '4112']);
+
+async function findClientCollectiveAccount(entrepriseId, numero) {
+  const accountNumber = String(numero ?? '').trim();
+  if (!ALLOWED_CLIENT_COLLECTIVE_ACCOUNTS.has(accountNumber)) return null;
+  const [account] = await db.select({
+    id: comptesComptables.id,
+    numero: comptesComptables.numero,
+  }).from(comptesComptables).where(and(
+    eq(comptesComptables.entrepriseId, Number(entrepriseId)),
+    eq(comptesComptables.numero, accountNumber),
+    eq(comptesComptables.actif, true),
+  )).limit(1);
+  return account || null;
+}
 
 async function findClientByIdentifier(identifier, entrepriseId) {
   const value = String(identifier ?? '').trim();
@@ -888,6 +903,7 @@ router.post('/', async (req, res) => {
       actif,
       echeancesPersonnalisees,
       modesPaiementPreferes,
+      compteClientNumero = '4111',
     } = req.body;
 
     // Validation des champs obligatoires
@@ -899,10 +915,10 @@ router.post('/', async (req, res) => {
     }
 
     // Validation du type
-    if (type && !['particulier', 'entreprise'].includes(type)) {
+    if (type && !['particulier', 'entreprise', 'administration'].includes(type)) {
       return res.status(400).json({
         success: false,
-        message: 'Le type doit être "particulier" ou "entreprise"',
+        message: 'Le type doit être "particulier", "entreprise" ou "administration"',
       });
     }
 
@@ -976,6 +992,14 @@ router.post('/', async (req, res) => {
       });
     }
 
+    const collectiveAccount = await findClientCollectiveAccount(req.entrepriseId, compteClientNumero);
+    if (!collectiveAccount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Choisissez un compte collectif actif : 4111 pour les ventes de biens ou 4112 pour les prestations de services.',
+      });
+    }
+
     const auditInfo = extractAuditInfo(req);
     const [newClient] = await db.transaction(async (tx) => {
       const [created] = await tx
@@ -998,7 +1022,7 @@ router.post('/', async (req, res) => {
           remise: remise || '0',
           soldeDu: soldeDu || '0',
           actif: actif !== undefined ? actif : true,
-          compteComptableId: null,
+          compteComptableId: collectiveAccount.id,
           echeancesPersonnalisees: echeancesPersonnalisees || null,
           modesPaiementPreferes: modesPaiementPreferes || null,
         })
@@ -1092,6 +1116,7 @@ router.put('/:id', async (req, res) => {
       actif,
       echeancesPersonnalisees,
       modesPaiementPreferes,
+      compteClientNumero,
     } = req.body;
 
     // Vérifier que le client existe et appartient à l'entreprise
@@ -1112,10 +1137,10 @@ router.put('/:id', async (req, res) => {
     }
 
     // Validation du type
-    if (type && !['particulier', 'entreprise'].includes(type)) {
+    if (type && !['particulier', 'entreprise', 'administration'].includes(type)) {
       return res.status(400).json({
         success: false,
-        message: 'Le type doit être "particulier" ou "entreprise"',
+        message: 'Le type doit être "particulier", "entreprise" ou "administration"',
       });
     }
 
@@ -1198,6 +1223,46 @@ router.put('/:id', async (req, res) => {
       });
     }
 
+    const collectiveAccount = compteClientNumero === undefined
+      ? null
+      : await findClientCollectiveAccount(req.entrepriseId, compteClientNumero);
+    if (compteClientNumero !== undefined && !collectiveAccount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Choisissez un compte collectif actif : 4111 pour les ventes de biens ou 4112 pour les prestations de services.',
+      });
+    }
+    if (collectiveAccount) {
+      const previousAccount = existingClient[0].compteComptableId
+        ? await db.select({ numero: comptesComptables.numero }).from(comptesComptables).where(and(
+          eq(comptesComptables.id, existingClient[0].compteComptableId),
+          eq(comptesComptables.entrepriseId, Number(req.entrepriseId)),
+        )).limit(1)
+        : [];
+      const previousAccountNumber = ['4111', '4112'].includes(String(previousAccount[0]?.numero))
+        ? String(previousAccount[0].numero)
+        : '4111';
+      if (previousAccountNumber !== String(collectiveAccount.numero)) {
+        const [openInvoice] = await db.select({ id: factures.id }).from(factures).where(and(
+          eq(factures.entrepriseId, Number(req.entrepriseId)),
+          eq(factures.clientId, Number(id)),
+          gt(factures.soldeRestant, '0'),
+        )).limit(1);
+        const [openNote] = await db.select({ id: notesCredit.id }).from(notesCredit).where(and(
+          eq(notesCredit.entrepriseId, Number(req.entrepriseId)),
+          eq(notesCredit.clientId, Number(id)),
+          gt(notesCredit.soldeRestant, '0'),
+          eq(notesCredit.statut, 'validee'),
+        )).limit(1);
+        if (Number(existingClient[0].soldeDu || 0) > 0 || openInvoice || openNote) {
+          return res.status(409).json({
+            success: false,
+            message: 'Le compte collectif ne peut pas changer tant que le client a un solde ou une facture à régler. Réglez d’abord les opérations en cours.',
+          });
+        }
+      }
+    }
+
     // Construire l'objet de mise à jour (seulement les champs fournis)
     const updateData = {
       updatedAt: new Date(),
@@ -1220,6 +1285,7 @@ router.put('/:id', async (req, res) => {
     if (actif !== undefined) updateData.actif = actif;
     if (echeancesPersonnalisees !== undefined) updateData.echeancesPersonnalisees = echeancesPersonnalisees;
     if (modesPaiementPreferes !== undefined) updateData.modesPaiementPreferes = modesPaiementPreferes;
+    if (collectiveAccount) updateData.compteComptableId = collectiveAccount.id;
 
     // Mettre à jour le client
     const updatedClient = await db

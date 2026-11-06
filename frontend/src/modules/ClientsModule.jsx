@@ -10,6 +10,7 @@ import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 import { addDaysToIsoDate, formatPeriodeFR } from '../utils/dateUtils';
 import { getCashDiscountPreview } from '../utils/cashDiscount';
+import { readApiList } from '../utils/apiList';
 
 export function ClientsModule() {
   const [activeTab, setActiveTab] = useState('devis');
@@ -2535,6 +2536,7 @@ function RelancesTab() {
 function ParametresTab() {
   const [subTab, setSubTab] = useState('clients');
   const [clients, setClients] = useState([]);
+  const [comptesCollectifs, setComptesCollectifs] = useState([]);
   const [taxes, setTaxes] = useState([]);
   const [codesComptables, setCodesComptables] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2557,6 +2559,7 @@ function ParametresTab() {
     delaiEscompte: 0,
     limiteCredit: 0,
     modesPaiementPreferes: [],
+    compteClientNumero: '4111',
   });
   const [taxeData, setTaxeData] = useState({ nom: '', taux: 0, codeComptable: '' });
   const [codeComptableData, setCodeComptableData] = useState({ code: '', libelle: '' });
@@ -2567,8 +2570,13 @@ function ParametresTab() {
 
   const loadData = async () => {
     try {
-      const clientsRes = await api.get('/clients');
-      setClients(clientsRes.data || []);
+      const [clientsRes, accountsRes] = await Promise.all([
+        api.get('/clients'),
+        api.get('/comptabilite/comptes'),
+      ]);
+      setClients(readApiList(clientsRes, 'data'));
+      setComptesCollectifs(readApiList(accountsRes)
+        .filter((account) => account.actif !== false && ['4111', '4112'].includes(String(account.numero))));
       setTaxes([
         { id: 1, nom: 'TVA 18%', taux: 18, codeComptable: '4431' },
         { id: 2, nom: 'TVA 9%', taux: 9, codeComptable: '4432' },
@@ -2602,6 +2610,7 @@ function ParametresTab() {
       delaiEscompte: 0,
       limiteCredit: 0,
       modesPaiementPreferes: [],
+      compteClientNumero: '4111',
     });
     setIsEditing(false);
     setModalType('client');
@@ -2633,10 +2642,18 @@ function ParametresTab() {
       escomptePourcentage: Number(client.escomptePourcentage || 0),
       delaiEscompte: Number(client.delaiEscompte || 0),
       modesPaiementPreferes: client.modesPaiementPreferes || [],
+      compteClientNumero: getClientAccountNumber(client),
     });
     setIsEditing(true);
     setModalType('client');
     setShowModal(true);
+  };
+
+  const getClientAccountNumber = (client) => {
+    const account = comptesCollectifs.find(
+      (item) => Number(item.id) === Number(client?.compteComptableId)
+    );
+    return ['4111', '4112'].includes(String(account?.numero)) ? String(account.numero) : '4111';
   };
 
   const handleEditTaxe = (taxe) => {
@@ -2667,6 +2684,11 @@ function ParametresTab() {
   const handleSubmit = async () => {
     try {
       if (modalType === 'client') {
+        if (!clientData.nom?.trim()) {
+          alert('Saisissez le nom du client.');
+          document.getElementById('client-name')?.focus();
+          return;
+        }
         if (isEditing) {
           await api.put(`/clients/${clientData.id}`, clientData);
           alert('Client modifié avec succès!');
@@ -2711,7 +2733,12 @@ function ParametresTab() {
     { 
       key: 'compteCollectif',
       label: 'Compte général',
-      render: () => '4111 - Clients - Ventes de biens'
+      render: (_value, row) => {
+        const account = comptesCollectifs.find((item) => Number(item.id) === Number(row?.compteComptableId));
+        const number = ['4111', '4112'].includes(String(account?.numero)) ? String(account.numero) : '4111';
+        const label = number === '4112' ? 'Clients - Ventes de services' : 'Clients - Ventes de biens';
+        return `${number} - ${label}`;
+      }
     },
   ];
 
@@ -2863,12 +2890,39 @@ function ParametresTab() {
             <h4 style={{ marginTop: 0 }}>📋 Informations Générales</h4>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-              <FormField
-                label="Nom *"
-                value={clientData.nom}
-                onChange={(e) => setClientData({ ...clientData, nom: e.target.value })}
-                placeholder="Nom du client"
-              />
+              <div style={{ marginBottom: '15px' }}>
+                <label htmlFor="client-name" style={{
+                  display: 'block',
+                  fontWeight: 500,
+                  fontSize: 14,
+                  marginBottom: 5,
+                  color: '#495057',
+                }}>
+                  Nom *
+                </label>
+                <input
+                  id="client-name"
+                  name="clientName"
+                  type="text"
+                  value={clientData.nom || ''}
+                  onChange={(event) => {
+                    const nom = event.target.value;
+                    setClientData((current) => ({ ...current, nom }));
+                  }}
+                  placeholder="Nom du client"
+                  autoComplete="off"
+                  autoFocus={!isEditing}
+                  required
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '10px 12px',
+                    border: '1px solid #ced4da',
+                    borderRadius: 4,
+                    fontSize: 14,
+                  }}
+                />
+              </div>
               <FormField
                 label="Email *"
                 type="email"
@@ -2899,7 +2953,7 @@ function ParametresTab() {
               <FormField
                 label="Catégorie"
                 type="select"
-                value={clientData.categorie}
+                value={clientData.categorieClient}
                 onChange={(e) => setClientData({ ...clientData, categorieClient: e.target.value })}
                 options={[
                   { value: 'standard', label: 'Standard' },
@@ -2944,8 +2998,39 @@ function ParametresTab() {
             <h4 style={{ marginTop: 0 }}>💰 Compte collectif client</h4>
             <p style={{ margin: '0 0 15px', color: '#334155', fontSize: 14 }}>
               <strong>4111 — Clients - Ventes de biens</strong><br />
-              Tous les clients utilisent ce compte général. Un numéro auxiliaire unique est attribué automatiquement à chaque client.
+              <strong>4112 — Clients - Ventes de services</strong><br />
+              Chaque client garde un identifiant auxiliaire unique; son compte collectif suit la nature de l’activité.
             </p>
+
+            <FormField
+              label="Nature de l’activité facturée"
+              name="compteClientNumero"
+              type="select"
+              value={clientData.compteClientNumero || '4111'}
+              onChange={(e) => setClientData((current) => ({
+                ...current,
+                compteClientNumero: e.target.value,
+              }))}
+              options={[
+                ...comptesCollectifs
+                  .filter((account) => String(account.numero) === '4111')
+                  .map((account) => ({ value: '4111', label: 'Ventes de biens — 4111' })),
+                ...comptesCollectifs
+                  .filter((account) => String(account.numero) === '4112')
+                  .map((account) => ({ value: '4112', label: 'Prestations de services — 4112' })),
+              ]}
+              required
+            />
+            {!comptesCollectifs.some((account) => String(account.numero) === '4111') && (
+              <p role="alert" style={{ color: '#b42318', fontSize: 12 }}>
+                Le compte 4111 est absent ou inactif dans le plan comptable de l’entreprise. Activez-le avant de créer un client.
+              </p>
+            )}
+            {!comptesCollectifs.some((account) => String(account.numero) === '4112') && (
+              <p role="alert" style={{ color: '#b42318', fontSize: 12 }}>
+                Le compte 4112 est absent ou inactif dans le plan comptable de l’entreprise. Activez-le avant d’affecter un client aux prestations de services.
+              </p>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '15px' }}>
               <FormField
@@ -3006,7 +3091,7 @@ function ParametresTab() {
               border: '1px solid #ffc107'
             }}>
               <div style={{ fontSize: '12px', color: '#856404' }}>
-                💡 Les échéances et l’escompte restent propres à chaque client; seul le compte général est commun.
+                💡 Les échéances et l’escompte restent propres à chaque client. Les clients de biens partagent 4111; les clients de services partagent 4112.
               </div>
             </div>
           </div>
@@ -3134,7 +3219,11 @@ function ParametresTab() {
             {
               title: 'Paramètres Commerciaux',
               fields: [
-                { label: 'Compte général', value: '4111 - Clients - Ventes de biens' },
+              { label: 'Compte général', value: (() => {
+                  const account = comptesCollectifs.find((item) => Number(item.id) === Number(selectedClient.compteComptableId));
+                  const number = ['4111', '4112'].includes(String(account?.numero)) ? String(account.numero) : '4111';
+                  return `${number} - ${number === '4112' ? 'Clients - Ventes de services' : 'Clients - Ventes de biens'}`;
+                })() },
                 { label: 'Échéance', value: Number(selectedClient.delaiPaiement ?? 30) === 0 ? 'À réception' : `${selectedClient.delaiPaiement ?? 30} jours` },
                 { label: 'Limite Crédit', value: `${Number(selectedClient.limiteCredit || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { label: 'Catégorie', value: selectedClient.categorieClient || 'Standard' }
