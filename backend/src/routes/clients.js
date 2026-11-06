@@ -14,6 +14,29 @@ import { formatClientNumberFromId } from '../services/clientIdentity.js';
 
 const router = express.Router();
 
+async function findClientByIdentifier(identifier, entrepriseId) {
+  const value = String(identifier ?? '').trim();
+  if (!value) return [];
+  const identifiers = [
+    eq(clients.numeroClient, value),
+    eq(clients.codeAuxiliaire, value),
+  ];
+  const byAuxiliaryNumber = await db
+    .select()
+    .from(clients)
+    .where(and(eq(clients.entrepriseId, entrepriseId), or(...identifiers)))
+    .limit(1);
+  if (byAuxiliaryNumber.length) return byAuxiliaryNumber;
+  const formattedId = /^CLI(\d+)(?:-\d+)?$/.exec(value)?.[1];
+  const internalId = /^\d+$/.test(value) ? Number(value) : Number(formattedId);
+  if (!Number.isSafeInteger(internalId) || internalId < 1) return [];
+  return db
+    .select()
+    .from(clients)
+    .where(and(eq(clients.entrepriseId, entrepriseId), eq(clients.id, internalId)))
+    .limit(1);
+}
+
 /**
  * GET /api/clients
  * Récupère la liste de tous les clients de l'entreprise (avec pagination)
@@ -1277,14 +1300,7 @@ router.post('/etat-compte', async (req, res) => {
       });
     }
 
-    const client = await db
-      .select()
-      .from(clients)
-      .where(and(
-        eq(clients.id, parseInt(clientId)),
-        eq(clients.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+    const client = await findClientByIdentifier(clientId, req.entrepriseId);
 
     if (!client || client.length === 0) {
       return res.status(404).json({
@@ -1297,7 +1313,7 @@ router.post('/etat-compte', async (req, res) => {
       .select()
       .from(factures)
       .where(and(
-        eq(factures.clientId, parseInt(clientId)),
+        eq(factures.clientId, client[0].id),
         eq(factures.entrepriseId, req.entrepriseId)
       ));
 
@@ -1305,13 +1321,13 @@ router.post('/etat-compte', async (req, res) => {
       .select()
       .from(paiements)
       .where(and(
-        eq(paiements.clientId, parseInt(clientId)),
+        eq(paiements.clientId, client[0].id),
         eq(paiements.entrepriseId, req.entrepriseId),
       ))
       .orderBy(paiements.datePaiement);
     const creditNotes = await db.select().from(notesCredit).where(and(
       eq(notesCredit.entrepriseId, req.entrepriseId),
-      eq(notesCredit.clientId, parseInt(clientId)),
+      eq(notesCredit.clientId, client[0].id),
       eq(notesCredit.type, 'client')
     ));
 
@@ -1328,7 +1344,10 @@ router.post('/etat-compte', async (req, res) => {
     res.json({
       success: true,
       data: {
-        client: client[0],
+        client: {
+          ...client[0],
+          numeroClient: client[0].numeroClient || client[0].codeAuxiliaire || formatClientNumberFromId(client[0].id),
+        },
         ...statement,
         periode: { dateDebut, dateFin }
       }
@@ -1359,14 +1378,7 @@ router.post('/etat-compte/email', async (req, res) => {
       });
     }
 
-    const client = await db
-      .select()
-      .from(clients)
-      .where(and(
-        eq(clients.id, parseInt(clientId)),
-        eq(clients.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+    const client = await findClientByIdentifier(clientId, req.entrepriseId);
 
     if (!client || client.length === 0) {
       return res.status(404).json({
@@ -1386,7 +1398,7 @@ router.post('/etat-compte/email', async (req, res) => {
       .select()
       .from(factures)
       .where(and(
-        eq(factures.clientId, parseInt(clientId)),
+        eq(factures.clientId, client[0].id),
         eq(factures.entrepriseId, req.entrepriseId)
       ));
 
@@ -1394,13 +1406,13 @@ router.post('/etat-compte/email', async (req, res) => {
       .select()
       .from(paiements)
       .where(and(
-        eq(paiements.clientId, parseInt(clientId)),
+        eq(paiements.clientId, client[0].id),
         eq(paiements.entrepriseId, req.entrepriseId),
       ))
       .orderBy(paiements.datePaiement);
     const creditNotes = await db.select().from(notesCredit).where(and(
       eq(notesCredit.entrepriseId, req.entrepriseId),
-      eq(notesCredit.clientId, parseInt(clientId)),
+      eq(notesCredit.clientId, client[0].id),
       eq(notesCredit.type, 'client')
     ));
 
@@ -1504,6 +1516,7 @@ router.post('/etat-compte/email', async (req, res) => {
         <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #3498db; padding-bottom: 20px;">
           <h1 style="color: #3498db; margin: 0 0 10px 0;">ÉTAT DE COMPTE CLIENT</h1>
           <p style="margin: 5px 0; font-size: 16px;"><strong>${client[0].nom}</strong></p>
+          <p style="margin: 5px 0; color: #666;">N° Client : ${client[0].numeroClient || client[0].codeAuxiliaire || formatClientNumberFromId(client[0].id)}</p>
           <p style="margin: 5px 0; color: #666;">Période: ${dateDebutFr} au ${dateFinFr}</p>
         </div>
 
@@ -1532,7 +1545,7 @@ router.post('/etat-compte/email', async (req, res) => {
 
     await emailService.sendEmail({
       to: client[0].email,
-      subject: `État de Compte - ${client[0].nom} (${dateDebutFr} au ${dateFinFr})`,
+      subject: `État de Compte - ${client[0].nom} (${client[0].numeroClient || client[0].codeAuxiliaire || formatClientNumberFromId(client[0].id)}) - ${dateDebutFr} au ${dateFinFr}`,
       html: emailHtml,
       entrepriseId: req.entrepriseId,
       typeEmail: 'etat_compte'

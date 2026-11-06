@@ -1,13 +1,37 @@
 import express from 'express';
 import { db } from '../db.js';
 import { fournisseurs, facturesAchat, paiementsFournisseurs, notesCredit } from '../schema.js';
-import { eq, and, sql, desc, gte, lte, inArray } from 'drizzle-orm';
+import { eq, and, or, sql, desc, gte, lte, inArray } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import emailService from '../services/emailService.js';
 import { isValidPaymentDelay, isValidCashDiscountTerms, isValidPreferredPaymentMethods } from '../services/paymentTerms.js';
 import { buildThirdPartyStatement } from '../services/thirdPartyLedger.js';
+import { formatSupplierNumberFromId } from '../services/supplierIdentity.js';
 
 const router = express.Router();
+
+async function findFournisseurByIdentifier(identifier, entrepriseId) {
+  const value = String(identifier ?? '').trim();
+  if (!value) return [];
+  const identifiers = [
+    eq(fournisseurs.numeroFournisseur, value),
+    eq(fournisseurs.codeAuxiliaire, value),
+  ];
+  const byAuxiliaryNumber = await db
+    .select()
+    .from(fournisseurs)
+    .where(and(eq(fournisseurs.entrepriseId, entrepriseId), or(...identifiers)))
+    .limit(1);
+  if (byAuxiliaryNumber.length) return byAuxiliaryNumber;
+  const formattedId = /^FOU(\d+)$/.exec(value)?.[1];
+  const internalId = /^\d+$/.test(value) ? Number(value) : Number(formattedId);
+  if (!Number.isSafeInteger(internalId) || internalId < 1) return [];
+  return db
+    .select()
+    .from(fournisseurs)
+    .where(and(eq(fournisseurs.entrepriseId, entrepriseId), eq(fournisseurs.id, internalId)))
+    .limit(1);
+}
 
 // GET /api/fournisseurs - Liste des fournisseurs avec pagination
 router.get('/', async (req, res) => {
@@ -103,7 +127,6 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      numeroFournisseur,
       raisonSociale,
       contactPrincipal,
       fonction,
@@ -158,67 +181,52 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Vérifier unicité du numéro fournisseur si fourni
-    if (numeroFournisseur) {
-      const [existing] = await db
-        .select()
-        .from(fournisseurs)
-        .where(
-          and(
-            eq(fournisseurs.numeroFournisseur, numeroFournisseur),
-            eq(fournisseurs.entrepriseId, req.entrepriseId)
-          )
-        )
-        .limit(1);
-
-      if (existing) {
-        return res.status(400).json({
-          success: false,
-          message: 'Ce numéro de fournisseur existe déjà'
-        });
-      }
-    }
-
-    // Créer le fournisseur
-    const [newFournisseur] = await db
-      .insert(fournisseurs)
-      .values({
-        entrepriseId: req.entrepriseId,
-        numeroFournisseur: numeroFournisseur || null,
-        raisonSociale,
-        contactPrincipal: contactPrincipal || null,
-        fonction: fonction || null,
-        email: email || null,
-        telephone: telephone || null,
-        adresse: adresse || null,
-        categorie: categorie || null,
-        delaiPaiement: delaiPaiement ?? 30,
-        escomptePourcentage: String(escomptePourcentage ?? 0),
-        delaiEscompte: Number(delaiEscompte ?? 0),
-        modesPaiementPreferes: modesPaiementPreferes || null,
-        compteBancaire: compteBancaire || null,
-        banque: banque || null,
-        soldeDu: '0',
-        actif: actif !== undefined ? actif : true,
-      })
-      .returning();
-
-    // Générer et assigner le code auxiliaire automatiquement
-    const codeAuxiliaire = 'FOU' + String(newFournisseur.id).padStart(5, '0');
-    await db.update(fournisseurs)
-      .set({ codeAuxiliaire })
-      .where(eq(fournisseurs.id, newFournisseur.id));
-    newFournisseur.codeAuxiliaire = codeAuxiliaire;
-
-    // Audit log
     const auditInfo = extractAuditInfo(req);
-    await logAudit({
-      ...auditInfo,
-      action: 'CREATE',
-      table: 'fournisseurs',
-      recordId: newFournisseur.id,
-      nouvelleValeur: newFournisseur,
-      description: `Fournisseur créé: ${raisonSociale}`
+    const newFournisseur = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(fournisseurs)
+        .values({
+          entrepriseId: req.entrepriseId,
+          numeroFournisseur: null,
+          raisonSociale,
+          contactPrincipal: contactPrincipal || null,
+          fonction: fonction || null,
+          email: email || null,
+          telephone: telephone || null,
+          adresse: adresse || null,
+          categorie: categorie || null,
+          delaiPaiement: delaiPaiement ?? 30,
+          escomptePourcentage: String(escomptePourcentage ?? 0),
+          delaiEscompte: Number(delaiEscompte ?? 0),
+          modesPaiementPreferes: modesPaiementPreferes || null,
+          compteBancaire: compteBancaire || null,
+          banque: banque || null,
+          soldeDu: '0',
+          actif: actif !== undefined ? actif : true,
+        })
+        .returning();
+
+      const numeroFournisseur = formatSupplierNumberFromId(created.id);
+      const [savedFournisseur] = await tx
+        .update(fournisseurs)
+        .set({ codeAuxiliaire: numeroFournisseur, numeroFournisseur })
+        .where(and(
+          eq(fournisseurs.id, created.id),
+          eq(fournisseurs.entrepriseId, req.entrepriseId)
+        ))
+        .returning();
+
+      await logAudit({
+        ...auditInfo,
+        action: 'CREATE',
+        table: 'fournisseurs',
+        recordId: savedFournisseur.id,
+        nouvelleValeur: savedFournisseur,
+        description: `Fournisseur créé: ${raisonSociale}`,
+        executor: tx,
+        required: true,
+      });
+      return savedFournisseur;
     });
 
     return res.status(201).json({
@@ -241,7 +249,6 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      numeroFournisseur,
       raisonSociale,
       contactPrincipal,
       fonction,
@@ -311,30 +318,8 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    // Vérifier unicité du numéro fournisseur si modifié
-    if (numeroFournisseur && numeroFournisseur !== existingFournisseur.numeroFournisseur) {
-      const [existing] = await db
-        .select()
-        .from(fournisseurs)
-        .where(
-          and(
-            eq(fournisseurs.numeroFournisseur, numeroFournisseur),
-            eq(fournisseurs.entrepriseId, req.entrepriseId)
-          )
-        )
-        .limit(1);
-
-      if (existing) {
-        return res.status(400).json({
-          success: false,
-          message: 'Ce numéro de fournisseur existe déjà'
-        });
-      }
-    }
-
     // Préparer les données à mettre à jour
     const updateData = {};
-    if (numeroFournisseur !== undefined) updateData.numeroFournisseur = numeroFournisseur;
     if (raisonSociale !== undefined) updateData.raisonSociale = raisonSociale;
     if (contactPrincipal !== undefined) updateData.contactPrincipal = contactPrincipal;
     if (fonction !== undefined) updateData.fonction = fonction;
@@ -469,14 +454,7 @@ router.post('/etat-compte', async (req, res) => {
       });
     }
 
-    const fournisseur = await db
-      .select()
-      .from(fournisseurs)
-      .where(and(
-        eq(fournisseurs.id, parseInt(fournisseurId)),
-        eq(fournisseurs.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+    const fournisseur = await findFournisseurByIdentifier(fournisseurId, req.entrepriseId);
 
     if (!fournisseur || fournisseur.length === 0) {
       return res.status(404).json({
@@ -489,7 +467,7 @@ router.post('/etat-compte', async (req, res) => {
       .select()
       .from(facturesAchat)
       .where(and(
-        eq(facturesAchat.fournisseurId, parseInt(fournisseurId)),
+        eq(facturesAchat.fournisseurId, fournisseur[0].id),
         eq(facturesAchat.entrepriseId, req.entrepriseId)
       ));
 
@@ -502,7 +480,7 @@ router.post('/etat-compte', async (req, res) => {
       : [];
     const creditNotes = await db.select().from(notesCredit).where(and(
       eq(notesCredit.entrepriseId, req.entrepriseId),
-      eq(notesCredit.fournisseurId, parseInt(fournisseurId)),
+      eq(notesCredit.fournisseurId, fournisseur[0].id),
       eq(notesCredit.type, 'fournisseur')
     ));
     const statement = buildThirdPartyStatement({
@@ -520,7 +498,10 @@ router.post('/etat-compte', async (req, res) => {
     res.json({
       success: true,
       data: {
-        fournisseur: fournisseur[0],
+        fournisseur: {
+          ...fournisseur[0],
+          numeroFournisseur: fournisseur[0].numeroFournisseur || fournisseur[0].codeAuxiliaire || formatSupplierNumberFromId(fournisseur[0].id),
+        },
         ...statement,
         periode: { dateDebut, dateFin }
       }
@@ -551,14 +532,7 @@ router.post('/etat-compte/email', async (req, res) => {
       });
     }
 
-    const fournisseur = await db
-      .select()
-      .from(fournisseurs)
-      .where(and(
-        eq(fournisseurs.id, parseInt(fournisseurId)),
-        eq(fournisseurs.entrepriseId, req.entrepriseId)
-      ))
-      .limit(1);
+    const fournisseur = await findFournisseurByIdentifier(fournisseurId, req.entrepriseId);
 
     if (!fournisseur || fournisseur.length === 0) {
       return res.status(404).json({
@@ -578,7 +552,7 @@ router.post('/etat-compte/email', async (req, res) => {
       .select()
       .from(facturesAchat)
       .where(and(
-        eq(facturesAchat.fournisseurId, parseInt(fournisseurId)),
+        eq(facturesAchat.fournisseurId, fournisseur[0].id),
         eq(facturesAchat.entrepriseId, req.entrepriseId)
       ));
     const allFactureIds = allFactures.map(facture => facture.id);
@@ -590,7 +564,7 @@ router.post('/etat-compte/email', async (req, res) => {
       : [];
     const creditNotes = await db.select().from(notesCredit).where(and(
       eq(notesCredit.entrepriseId, req.entrepriseId),
-      eq(notesCredit.fournisseurId, parseInt(fournisseurId)),
+      eq(notesCredit.fournisseurId, fournisseur[0].id),
       eq(notesCredit.type, 'fournisseur')
     ));
     const statement = buildThirdPartyStatement({
@@ -695,6 +669,7 @@ router.post('/etat-compte/email', async (req, res) => {
         <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1976d2; padding-bottom: 20px;">
           <h1 style="color: #1976d2; margin: 0 0 10px 0;">ÉTAT DE COMPTE FOURNISSEUR</h1>
           <p style="margin: 5px 0; font-size: 16px;"><strong>${fournisseur[0].raisonSociale || fournisseur[0].nom}</strong></p>
+          <p style="margin: 5px 0; color: #666;">N° Fournisseur : ${fournisseur[0].numeroFournisseur || fournisseur[0].codeAuxiliaire || formatSupplierNumberFromId(fournisseur[0].id)}</p>
           <p style="margin: 5px 0; color: #666;">Période: ${dateDebutFr} au ${dateFinFr}</p>
         </div>
 
@@ -723,7 +698,7 @@ router.post('/etat-compte/email', async (req, res) => {
 
     await emailService.sendEmail({
       to: fournisseur[0].email,
-      subject: `État de Compte - ${fournisseur[0].nom} (${dateDebutFr} au ${dateFinFr})`,
+      subject: `État de Compte - ${fournisseur[0].raisonSociale || fournisseur[0].nom} (${fournisseur[0].numeroFournisseur || fournisseur[0].codeAuxiliaire || formatSupplierNumberFromId(fournisseur[0].id)}) - ${dateDebutFr} au ${dateFinFr}`,
       html: emailHtml,
       entrepriseId: req.entrepriseId,
       typeEmail: 'etat_compte'

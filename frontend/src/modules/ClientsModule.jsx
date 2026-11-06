@@ -2675,9 +2675,9 @@ function ParametresTab() {
 
   const columns = [
     {
-      key: 'codeAuxiliaire',
+      key: 'numeroClient',
       label: 'N° Client',
-      render: (value, row) => value || row?.numeroClient || '-',
+      render: (value, row) => value || row?.codeAuxiliaire || (row?.id ? `CLI${String(row.id).padStart(5, '0')}` : '-'),
     },
     { key: 'nom', label: 'Nom' },
     { key: 'email', label: 'Email' },
@@ -3090,7 +3090,7 @@ function ParametresTab() {
             {
               title: 'Informations Générales',
               fields: [
-                { label: 'N° Client', value: selectedClient.numeroClient || selectedClient.codeAuxiliaire || '-' },
+                { label: 'N° Client', value: selectedClient.numeroClient || selectedClient.codeAuxiliaire || `CLI${String(selectedClient.id).padStart(5, '0')}` },
                 { label: 'Nom', value: selectedClient.nom },
                 { label: 'Email', value: selectedClient.email || '-' },
                 { label: 'Téléphone', value: selectedClient.telephone || '-' },
@@ -3236,7 +3236,9 @@ function EtatsCompteTab() {
     }
   };
 
-  const selectedClient = clients.find(c => c.id == selectedClientId);
+  const getClientNumber = (client) =>
+    client?.numeroClient || client?.codeAuxiliaire || (client?.id ? `CLI${String(client.id).padStart(5, '0')}` : '-');
+  const selectedClient = clients.find(c => getClientNumber(c) === String(selectedClientId));
 
   const imprimerEtatCompte = () => {
     if (!etatCompte || !selectedClient) return;
@@ -3296,6 +3298,7 @@ function EtatsCompteTab() {
         <div class="header">
           <h1>ÉTAT DE COMPTE CLIENT</h1>
           <div class="client-name">${selectedClient.nom}</div>
+          <div class="client-id">N° Client : ${getClientNumber(selectedClient)}</div>
           <div class="periode">Période: ${formatPeriodeFR(periode.dateDebut, periode.dateFin)}</div>
         </div>
 
@@ -3358,7 +3361,10 @@ function EtatsCompteTab() {
             }}
             options={[
               { value: '', label: '-- Sélectionner un client --' },
-              ...clients.map(c => ({ value: c.id, label: c.nom }))
+               ...clients.map(c => {
+                 const numero = getClientNumber(c);
+                 return { value: numero, label: `${numero} — ${c.nom}` };
+               })
             ]}
           />
           <FormField
@@ -3408,6 +3414,7 @@ function EtatsCompteTab() {
           <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #3498db', paddingBottom: '20px' }}>
             <h2 style={{ color: '#3498db', margin: '0 0 10px 0' }}>ÉTAT DE COMPTE CLIENT</h2>
             <p style={{ margin: '5px 0', fontSize: '16px' }}><strong>{selectedClient?.nom}</strong></p>
+            <p style={{ margin: '5px 0', color: '#555' }}>N° Client : {getClientNumber(selectedClient)}</p>
             <p style={{ margin: '5px 0', color: '#666' }}>
               Période: {formatPeriodeFR(periode.dateDebut, periode.dateFin)}
             </p>

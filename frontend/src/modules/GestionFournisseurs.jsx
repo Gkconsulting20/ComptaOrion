@@ -1396,7 +1396,11 @@ export function GestionFournisseurs() {
               </div>
               <Table
                 columns={[
-                  { key: 'codeAuxiliaire', label: 'ID Fournisseur' },
+                  {
+                    key: 'numeroFournisseur',
+                    label: 'ID Fournisseur',
+                    render: (value, row) => value || row?.codeAuxiliaire || (row?.id ? `FOU${String(row.id).padStart(5, '0')}` : '-'),
+                  },
                   { key: 'raisonSociale', label: 'Nom' },
                   { key: 'email', label: 'Email' },
                   { key: 'telephone', label: 'Téléphone' },
@@ -2252,7 +2256,7 @@ export function GestionFournisseurs() {
             {
               title: 'Informations Générales',
               fields: [
-                { label: 'N° Fournisseur', value: selectedFournisseur.numeroFournisseur },
+                { label: 'N° Fournisseur', value: selectedFournisseur.numeroFournisseur || selectedFournisseur.codeAuxiliaire || `FOU${String(selectedFournisseur.id).padStart(5, '0')}` },
                 { label: 'Nom', value: selectedFournisseur.nom || selectedFournisseur.raisonSociale },
                 { label: 'Email', value: selectedFournisseur.email || '-' },
                 { label: 'Téléphone', value: selectedFournisseur.telephone || '-' }
@@ -2650,7 +2654,9 @@ function EtatsCompteFournisseurTab() {
     }
   };
 
-  const selectedFournisseur = fournisseurs.find(f => f.id == selectedFournisseurId);
+    const getFournisseurNumber = (fournisseur) =>
+      fournisseur?.numeroFournisseur || fournisseur?.codeAuxiliaire || (fournisseur?.id ? `FOU${String(fournisseur.id).padStart(5, '0')}` : '-');
+    const selectedFournisseur = fournisseurs.find(f => getFournisseurNumber(f) === String(selectedFournisseurId));
 
   const imprimerEtatCompte = () => {
     if (!etatCompte || !selectedFournisseur) return;
@@ -2668,7 +2674,7 @@ function EtatsCompteFournisseurTab() {
     const printContent = '<!DOCTYPE html><html><head><title>État de Compte Fournisseur - ' + selectedFournisseur.raisonSociale + '</title><style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: "Segoe UI", Arial, sans-serif; padding: 30px; color: #333; } .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #1976d2; } .header h1 { color: #1976d2; font-size: 24px; margin-bottom: 15px; } .fournisseur-info { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px; } .fournisseur-info h3 { margin-bottom: 10px; color: #1976d2; } .fournisseur-info p { margin: 5px 0; font-size: 13px; } .periode { color: #666; font-style: italic; margin-top: 10px; } .summary { display: flex; justify-content: space-between; margin-bottom: 30px; } .summary-box { flex: 1; padding: 15px; margin: 0 10px; border-radius: 8px; text-align: center; } .summary-box:first-child { margin-left: 0; } .summary-box:last-child { margin-right: 0; } .summary-box.facture { background: #e3f2fd; } .summary-box.paye { background: #e8f5e9; } .summary-box.solde { background: #fff3e0; } .summary-box .label { color: #666; font-size: 12px; margin-bottom: 5px; } .summary-box .value { font-size: 20px; font-weight: bold; } .summary-box.facture .value { color: #1976d2; } .summary-box.paye .value { color: #388e3c; } .summary-box.solde .value { color: #e65100; } .section { margin-bottom: 25px; } .section h3 { margin-bottom: 15px; color: #333; font-size: 16px; } table { width: 100%; border-collapse: collapse; } th { background: #f8f9fa; padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; font-size: 12px; } td { padding: 10px; border-bottom: 1px solid #dee2e6; font-size: 12px; } .text-right { text-align: right; } .text-center { text-align: center; } .amount { font-weight: bold; } .status { padding: 3px 8px; border-radius: 4px; font-size: 11px; } .status-payee { background: #d4edda; color: #155724; } .status-validee { background: #fff3cd; color: #856404; } .status-brouillon { background: #e2e3e5; color: #383d41; } .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 11px; } .no-data { color: #999; font-style: italic; padding: 20px; text-align: center; } @media print { body { padding: 15px; } }</style></head><body>' +
       '<div class="header"><h1>ÉTAT DE COMPTE FOURNISSEUR</h1></div>' +
       '<div class="fournisseur-info"><h3>' + selectedFournisseur.raisonSociale + '</h3>' +
-      '<p><strong>Code:</strong> ' + (selectedFournisseur.codeAuxiliaire || selectedFournisseur.numeroFournisseur || '-') + '</p>' +
+      '<p><strong>N° Fournisseur:</strong> ' + getFournisseurNumber(selectedFournisseur) + '</p>' +
       (selectedFournisseur.adresse ? '<p><strong>Adresse:</strong> ' + selectedFournisseur.adresse + '</p>' : '') +
       (selectedFournisseur.email ? '<p><strong>Email:</strong> ' + selectedFournisseur.email + '</p>' : '') +
       (selectedFournisseur.telephone ? '<p><strong>Téléphone:</strong> ' + selectedFournisseur.telephone + '</p>' : '') +
@@ -2708,7 +2714,10 @@ function EtatsCompteFournisseurTab() {
             }}
             options={[
               { value: '', label: '-- Sélectionner un fournisseur --' },
-              ...fournisseurs.map(f => ({ value: f.id, label: f.raisonSociale || f.nom }))
+               ...fournisseurs.map(f => {
+                 const numero = getFournisseurNumber(f);
+                 return { value: numero, label: `${numero} — ${f.raisonSociale || f.nom}` };
+               })
             ]}
           />
           <FormField
@@ -2761,7 +2770,7 @@ function EtatsCompteFournisseurTab() {
 
           <div style={{ backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '25px' }}>
             <h3 style={{ margin: '0 0 10px 0', color: '#1976d2' }}>{selectedFournisseur?.raisonSociale}</h3>
-            <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Code:</strong> {selectedFournisseur?.codeAuxiliaire || selectedFournisseur?.numeroFournisseur || '-'}</p>
+            <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>N° Fournisseur:</strong> {getFournisseurNumber(selectedFournisseur)}</p>
             {selectedFournisseur?.adresse && <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Adresse:</strong> {selectedFournisseur.adresse}</p>}
             {selectedFournisseur?.email && <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Email:</strong> {selectedFournisseur.email}</p>}
             {selectedFournisseur?.telephone && <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Téléphone:</strong> {selectedFournisseur.telephone}</p>}
