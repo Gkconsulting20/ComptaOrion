@@ -1136,12 +1136,12 @@ export function GestionFournisseurs() {
         api.get('/achats/factures').catch(() => ({ data: [] })),
         api.get('/tresorerie/comptes').catch(() => ({ data: [] })),
       ]);
-      setComptesBancaires(accountsRes.data || []);
+      setComptesBancaires(readApiList(accountsRes, 'data'));
       setData({
-        fournisseurs: fournisseursRes.data || [],
-        commandes: commandesRes.data || [],
+        fournisseurs: readApiList(fournisseursRes, 'data'),
+        commandes: readApiList(commandesRes, 'data'),
         receptions: [],
-        factures: facturesRes.data || [],
+        factures: readApiList(facturesRes, 'data'),
         paiements: [],
         taxes: [
           { id: 1, nom: 'TVA 18%', taux: 18, codeComptable: '4431' },
