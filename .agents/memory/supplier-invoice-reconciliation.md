@@ -8,3 +8,9 @@ Le rapprochement fournisseur doit être vérifié de bout en bout depuis la réc
 **Why:** Le flux peut sembler raccordé côté interface alors que des colonnes absentes du schéma font échouer l’enregistrement au milieu du rapprochement.
 
 **How to apply:** Lors de toute évolution de ce parcours, exécuter un test fonctionnel isolé « commande → réception → facture rapprochée », puis contrôler les montants pending et le lien vers l’écriture comptable.
+
+Le numéro externe de facture fournisseur est saisi manuellement par l’utilisateur et reste distinct du numéro interne généré par ComptaOrion.
+
+**Why:** L’utilisateur a signalé plusieurs fois que le champ du numéro externe ne permettait pas de garder le curseur ni de saisir le numéro.
+
+**How to apply:** Garder ce champ directement éditable dans le formulaire de rapprochement, synchroniser la saisie avec l’état envoyé à l’API et vérifier qu’aucun pied fixe ou élément superposé ne bloque le clic.

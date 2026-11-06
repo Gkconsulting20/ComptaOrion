@@ -95,11 +95,11 @@ test('le rapprochement charge les comptes via l’API achats dédiée', async ()
   assert.match(suppliers, /compteEcartId: factureForm\.compteEcartId \? Number\(factureForm\.compteEcartId\) : null/);
   assert.match(suppliers, /if \(!numeroFactureFournisseur\)/);
   assert.match(suppliers, /disabled=\{submitting\}/);
-  assert.match(suppliers, /defaultValue=\{factureForm\.numeroFactureFournisseur/);
+  assert.match(suppliers, /value=\{factureForm\.numeroFactureFournisseur\}/);
   assert.match(suppliers, /htmlFor="supplier-invoice-number"/);
-  assert.match(suppliers, /numeroFactureInputRef\.current\?\.value/);
-  assert.match(suppliers, /onBlur=\{\(e\) =>/);
-  assert.match(suppliers, /position: 'sticky',\s*bottom: 0/);
+  assert.match(suppliers, /numeroFactureFournisseur: value/);
+  assert.doesNotMatch(suppliers, /numeroFactureInputRef/);
+  assert.doesNotMatch(suppliers, /position: 'sticky',\s*bottom: 0/);
 });
 
 test('la réception d’une commande accepte le poids des produits', async () => {
