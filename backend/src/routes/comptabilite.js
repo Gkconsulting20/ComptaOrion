@@ -1,13 +1,14 @@
 import express from 'express';
 import { db } from '../db.js';
 import { 
-  plansComptables, comptes, comptesComptables, journaux, ecritures, lignesEcritures, 
+  plansComptables, comptes, comptesComptables, comptesAutomatiques, journaux, ecritures, lignesEcritures,
   soldesComptes, entreprises
 } from '../schema.js';
 import { eq, and, desc, gte, lte, sum, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { synchroniserTransactionDepuisEcriture } from '../services/treasuryJournalSync.js';
 import { generateNumeroEcriture } from '../services/comptabiliteService.js';
+import { ACCOUNTING_ACCOUNT_ROLES } from '../services/accountingAccountMappings.js';
 
 const router = express.Router();
 
@@ -173,43 +174,9 @@ const PLAN_SYSCOHADA = [
 // Initialiser le plan comptable SYSCOHADA
 router.post('/init-syscohada', async (req, res) => {
   try {
-    const { entrepriseId } = req.body;
-    const eId = parseInt(entrepriseId);
-    
-    // Vérifier si des comptes existent déjà
-    const existingComptes = await db.query.comptes.findMany({
-      where: eq(comptes.entrepriseId, eId)
-    });
-    
-    if (existingComptes.length > 10) {
-      return res.status(400).json({ 
-        error: 'Le plan comptable est déjà initialisé',
-        count: existingComptes.length 
-      });
-    }
-    
-    // Insérer tous les comptes SYSCOHADA
-    const insertedComptes = [];
-    for (const compte of PLAN_SYSCOHADA) {
-      try {
-        const result = await db.insert(comptes).values({
-          entrepriseId: eId,
-          numero: compte.numero,
-          nom: compte.nom,
-          categorie: compte.categorie,
-          sousCategorie: compte.classe,
-          devise: 'XOF',
-          solde: 0,
-          actif: true
-        }).returning();
-        insertedComptes.push(result[0]);
-      } catch (err) {
-        // Ignorer les doublons
-        console.log(`Compte ${compte.numero} existe déjà`);
-      }
-    }
-    
-    // Créer les journaux de base
+    const eId = Number(req.entrepriseId);
+    if (!eId) return res.status(400).json({ error: 'Entreprise non identifiée.' });
+
     const journauxBase = [
       { code: 'AC', nom: 'Journal des Achats', type: 'achats' },
       { code: 'VE', nom: 'Journal des Ventes', type: 'ventes' },
@@ -219,24 +186,76 @@ router.post('/init-syscohada', async (req, res) => {
       { code: 'SA', nom: 'Journal des Salaires', type: 'od' },
       { code: 'AN', nom: 'Journal à Nouveaux', type: 'od' }
     ];
-    
-    for (const journal of journauxBase) {
-      try {
-        await db.insert(journaux).values({
-          entrepriseId: eId,
-          code: journal.code,
-          nom: journal.nom,
-          type: journal.type,
-          actif: true
-        });
-      } catch (err) {
-        console.log(`Journal ${journal.code} existe déjà`);
+
+    const result = await db.transaction(async (tx) => {
+      const lockKey = `comptaorion:init-syscohada:${eId}`;
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+      const existingComptes = await tx.select({ numero: comptesComptables.numero })
+        .from(comptesComptables)
+        .where(eq(comptesComptables.entrepriseId, eId));
+      if (existingComptes.length > 10) {
+        return { alreadyInitialized: true, count: existingComptes.length, comptesCreés: 0 };
       }
+
+      const existingNumbers = new Set(existingComptes.map((account) => account.numero));
+      const accountType = {
+        Actif: 'actif',
+        Passif: 'passif',
+        'Capitaux propres': 'capitaux',
+        Charges: 'charge',
+        Produits: 'produit',
+        Résultat: 'capitaux',
+      };
+      const accountRows = PLAN_SYSCOHADA
+        .filter((account) => !existingNumbers.has(account.numero))
+        .map((account) => ({
+          entrepriseId: eId,
+          numero: account.numero,
+          nom: account.nom,
+          type: accountType[account.categorie] || 'actif',
+          categorie: ['6', '7', '8'].includes(account.classe) ? 'résultat' : 'bilan',
+          actif: true,
+        }));
+      if (accountRows.length) await tx.insert(comptesComptables).values(accountRows);
+
+      const existingJournals = await tx.select({ code: journaux.code })
+        .from(journaux)
+        .where(eq(journaux.entrepriseId, eId));
+      const journalCodes = new Set(existingJournals.map((journal) => String(journal.code).toUpperCase()));
+      const journalRows = journauxBase
+        .filter((journal) => !journalCodes.has(journal.code))
+        .map((journal) => ({ entrepriseId: eId, ...journal, actif: true }));
+      if (journalRows.length) await tx.insert(journaux).values(journalRows);
+
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'comptes_comptables',
+        recordId: eId,
+        nouvelleValeur: { comptesCreés: accountRows.length, journauxCreés: journalRows.length },
+        description: 'Initialisation du plan comptable SYSCOHADA',
+        executor: tx,
+        required: true,
+      });
+      return {
+        alreadyInitialized: false,
+        count: existingComptes.length + accountRows.length,
+        comptesCreés: accountRows.length,
+        journauxCreés: journalRows.length,
+      };
+    });
+
+    if (result.alreadyInitialized) {
+      return res.status(400).json({
+        error: 'Le plan comptable contient déjà plus de 10 comptes.',
+        count: result.count,
+      });
     }
-    
+
     res.json({ 
       message: 'Plan comptable SYSCOHADA initialisé',
-      comptesCreés: insertedComptes.length,
+      comptesCreés: result.comptesCreés,
+      journauxCréés: result.journauxCreés,
       total: PLAN_SYSCOHADA.length
     });
   } catch (error) {
@@ -1095,17 +1114,27 @@ router.get('/rapports/journal-general', async (req, res) => {
 // Export CSV des comptes
 router.get('/export/comptes', async (req, res) => {
   try {
-    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const entrepriseId = req.entrepriseId;
     if (!entrepriseId || isNaN(entrepriseId)) {
       return res.status(400).json({ error: 'entrepriseId requis' });
     }
-    const allComptes = await db.query.comptes.findMany({
-      where: eq(comptes.entrepriseId, entrepriseId)
+    const allComptes = await db.query.comptesComptables.findMany({
+      where: eq(comptesComptables.entrepriseId, entrepriseId),
+      orderBy: (comptesComptables, { asc }) => [asc(comptesComptables.numero)]
     });
     
     const csv = [
-      'Numero;Nom;Categorie;Solde;Devise',
-      ...allComptes.map(c => `${c.numero};${c.nom};${c.categorie};${c.solde};${c.devise}`)
+      'Numero;Nom;Nature;Categorie;Compte parent;Solde debiteur;Solde crediteur;Actif',
+      ...allComptes.map(c => [
+        c.numero,
+        c.nom,
+        c.type,
+        c.categorie,
+        c.compteParent || '',
+        c.soldeDebiteur || '0',
+        c.soldeCrediteur || '0',
+        c.actif ? 'oui' : 'non',
+      ].join(';'))
     ].join('\n');
     
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -1133,7 +1162,7 @@ const CLASSES_SYSCOHADA = {
 
 router.get('/rapports/charte-comptes', async (req, res) => {
   try {
-    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const entrepriseId = req.entrepriseId;
     if (!entrepriseId || isNaN(entrepriseId)) {
       return res.status(400).json({ error: 'entrepriseId requis' });
     }
@@ -1194,6 +1223,8 @@ router.get('/rapports/charte-comptes', async (req, res) => {
         numero: c.numero,
         nom: c.nom,
         categorie: c.categorie || c.type || '',
+        type: c.type || '',
+        compteParent: c.compteParent || '',
         devise: c.devise || 'XOF',
         solde: soldeNet,
         soldeDebiteur: soldeDebit,
@@ -1223,20 +1254,36 @@ router.get('/rapports/charte-comptes', async (req, res) => {
       where: eq(entreprises.id, entrepriseId)
     });
 
+    const isCustomPlan = entreprise?.systemeComptable === 'PERSONNALISE';
     const parClasse = {};
-    for (const classe of Object.keys(CLASSES_SYSCOHADA)) {
-      parClasse[classe] = {
-        classe,
-        ...CLASSES_SYSCOHADA[classe],
+    if (isCustomPlan) {
+      parClasse.PERSONNALISE = {
+        classe: 'PERSONNALISE',
+        nom: 'Comptes de l’entreprise',
+        type: 'Plan personnalisé',
+        color: '#eef4f8',
         comptes: [],
         nombreComptes: 0,
         totalSoldeDebiteur: 0,
-        totalSoldeCrediteur: 0
+        totalSoldeCrediteur: 0,
       };
+    } else {
+      for (const classe of Object.keys(CLASSES_SYSCOHADA)) {
+        parClasse[classe] = {
+          classe,
+          ...CLASSES_SYSCOHADA[classe],
+          comptes: [],
+          nombreComptes: 0,
+          totalSoldeDebiteur: 0,
+          totalSoldeCrediteur: 0
+        };
+      }
     }
 
     for (const compte of allComptesUnified) {
-      const classe = compte.numero ? compte.numero.charAt(0) : null;
+      const classe = isCustomPlan
+        ? 'PERSONNALISE'
+        : compte.numero ? compte.numero.charAt(0) : null;
       if (classe && parClasse[classe]) {
         parClasse[classe].comptes.push(compte);
         parClasse[classe].nombreComptes++;
@@ -1252,10 +1299,10 @@ router.get('/rapports/charte-comptes', async (req, res) => {
         logo: entreprise?.logo
       },
       dateGeneration: new Date().toISOString(),
-      systemeComptable: 'SYSCOHADA',
+      systemeComptable: entreprise?.systemeComptable || 'SYSCOHADA',
       totalComptes: allComptesUnified.length,
       classes: Object.values(parClasse).filter(c => c.nombreComptes > 0),
-      planReference: PLAN_SYSCOHADA
+      planReference: isCustomPlan ? [] : PLAN_SYSCOHADA
     });
   } catch (error) {
     console.error('Erreur GET /rapports/charte-comptes:', error);
@@ -1265,7 +1312,7 @@ router.get('/rapports/charte-comptes', async (req, res) => {
 
 router.get('/export/charte-comptes', async (req, res) => {
   try {
-    const entrepriseId = req.entrepriseId || parseInt(req.query.entrepriseId);
+    const entrepriseId = req.entrepriseId;
     if (!entrepriseId || isNaN(entrepriseId)) {
       return res.status(400).json({ error: 'entrepriseId requis' });
     }
@@ -1491,28 +1538,153 @@ router.post('/plans', async (req, res) => {
 // CRUD COMPTES COMPTABLES
 // ==========================================
 
+router.get('/comptes-automatiques', async (req, res) => {
+  try {
+    const entrepriseId = Number(req.entrepriseId);
+    if (!entrepriseId) return res.status(400).json({ error: 'Entreprise non identifiée' });
+    const [[company], mappings] = await Promise.all([
+      db.select({ systemeComptable: entreprises.systemeComptable })
+        .from(entreprises).where(eq(entreprises.id, entrepriseId)).limit(1),
+      db.select().from(comptesAutomatiques)
+        .where(eq(comptesAutomatiques.entrepriseId, entrepriseId)),
+    ]);
+    res.json({
+      systemeComptable: company?.systemeComptable || 'SYSCOHADA',
+      roles: ACCOUNTING_ACCOUNT_ROLES,
+      mappings: Object.fromEntries(mappings.map((mapping) => [mapping.roleKey, mapping.compteComptableId])),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/comptes-automatiques', async (req, res) => {
+  try {
+    const entrepriseId = Number(req.entrepriseId);
+    const submittedMappings = req.body?.mappings;
+    if (!entrepriseId) return res.status(400).json({ error: 'Entreprise non identifiée' });
+    if (!submittedMappings || typeof submittedMappings !== 'object' || Array.isArray(submittedMappings)) {
+      return res.status(400).json({ error: 'Les correspondances de comptes sont invalides.' });
+    }
+
+    const requiredRoles = ACCOUNTING_ACCOUNT_ROLES.map((role) => role.key);
+    const submittedKeys = Object.keys(submittedMappings);
+    const missingRoles = requiredRoles.filter((key) => !Number.isInteger(Number(submittedMappings[key])) || Number(submittedMappings[key]) <= 0);
+    const unknownRoles = submittedKeys.filter((key) => !requiredRoles.includes(key));
+    if (missingRoles.length || unknownRoles.length) {
+      return res.status(400).json({
+        error: missingRoles.length
+          ? 'Associez un compte à chaque fonction comptable avant d’activer le plan personnalisé.'
+          : 'Une fonction comptable inconnue a été transmise.',
+        missingRoles,
+      });
+    }
+
+    const saved = await db.transaction(async (tx) => {
+      const oldMappings = await tx.select().from(comptesAutomatiques)
+        .where(eq(comptesAutomatiques.entrepriseId, entrepriseId));
+      const accountIds = [...new Set(requiredRoles.map((key) => Number(submittedMappings[key])))];
+      const validAccounts = await tx.select({
+        id: comptesComptables.id,
+      }).from(comptesComptables).where(and(
+        eq(comptesComptables.entrepriseId, entrepriseId),
+        eq(comptesComptables.actif, true),
+      ));
+      const validAccountIds = new Set(validAccounts.map((account) => account.id));
+      const invalidIds = accountIds.filter((id) => !validAccountIds.has(id));
+      if (invalidIds.length) {
+        throw Object.assign(new Error('Chaque compte associé doit être actif et appartenir à cette entreprise.'), { status: 400 });
+      }
+
+      await tx.delete(comptesAutomatiques).where(eq(comptesAutomatiques.entrepriseId, entrepriseId));
+      const rows = ACCOUNTING_ACCOUNT_ROLES.map((role) => ({
+        entrepriseId,
+        roleKey: role.key,
+        compteComptableId: Number(submittedMappings[role.key]),
+        updatedAt: new Date(),
+      }));
+      await tx.insert(comptesAutomatiques).values(rows);
+      const [company] = await tx.update(entreprises).set({
+        systemeComptable: 'PERSONNALISE',
+        updatedAt: new Date(),
+      }).where(eq(entreprises.id, entrepriseId)).returning({
+        systemeComptable: entreprises.systemeComptable,
+      });
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'comptes_automatiques',
+        recordId: entrepriseId,
+        ancienneValeur: oldMappings,
+        nouvelleValeur: rows,
+        description: 'Correspondances du plan comptable personnalisé enregistrées',
+        executor: tx,
+        required: true,
+      });
+      return {
+        systemeComptable: company.systemeComptable,
+        mappings: Object.fromEntries(rows.map((row) => [row.roleKey, row.compteComptableId])),
+      };
+    });
+    res.json({ ...saved, roles: ACCOUNTING_ACCOUNT_ROLES });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
 router.post('/comptes', async (req, res) => {
   try {
     const entrepriseId = req.entrepriseId;
-    const { numero, nom, categorie, sousCategorie, devise } = req.body;
+    const { numero: rawNumero, nom: rawNom, type: rawType, categorie: rawCategorie, compteParent, sousCategorie } = req.body;
     if (!entrepriseId) return res.status(400).json({ error: 'Entreprise non identifiée' });
 
+    const numero = String(rawNumero || '').trim();
+    const nom = String(rawNom || '').trim();
+    const legacyTypeMap = {
+      Actif: 'actif',
+      Passif: 'passif',
+      'Capitaux propres': 'capitaux',
+      Charges: 'charge',
+      Produits: 'produit',
+    };
+    const type = rawType || legacyTypeMap[rawCategorie] || '';
+    const typeToCategory = {
+      actif: 'bilan',
+      passif: 'bilan',
+      capitaux: 'bilan',
+      charge: 'résultat',
+      produit: 'résultat',
+    };
+    if (!numero || numero.length > 50 || !nom || nom.length > 255 || !typeToCategory[type]) {
+      return res.status(400).json({ error: 'Le numéro, le nom et la nature du compte sont obligatoires.' });
+    }
+
     const compte = await db.transaction(async (tx) => {
-      const [created] = await tx.insert(comptes).values({
+      const lockKey = `comptaorion:account-number:${Number(entrepriseId)}:${numero}`;
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+      const [duplicate] = await tx.select({ id: comptesComptables.id })
+        .from(comptesComptables)
+        .where(and(
+          eq(comptesComptables.entrepriseId, Number(entrepriseId)),
+          eq(comptesComptables.numero, numero),
+        ))
+        .limit(1);
+      if (duplicate) throw Object.assign(new Error('Ce numéro de compte existe déjà dans votre plan.'), { status: 409 });
+
+      const [created] = await tx.insert(comptesComptables).values({
         entrepriseId: Number(entrepriseId),
         numero,
         nom,
-        categorie,
-        sousCategorie,
-        devise: devise || 'XOF',
-        solde: 0,
+        type,
+        categorie: typeToCategory[type],
+        compteParent: compteParent || sousCategorie || null,
         actif: true
       }).returning();
 
       await logAudit({
         ...extractAuditInfo(req),
         action: 'CREATE',
-        table: 'comptes',
+        table: 'comptes_comptables',
         recordId: created.id,
         nouvelleValeur: created,
         description: `Compte créé: ${numero} - ${nom}`,
@@ -1522,15 +1694,104 @@ router.post('/comptes', async (req, res) => {
       return created;
     });
 
-    res.json(compte);
+    res.status(201).json(compte);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+router.put('/comptes/:id', async (req, res) => {
+  try {
+    const entrepriseId = Number(req.entrepriseId);
+    const accountId = Number(req.params.id);
+    if (!entrepriseId || !Number.isInteger(accountId)) {
+      return res.status(400).json({ error: 'Compte ou entreprise invalide.' });
+    }
+    const { numero: rawNumero, nom: rawNom, type: rawType, categorie: rawCategorie, compteParent, sousCategorie } = req.body;
+    const numero = String(rawNumero || '').trim();
+    const nom = String(rawNom || '').trim();
+    const legacyTypeMap = {
+      Actif: 'actif',
+      Passif: 'passif',
+      'Capitaux propres': 'capitaux',
+      Charges: 'charge',
+      Produits: 'produit',
+    };
+    const type = rawType || legacyTypeMap[rawCategorie] || '';
+    const typeToCategory = {
+      actif: 'bilan',
+      passif: 'bilan',
+      capitaux: 'bilan',
+      charge: 'résultat',
+      produit: 'résultat',
+    };
+    if (!numero || numero.length > 50 || !nom || nom.length > 255 || !typeToCategory[type]) {
+      return res.status(400).json({ error: 'Le numéro, le nom et la nature du compte sont obligatoires.' });
+    }
+
+    const updatedAccount = await db.transaction(async (tx) => {
+      const [current] = await tx.select().from(comptesComptables).where(and(
+        eq(comptesComptables.id, accountId),
+        eq(comptesComptables.entrepriseId, entrepriseId),
+      )).limit(1);
+      if (!current) throw Object.assign(new Error('Compte comptable introuvable.'), { status: 404 });
+
+      const [duplicate] = await tx.select({ id: comptesComptables.id }).from(comptesComptables).where(and(
+        eq(comptesComptables.entrepriseId, entrepriseId),
+        eq(comptesComptables.numero, numero),
+      )).limit(1);
+      if (duplicate && duplicate.id !== accountId) {
+        throw Object.assign(new Error('Ce numéro de compte existe déjà dans votre plan.'), { status: 409 });
+      }
+
+      const [usedLine] = await tx.select({ id: lignesEcritures.id }).from(lignesEcritures).where(and(
+        eq(lignesEcritures.entrepriseId, entrepriseId),
+        eq(lignesEcritures.compteComptableId, accountId),
+      )).limit(1);
+      if (usedLine && (
+        current.numero !== numero
+        || current.type !== type
+        || current.categorie !== typeToCategory[type]
+        || (current.compteParent || '') !== (compteParent || sousCategorie || '')
+      )) {
+        throw Object.assign(
+          new Error('Ce compte est déjà utilisé dans des écritures. Seul son nom peut être modifié.'),
+          { status: 409 },
+        );
+      }
+
+      const [updated] = await tx.update(comptesComptables).set({
+        numero,
+        nom,
+        type,
+        categorie: typeToCategory[type],
+        compteParent: compteParent || sousCategorie || null,
+      }).where(and(
+        eq(comptesComptables.id, accountId),
+        eq(comptesComptables.entrepriseId, entrepriseId),
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'comptes_comptables',
+        recordId: accountId,
+        ancienneValeur: current,
+        nouvelleValeur: updated,
+        description: `Compte comptable modifié: ${updated.numero} - ${updated.nom}`,
+        executor: tx,
+        required: true,
+      });
+      return updated;
+    });
+    res.json(updatedAccount);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 router.get('/comptes', async (req, res) => {
   try {
-    const entrepriseId = req.entrepriseId || req.query.entrepriseId;
+    const entrepriseId = req.entrepriseId;
     if (!entrepriseId) {
       return res.status(400).json({ error: 'entrepriseId requis' });
     }

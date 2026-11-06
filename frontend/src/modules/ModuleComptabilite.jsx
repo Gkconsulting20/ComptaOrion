@@ -23,6 +23,12 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
   const [loadingCharte, setLoadingCharte] = useState(false);
   const [expandedClasses, setExpandedClasses] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [mappingData, setMappingData] = useState(null);
+  const [mappingValues, setMappingValues] = useState({});
+  const [mappingLoading, setMappingLoading] = useState(false);
+  const [mappingSaving, setMappingSaving] = useState(false);
+  const [mappingError, setMappingError] = useState('');
+  const [mappingAttempted, setMappingAttempted] = useState(false);
 
   const loadCharteComptes = async () => {
     setLoadingCharte(true);
@@ -44,6 +50,46 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
       loadCharteComptes();
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== 'correspondances' || mappingData || mappingAttempted) return;
+    setMappingAttempted(true);
+    setMappingLoading(true);
+    api.get('/comptabilite/comptes-automatiques')
+      .then((result) => {
+        const roles = result.roles || [];
+        const mappings = { ...(result.mappings || {}) };
+        for (const role of roles) {
+          if (!mappings[role.key]) {
+            const defaultAccount = data.comptes.find((account) => account.numero === role.defaultNumber);
+            if (defaultAccount) mappings[role.key] = defaultAccount.id;
+          }
+        }
+        setMappingData(result);
+        setMappingValues(mappings);
+        setMappingError('');
+      })
+      .catch((error) => setMappingError(error.message || 'Impossible de charger les correspondances.'))
+      .finally(() => setMappingLoading(false));
+  }, [viewMode, mappingData, mappingAttempted, data.comptes, api]);
+
+  const saveCustomMappings = async () => {
+    setMappingSaving(true);
+    setMappingError('');
+    try {
+      const mappings = Object.fromEntries(
+        (mappingData?.roles || []).map((role) => [role.key, Number(mappingValues[role.key])]),
+      );
+      await api.put('/comptabilite/comptes-automatiques', { mappings });
+      setMappingData((current) => ({ ...current, systemeComptable: 'PERSONNALISE', mappings }));
+      alert('Plan personnalisé enregistré et activé pour cette entreprise.');
+      loadAllData();
+    } catch (error) {
+      setMappingError(error.message || 'Impossible d’enregistrer les correspondances.');
+    } finally {
+      setMappingSaving(false);
+    }
+  };
 
   const toggleClasse = (classe) => {
     setExpandedClasses(prev => ({ ...prev, [classe]: !prev[classe] }));
@@ -91,6 +137,11 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
               background: viewMode === 'charte' ? '#1976d2' : '#fff',
               color: viewMode === 'charte' ? '#fff' : '#333'
             }}>📊 Charte des Comptes</button>
+            <button onClick={() => setViewMode('correspondances')} style={{
+              padding: '8px 16px', border: 'none', cursor: 'pointer',
+              background: viewMode === 'correspondances' ? '#1976d2' : '#fff',
+              color: viewMode === 'correspondances' ? '#fff' : '#333'
+            }}>Comptes automatiques</button>
           </div>
         </div>
       </div>
@@ -141,9 +192,9 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
             columns={[
               { key: 'numero', label: 'N° Compte' },
               { key: 'nom', label: 'Nom du Compte' },
-              { key: 'categorie', label: 'Catégorie' },
-              { key: 'sousCategorie', label: 'Classe' },
-              { key: 'solde', label: 'Solde', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` }
+              { key: 'type', label: 'Nature' },
+              { key: 'categorie', label: 'État' },
+              { key: 'compteParent', label: 'Compte parent' }
             ]}
             data={filteredComptes}
             onEdit={(item) => openModal('compte', item)}
@@ -254,6 +305,67 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
             </div>
           )}
         </div>
+      )}
+
+      {viewMode === 'correspondances' && (
+        <section style={{ padding: '16px', border: '1px solid #dbe3ea', borderRadius: '8px', background: '#fff' }}>
+          <h3 style={{ marginTop: 0 }}>Plan comptable personnalisé</h3>
+          <p style={{ color: '#52606d', marginTop: 0 }}>
+            SYSCOHADA reste le choix par défaut. Associez les comptes de votre plan aux fonctions utilisées pour les écritures automatiques; l’enregistrement active le plan personnalisé pour cette entreprise seulement.
+          </p>
+          {mappingError && (
+            <div role="alert" style={{ padding: '10px 12px', marginBottom: '12px', borderRadius: '6px', background: '#fff0f0', color: '#9d2525', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+              <span>{mappingError}</span>
+              <Button variant="secondary" onClick={() => {
+                setMappingError('');
+                setMappingAttempted(false);
+              }}>Réessayer</Button>
+            </div>
+          )}
+          {mappingLoading ? (
+            <p>Chargement des correspondances…</p>
+          ) : mappingData ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))', gap: '12px' }}>
+                {mappingData.roles.map((role) => (
+                  <label key={role.key} style={{ display: 'grid', gap: '5px', fontSize: '13px', fontWeight: 600 }}>
+                    {role.label}
+                    <select
+                      value={mappingValues[role.key] || ''}
+                      onChange={(event) => setMappingValues((current) => ({
+                        ...current,
+                        [role.key]: event.target.value,
+                      }))}
+                      style={{ width: '100%', minWidth: 0, padding: '9px', border: '1px solid #ccd5df', borderRadius: '6px', background: '#fff' }}
+                    >
+                      <option value="">Sélectionner un compte</option>
+                      {data.comptes.filter((account) => account.actif).map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.numero} — {account.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+              {!data.comptes.length && (
+                <p style={{ color: '#9b4e00' }}>Créez d’abord les comptes de votre plan comptable.</p>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', gap: '12px', flexWrap: 'wrap' }}>
+                <span style={{ color: '#64748b', fontSize: '13px' }}>
+                  Mode actuel : {mappingData.systemeComptable === 'PERSONNALISE' ? 'Plan personnalisé' : 'SYSCOHADA'}
+                </span>
+                <Button
+                  variant="primary"
+                  onClick={saveCustomMappings}
+                  disabled={mappingSaving || !mappingData.roles.every((role) => Number(mappingValues[role.key]) > 0)}
+                >
+                  {mappingSaving ? 'Enregistrement…' : 'Enregistrer et activer'}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </section>
       )}
     </div>
   );
@@ -686,7 +798,7 @@ export function ModuleComptabilite() {
     setModal({ open: true, type, item });
     if (type === 'compte') {
       setForm(item || {
-        numero: '', nom: '', categorie: 'Actif', sousCategorie: '', devise: 'XOF'
+        numero: '', nom: '', type: 'actif', compteParent: ''
       });
     } else if (type === 'journal') {
       setForm(item || { code: '', nom: '', type: 'od' });
@@ -735,7 +847,7 @@ export function ModuleComptabilite() {
         if (item) {
           await api.put(`/comptabilite/comptes/${item.id}`, form);
         } else {
-          await api.post('/comptabilite/comptes', { ...form, userId: 1, ipAddress: '127.0.0.1' });
+          await api.post('/comptabilite/comptes', form);
         }
       } else if (type === 'journal') {
         if (item) {
@@ -1711,24 +1823,17 @@ export function ModuleComptabilite() {
                   placeholder="Ex: 601000" />
                 <FormField label="Nom du Compte" name="nom" value={form.nom}
                   onChange={(e) => setForm({...form, nom: e.target.value})} required />
-                <FormField label="Catégorie" name="categorie" type="select" value={form.categorie}
-                  onChange={(e) => setForm({...form, categorie: e.target.value})}
+                <FormField label="Nature du compte" name="type" type="select" value={form.type}
+                  onChange={(e) => setForm({...form, type: e.target.value})}
                   options={[
-                    { value: 'Actif', label: 'Actif' },
-                    { value: 'Passif', label: 'Passif' },
-                    { value: 'Capitaux propres', label: 'Capitaux Propres' },
-                    { value: 'Charges', label: 'Charges' },
-                    { value: 'Produits', label: 'Produits' }
+                    { value: 'actif', label: 'Actif' },
+                    { value: 'passif', label: 'Passif' },
+                    { value: 'capitaux', label: 'Capitaux propres' },
+                    { value: 'charge', label: 'Charge' },
+                    { value: 'produit', label: 'Produit' }
                   ]} />
-                <FormField label="Sous-Catégorie" name="sousCategorie" value={form.sousCategorie}
-                  onChange={(e) => setForm({...form, sousCategorie: e.target.value})} />
-                <FormField label="Devise" name="devise" type="select" value={form.devise}
-                  onChange={(e) => setForm({...form, devise: e.target.value})}
-                  options={[
-                    { value: 'XOF', label: 'XOF' },
-                    { value: 'EUR', label: 'EUR (Euro)' },
-                    { value: 'USD', label: 'USD (Dollar)' }
-                  ]} />
+                <FormField label="Compte parent (facultatif)" name="compteParent" value={form.compteParent}
+                  onChange={(e) => setForm({...form, compteParent: e.target.value})} />
               </div>
               <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>

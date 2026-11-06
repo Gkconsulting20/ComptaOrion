@@ -652,6 +652,26 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const f=invoice.data;
     assert.equal(Number(f.totalHT),1317.34);
     assert.equal(Number(f.totalTTC),1554.46);
+    const createdChartAccount = await api('/comptabilite/comptes', 'POST', {
+      numero: 'TEST-PLAN-001',
+      nom: 'Compte personnalisé de recette',
+      type: 'actif',
+    }, 201);
+    assert.equal(createdChartAccount.numero, 'TEST-PLAN-001',
+      'La création doit écrire dans le plan réellement utilisé par la comptabilité');
+    await api('/comptabilite/comptes', 'POST', {
+      numero: 'TEST-PLAN-001',
+      nom: 'Doublon interdit',
+      type: 'actif',
+    }, 409);
+    const renamedChartAccount = await api(`/comptabilite/comptes/${createdChartAccount.id}`, 'PUT', {
+      numero: 'TEST-PLAN-001',
+      nom: 'Compte personnalisé renommé',
+      type: 'actif',
+      compteParent: '',
+    });
+    assert.equal(renamedChartAccount.nom, 'Compte personnalisé renommé',
+      'La modification doit fonctionner sur le même plan comptable');
     const accounts=await api('/comptabilite/comptes');
     const clientCollectiveAccount=accounts.find(account=>account.numero==='4111');
     assert.ok(clientCollectiveAccount,'Le compte collectif client 4111 doit être configuré');
@@ -839,6 +859,49 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.deepEqual(forged.map(product=>product.id),[secondProduct.data.id],
       'Un paramètre entreprise falsifié ne doit retourner que les produits du tenant connecté');
     cookieJar = firstCookieJar;
+    const automaticAccounts = await api('/comptabilite/comptes-automatiques');
+    assert.equal(automaticAccounts.systemeComptable, 'SYSCOHADA',
+      'SYSCOHADA reste le système par défaut avant activation du plan personnalisé');
+    const companyAccounts = await api('/comptabilite/comptes');
+    const customAccount = await api('/comptabilite/comptes', 'POST', {
+      numero: 'CUSTOM-4111',
+      nom: 'Créances clients - plan personnalisé',
+      type: 'actif',
+    }, 201);
+    const roleMappings = {};
+    for (const role of automaticAccounts.roles) {
+      const standardAccount = companyAccounts.find((account) => account.numero === role.defaultNumber && account.actif);
+      if (!standardAccount) {
+        const created = await api('/comptabilite/comptes', 'POST', {
+          numero: `MAP-${role.key.toUpperCase()}`,
+          nom: `Compte de test - ${role.label}`,
+          type: 'actif',
+        }, 201);
+        roleMappings[role.key] = created.id;
+      } else {
+        roleMappings[role.key] = standardAccount.id;
+      }
+    }
+    roleMappings.customer = customAccount.id;
+    const incompleteMappings = { ...roleMappings };
+    delete incompleteMappings[automaticAccounts.roles[0].key];
+    await api('/comptabilite/comptes-automatiques', 'PUT', { mappings: incompleteMappings }, 400);
+    await api('/comptabilite/comptes-automatiques', 'PUT', {
+      mappings: { ...roleMappings, customer: 99999999 },
+    }, 400);
+    const activatedCustomChart = await api('/comptabilite/comptes-automatiques', 'PUT', {
+      mappings: roleMappings,
+    });
+    assert.equal(activatedCustomChart.systemeComptable, 'PERSONNALISE');
+    const customServiceInvoice = await api('/factures', 'POST', {
+      clientId,
+      dateFacture: `${testYear}-01-17`,
+      items: [{ description: 'Prestation avec plan personnalisé', quantite: 1, prixUnitaire: 500 }],
+    }, 201);
+    const customCustomerMovements = await api(`/comptabilite/compte/${customAccount.id}/ecritures`);
+    assert.ok(customCustomerMovements.some((movement) => movement.reference === customServiceInvoice.data.numeroFacture),
+      'Une écriture automatique doit débiter le compte client personnalisé associé');
+
     const accountantInvite = await api('/accountant-invitations/whatsapp-link', 'POST', {
       email: 'cabinet@example.invalid',
     }, 201);

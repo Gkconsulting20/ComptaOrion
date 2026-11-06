@@ -1,8 +1,18 @@
 import { db } from '../db.js';
-import { journaux, ecritures, lignesEcritures, comptesComptables, comptesBancaires, parametresComptables } from '../schema.js';
+import {
+  journaux,
+  ecritures,
+  lignesEcritures,
+  comptesComptables,
+  comptesBancaires,
+  parametresComptables,
+  comptesAutomatiques,
+  entreprises,
+} from '../schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { formatJournalEntryNumber } from './sequentialNumbering.js';
 import { buildCashSettlementEntryLines } from './cashDiscountAccounting.js';
+import { ACCOUNTING_ACCOUNT_ROLES } from './accountingAccountMappings.js';
 
 const JOURNAL_CODES = {
   ACHATS: 'AC',
@@ -38,6 +48,13 @@ const COMPTES_SYSCOHADA = {
   ECARTS_PRIX: '603'
 };
 
+const DEFAULT_ROLE_BY_ACCOUNT_NUMBER = new Map();
+for (const role of ACCOUNTING_ACCOUNT_ROLES) {
+  if (!DEFAULT_ROLE_BY_ACCOUNT_NUMBER.has(role.defaultNumber)) {
+    DEFAULT_ROLE_BY_ACCOUNT_NUMBER.set(role.defaultNumber, role.key);
+  }
+}
+
 export async function getOrCreateJournal(entrepriseId, code, nom, type, executor = db) {
   let journal = await executor.select().from(journaux)
     .where(and(eq(journaux.entrepriseId, entrepriseId), eq(journaux.code, code)))
@@ -56,7 +73,41 @@ export async function getOrCreateJournal(entrepriseId, code, nom, type, executor
   return journal[0];
 }
 
-export async function getCompteByNumero(entrepriseId, numero, executor = db) {
+async function getMappedAccount(entrepriseId, roleKey, executor) {
+  if (!roleKey) return null;
+  const [company] = await executor.select({
+    systemeComptable: entreprises.systemeComptable,
+  }).from(entreprises).where(eq(entreprises.id, Number(entrepriseId))).limit(1);
+  if (company?.systemeComptable !== 'PERSONNALISE') return null;
+
+  const [mapping] = await executor.select({
+    compteComptableId: comptesAutomatiques.compteComptableId,
+  }).from(comptesAutomatiques).where(and(
+    eq(comptesAutomatiques.entrepriseId, Number(entrepriseId)),
+    eq(comptesAutomatiques.roleKey, roleKey),
+  )).limit(1);
+  if (!mapping) {
+    throw new Error(`Le compte automatique « ${roleKey} » n’est pas associé au plan personnalisé.`);
+  }
+
+  const [account] = await executor.select().from(comptesComptables).where(and(
+    eq(comptesComptables.id, mapping.compteComptableId),
+    eq(comptesComptables.entrepriseId, Number(entrepriseId)),
+    eq(comptesComptables.actif, true),
+  )).limit(1);
+  if (!account) {
+    throw new Error(`Le compte associé à « ${roleKey} » est absent ou inactif.`);
+  }
+  return account;
+}
+
+export async function getCompteByNumero(entrepriseId, numero, executor = db, roleKey) {
+  const mapped = await getMappedAccount(
+    entrepriseId,
+    roleKey || DEFAULT_ROLE_BY_ACCOUNT_NUMBER.get(String(numero)),
+    executor,
+  );
+  if (mapped) return mapped;
   const comptes = await executor.select().from(comptesComptables)
     .where(and(
       eq(comptesComptables.entrepriseId, entrepriseId),
@@ -66,7 +117,13 @@ export async function getCompteByNumero(entrepriseId, numero, executor = db) {
   return comptes[0] || null;
 }
 
-async function getCompteByNumeroExact(entrepriseId, numero, executor = db) {
+async function getCompteByNumeroExact(entrepriseId, numero, executor = db, roleKey) {
+  const mapped = await getMappedAccount(
+    entrepriseId,
+    roleKey || DEFAULT_ROLE_BY_ACCOUNT_NUMBER.get(String(numero)),
+    executor,
+  );
+  if (mapped) return mapped;
   const [compte] = await executor.select().from(comptesComptables)
     .where(and(
       eq(comptesComptables.entrepriseId, entrepriseId),
@@ -334,7 +391,12 @@ export async function createEcritureFactureAchat(params) {
   }
   const compte408 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS_FACTURES_NON_PARVENUES, executor);
   const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor);
-  const compteEcarts = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ECARTS_PRIX, executor);
+  const compteEcarts = await getCompteByNumero(
+    entrepriseId,
+    COMPTES_SYSCOHADA.ECARTS_PRIX,
+    executor,
+    'price_variances',
+  );
   const compteAchatsServices = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_SERVICES, executor);
   const compteStock = Number(montantValorisationStock) !== 0 || Number(montantStockDirect) > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES, executor)
@@ -932,16 +994,17 @@ export async function createEcritureChargeNoteFrais({
     eq(comptesComptables.actif, true),
   )).limit(1);
   // Les notes de frais d’un salarié sont une dette envers le personnel; les factures fournisseurs utilisent le compte collectif 401.
-  const [employeeAdvanceAccount] = await executor.select().from(comptesComptables).where(and(
-    eq(comptesComptables.entrepriseId, tenantId),
-    eq(comptesComptables.numero, COMPTES_SYSCOHADA.PERSONNEL_AVANCES),
-    eq(comptesComptables.actif, true),
-  )).limit(1);
+  const employeeAdvanceAccount = await getCompteByNumero(
+    tenantId,
+    COMPTES_SYSCOHADA.PERSONNEL_AVANCES,
+    executor,
+    'employee_advances',
+  );
 
   if (!chargeAccount || !String(chargeAccount.numero).startsWith('6')) {
     throw Object.assign(new Error('La catégorie doit être liée à un compte de charge actif de classe 6.'), { status: 400 });
   }
-  if (!employeeAdvanceAccount) {
+  if (!employeeAdvanceAccount?.actif) {
     throw Object.assign(new Error('Le compte d’avances au personnel (421) est requis pour comptabiliser cette dépense.'), { status: 400 });
   }
 

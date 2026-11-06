@@ -463,6 +463,11 @@ function EntrepriseForm({ initialData, devises, systemes, pays, onSave, onCancel
               <option key={s.code} value={s.code}>{s.code} - {s.nom}</option>
             ))}
           </select>
+          {formData.systemeComptable === 'PERSONNALISE' && (
+            <small style={{ display: 'block', marginTop: '6px', color: '#52606d' }}>
+              Le plan personnalisé doit d’abord être associé aux comptes automatiques dans Comptabilité → Plan comptable.
+            </small>
+          )}
         </div>
       </div>
 

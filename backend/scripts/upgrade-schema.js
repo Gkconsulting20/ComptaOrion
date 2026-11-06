@@ -19,6 +19,7 @@ const migrationScopes = new Map([
     'clients', 'fournisseurs', 'factures', 'factures_achat',
     'paiements', 'paiements_fournisseurs', 'notes_credit', 'notes_credit_items',
   ])],
+  ['custom-accounting', new Set(['comptes_automatiques'])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
@@ -47,6 +48,9 @@ try {
   if (scope === 'auth-audit') {
     actions.push(...buildAuthAuditNullabilityStatements(columns));
   }
+  if (scope === 'custom-accounting' && types.has('systeme_comptable')) {
+    actions.push('ALTER TYPE "systeme_comptable" ADD VALUE IF NOT EXISTS \'PERSONNALISE\'');
+  }
   for (const statement of source.split(/;\s*(?:--> statement-breakpoint)?\s*/)) {
     const type = statement.match(/^CREATE TYPE "public"\."([^"]+)"/);
     if (!scopedTables && type && !types.has(type[1])) actions.push(statement);
@@ -56,7 +60,8 @@ try {
     if (scopedTables && !scopedTables.has(name)) continue;
     if (!present.has(name)) {
       if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations' &&
-          scope !== 'credit-notes-cheques' && scope !== 'commercial-adjustments') {
+          scope !== 'credit-notes-cheques' && scope !== 'commercial-adjustments' &&
+          scope !== 'custom-accounting') {
         throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
       }
       actions.push(statement);
@@ -170,6 +175,8 @@ try {
     'ecriture_sequences_scope_unique',
     'journaux_entreprise_code_unique',
     'accountant_invitations_one_live_per_company',
+    'comptes_comptables_entreprise_numero_unique',
+    'comptes_automatiques_entreprise_role_unique',
   ]);
   const indexesForScope = scopedTables
     ? new Set(scope === 'expense-tracking'
@@ -180,6 +187,8 @@ try {
           ? ['notes_credit_sequence_unique', 'notes_credit_number_unique']
           : scope === 'commercial-adjustments'
             ? ['notes_credit_sequence_unique', 'notes_credit_number_unique']
+          : scope === 'custom-accounting'
+            ? ['comptes_comptables_entreprise_numero_unique', 'comptes_automatiques_entreprise_role_unique']
         : [])
     : permittedIndexes;
   const existingIndexes = new Set((await client.query(
@@ -188,6 +197,22 @@ try {
   for (const statement of source.split(/;\s*(?:--> statement-breakpoint)?\s*/)) {
     const index = statement.match(/^CREATE UNIQUE INDEX "([^"]+)"/);
     if (!index || !indexesForScope.has(index[1]) || existingIndexes.has(index[1])) continue;
+    if (index[1] === 'comptes_comptables_entreprise_numero_unique' && present.has('comptes_comptables')) {
+      const { rows: [duplicates] } = await client.query(`
+        SELECT COUNT(*)::int AS count FROM (
+          SELECT entreprise_id, numero
+          FROM comptes_comptables
+          GROUP BY entreprise_id, numero
+          HAVING COUNT(*) > 1
+        ) duplicate_accounts
+      `);
+      if (duplicates.count > 0) {
+        throw new Error(
+          `Migration annulée : ${duplicates.count} numéro(s) de compte en doublon dans une entreprise. ` +
+          'Aucun compte ne sera supprimé; corrigez les doublons avant de relancer.'
+        );
+      }
+    }
     if (index[1] === 'ecritures_entreprise_numero_unique') {
       if (present.has('ecritures')) {
         const { rows: [duplicates] } = await client.query(`
@@ -225,6 +250,39 @@ try {
     }
     console.log(`INDEX ${index[1]} (${apply ? 'application' : 'simulation'})`);
     if (apply) await client.query(statement);
+  }
+  if (scope === 'custom-accounting' && apply && present.has('comptes') && present.has('comptes_comptables')) {
+    // Preserve account entries created by the legacy account screen, without replacing chart accounts.
+    await client.query(`
+      INSERT INTO comptes_comptables
+        (entreprise_id, numero, nom, type, categorie, compte_parent, actif)
+      SELECT
+        legacy.entreprise_id,
+        legacy.numero,
+        legacy.nom,
+        CASE LOWER(COALESCE(legacy.categorie, ''))
+          WHEN 'passif' THEN 'passif'
+          WHEN 'capitaux propres' THEN 'capitaux'
+          WHEN 'charges' THEN 'charge'
+          WHEN 'produits' THEN 'produit'
+          ELSE 'actif'
+        END,
+        CASE WHEN LOWER(COALESCE(legacy.categorie, '')) IN ('charges','produits')
+          THEN 'résultat' ELSE 'bilan' END,
+        legacy.sous_categorie,
+        COALESCE(legacy.actif, true)
+      FROM comptes legacy
+      WHERE NOT EXISTS (
+        SELECT 1 FROM comptes_comptables current
+        WHERE current.entreprise_id = legacy.entreprise_id
+          AND current.numero = legacy.numero
+      )
+      AND legacy.id = (
+        SELECT MIN(first_legacy.id) FROM comptes first_legacy
+        WHERE first_legacy.entreprise_id = legacy.entreprise_id
+          AND first_legacy.numero = legacy.numero
+      )
+    `);
   }
   if (!scopedTables) {
     if (present.has('ecritures')) {

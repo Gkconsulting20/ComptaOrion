@@ -1,8 +1,9 @@
 import express from 'express';
 import { db } from '../db.js';
-import { entreprises } from '../schema.js';
+import { entreprises, comptesAutomatiques } from '../schema.js';
 import { eq } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { ACCOUNTING_ACCOUNT_ROLES } from '../services/accountingAccountMappings.js';
 
 const router = express.Router();
 
@@ -75,6 +76,16 @@ const SYSTEMES_COMPTABLES = [
       'Plan comptable français',
       'Adapté au droit français',
       'Utilisé en France et DOM-TOM'
+    ]
+  },
+  {
+    code: 'PERSONNALISE',
+    nom: 'Plan comptable personnalisé',
+    description: 'Plan propre à l’entreprise, avec SYSCOHADA conservé comme choix par défaut',
+    pays: ['Tous pays'],
+    caracteristiques: [
+      'Comptes et numéros créés par l’entreprise',
+      'Correspondances obligatoires pour les écritures automatiques',
     ]
   }
 ];
@@ -182,11 +193,28 @@ router.put('/entreprise', async (req, res) => {
     } = req.body;
 
     // Validation des données
-    if (systemeComptable && !['SYSCOHADA', 'IFRS', 'PCG'].includes(systemeComptable)) {
+    if (systemeComptable && !['SYSCOHADA', 'IFRS', 'PCG', 'PERSONNALISE'].includes(systemeComptable)) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Système comptable invalide. Valeurs acceptées : SYSCOHADA, IFRS, PCG' 
+        message: 'Système comptable invalide. Valeurs acceptées : SYSCOHADA, IFRS, PCG, PERSONNALISE'
       });
+    }
+
+    if (systemeComptable === 'PERSONNALISE') {
+      const mappings = await db.select({ roleKey: comptesAutomatiques.roleKey })
+        .from(comptesAutomatiques)
+        .where(eq(comptesAutomatiques.entrepriseId, Number(req.entrepriseId)));
+      const configuredRoles = new Set(mappings.map((mapping) => mapping.roleKey));
+      const missingRoles = ACCOUNTING_ACCOUNT_ROLES
+        .filter((role) => !configuredRoles.has(role.key))
+        .map((role) => role.label);
+      if (missingRoles.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'Associez d’abord les comptes automatiques de votre plan personnalisé.',
+          missingRoles,
+        });
+      }
     }
 
     if (tauxTva !== undefined) {

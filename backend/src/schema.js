@@ -13,7 +13,7 @@ export const invoiceStatusEnum = pgEnum('invoice_status', ['brouillon', 'envoyee
 export const expenseStatusEnum = pgEnum('expense_status', ['brouillon', 'soumise', 'approuvee', 'rejetee', 'remboursee']);
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['entree', 'sortie', 'transfert', 'ajustement']);
 export const journalTypeEnum = pgEnum('journal_type', ['achats', 'ventes', 'banque', 'caisse', 'od']);
-export const systemeComptableEnum = pgEnum('systeme_comptable', ['SYSCOHADA', 'IFRS', 'PCG']);
+export const systemeComptableEnum = pgEnum('systeme_comptable', ['SYSCOHADA', 'IFRS', 'PCG', 'PERSONNALISE']);
 export const emailStatusEnum = pgEnum('email_status', ['envoye', 'echec', 'en_attente']);
 export const receptionStatusEnum = pgEnum('reception_status', ['brouillon', 'validee', 'facturee', 'annulee']);
 
@@ -786,7 +786,22 @@ export const comptesComptables = pgTable('comptes_comptables', {
   soldeCrediteur: decimal('solde_crediteur', { precision: 15, scale: 2 }).default('0'),
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  entrepriseNumeroUnique: uniqueIndex('comptes_comptables_entreprise_numero_unique')
+    .on(table.entrepriseId, table.numero),
+}));
+
+export const comptesAutomatiques = pgTable('comptes_automatiques', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  roleKey: varchar('role_key', { length: 80 }).notNull(),
+  compteComptableId: integer('compte_comptable_id').references(() => comptesComptables.id).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  entrepriseRoleUnique: uniqueIndex('comptes_automatiques_entreprise_role_unique')
+    .on(table.entrepriseId, table.roleKey),
+}));
 
 // ==========================================
 // MODULE 16: ORION EXPENSE - DEPENSES/NOTES DE FRAIS
