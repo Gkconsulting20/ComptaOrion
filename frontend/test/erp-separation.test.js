@@ -93,4 +93,6 @@ test('le rapprochement charge les comptes via l’API achats dédiée', async ()
   assert.match(suppliers, /required=\{hasVariance\}/);
   assert.match(suppliers, /if \(hasVariance && !factureForm\.compteEcartId\)/);
   assert.match(suppliers, /compteEcartId: factureForm\.compteEcartId \? Number\(factureForm\.compteEcartId\) : null/);
+  assert.match(suppliers, /if \(!numeroFactureFournisseur\)/);
+  assert.match(suppliers, /disabled=\{submitting\}/);
 });

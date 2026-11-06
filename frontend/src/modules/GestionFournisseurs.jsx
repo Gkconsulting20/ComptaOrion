@@ -53,6 +53,7 @@ function FacturationTab({ fournisseurs }) {
   });
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [factureSubmitError, setFactureSubmitError] = useState('');
 
   const getSupplierDueDate = (supplierId, invoiceDate) => {
     const supplier = fournisseurs.find((item) => Number(item.id) === Number(supplierId));
@@ -137,6 +138,7 @@ function FacturationTab({ fournisseurs }) {
   const openFactureModal = async () => {
     setShowFactureModal(true);
     setStep(1);
+    setFactureSubmitError('');
     setSelectedReceptions([]);
     setReceptionsEnAttente([]);
     setAllReceptionsEnAttente([]);
@@ -280,15 +282,21 @@ function FacturationTab({ fournisseurs }) {
   };
 
   const submitFacture = async () => {
+    setFactureSubmitError('');
+    const numeroFactureFournisseur = String(factureForm.numeroFactureFournisseur || '').trim();
+    if (!numeroFactureFournisseur) {
+      setFactureSubmitError('Saisissez le numéro de la facture du fournisseur avant de créer la facture.');
+      return;
+    }
     if (hasVariance && !factureForm.compteEcartId) {
-      alert('Sélectionnez un compte comptable pour enregistrer les écarts de prix.');
+      setFactureSubmitError('Sélectionnez un compte comptable pour enregistrer les écarts de prix.');
       return;
     }
     setSubmitting(true);
     try {
       const payload = {
         fournisseurId: factureForm.fournisseurId,
-        numeroFactureFournisseur: factureForm.numeroFactureFournisseur,
+        numeroFactureFournisseur,
         dateFacture: factureForm.dateFacture,
         compteEcartId: factureForm.compteEcartId ? Number(factureForm.compteEcartId) : null,
         tvaExoneree: factureForm.tvaExoneree,
@@ -317,7 +325,7 @@ function FacturationTab({ fournisseurs }) {
       setShowFactureModal(false);
       loadData();
     } catch (err) {
-      alert('Erreur: ' + (err.response?.data?.message || err.message));
+      setFactureSubmitError(err.response?.data?.message || err.message || 'La facture n’a pas pu être créée.');
     } finally {
       setSubmitting(false);
     }
@@ -553,8 +561,16 @@ function FacturationTab({ fournisseurs }) {
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>N° Facture Fournisseur *</label>
                   <input type="text" value={factureForm.numeroFactureFournisseur}
-                    onChange={(e) => setFactureForm(prev => ({ ...prev, numeroFactureFournisseur: e.target.value }))}
+                    required
+                    aria-invalid={!String(factureForm.numeroFactureFournisseur || '').trim()}
+                    onChange={(e) => {
+                      setFactureSubmitError('');
+                      setFactureForm(prev => ({ ...prev, numeroFactureFournisseur: e.target.value }));
+                    }}
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
+                  <small style={{ display: 'block', marginTop: 4, color: '#52606d' }}>
+                    Saisissez la référence figurant sur la facture reçue du fournisseur.
+                  </small>
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Date Facture *</label>
@@ -786,9 +802,14 @@ function FacturationTab({ fournisseurs }) {
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minHeight: '60px' }} />
               </div>
 
+              {factureSubmitError && (
+                <p role="alert" style={{ color: '#b42318', background: '#fff1f0', padding: 10, borderRadius: 5, marginBottom: 12 }}>
+                  {factureSubmitError}
+                </p>
+              )}
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <Button variant="secondary" onClick={() => setStep(1)}>← Retour</Button>
-                <Button variant="success" onClick={submitFacture} disabled={submitting || !factureForm.numeroFactureFournisseur}>
+                <Button variant="success" onClick={submitFacture} disabled={submitting}>
                   {submitting ? 'Création...' : 'Créer la Facture'}
                 </Button>
               </div>
