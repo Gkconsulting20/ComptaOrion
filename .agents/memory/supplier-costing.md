@@ -9,6 +9,12 @@ Pour les achats de stock, répartir les frais logistiques au prorata du poids to
 
 **How to apply:** Calculer le poids d’une ligne depuis sa quantité et le poids par unité de stock. Si le poids manque ou ne peut pas être converti, ne pas répartir ce coût par valeur en silence; signaler l’article à compléter.
 
+Lors d’une réception de commande, permettre de saisir ou confirmer le poids par unité de chaque produit. Conserver cette donnée au niveau du produit afin que la réception et le rapprochement de facture utilisent le même poids; ne pas demander de le ressaisir sur la facture.
+
+**Why:** L’utilisateur a demandé que les poids soient renseignés à la réception, car la répartition logistique se fait au poids et la saisie au niveau de la facture ne fonctionne pas dans son parcours.
+
+**How to apply:** Préremplir le poids déjà connu, permettre de le corriger pendant la réception, puis utiliser la valeur sauvegardée pour répartir les frais logistiques et calculer le coût de revient.
+
 Pour les achats, convertir l’unité saisie (par exemple tonne ou gramme) vers l’unité principale de stock du produit, en conservant aussi les valeurs d’origine de la facture. La quantité en stock et le coût unitaire doivent être normalisés dans la même unité avant le calcul du coût moyen et la répartition logistique.
 
 **Why:** L’utilisateur a précisé qu’un produit suivi en kg peut être acheté en tonnes et que les frais doivent ensuite être répartis selon le poids converti.

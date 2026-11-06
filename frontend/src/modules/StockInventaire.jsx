@@ -349,6 +349,9 @@ export function StockInventaire() {
           .map((line) => ({
             commandeItemId: line.id,
             description: line.description || line.produit?.nom || 'Article',
+              uniteMesure: line.produit?.uniteMesure || 'pièce',
+              poidsParUnite: isMassUnit(line.produit?.uniteMesure) ? '' : (line.produit?.poidsParUnite ?? ''),
+              unitePoids: line.produit?.unitePoids || 'kg',
             quantiteRestante: Math.max(0, Number(line.quantite || 0) - Number(line.quantiteRecue || 0)),
             quantiteRecue: 0,
           })),
@@ -488,13 +491,26 @@ export function StockInventaire() {
         await reload('commandes');
       } else if (type === 'commandeReception') {
         const receivedItems = (form.items || [])
-          .filter(line => Number(line.quantiteRecue) > 0)
           .map(line => ({
             commandeItemId: Number(line.commandeItemId),
             quantiteRecue: Number(line.quantiteRecue),
+            poidsParUnite: isMassUnit(line.uniteMesure) ||
+              line.poidsParUnite == null || String(line.poidsParUnite).trim() === ''
+              ? null
+              : Number(line.poidsParUnite),
+            unitePoids: line.unitePoids || 'kg',
           }));
-        if (!receivedItems.length) {
+        if (!receivedItems.some((item) => item.quantiteRecue > 0)) {
           return alert('Saisissez au moins une quantité reçue.');
+        }
+        const fraisLogistiquesPrevus = Number(modal.item?.totalLogistique || 0);
+        const poidsManquant = fraisLogistiquesPrevus > 0 && (form.items || []).some((line) =>
+          !isMassUnit(line.uniteMesure) &&
+          (!Number.isFinite(Number(line.poidsParUnite)) || Number(line.poidsParUnite) <= 0)
+        );
+        if (poidsManquant) {
+          setFormError('Renseignez le poids par unité de chaque article avant de répartir les frais logistiques.');
+          return;
         }
         if (!form.entrepotId) {
           return alert('Sélectionnez un entrepôt pour enregistrer le stock reçu.');
@@ -1457,24 +1473,76 @@ export function StockInventaire() {
                 onChange={(event) => setForm({ ...form, notes: event.target.value })} />
               <div style={{ marginTop: 12 }}>
                 {(form.items || []).map((line, index) => (
-                  <div key={line.commandeItemId} style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 1fr) 120px 140px', gap: 10, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #e5e9ed' }}>
-                    <span>{line.description}</span>
-                    <span style={{ fontSize: 12, color: '#60717d' }}>Reste : {line.quantiteRestante}</span>
-                    <input
-                      aria-label={`Quantité reçue ${line.description}`}
-                      type="number"
-                      min="0"
-                      max={line.quantiteRestante}
-                      step="0.001"
-                      value={line.quantiteRecue}
-                      disabled={line.quantiteRestante <= 0}
-                      onChange={(event) => {
-                        const items = [...form.items];
-                        items[index] = { ...items[index], quantiteRecue: event.target.value };
-                        setForm({ ...form, items });
-                      }}
-                      style={{ width: '100%', padding: 8, border: '1px solid #d4dce2', borderRadius: 5 }}
-                    />
+                  <div key={line.commandeItemId} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, alignItems: 'end', padding: '10px 0', borderBottom: '1px solid #e5e9ed' }}>
+                    <div>
+                      <strong>{line.description}</strong>
+                      <div style={{ fontSize: 12, color: '#60717d' }}>Reste à recevoir : {line.quantiteRestante}</div>
+                    </div>
+                    <label style={{ fontSize: 12, color: '#52606d' }}>
+                      Quantité reçue
+                      <input
+                        aria-label={`Quantité reçue ${line.description}`}
+                        type="number"
+                        min="0"
+                        max={line.quantiteRestante}
+                        step="0.001"
+                        value={line.quantiteRecue}
+                        disabled={line.quantiteRestante <= 0}
+                        onChange={(event) => {
+                          const items = [...form.items];
+                          items[index] = { ...items[index], quantiteRecue: event.target.value };
+                          setForm({ ...form, items });
+                        }}
+                        style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 4, padding: 8, border: '1px solid #d4dce2', borderRadius: 5 }}
+                      />
+                    </label>
+                    {isMassUnit(line.uniteMesure) ? (
+                      <div style={{ fontSize: 12, color: '#52606d' }}>
+                        Poids automatique
+                        <strong style={{ display: 'block', marginTop: 4 }}>Déduit de l’unité {line.uniteMesure}</strong>
+                      </div>
+                    ) : (
+                      <>
+                        <label style={{ fontSize: 12, color: '#52606d' }}>
+                          Poids par unité{Number(modal.item?.totalLogistique || 0) > 0 ? ' *' : ''}
+                          <input
+                            aria-label={`Poids par unité ${line.description}`}
+                            type="number"
+                            min="0.000001"
+                            step="0.000001"
+                            value={line.poidsParUnite ?? ''}
+                            onChange={(event) => {
+                              const items = [...form.items];
+                              items[index] = {
+                                ...items[index],
+                                poidsParUnite: event.target.value === '' ? '' : event.target.value,
+                              };
+                              setForm({ ...form, items });
+                            }}
+                            style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 4, padding: 8, border: '1px solid #d4dce2', borderRadius: 5 }}
+                          />
+                        </label>
+                        <label style={{ fontSize: 12, color: '#52606d' }}>
+                          Unité
+                          <select
+                            aria-label={`Unité du poids ${line.description}`}
+                            value={line.unitePoids || 'kg'}
+                            onChange={(event) => {
+                              const items = [...form.items];
+                              items[index] = { ...items[index], unitePoids: event.target.value };
+                              setForm({ ...form, items });
+                            }}
+                            style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 4, padding: 8, border: '1px solid #d4dce2', borderRadius: 5 }}
+                          >
+                            <option value="g">g</option>
+                            <option value="kg">kg</option>
+                            <option value="t">t</option>
+                            <option value="mg">mg</option>
+                            <option value="lb">lb</option>
+                          </select>
+                        </label>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

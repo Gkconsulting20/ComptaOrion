@@ -17,7 +17,12 @@ import {
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { createEcritureReception } from '../services/comptabiliteService.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
-import { allocateLogisticsByWeight, createStockValuationLayer, ensureOpeningValuationLayer } from '../services/stockValuation.js';
+import {
+  allocateLogisticsByWeight,
+  convertWeightToKg,
+  createStockValuationLayer,
+  ensureOpeningValuationLayer,
+} from '../services/stockValuation.js';
 
 const router = express.Router();
 
@@ -41,7 +46,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    if (!items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Au moins un article est obligatoire'
@@ -89,6 +94,49 @@ router.post('/', async (req, res) => {
         eq(commandesAchatItems.commandeId, commande.id),
         eq(commandesAchatItems.entrepriseId, req.entrepriseId)
       ));
+      const orderLinesById = new Map(orderLines.map((line) => [line.id, line]));
+      const receivedWeightsByOrderLine = new Map();
+      for (const item of items) {
+        const commandeItemId = Number.parseInt(item?.commandeItemId, 10);
+        if (!Number.isSafeInteger(commandeItemId) || commandeItemId <= 0 ||
+            item.poidsParUnite == null || String(item.poidsParUnite).trim() === '') {
+          continue;
+        }
+        const commandeItem = orderLinesById.get(commandeItemId);
+        if (!commandeItem) {
+          throw Object.assign(new Error(`Ligne de commande ${commandeItemId} non trouvée`), { status: 404 });
+        }
+        if (!commandeItem.produitId) continue;
+        const poidsParUnite = Number(item.poidsParUnite);
+        const unitePoids = String(item.unitePoids || 'kg').trim();
+        if (!Number.isFinite(poidsParUnite) || poidsParUnite <= 0) {
+          throw Object.assign(new Error('Le poids par unité doit être supérieur à zéro.'), { status: 400 });
+        }
+        try {
+          convertWeightToKg(poidsParUnite, unitePoids);
+        } catch {
+          throw Object.assign(new Error(`Unité de poids invalide pour la ligne ${commandeItemId}.`), { status: 400 });
+        }
+        receivedWeightsByOrderLine.set(commandeItemId, { poidsParUnite, unitePoids });
+      }
+      for (const [commandeItemId, weight] of receivedWeightsByOrderLine) {
+        const commandeItem = orderLinesById.get(commandeItemId);
+        const [product] = await tx.select().from(produits).where(and(
+          eq(produits.id, commandeItem.produitId),
+          eq(produits.entrepriseId, req.entrepriseId)
+        )).for('update').limit(1);
+        if (!product) throw Object.assign(new Error(`Produit ${commandeItem.produitId} introuvable`), { status: 409 });
+        if (Number(product.poidsParUnite) === weight.poidsParUnite && product.unitePoids === weight.unitePoids) continue;
+        const [updatedProduct] = await tx.update(produits).set({
+          poidsParUnite: weight.poidsParUnite.toString(),
+          unitePoids: weight.unitePoids,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(produits.id, product.id),
+          eq(produits.entrepriseId, req.entrepriseId)
+        )).returning();
+        changedProducts.push({ before: product, after: updatedProduct });
+      }
       const logisticsRows = await tx.select().from(coutsLogistiquesCommande).where(and(
         eq(coutsLogistiquesCommande.commandeAchatId, commande.id),
         eq(coutsLogistiquesCommande.entrepriseId, req.entrepriseId)
@@ -241,10 +289,11 @@ router.post('/', async (req, res) => {
             produitId: product.id,
             productSnapshot: product,
           });
-          const [updatedProduct] = await tx.update(produits).set({
+          const productUpdate = {
             quantite: (Number(product.quantite) + quantiteRecue).toString(),
             updatedAt: new Date()
-          }).where(and(
+          };
+          const [updatedProduct] = await tx.update(produits).set(productUpdate).where(and(
             eq(produits.id, product.id),
             eq(produits.entrepriseId, req.entrepriseId)
           )).returning();

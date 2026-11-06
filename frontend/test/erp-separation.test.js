@@ -101,3 +101,12 @@ test('le rapprochement charge les comptes via l’API achats dédiée', async ()
   assert.match(suppliers, /onBlur=\{\(e\) =>/);
   assert.match(suppliers, /position: 'sticky',\s*bottom: 0/);
 });
+
+test('la réception d’une commande accepte le poids des produits', async () => {
+  const stock = await read('../src/modules/StockInventaire.jsx');
+  assert.match(stock, /Poids par unité/);
+  assert.match(stock, /Unité du poids/);
+  assert.match(stock, /poidsParUnite: isMassUnit/);
+  assert.match(stock, /unitePoids: line\.unitePoids \|\| 'kg'/);
+  assert.match(stock, /poidsManquant/);
+});

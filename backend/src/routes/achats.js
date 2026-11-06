@@ -28,6 +28,7 @@ import {
   createEcritureAvoirQualiteFournisseur,
 } from '../services/comptabiliteService.js';
 import { addDaysToIsoDate, calculateCashDiscount } from '../services/paymentTerms.js';
+import { getNextPurchaseInvoiceNumber } from '../services/purchaseInvoiceNumber.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import {
   allocateLogisticsByWeight,
@@ -94,22 +95,20 @@ router.get('/comptes-ecarts', async (req, res) => {
 // Génération automatique du numéro de facture achat
 async function genererNumeroFactureAchat(entrepriseId) {
   const annee = new Date().getFullYear();
-  const [lastFacture] = await db
-    .select()
-    .from(facturesAchat)
-    .where(eq(facturesAchat.entrepriseId, entrepriseId))
-    .orderBy(desc(facturesAchat.id))
-    .limit(1);
-
-  let numero = 1;
-  if (lastFacture && lastFacture.numeroFacture) {
-    const match = lastFacture.numeroFacture.match(/FACT-ACH-(\d{4})-(\d+)/);
-    if (match && parseInt(match[1]) === annee) {
-      numero = parseInt(match[2]) + 1;
-    }
-  }
-
-  return `FACT-ACH-${annee}-${numero.toString().padStart(4, '0')}`;
+  const prefix = `FACT-ACH-${annee}-`;
+  const [companyInvoices, globallyUsedInvoices] = await Promise.all([
+    db.select({ numeroFacture: facturesAchat.numeroFacture })
+      .from(facturesAchat)
+      .where(eq(facturesAchat.entrepriseId, entrepriseId)),
+    db.select({ numeroFacture: facturesAchat.numeroFacture })
+      .from(facturesAchat)
+      .where(sql`${facturesAchat.numeroFacture} LIKE ${`${prefix}%`}`),
+  ]);
+  return getNextPurchaseInvoiceNumber(
+    annee,
+    companyInvoices.map((invoice) => invoice.numeroFacture),
+    globallyUsedInvoices.map((invoice) => invoice.numeroFacture),
+  );
 }
 
 // =========================================
@@ -1385,7 +1384,17 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur création facture avec rapprochement:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const databaseError = error?.cause || error;
+    if (databaseError?.code === '23505' && databaseError?.constraint === 'factures_achat_numero_facture_unique') {
+      return res.status(409).json({
+        success: false,
+        message: 'Le numéro interne de facture existe déjà. Réessayez : la séquence suivante sera utilisée.',
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: 'La facture rapprochée n’a pas pu être enregistrée. Vérifiez les données et réessayez.',
+    });
   }
 });
 

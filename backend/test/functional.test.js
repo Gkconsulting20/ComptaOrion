@@ -662,9 +662,24 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       items:editedPurchaseOrder.data.items.map(line=>({
         commandeItemId:line.id,
         quantiteRecue:quantity,
+        poidsParUnite:line.produitId === productId ? 3 : 1.5,
+        unitePoids:'kg',
       })),
     });
     const firstReceipt = await receivePart(5);
+    const recordedReceiptWeights = await admin.query(
+      `SELECT id, poids_par_unite, unite_poids
+       FROM "${schema}".produits
+       WHERE entreprise_id = $1 AND id = ANY($2::int[])`,
+      [signup.user.entrepriseId,[productId,secondCostProduct.data.id]],
+    );
+    const receiptWeightsByProductId = new Map(
+      recordedReceiptWeights.rows.map(row => [Number(row.id), row]),
+    );
+    assert.equal(Number(receiptWeightsByProductId.get(productId)?.poids_par_unite),3,
+      'Le poids saisi à la réception doit être enregistré sur le produit');
+    assert.equal(receiptWeightsByProductId.get(productId)?.unite_poids,'kg');
+    assert.equal(Number(receiptWeightsByProductId.get(secondCostProduct.data.id)?.poids_par_unite),1.5);
     await api(`/commandes-achat/${purchaseOrder.data.id}`,'PUT',{
       fournisseurId:supplierRecord.data.id,
       items:editedPurchaseOrder.data.items.map(line=>({
