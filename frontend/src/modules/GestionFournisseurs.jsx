@@ -393,6 +393,7 @@ function FacturationTab({ fournisseurs }) {
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Fournisseur *</label>
                 <select 
+                  disabled={fournisseurs.length === 0}
                   value={factureForm.fournisseurId} 
                   onChange={(e) => {
                     const fournisseurId = e.target.value;
@@ -405,9 +406,16 @@ function FacturationTab({ fournisseurs }) {
                     setSelectedReceptions([]);
                   }}
                   style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd' }}>
-                  <option value="">-- Sélectionner un fournisseur --</option>
+                  <option value="">
+                    {fournisseurs.length ? '-- Sélectionner un fournisseur --' : '-- Aucun fournisseur disponible --'}
+                  </option>
                   {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom || f.raisonSociale}</option>)}
                 </select>
+                {!fournisseurs.length && (
+                  <p role="alert" style={{ color: '#b42318', marginTop: 8 }}>
+                    Aucun fournisseur n’a été chargé. Vérifiez la connexion ou créez un fournisseur dans Paramètres → Fournisseurs.
+                  </p>
+                )}
               </div>
 
               {factureForm.fournisseurId && (
@@ -415,7 +423,7 @@ function FacturationTab({ fournisseurs }) {
                   <h5>Réceptions en attente de facturation ({receptionsEnAttente.length})</h5>
                   {receptionsEnAttente.length === 0 ? (
                     <div style={{ padding: '20px', background: '#f8f9fa', borderRadius: '8px', textAlign: 'center' }}>
-                      Aucune réception en attente pour ce fournisseur
+                      Le fournisseur est sélectionné, mais aucune réception validée n’attend sa facture. Créez un bon de commande et validez sa réception. Pour un service ou un achat sans stock, utilisez « Facture directe hors stock ».
                     </div>
                   ) : (
                     <div style={{ maxHeight: '300px', overflow: 'auto', border: '1px solid #ddd', borderRadius: '8px' }}>
@@ -1217,8 +1225,14 @@ export function GestionFournisseurs() {
     setLoading(true);
     try {
       const [fournisseursRes, commandesRes, facturesRes, accountsRes] = await Promise.all([
-        api.get('/fournisseurs'),
-        api.get('/commandes-achat'),
+        api.get('/fournisseurs', { limit: 500 }).catch((error) => {
+          console.error('Erreur chargement fournisseurs:', error);
+          return null;
+        }),
+        api.get('/commandes-achat').catch((error) => {
+          console.error('Erreur chargement commandes fournisseur:', error);
+          return null;
+        }),
         api.get('/achats/factures').catch(() => ({ data: [] })),
         api.get('/tresorerie/comptes').catch(() => ({ data: [] })),
       ]);
