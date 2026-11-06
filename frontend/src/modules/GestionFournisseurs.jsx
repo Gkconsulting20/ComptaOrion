@@ -38,7 +38,6 @@ function FacturationTab({ fournisseurs }) {
   const [totalComptesPlan, setTotalComptesPlan] = useState(null);
   const [comptesEcartInactifs, setComptesEcartInactifs] = useState(0);
   const [compteEcartSearch, setCompteEcartSearch] = useState('');
-  const [compteEcartPickerOpen, setCompteEcartPickerOpen] = useState(false);
   const [chargementComptesEcart, setChargementComptesEcart] = useState(true);
   const [initialisationPlan, setInitialisationPlan] = useState(false);
   const [tauxTva, setTauxTva] = useState(18);
@@ -725,45 +724,26 @@ function FacturationTab({ fournisseurs }) {
                     role="combobox"
                     aria-label="Rechercher un compte comptable pour l’écart"
                     aria-autocomplete="list"
-                    aria-expanded={compteEcartPickerOpen}
+                    aria-expanded={Boolean(normalizedAccountQuery)}
                     aria-controls="supplier-variance-account-options"
                     autoComplete="off"
-                    value={compteEcartPickerOpen
-                      ? compteEcartSearch
-                      : selectedVarianceAccount
-                        ? `${selectedVarianceAccount.numero} — ${selectedVarianceAccount.nom}`
-                        : ''}
+                    value={compteEcartSearch}
                     placeholder={chargementComptesEcart
                       ? 'Chargement des comptes…'
                       : hasVariance
                         ? 'Rechercher un compte de charge ou de produit'
                         : 'Aucun compte requis si l’écart est nul'}
-                    onFocus={() => {
-                      setCompteEcartSearch('');
-                      setCompteEcartPickerOpen(true);
-                    }}
-                    onClick={() => setCompteEcartPickerOpen(true)}
                     onChange={(event) => {
                       setCompteEcartSearch(event.target.value);
-                      setCompteEcartPickerOpen(true);
-                    }}
-                    onBlur={(event) => {
-                      const picker = event.currentTarget.parentElement;
-                      window.setTimeout(() => {
-                        if (!picker?.contains(document.activeElement)) {
-                          setCompteEcartPickerOpen(false);
-                        }
-                      }, 150);
                     }}
                     onKeyDown={(event) => {
                       if (event.key === 'Escape') {
-                        setCompteEcartPickerOpen(false);
-                      } else if (event.key === 'Enter' && compteEcartPickerOpen && filteredVarianceAccounts.length) {
+                        setCompteEcartSearch('');
+                      } else if (event.key === 'Enter' && normalizedAccountQuery && filteredVarianceAccounts.length) {
                         event.preventDefault();
                         const account = filteredVarianceAccounts[0];
                         setFactureForm((current) => ({ ...current, compteEcartId: String(account.id) }));
                         setCompteEcartSearch('');
-                        setCompteEcartPickerOpen(false);
                       }
                     }}
                     style={{
@@ -779,7 +759,7 @@ function FacturationTab({ fournisseurs }) {
                       pointerEvents: 'auto',
                     }}
                   />
-                  {compteEcartPickerOpen && (
+                  {normalizedAccountQuery && (
                     <div
                       id="supplier-variance-account-options"
                       role="listbox"
@@ -810,7 +790,6 @@ function FacturationTab({ fournisseurs }) {
                             onClick={() => {
                               setFactureForm((current) => ({ ...current, compteEcartId: String(account.id) }));
                               setCompteEcartSearch('');
-                              setCompteEcartPickerOpen(false);
                             }}
                             style={{
                               display: 'block',
@@ -841,6 +820,11 @@ function FacturationTab({ fournisseurs }) {
                     Compte sélectionné : {selectedVarianceAccount.numero} — {selectedVarianceAccount.nom}
                   </p>
                 )}
+                  {!selectedVarianceAccount && comptesEcart.length > 0 && !normalizedAccountQuery && (
+                    <p style={{ color: '#52606d', fontSize: 13, margin: '6px 0 0' }}>
+                      Saisissez un numéro ou un nom de compte pour afficher les choix.
+                    </p>
+                  )}
                 <p style={{ color: '#52606d', fontSize: 13, margin: '6px 0 0' }}>
                   Écart HT constaté : {totalVariance.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF. Il sera débité si défavorable, crédité si favorable.
                 </p>

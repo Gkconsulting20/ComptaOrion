@@ -102,7 +102,9 @@ test('le rapprochement charge les comptes via l’API achats dédiée', async ()
   assert.match(suppliers, /role="combobox"/);
   assert.match(suppliers, /role="option"/);
   assert.match(suppliers, /compteEcartId: String\(account\.id\)/);
-  assert.match(suppliers, /aria-expanded=\{compteEcartPickerOpen\}/);
+  assert.match(suppliers, /value=\{compteEcartSearch\}/);
+  assert.match(suppliers, /aria-expanded=\{Boolean\(normalizedAccountQuery\)\}/);
+  assert.doesNotMatch(suppliers, /compteEcartPickerOpen/);
 });
 
 test('la réception d’une commande accepte le poids des produits', async () => {
