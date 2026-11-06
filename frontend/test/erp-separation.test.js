@@ -105,6 +105,10 @@ test('le rapprochement charge les comptes via l’API achats dédiée', async ()
   assert.match(suppliers, /value=\{compteEcartSearch\}/);
   assert.match(suppliers, /aria-expanded=\{Boolean\(normalizedAccountQuery\)\}/);
   assert.doesNotMatch(suppliers, /compteEcartPickerOpen/);
+  assert.match(suppliers, /Choisir un autre compte/);
+  assert.match(suppliers, /Modifier le compte/);
+  assert.match(suppliers, /Reprendre l’écriture/);
+  assert.match(suppliers, /reprendre-comptabilisation/);
 });
 
 test('la réception d’une commande accepte le poids des produits', async () => {

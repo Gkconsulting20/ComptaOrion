@@ -21,6 +21,7 @@ const migrationScopes = new Map([
   ])],
   ['supplier-invoice-reconciliation', new Set(['factures_achat', 'stock_pending', 'logistique_pending'])],
   ['custom-accounting', new Set(['comptes_automatiques'])],
+  ['accounting-sequences', new Set(['ecriture_sequences'])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
@@ -62,7 +63,8 @@ try {
     if (!present.has(name)) {
       if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations' &&
           scope !== 'credit-notes-cheques' && scope !== 'commercial-adjustments' &&
-          scope !== 'supplier-invoice-reconciliation' && scope !== 'custom-accounting') {
+          scope !== 'supplier-invoice-reconciliation' && scope !== 'custom-accounting' &&
+          scope !== 'accounting-sequences') {
         throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
       }
       actions.push(statement);
@@ -190,6 +192,8 @@ try {
             ? ['notes_credit_sequence_unique', 'notes_credit_number_unique']
           : scope === 'custom-accounting'
             ? ['comptes_comptables_entreprise_numero_unique', 'comptes_automatiques_entreprise_role_unique']
+            : scope === 'accounting-sequences'
+              ? ['ecriture_sequences_scope_unique', 'ecritures_entreprise_numero_unique', 'journaux_entreprise_code_unique']
         : [])
     : permittedIndexes;
   const existingIndexes = new Set((await client.query(
@@ -285,7 +289,7 @@ try {
       )
     `);
   }
-  if (!scopedTables) {
+  if (!scopedTables || scope === 'accounting-sequences') {
     if (present.has('ecritures')) {
       const seedSequences = `
       INSERT INTO ecriture_sequences

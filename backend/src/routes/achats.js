@@ -16,6 +16,8 @@ import {
   notesCreditItems,
   comptesComptables,
   comptesAutomatiques,
+  ecritures,
+  lignesEcritures,
   stockPending,
   logistiquePending,
   entreprises,
@@ -148,10 +150,49 @@ router.get('/factures', async (req, res) => {
       .from(facturesAchat)
       .where(and(...whereConditions));
 
-    const formattedResults = results.map(r => ({
-      ...r.facture,
-      fournisseur: r.fournisseur
-    }));
+    const factureIds = results.map((row) => row.facture.id);
+    const ecritureIds = results
+      .map((row) => row.facture.ecritureComptableId)
+      .filter((id) => Number.isSafeInteger(Number(id)) && Number(id) > 0);
+    const [pendingRows, varianceRows] = await Promise.all([
+      factureIds.length
+        ? db.select({ factureAchatId: stockPending.factureAchatId })
+          .from(stockPending)
+          .where(and(
+            eq(stockPending.entrepriseId, req.entrepriseId),
+            inArray(stockPending.factureAchatId, factureIds),
+          ))
+        : [],
+      ecritureIds.length
+        ? db.select({
+          ecritureId: lignesEcritures.ecritureId,
+          compteId: comptesComptables.id,
+          numero: comptesComptables.numero,
+          nom: comptesComptables.nom,
+        })
+          .from(lignesEcritures)
+          .innerJoin(comptesComptables, eq(lignesEcritures.compteComptableId, comptesComptables.id))
+          .where(and(
+            eq(lignesEcritures.entrepriseId, req.entrepriseId),
+            inArray(lignesEcritures.ecritureId, ecritureIds),
+            sql`${lignesEcritures.libelle} ILIKE 'Écart de prix %'`,
+          ))
+        : [],
+    ]);
+    const pendingInvoiceIds = new Set(pendingRows.map((row) => Number(row.factureAchatId)));
+    const varianceByEntry = new Map(varianceRows.map((row) => [Number(row.ecritureId), row]));
+    const formattedResults = results.map((row) => {
+      const varianceAccount = varianceByEntry.get(Number(row.facture.ecritureComptableId));
+      return {
+        ...row.facture,
+        fournisseur: row.fournisseur,
+        hasStockPending: pendingInvoiceIds.has(Number(row.facture.id)),
+        compteEcartId: varianceAccount?.compteId ?? null,
+        compteEcart: varianceAccount
+          ? { id: varianceAccount.compteId, numero: varianceAccount.numero, nom: varianceAccount.nom }
+          : null,
+      };
+    });
 
     return res.json({
       success: true,
@@ -227,6 +268,107 @@ router.get('/factures/:id', async (req, res) => {
       success: false,
       message: 'Erreur lors de la récupération de la facture',
       error: error.message
+    });
+  }
+});
+
+router.put('/factures/:id/compte-ecart', async (req, res) => {
+  const factureId = Number(req.params.id);
+  const compteEcartId = Number(req.body?.compteEcartId);
+  if (!Number.isSafeInteger(factureId) || factureId <= 0 ||
+      !Number.isSafeInteger(compteEcartId) || compteEcartId <= 0) {
+    return res.status(400).json({ success: false, message: 'Choisissez une facture et un compte d’écart valides.' });
+  }
+
+  try {
+    const [account] = await db.select().from(comptesComptables).where(and(
+      eq(comptesComptables.id, compteEcartId),
+      eq(comptesComptables.entrepriseId, req.entrepriseId),
+      eq(comptesComptables.actif, true),
+    )).limit(1);
+    if (!account || !isPriceVarianceAccount(account)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le compte d’écart doit être un compte actif de charge ou de produit de cette entreprise.',
+      });
+    }
+
+    const updated = await db.transaction(async (tx) => {
+      const [invoice] = await tx.select().from(facturesAchat).where(and(
+        eq(facturesAchat.id, factureId),
+        eq(facturesAchat.entrepriseId, req.entrepriseId),
+      )).limit(1);
+      if (!invoice) {
+        const error = new Error('Facture fournisseur introuvable.');
+        error.statusCode = 404;
+        throw error;
+      }
+      if (invoice.statut !== 'brouillon' || !invoice.ecritureComptableId) {
+        const error = new Error('Le compte d’écart ne peut être modifié que sur une facture brouillon déjà comptabilisée.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const [entry] = await tx.select().from(ecritures).where(and(
+        eq(ecritures.id, invoice.ecritureComptableId),
+        eq(ecritures.entrepriseId, req.entrepriseId),
+      )).limit(1);
+      if (!entry || entry.valide) {
+        const error = new Error('Cette écriture est déjà validée; son compte ne peut plus être modifié directement.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const [varianceLine] = await tx.select().from(lignesEcritures).where(and(
+        eq(lignesEcritures.ecritureId, entry.id),
+        eq(lignesEcritures.entrepriseId, req.entrepriseId),
+        sql`${lignesEcritures.libelle} ILIKE ${`Écart de prix% - ${invoice.numeroFacture}`}`,
+      )).limit(1);
+      if (!varianceLine) {
+        const error = new Error('Aucune ligne d’écart de prix n’existe sur cette facture.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const [previousAccount] = await tx.select().from(comptesComptables).where(and(
+        eq(comptesComptables.id, varianceLine.compteComptableId),
+        eq(comptesComptables.entrepriseId, req.entrepriseId),
+      )).limit(1);
+      const [updatedLine] = await tx.update(lignesEcritures).set({
+        compteComptableId: account.id,
+      }).where(and(
+        eq(lignesEcritures.id, varianceLine.id),
+        eq(lignesEcritures.entrepriseId, req.entrepriseId),
+      )).returning();
+
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'lignes_ecriture',
+        recordId: varianceLine.id,
+        ancienneValeur: {
+          compteId: previousAccount?.id ?? varianceLine.compteComptableId,
+          numero: previousAccount?.numero ?? null,
+          nom: previousAccount?.nom ?? null,
+        },
+        nouvelleValeur: { compteId: account.id, numero: account.numero, nom: account.nom },
+        description: `Changement du compte d’écart de la facture fournisseur ${invoice.numeroFacture}`,
+        executor: tx,
+        required: true,
+      });
+      return updatedLine;
+    });
+
+    return res.json({
+      success: true,
+      message: 'Le compte d’écart a été modifié.',
+      data: { compteEcartId: updated.compteComptableId },
+    });
+  } catch (error) {
+    console.error('Erreur modification du compte d’écart fournisseur:', error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : 'Le compte d’écart n’a pas pu être modifié.',
     });
   }
 });
@@ -1280,6 +1422,7 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       avertissements: [],
     };
     let comptabiliteAvertissement = null;
+    let ecritureComptableId = newFacture.ecritureComptableId ?? null;
     try {
       const result = await db.transaction(async (tx) => {
         const pendingRowsResult = await tx.execute(sql`
@@ -1350,20 +1493,28 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
         return { valuation, ecriture };
       });
       coutRevient = result.valuation;
+      ecritureComptableId = result.ecriture?.id ?? null;
       if (!result.ecriture) comptabiliteAvertissement = 'L’écriture comptable n’a pas été créée : vérifiez les comptes configurés.';
     } catch (comptaError) {
-      comptabiliteAvertissement = comptaError.message;
+      comptabiliteAvertissement = 'La facture est créée, mais sa comptabilisation reste à reprendre. Ouvrez « Factures fournisseurs » et utilisez « Reprendre l’écriture ».';
       coutRevient.avertissements.push(
-        `La correction de valorisation et l’écriture comptable ont été annulées ensemble : ${comptaError.message}`
+        'La correction de valorisation et l’écriture comptable ont été annulées ensemble. Aucune écriture partielle n’a été conservée.'
       );
-      console.warn('Avertissement: valorisation ou écriture comptable non générée:', comptaError.message);
+      console.error('Avertissement: valorisation ou écriture comptable non générée:', {
+        message: comptaError.message,
+        cause: comptaError.cause?.message,
+        code: comptaError.code,
+      });
     }
 
     res.status(201).json({
       success: true,
-      message: 'Facture créée avec rapprochement réussi',
+      message: comptabiliteAvertissement
+        ? 'Facture créée, mais comptabilisation à reprendre'
+        : 'Facture créée avec rapprochement réussi',
       data: {
         ...newFacture,
+        ecritureComptableId,
         totalArticles: totalArticlesHT,
         totalLogistique,
         receptionsRapprochees: receptionsIds.length,
@@ -1394,6 +1545,213 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'La facture rapprochée n’a pas pu être enregistrée. Vérifiez les données et réessayez.',
+    });
+  }
+});
+
+router.post('/factures/:id/reprendre-comptabilisation', async (req, res) => {
+  const factureId = Number(req.params.id);
+  const compteEcartId = req.body?.compteEcartId == null || req.body.compteEcartId === ''
+    ? null
+    : Number(req.body.compteEcartId);
+  if (!Number.isSafeInteger(factureId) || factureId <= 0 ||
+      (compteEcartId !== null && (!Number.isSafeInteger(compteEcartId) || compteEcartId <= 0))) {
+    return res.status(400).json({ success: false, message: 'La facture ou le compte d’écart indiqué est invalide.' });
+  }
+
+  try {
+    if (compteEcartId) {
+      const [account] = await db.select().from(comptesComptables).where(and(
+        eq(comptesComptables.id, compteEcartId),
+        eq(comptesComptables.entrepriseId, req.entrepriseId),
+        eq(comptesComptables.actif, true),
+      )).limit(1);
+      if (!account || !isPriceVarianceAccount(account)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Le compte d’écart doit être un compte actif de charge ou de produit de cette entreprise.',
+        });
+      }
+    }
+
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    const result = await db.transaction(async (tx) => {
+      const [invoice] = await tx.select().from(facturesAchat).where(and(
+        eq(facturesAchat.id, factureId),
+        eq(facturesAchat.entrepriseId, req.entrepriseId),
+      )).limit(1);
+      if (!invoice) {
+        const error = new Error('Facture fournisseur introuvable.');
+        error.statusCode = 404;
+        throw error;
+      }
+      if (invoice.statut !== 'brouillon' || invoice.ecritureComptableId) {
+        const error = new Error('Cette facture n’est pas en attente de comptabilisation.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const items = await tx.select().from(factureAchatItems).where(and(
+        eq(factureAchatItems.factureId, invoice.id),
+        eq(factureAchatItems.entrepriseId, req.entrepriseId),
+      ));
+      const productItems = items.filter((item) => item.produitId != null);
+      const logisticsTotal = items
+        .filter((item) => item.produitId == null)
+        .reduce((total, item) => total + Number(item.totalLigne || 0), 0);
+      const productIds = [...new Set(productItems.map((item) => Number(item.produitId)))];
+      if (productIds.length === 0) {
+        const error = new Error('Cette facture ne contient pas de réception de stock à reprendre.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const weightProducts = await tx.select({
+        id: produits.id,
+        nom: produits.nom,
+        uniteMesure: produits.uniteMesure,
+        poidsParUnite: produits.poidsParUnite,
+        unitePoids: produits.unitePoids,
+      }).from(produits).where(and(
+        eq(produits.entrepriseId, req.entrepriseId),
+        inArray(produits.id, productIds),
+      ));
+      const productById = new Map(weightProducts.map((product) => [Number(product.id), product]));
+      const allocationLines = productItems.map((item) => {
+        const product = productById.get(Number(item.produitId));
+        return {
+          quantite: item.quantite,
+          poidsParUnite: product?.poidsParUnite,
+          unitePoids: product?.unitePoids,
+          uniteMesure: product?.uniteMesure,
+        };
+      });
+      const logisticsAllocation = automaticCosting
+        ? allocateLogisticsByWeight(allocationLines, logisticsTotal)
+        : { allocations: allocationLines.map(() => 0), unallocated: logisticsTotal, totalWeightKg: 0 };
+      const invoiceCostsByProduct = new Map();
+      for (const [index, item] of productItems.entries()) {
+        const productId = Number(item.produitId);
+        const current = invoiceCostsByProduct.get(productId) || { quantity: 0, totalCost: 0 };
+        current.quantity += Number(item.quantite || 0);
+        current.totalCost += Number(item.totalLigne || 0) + Number(logisticsAllocation.allocations[index] || 0);
+        invoiceCostsByProduct.set(productId, current);
+      }
+
+      const pendingResult = await tx.execute(sql`
+        SELECT
+          COALESCE((SELECT SUM(valeur_estimee) FROM stock_pending
+            WHERE entreprise_id = ${req.entrepriseId} AND facture_achat_id = ${invoice.id}), 0) AS total_stock_pending,
+          COALESCE((SELECT SUM(montant_estime) FROM logistique_pending
+            WHERE entreprise_id = ${req.entrepriseId} AND facture_achat_id = ${invoice.id}), 0) AS total_logistique_pending
+      `);
+      const totalPending = Number(pendingResult.rows?.[0]?.total_stock_pending || 0)
+        + Number(pendingResult.rows?.[0]?.total_logistique_pending || 0);
+      if (totalPending <= 0) {
+        const error = new Error('Aucune réception en attente n’est liée à cette facture.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const pendingRowsResult = await tx.execute(sql`
+        SELECT sp.produit_id, sp.quantite_pending, lr.mouvement_stock_id
+        FROM stock_pending sp
+        JOIN lignes_reception lr
+          ON lr.id = sp.ligne_reception_id
+         AND lr.entreprise_id = sp.entreprise_id
+        WHERE sp.entreprise_id = ${req.entrepriseId}
+          AND sp.facture_achat_id = ${invoice.id}
+        ORDER BY sp.id
+      `);
+      const valuation = await applySupplierInvoiceCostsToRemainingLayers(tx, {
+        entrepriseId: req.entrepriseId,
+        receiptRows: pendingRowsResult.rows || [],
+        invoiceCostsByProduct,
+      });
+      const variance = splitCostVariance(
+        Number(invoice.totalHT || 0) - totalPending,
+        valuation.ajustementStock,
+      );
+      const supplierResult = await tx.execute(sql`
+        SELECT raison_sociale AS nom
+        FROM fournisseurs
+        WHERE id = ${invoice.fournisseurId}
+          AND entreprise_id = ${req.entrepriseId}
+      `);
+      const ecriture = await createEcritureFactureAchat({
+        entrepriseId: req.entrepriseId,
+        numeroFacture: invoice.numeroFacture,
+        dateFacture: invoice.dateFacture,
+        fournisseurNom: supplierResult.rows?.[0]?.nom || 'Fournisseur',
+        totalHT: Number(invoice.totalHT || 0),
+        totalTVA: Number(invoice.totalTVA || 0),
+        totalTTC: Number(invoice.totalTTC || 0),
+        montantPending: totalPending,
+        ecartPrix: variance.expenseVariance,
+        montantValorisationStock: variance.inventoryAdjustment,
+        compteEcartId,
+        executor: tx,
+      });
+      if (!ecriture) {
+        throw new Error('L’écriture comptable n’a pas pu être créée. Vérifiez les comptes configurés.');
+      }
+
+      await tx.update(facturesAchat).set({
+        ecritureComptableId: ecriture.id,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(facturesAchat.id, invoice.id),
+        eq(facturesAchat.entrepriseId, req.entrepriseId),
+      ));
+      for (const layer of valuation.couchesRevalorisees) {
+        await logAudit({
+          ...extractAuditInfo(req),
+          action: 'UPDATE',
+          table: 'valorisations_stock',
+          recordId: layer.layerId,
+          ancienneValeur: {
+            produitId: layer.produitId,
+            mouvementId: layer.mouvementId,
+            quantiteRestante: layer.quantiteRestante,
+            coutTotal: layer.ancienCoutTotal,
+          },
+          nouvelleValeur: {
+            produitId: layer.produitId,
+            mouvementId: layer.mouvementId,
+            quantiteRestante: layer.quantiteRestante,
+            coutTotal: layer.nouveauCoutTotal,
+            factureFournisseurId: invoice.id,
+          },
+          description: `Reprise de la correction du coût de revient pour la facture ${invoice.numeroFacture}`,
+          executor: tx,
+          required: true,
+        });
+      }
+      return { ecritureId: ecriture.id, valuation, logisticsAllocation };
+    });
+
+    return res.json({
+      success: true,
+      message: 'La comptabilisation et la correction de valorisation ont été reprises.',
+      data: {
+        ecritureComptableId: result.ecritureId,
+        coutRevient: result.valuation,
+        avertissements: result.logisticsAllocation.unallocated > 0
+          ? ['Certains frais logistiques restent non répartis : vérifiez le poids par unité des produits.']
+          : [],
+      },
+    });
+  } catch (error) {
+    console.error('Erreur reprise de la comptabilisation fournisseur:', {
+      message: error.message,
+      cause: error.cause?.message,
+      code: error.code,
+    });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode
+        ? error.message
+        : 'La comptabilisation n’a pas pu être reprise. Vérifiez la configuration comptable ou contactez l’administrateur.',
     });
   }
 });

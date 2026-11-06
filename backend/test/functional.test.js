@@ -808,6 +808,34 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     );
     assert.ok(linkedAccountingEntry.rows[0]?.ecriture_comptable_id,
       'La facture rapprochée doit conserver le lien vers son écriture comptable');
+    const alternateVarianceAccount = await admin.query(
+      `INSERT INTO "${schema}".comptes_comptables
+         (entreprise_id, numero, nom, type, categorie, actif)
+       VALUES ($1, 'TEST-ECART-PRODUIT', 'Compte test autre écart', 'produits', 'Produits', true)
+       RETURNING id`,
+      [signup.user.entrepriseId],
+    );
+    await admin.query(
+      `INSERT INTO "${schema}".lignes_ecriture
+         (entreprise_id, ecriture_id, compte_comptable_id, debit, credit, libelle)
+       SELECT $1, ecriture_comptable_id, $2, 0, 0, 'Écart de prix défavorable - ' || numero_facture
+       FROM "${schema}".factures_achat
+       WHERE entreprise_id = $1 AND id = $3`,
+      [signup.user.entrepriseId, varianceAccount.rows[0].id, matchedInvoice.data.id],
+    );
+    await api(`/achats/factures/${matchedInvoice.data.id}/compte-ecart`, 'PUT', {
+      compteEcartId: alternateVarianceAccount.rows[0].id,
+    });
+    const changedVarianceLine = await admin.query(
+      `SELECT le.compte_comptable_id
+       FROM "${schema}".lignes_ecriture le
+       JOIN "${schema}".factures_achat fa ON fa.ecriture_comptable_id = le.ecriture_id
+       WHERE fa.entreprise_id = $1 AND fa.id = $2
+         AND le.libelle ILIKE 'Écart de prix %'`,
+      [signup.user.entrepriseId, matchedInvoice.data.id],
+    );
+    assert.equal(Number(changedVarianceLine.rows[0]?.compte_comptable_id), Number(alternateVarianceAccount.rows[0].id),
+      'Le compte d’écart doit pouvoir être remplacé sur une facture brouillon');
     const stockPendingAfterMatch = await api('/stock/rapports/stock-non-facture');
     const logisticsPendingAfterMatch = await api('/stock/rapports/logistique-non-facturee');
     assert.equal(stockPendingAfterMatch.items.length, 0,
@@ -1048,6 +1076,76 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     await api('/upload/logo','DELETE');
     const firstCookieJar = new Map(cookieJar);
     const secondPassword=randomUUID()+'Bb8!';
+    const recoveryOrder = await api('/commandes-achat', 'POST', {
+      fournisseurId: supplierRecord.data.id,
+      dateCommande: new Date().toISOString().slice(0, 10),
+      items: [{ produitId: secondCostProduct.data.id, description: 'Produit reprise écriture', quantite: 2, prixUnitaire: 2000 }],
+      coutsLogistiques: [{ type: 'transport', description: 'Transport reprise', montant: 10 }],
+    }, 201);
+    await api(`/commandes-achat/${recoveryOrder.data.id}/confirmer`, 'PUT', {});
+    const recoveryReceipt = await api('/receptions', 'POST', {
+      commandeId: recoveryOrder.data.id,
+      dateReception: new Date().toISOString().slice(0, 10),
+      entrepotId: warehouseRecord.id,
+      items: recoveryOrder.data.items.map(line => ({
+        commandeItemId: line.id,
+        quantiteRecue: 2,
+        poidsParUnite: 1.5,
+        unitePoids: 'kg',
+      })),
+    });
+    const recoveryPendingReceipts = await api(
+      `/achats/receptions-en-attente?fournisseurId=${supplierRecord.data.id}`,
+    );
+    assert.equal(recoveryPendingReceipts.data.length, 1,
+      'La réception de reprise doit être retrouvée dans la liste des réceptions à rapprocher');
+    await admin.query(`DROP TABLE "${schema}".ecriture_sequences`);
+    const incompleteInvoice = await api('/achats/factures-avec-rapprochement', 'POST', {
+      fournisseurId: supplierRecord.data.id,
+      numeroFactureFournisseur: 'FACT-FOURN-REPRISE-SEQUENCE',
+      dateFacture: new Date().toISOString().slice(0, 10),
+      receptionsIds: recoveryPendingReceipts.data.map(receipt => receipt.id),
+      lignes: [{
+        produitId: secondCostProduct.data.id,
+        quantite: 2,
+        uniteSaisie: 'pièce',
+        prixUnitaireReel: 2000,
+        description: 'Produit reprise écriture',
+      }],
+      coutsLogistiques: [{ type: 'transport', montantReel: 10, description: 'Transport reprise' }],
+    }, 201);
+    assert.equal(incompleteInvoice.data.ecritureComptableId, null,
+      'Une panne comptable ne doit pas prétendre avoir créé une écriture');
+    assert.match(incompleteInvoice.message, /comptabilisation à reprendre/i);
+
+    await admin.query(`
+      CREATE TABLE "${schema}".ecriture_sequences (
+        id SERIAL PRIMARY KEY,
+        entreprise_id INTEGER NOT NULL REFERENCES "${schema}".entreprises(id),
+        journal_id INTEGER NOT NULL REFERENCES "${schema}".journaux(id),
+        exercice INTEGER NOT NULL,
+        derniere_sequence INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX ecriture_sequences_scope_unique
+        ON "${schema}".ecriture_sequences (entreprise_id, journal_id, exercice);
+    `);
+    await admin.query(`GRANT ALL PRIVILEGES ON TABLE "${schema}".ecriture_sequences TO ${quotedRole}`);
+    await admin.query(`GRANT USAGE, SELECT ON SEQUENCE "${schema}".ecriture_sequences_id_seq TO ${quotedRole}`);
+    const resumedInvoice = await api(
+      `/achats/factures/${incompleteInvoice.data.id}/reprendre-comptabilisation`,
+      'POST',
+      { compteEcartId: varianceAccount.rows[0].id },
+    );
+    assert.ok(resumedInvoice.data.ecritureComptableId,
+      'La facture déjà créée doit pouvoir reprendre sa comptabilisation après correction du schéma');
+    const resumedInvoiceLink = await admin.query(
+      `SELECT ecriture_comptable_id FROM "${schema}".factures_achat
+       WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId, incompleteInvoice.data.id],
+    );
+    assert.equal(Number(resumedInvoiceLink.rows[0]?.ecriture_comptable_id), Number(resumedInvoice.data.ecritureComptableId));
+
     const secondSignup=await api('/public/inscription','POST',{
       nomEntreprise:'Autre entreprise isolée',
       nomAdministrateur:'Second administrateur',

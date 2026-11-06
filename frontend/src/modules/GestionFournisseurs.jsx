@@ -320,7 +320,7 @@ function FacturationTab({ fournisseurs }) {
       const response = await api.post('/achats/factures-avec-rapprochement', payload);
       const warnings = response.data?.coutRevient?.avertissements || [];
       alert([
-        'Facture créée avec succès.',
+        response.data?.message || 'Facture créée avec rapprochement réussi.',
         ...warnings,
       ].join('\n\n'));
       setShowFactureModal(false);
@@ -816,9 +816,21 @@ function FacturationTab({ fournisseurs }) {
                   )}
                 </div>
                 {selectedVarianceAccount && (
-                  <p style={{ color: '#247a45', fontSize: 13, margin: '6px 0 0' }}>
-                    Compte sélectionné : {selectedVarianceAccount.numero} — {selectedVarianceAccount.nom}
-                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 6 }}>
+                    <p style={{ color: '#247a45', fontSize: 13, margin: 0 }}>
+                      Compte sélectionné : {selectedVarianceAccount.numero} — {selectedVarianceAccount.nom}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFactureForm((current) => ({ ...current, compteEcartId: '' }));
+                        setCompteEcartSearch('');
+                      }}
+                      style={{ border: '1px solid #9aa7b2', borderRadius: 4, background: '#fff', padding: '5px 9px', cursor: 'pointer' }}
+                    >
+                      Modifier
+                    </button>
+                  </div>
                 )}
                   {!selectedVarianceAccount && comptesEcart.length > 0 && !normalizedAccountQuery && (
                     <p style={{ color: '#52606d', fontSize: 13, margin: '6px 0 0' }}>
@@ -1191,6 +1203,10 @@ export function GestionFournisseurs() {
     datePaiement: new Date().toISOString().slice(0, 10), reference: '', notes: '',
     compteBancaireId: '', appliquerEscompte: false, saving: false,
   });
+  const [invoiceAccountModal, setInvoiceAccountModal] = useState({
+    open: false, invoice: null, accounts: [], selectedId: '', query: '',
+    loading: false, saving: false, error: '',
+  });
 
   const nombreEnLettres = (n) => {
     const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
@@ -1521,6 +1537,65 @@ export function GestionFournisseurs() {
     }
   };
 
+  const openInvoiceAccountModal = async (invoice) => {
+    setInvoiceAccountModal({
+      open: true,
+      invoice,
+      accounts: [],
+      selectedId: String(invoice.compteEcartId || ''),
+      query: '',
+      loading: true,
+      saving: false,
+      error: '',
+    });
+    try {
+      const response = await api.get('/achats/comptes-ecarts');
+      const payload = response.data || response;
+      const accounts = payload.accounts || payload.data?.accounts || [];
+      setInvoiceAccountModal((current) => ({
+        ...current,
+        accounts,
+        selectedId: String(invoice.compteEcartId || payload.defaultAccountId || ''),
+        loading: false,
+        error: accounts.length ? '' : 'Aucun compte de charge ou de produit actif n’est disponible.',
+      }));
+    } catch (error) {
+      setInvoiceAccountModal((current) => ({
+        ...current,
+        loading: false,
+        error: error.response?.data?.message || 'Impossible de charger les comptes comptables.',
+      }));
+    }
+  };
+
+  const saveInvoiceAccount = async () => {
+    const invoice = invoiceAccountModal.invoice;
+    if (!invoice || !invoiceAccountModal.selectedId) {
+      setInvoiceAccountModal((current) => ({ ...current, error: 'Choisissez un compte comptable avant de continuer.' }));
+      return;
+    }
+    setInvoiceAccountModal((current) => ({ ...current, saving: true, error: '' }));
+    try {
+      const endpoint = `/achats/factures/${invoice.id}`;
+      const response = invoice.ecritureComptableId
+        ? await api.put(`${endpoint}/compte-ecart`, { compteEcartId: Number(invoiceAccountModal.selectedId) })
+        : await api.post(`${endpoint}/reprendre-comptabilisation`, { compteEcartId: Number(invoiceAccountModal.selectedId) });
+      const payload = response.data || response;
+      setInvoiceAccountModal({
+        open: false, invoice: null, accounts: [], selectedId: '', query: '',
+        loading: false, saving: false, error: '',
+      });
+      await loadAllData();
+      alert(payload.message || 'La mise à jour comptable a été enregistrée.');
+    } catch (error) {
+      setInvoiceAccountModal((current) => ({
+        ...current,
+        saving: false,
+        error: error.response?.data?.message || 'La mise à jour comptable n’a pas abouti.',
+      }));
+    }
+  };
+
   const openModal = (type, item = null) => {
     setModal({ open: true, type, item });
     if (type === 'fournisseur') {
@@ -1845,12 +1920,37 @@ export function GestionFournisseurs() {
                 { key: 'totalHT', label: 'HT', render: value => `${Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { key: 'totalTVA', label: 'TVA', render: value => `${Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { key: 'totalTTC', label: 'TTC', render: value => `${Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
-                { key: 'statut', label: 'Statut', render: value => value === 'brouillon' ? 'Brouillon — à vérifier' : value }
+                { key: 'statut', label: 'Statut', render: value => value === 'brouillon' ? 'Brouillon — à vérifier' : value },
+                {
+                  key: 'compteEcart',
+                  label: 'Compte d’écart',
+                  render: (value, row) => value
+                    ? `${value.numero} — ${value.nom}`
+                    : row.hasStockPending && !row.ecritureComptableId ? 'Comptabilisation à reprendre' : '—',
+                }
               ]}
               data={data.factures}
               actions={true}
               customActions={facture => (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {facture.statut === 'brouillon' && facture.hasStockPending && !facture.ecritureComptableId && (
+                      <Button
+                        size="small"
+                        variant="secondary"
+                        onClick={() => openInvoiceAccountModal(facture)}
+                      >
+                        Reprendre l’écriture
+                      </Button>
+                    )}
+                    {facture.statut === 'brouillon' && facture.ecritureComptableId && facture.compteEcartId && (
+                      <Button
+                        size="small"
+                        variant="secondary"
+                        onClick={() => openInvoiceAccountModal(facture)}
+                      >
+                        Modifier le compte
+                      </Button>
+                    )}
                   <Button
                     size="small"
                     variant="secondary"
@@ -1890,6 +1990,114 @@ export function GestionFournisseurs() {
                 </div>
               )}
             />
+          )}
+          {invoiceAccountModal.open && (
+            <Modal
+              isOpen={invoiceAccountModal.open}
+              onClose={() => !invoiceAccountModal.saving && setInvoiceAccountModal({
+                open: false, invoice: null, accounts: [], selectedId: '', query: '',
+                loading: false, saving: false, error: '',
+              })}
+              title={invoiceAccountModal.invoice?.ecritureComptableId
+                ? 'Modifier le compte d’écart'
+                : 'Reprendre la comptabilisation'}
+              size="medium"
+            >
+              <p>
+                Facture {invoiceAccountModal.invoice?.numeroFacture || ''}. Choisissez le compte à utiliser pour l’écart de prix.
+              </p>
+              {invoiceAccountModal.loading ? (
+                <p>Chargement des comptes…</p>
+              ) : (
+                <>
+                  {invoiceAccountModal.selectedId && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: 12, marginBottom: 12, background: '#edf7ef', borderRadius: 6 }}>
+                      <span>
+                        Compte choisi : {(() => {
+                          const account = invoiceAccountModal.accounts.find(
+                            item => String(item.id) === String(invoiceAccountModal.selectedId),
+                          );
+                          return account ? `${account.numero} — ${account.nom}` : 'compte non disponible';
+                        })()}
+                      </span>
+                      <Button
+                        type="button"
+                        size="small"
+                        variant="secondary"
+                        onClick={() => setInvoiceAccountModal(current => ({ ...current, selectedId: '', query: '' }))}
+                      >
+                        Choisir un autre compte
+                      </Button>
+                    </div>
+                  )}
+                  <label htmlFor="invoice-variance-account-search" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                    Rechercher un compte de charge ou de produit
+                  </label>
+                  <input
+                    id="invoice-variance-account-search"
+                    type="search"
+                    value={invoiceAccountModal.query}
+                    onChange={event => setInvoiceAccountModal(current => ({ ...current, query: event.target.value }))}
+                    placeholder="Code ou nom du compte"
+                    autoComplete="off"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: 10, marginBottom: 8 }}
+                  />
+                  {invoiceAccountModal.query.trim() && (
+                    <div role="listbox" aria-label="Comptes disponibles" style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #d8dee5', borderRadius: 6 }}>
+                      {invoiceAccountModal.accounts
+                        .filter(account => `${account.numero} ${account.nom}`.toLowerCase().includes(invoiceAccountModal.query.trim().toLowerCase()))
+                        .slice(0, 20)
+                        .map(account => (
+                          <button
+                            key={account.id}
+                            type="button"
+                            role="option"
+                            aria-selected={String(account.id) === String(invoiceAccountModal.selectedId)}
+                            onClick={() => setInvoiceAccountModal(current => ({
+                              ...current,
+                              selectedId: String(account.id),
+                              query: '',
+                              error: '',
+                            }))}
+                            style={{ display: 'block', width: '100%', padding: 10, textAlign: 'left', border: 0, borderBottom: '1px solid #edf0f3', background: '#fff', cursor: 'pointer' }}
+                          >
+                            {account.numero} — {account.nom}
+                          </button>
+                        ))}
+                      {!invoiceAccountModal.accounts.some(account => `${account.numero} ${account.nom}`.toLowerCase().includes(invoiceAccountModal.query.trim().toLowerCase())) && (
+                        <p style={{ padding: '8px 10px', margin: 0, color: '#687585' }}>Aucun compte correspondant.</p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+              {invoiceAccountModal.error && (
+                <p role="alert" style={{ color: '#a33434', marginTop: 12 }}>{invoiceAccountModal.error}</p>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+                <Button
+                  variant="secondary"
+                  disabled={invoiceAccountModal.saving}
+                  onClick={() => setInvoiceAccountModal({
+                    open: false, invoice: null, accounts: [], selectedId: '', query: '',
+                    loading: false, saving: false, error: '',
+                  })}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  variant="success"
+                  disabled={invoiceAccountModal.loading || invoiceAccountModal.saving || !invoiceAccountModal.selectedId}
+                  onClick={saveInvoiceAccount}
+                >
+                  {invoiceAccountModal.saving
+                    ? 'Enregistrement…'
+                    : invoiceAccountModal.invoice?.ecritureComptableId
+                      ? 'Enregistrer le compte'
+                      : 'Reprendre l’écriture'}
+                </Button>
+              </div>
+            </Modal>
           )}
           {supplierAvoirModal.open && (
             <Modal
