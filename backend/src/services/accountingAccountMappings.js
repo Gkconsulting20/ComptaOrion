@@ -24,6 +24,24 @@ export const ACCOUNTING_ACCOUNT_ROLES = [
 ];
 
 export const PRICE_VARIANCE_ACCOUNT_TYPES = ['charge', 'charges', 'produit', 'produits'];
+const PRICE_VARIANCE_ACCOUNT_TYPE_SET = new Set([
+  ...PRICE_VARIANCE_ACCOUNT_TYPES,
+  'expense',
+  'expenses',
+  'income',
+  'revenue',
+  'revenues',
+]);
+
+export function isPriceVarianceAccount(account) {
+  const type = String(account?.type || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim()
+    .toLowerCase();
+  const number = String(account?.numero || '').trim();
+  return PRICE_VARIANCE_ACCOUNT_TYPE_SET.has(type) || /^[67]/.test(number);
+}
 
 export const ACCOUNTING_ACCOUNT_ROLE_BY_KEY = new Map(
   ACCOUNTING_ACCOUNT_ROLES.map((role) => [role.key, role]),

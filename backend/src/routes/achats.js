@@ -15,6 +15,7 @@ import {
   notesCredit,
   notesCreditItems,
   comptesComptables,
+  comptesAutomatiques,
   entreprises,
 } from '../schema.js';
 import { eq, and, inArray, sql, desc } from 'drizzle-orm';
@@ -39,9 +40,53 @@ import {
 import { calculateCreditNoteVat, calculateReturnedLine } from '../services/creditNoteCalculations.js';
 import { generateCreditNoteNumber } from '../services/creditNoteNumbering.js';
 import { getPlanCapabilities } from '../services/planEntitlements.js';
-import { PRICE_VARIANCE_ACCOUNT_TYPES } from '../services/accountingAccountMappings.js';
+import { isPriceVarianceAccount } from '../services/accountingAccountMappings.js';
 
 const router = express.Router();
+
+router.get('/comptes-ecarts', async (req, res) => {
+  try {
+    const entrepriseId = Number(req.entrepriseId);
+    if (!Number.isSafeInteger(entrepriseId) || entrepriseId <= 0) {
+      return res.status(400).json({ success: false, message: 'Entreprise non identifiée.' });
+    }
+    const [activeAccounts, [varianceMapping], [company]] = await Promise.all([
+      db.select({
+        id: comptesComptables.id,
+        numero: comptesComptables.numero,
+        nom: comptesComptables.nom,
+        type: comptesComptables.type,
+        actif: comptesComptables.actif,
+      }).from(comptesComptables).where(and(
+        eq(comptesComptables.entrepriseId, entrepriseId),
+        eq(comptesComptables.actif, true),
+      )),
+      db.select({ compteComptableId: comptesAutomatiques.compteComptableId })
+        .from(comptesAutomatiques)
+        .where(and(
+          eq(comptesAutomatiques.entrepriseId, entrepriseId),
+          eq(comptesAutomatiques.roleKey, 'price_variances'),
+        ))
+        .limit(1),
+      db.select({ tauxTva: entreprises.tauxTva })
+        .from(entreprises)
+        .where(eq(entreprises.id, entrepriseId))
+        .limit(1),
+    ]);
+    const accounts = activeAccounts.filter(isPriceVarianceAccount);
+    const mappedId = varianceMapping?.compteComptableId;
+    const defaultAccount = accounts.find((account) => String(account.id) === String(mappedId))
+      || accounts.find((account) => String(account.numero) === '603');
+    res.json({
+      accounts,
+      defaultAccountId: defaultAccount ? String(defaultAccount.id) : '',
+      tauxTva: company?.tauxTva ?? null,
+    });
+  } catch (error) {
+    console.error('Erreur GET /achats/comptes-ecarts:', error);
+    res.status(500).json({ success: false, message: 'Impossible de charger les comptes d’écart.' });
+  }
+});
 
 // Génération automatique du numéro de facture achat
 async function genererNumeroFactureAchat(entrepriseId) {
@@ -964,16 +1009,15 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Fournisseur non trouvé' });
     }
     const fournisseur = fournisseurResult.rows[0];
-    const [varianceAccount] = await db.select({ id: comptesComptables.id })
+    const [varianceAccount] = await db.select()
       .from(comptesComptables)
       .where(and(
         eq(comptesComptables.id, varianceAccountId),
         eq(comptesComptables.entrepriseId, req.entrepriseId),
         eq(comptesComptables.actif, true),
-        inArray(comptesComptables.type, PRICE_VARIANCE_ACCOUNT_TYPES),
       ))
       .limit(1);
-    if (!varianceAccount) {
+    if (!varianceAccount || !isPriceVarianceAccount(varianceAccount)) {
       return res.status(400).json({
         success: false,
         message: 'Le compte d’écart doit être un compte actif de charge ou de produit de cette entreprise.',

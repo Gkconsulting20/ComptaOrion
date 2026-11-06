@@ -34,6 +34,7 @@ function FacturationTab({ fournisseurs }) {
   const [produits, setProduits] = useState([]);
   const [comptesEcart, setComptesEcart] = useState([]);
   const [compteEcartParDefaut, setCompteEcartParDefaut] = useState('');
+  const [comptesEcartError, setComptesEcartError] = useState('');
   const [tauxTva, setTauxTva] = useState(18);
   const [factureForm, setFactureForm] = useState({
     fournisseurId: '',
@@ -83,24 +84,16 @@ function FacturationTab({ fournisseurs }) {
 
   useEffect(() => {
     const loadAccountingSettings = async () => {
+      setComptesEcartError('');
       try {
-        const [companyRes, accountsRes, mappingsRes] = await Promise.all([
-          api.get('/parametres/entreprise'),
-          api.get('/comptabilite/comptes'),
-          api.get('/comptabilite/comptes-automatiques'),
-        ]);
-        const company = companyRes?.data?.data ?? companyRes?.data ?? {};
-        const accounts = readApiList(accountsRes).filter((account) =>
-          account.actif !== false && ['charge', 'charges', 'produit', 'produits'].includes(String(account.type || '').toLowerCase())
-        );
-        const mappings = mappingsRes?.data?.mappings ?? mappingsRes?.mappings ?? {};
-        const roles = mappingsRes?.data?.roles ?? mappingsRes?.roles ?? [];
-        const varianceRole = roles.find((role) => role.key === 'price_variances');
-        const mappedAccount = mappings.price_variances
-          ? accounts.find((account) => String(account.id) === String(mappings.price_variances))
-          : accounts.find((account) => String(account.numero) === String(varianceRole?.defaultNumber || '603'));
-        const defaultAccountId = mappedAccount ? String(mappedAccount.id) : '';
-        setTauxTva(Number.isFinite(Number(company.tauxTva)) ? Number(company.tauxTva) : 18);
+        const accountsResponse = await api.get('/achats/comptes-ecarts');
+        const accounts = Array.isArray(accountsResponse.accounts) ? accountsResponse.accounts : [];
+        const defaultAccountId = String(accountsResponse.defaultAccountId || '');
+        if (accountsResponse.tauxTva !== null
+          && accountsResponse.tauxTva !== undefined
+          && Number.isFinite(Number(accountsResponse.tauxTva))) {
+          setTauxTva(Number(accountsResponse.tauxTva));
+        }
         setComptesEcart(accounts);
         setCompteEcartParDefaut(defaultAccountId);
         setFactureForm((current) => ({
@@ -108,7 +101,10 @@ function FacturationTab({ fournisseurs }) {
           compteEcartId: current.compteEcartId || defaultAccountId,
         }));
       } catch (error) {
-        console.error('Impossible de charger les paramètres de TVA et de comptes:', error);
+        const message = error?.message || 'Impossible de charger les comptes d’écart.';
+        setComptesEcart([]);
+        setComptesEcartError(message);
+        console.error('Impossible de charger les comptes d’écart:', error);
       }
     };
     loadAccountingSettings();
@@ -701,9 +697,14 @@ function FacturationTab({ fournisseurs }) {
                 <p style={{ color: '#52606d', fontSize: 13, margin: '6px 0 0' }}>
                   Écart HT constaté : {totalVariance.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF. Il sera débité si défavorable, crédité si favorable.
                 </p>
-                {!comptesEcart.length && (
+                {comptesEcartError && (
                   <p style={{ color: '#b42318', fontSize: 13, margin: '6px 0 0' }}>
-                    Aucun compte actif de charge ou de produit n’est disponible dans le plan comptable.
+                    Chargement des comptes impossible : {comptesEcartError}
+                  </p>
+                )}
+                {!comptesEcartError && !comptesEcart.length && (
+                  <p style={{ color: '#b42318', fontSize: 13, margin: '6px 0 0' }}>
+                    Aucun compte actif de charge ou de produit n’est disponible dans le plan comptable. Vérifiez qu’un compte de charges ou de produits est actif.
                   </p>
                 )}
               </div>

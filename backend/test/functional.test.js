@@ -724,6 +724,11 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     );
     assert.ok(varianceAccount.rows[0]?.id,
       'Le plan comptable de test doit offrir un compte actif pour enregistrer les écarts');
+    const availableVarianceAccounts = await api('/achats/comptes-ecarts');
+    assert.ok(
+      availableVarianceAccounts.accounts.some(account => Number(account.id) === Number(varianceAccount.rows[0].id)),
+      'L’API achats doit rendre le compte de charge au pluriel disponible au rapprochement',
+    );
     const matchedInvoice = await api('/achats/factures-avec-rapprochement', 'POST', {
       fournisseurId: supplierRecord.data.id,
       numeroFactureFournisseur: 'FACT-FOURN-TEST',

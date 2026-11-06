@@ -13,7 +13,7 @@ import {
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { formatJournalEntryNumber } from './sequentialNumbering.js';
 import { buildCashSettlementEntryLines } from './cashDiscountAccounting.js';
-import { ACCOUNTING_ACCOUNT_ROLES, PRICE_VARIANCE_ACCOUNT_TYPES } from './accountingAccountMappings.js';
+import { ACCOUNTING_ACCOUNT_ROLES, isPriceVarianceAccount } from './accountingAccountMappings.js';
 
 const JOURNAL_CODES = {
   ACHATS: 'AC',
@@ -429,9 +429,8 @@ export async function createEcritureFactureAchat(params) {
       eq(comptesComptables.id, Number(compteEcartId)),
       eq(comptesComptables.entrepriseId, Number(entrepriseId)),
       eq(comptesComptables.actif, true),
-      inArray(comptesComptables.type, PRICE_VARIANCE_ACCOUNT_TYPES),
     )).limit(1);
-    if (!compteEcarts) {
+    if (!compteEcarts || !isPriceVarianceAccount(compteEcarts)) {
       throw new Error('Le compte choisi pour les écarts est absent, inactif ou n’appartient pas à cette entreprise.');
     }
   } else {

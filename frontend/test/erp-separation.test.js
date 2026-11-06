@@ -86,7 +86,8 @@ test('la fiche client accepte un nom saisi et propose les comptes collectifs bie
   assert.match(clients, /Prestations de services — 4112/);
 });
 
-test('le rapprochement propose les types SYSCOHADA singuliers et pluriels', async () => {
+test('le rapprochement charge les comptes via l’API achats dédiée', async () => {
   const suppliers = await read('../src/modules/GestionFournisseurs.jsx');
-  assert.match(suppliers, /\['charge', 'charges', 'produit', 'produits'\]\.includes/);
+  assert.match(suppliers, /api\.get\('\/achats\/comptes-ecarts'\)/);
+  assert.doesNotMatch(suppliers, /api\.get\('\/comptabilite\/comptes'\)/);
 });
