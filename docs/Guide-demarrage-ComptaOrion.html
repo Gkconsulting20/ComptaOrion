@@ -107,7 +107,7 @@
     <h1>Bien démarrer avec ComptaOrion</h1>
     <p class="lead">Un parcours pratique, de la configuration de l’entreprise aux ventes, achats, écritures et contrôles de fin de période.</p>
     <div class="meta">
-      <span>Interface en français</span><span>Devise courante : XOF</span><span>Comptabilité SYSCOHADA disponible</span>
+      <span>Interface en français</span><span>Devise courante : XOF</span><span>SYSCOHADA par défaut · plan personnalisé en option</span>
     </div>
       <p class="publisher-note"><strong>Éditeur :</strong> ORIONEXA · Agbodrafo, Togo · Tél. 90 54 15 15 · <a href="mailto:admin@orionexa.com">admin@orionexa.com</a></p>
 
@@ -120,6 +120,7 @@
       <h2>Dans ce guide</h2>
       <ol>
         <li><a href="#acces">Accéder au logiciel</a></li>
+        <li><a href="#forfaits">Comprendre les forfaits</a></li>
         <li><a href="#configuration">Configurer l’entreprise</a></li>
         <li><a href="#utilisateurs">Créer les utilisateurs et régler les droits</a></li>
         <li><a href="#fiches">Créer les fiches clients et fournisseurs</a></li>
@@ -143,19 +144,39 @@
       <div class="step"><span class="step-num">3</span><div><h3>Vérifier le nom de l’entreprise</h3><p>Avant toute saisie, confirmez dans l’en-tête que vous êtes dans la bonne entreprise. Si un module ou une action manque, demandez à l’administrateur de vérifier vos droits.</p></div></div>
     </section>
 
+    <section id="forfaits">
+      <h2>Votre forfait et les fonctions associées</h2>
+      <p>Les trois forfaits comprennent les fonctions de gestion courante, les droits utilisateurs par module et trois utilisateurs. Les tarifs mensuels et annuels à jour figurent dans l’offre commerciale ComptaOrion.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Forfait</th><th>Fonctions distinctives</th><th>Coût et prix des produits</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Base</strong></td><td>Socle ERP, ventes, achats, trésorerie, stock, comptabilité et rapports.</td><td>Saisie manuelle du coût de revient et du prix de vente.</td></tr>
+            <tr><td><strong>Standard</strong></td><td>Fonctions Base et lecture OCR des factures fournisseurs par photo.</td><td>Saisie manuelle du coût de revient et du prix de vente.</td></tr>
+            <tr><td><strong>Premium</strong></td><td>OCR, calcul des coûts et prix de vente, comptabilité associative et rapports détaillables.</td><td>Calcul automatique à partir des coûts réellement reçus et de la marge définie.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout callout--blue">
+        <strong>Essai gratuit de 30 jours</strong>
+        L’essai commence à la création de l’organisation, sans paiement, et inclut le calcul automatique des coûts pour le tester. À l’échéance, l’accès est bloqué; contactez ComptaOrion pour connaître la suite.
+      </div>
+      <p class="small">Le parcours d’invitation et de connexion du cabinet comptable gratuit doit encore être validé; ne comptez pas sur cet accès tant que l’administrateur ne vous a pas confirmé qu’il est disponible.</p>
+    </section>
+
     <section id="configuration">
       <h2>2. Configurer l’entreprise</h2>
       <p>Un administrateur d’entreprise ouvre <span class="path">Paramètres → Entreprise</span> et vérifie les informations suivantes avant de saisir des opérations :</p>
       <ul>
         <li>nom, raison sociale, adresse, ville, pays, téléphone et e-mail ;</li>
         <li>devise de tenue des comptes, par exemple <strong>XOF</strong> ;</li>
-        <li>système comptable, par exemple <strong>SYSCOHADA</strong> ;</li>
+        <li>système comptable : <strong>SYSCOHADA</strong> par défaut, avec la possibilité de préparer un plan comptable personnalisé ;</li>
         <li>dates de début et de fin d’exercice fiscal ;</li>
         <li>forme juridique, identifiants fiscaux et mentions à imprimer sur les factures ;</li>
         <li>taux de TVA appliqué aux documents, après validation par votre comptable.</li>
       </ul>
       <div class="callout"><strong>À faire avant la première écriture</strong>Vérifiez les dates d’exercice, la devise et le plan comptable. N’appliquez pas un taux fiscal ou une règle de comptabilisation uniquement parce qu’elle apparaît comme valeur proposée dans un écran.</div>
-      <p>Dans <span class="path">Paramètres → Système comptable</span>, vérifiez le référentiel actif. Les onglets Devises, Pays &amp; Régions et Taxes présentent les paramètres disponibles.</p>
+      <p>Dans <span class="path">Paramètres → Système comptable</span>, vérifiez le référentiel actif. SYSCOHADA reste le modèle par défaut; le plan personnalisé se gère dans <span class="path">Comptabilité → Plan comptable</span>. Les onglets Devises, Pays &amp; Régions et Taxes présentent les paramètres disponibles.</p>
     </section>
 
     <section id="utilisateurs">
@@ -174,10 +195,10 @@
     <section id="fiches">
       <h2>4. Créer les fiches clients et fournisseurs</h2>
       <h3>Clients</h3>
-      <p>Ouvrez <span class="path">Clients → Paramètres → Clients</span>, puis créez une fiche par client. Saisissez son nom, ses coordonnées, son adresse de facturation, ses délais et les renseignements nécessaires aux documents commerciaux. Vérifiez ensuite que la fiche est disponible dans les devis et factures.</p>
+      <p>Ouvrez <span class="path">Clients → Paramètres → Clients</span>, puis créez une fiche par client. Saisissez son nom, ses coordonnées, son adresse de facturation et ses renseignements commerciaux. Un identifiant auxiliaire unique est attribué automatiquement : utilisez-le pour retrouver le client et produire son état de compte. Les écritures de tous les clients utilisent le compte collectif 4111; aucun compte général distinct n’est créé pour chaque client.</p>
       <h3>Fournisseurs</h3>
-      <p>Ouvrez <span class="path">Fournisseurs → Paramètres → Fournisseurs</span>, puis créez une fiche séparée pour chaque fournisseur. Enregistrez ses coordonnées, ses conditions de paiement et les références utiles pour rapprocher les factures et les règlements. N’utilisez pas une fiche générique pour plusieurs fournisseurs.</p>
-      <p>Les listes et états de compte permettent ensuite de retrouver les opérations de chaque tiers.</p>
+      <p>Ouvrez <span class="path">Fournisseurs → Paramètres → Fournisseurs</span>, puis créez une fiche séparée pour chaque fournisseur. Un identifiant auxiliaire unique est attribué automatiquement et sert à retrouver sa fiche et son état de compte. Les écritures utilisent le compte collectif fournisseurs; ne choisissez pas un compte général différent pour chaque fournisseur.</p>
+      <p>Pour chaque client et fournisseur, réglez les conditions de paiement : à réception ou avec l’échéance prévue (par exemple 15, 30 ou 60 jours). Si un escompte de règlement est convenu, indiquez son pourcentage et le délai correspondant. L’escompte de règlement est calculé sur le HT, mais ne modifie ni la facture d’origine ni sa TVA; un escompte commercial figurant sur une facture d’achat, lui, peut modifier le prix du bien et la taxe.</p>
     </section>
 
     <section id="stock">
@@ -187,26 +208,31 @@
         <li>Indiquez une référence, un nom, une catégorie et l’unité de stock principale.</li>
         <li>Ajoutez les conversions utiles entre unités : par exemple 1 tonne = 1 000 kg.</li>
         <li>Pour un article vendu à la pièce ou au sac, indiquez son poids par unité et l’unité de poids.</li>
-        <li>Vérifiez le stock minimum, le prix d’achat de départ et le compte comptable associé.</li>
+        <li>Vérifiez le stock minimum, le coût standard indiqué sur le devis fournisseur et le compte comptable associé.</li>
       </ol>
+      <div class="callout">
+        <strong>Coût manuel ou coût calculé selon le forfait</strong>
+        En Base et Standard, renseignez vous-même le coût de revient et le prix de vente. En Premium et pendant l’essai, le prix du devis fournisseur constitue un coût standard de référence : il ne sert pas à calculer le prix de vente. Après la première réception, le système calcule le coût réel avec les frais logistiques et peut établir le prix de vente selon la majoration choisie. Avant cette réception, le prix de vente calculé n’est pas disponible.
+      </div>
       <div class="callout callout--blue">
         <strong>Exemple de conversion et de frais de transport</strong>
-        Si le stock principal est en kg, une réception de 1 tonne doit représenter 1 000 kg. Si le transport groupé coûte 10 000 XOF, le système répartit ce coût en fonction du poids des lignes reçues. Un poids manquant ou une unité mal configurée peut empêcher une répartition fiable.
+        Si le stock principal est en kg, une réception de 1 tonne doit représenter 1 000 kg. En Premium et pendant l’essai, si le transport groupé coûte 10 000 XOF, le système répartit ce coût en fonction du poids des lignes reçues. Un poids manquant ou une unité mal configurée peut empêcher une répartition fiable.
       </div>
-      <p>Dans les rapports de stock, contrôlez le coût moyen pondéré (CMP), les quantités et la valeur de stock après chaque réception importante. Une vente utilise le coût moyen courant pour calculer le coût des marchandises vendues ; elle ne doit pas recalculer le coût d’achat du stock restant.</p>
-      <p>Dans la table de prix de vente, l’utilisateur définit la majoration appliquée au coût : par exemple, un CMP de 100,00 XOF avec une majoration de 30 % donne un prix de vente de 130,00 XOF avant taxes. Cette formule est une majoration sur le coût, pas une marge de 30 % du prix final.</p>
+      <p>En Premium et pendant l’essai, contrôlez le coût moyen pondéré (CMP), les quantités et la valeur de stock après chaque réception importante. Une vente utilise le coût moyen courant pour calculer le coût des marchandises vendues ; elle ne doit pas recalculer le coût d’achat du stock restant.</p>
+      <p>Dans la bibliothèque Premium de prix de vente, l’utilisateur définit la majoration appliquée au coût réel : par exemple, un CMP de 100,00 XOF avec une majoration de 30 % donne un prix de vente de 130,00 XOF avant taxes. Cette formule est une majoration sur le coût, pas une marge de 30 % du prix final.</p>
     </section>
 
     <section id="achats">
       <h2>6. Saisir un achat et une facture fournisseur</h2>
       <ol>
-        <li>Dans <span class="path">Stock → Commandes</span>, créez la commande fournisseur avec les produits, quantités, unités, prix et dates prévues.</li>
-        <li>À l’arrivée, ouvrez <span class="path">Stock → Réceptions</span> et enregistrez les quantités réellement reçues. Corrigez les écarts avant de valider.</li>
-        <li>Dans <span class="path">Fournisseurs → Facturation</span>, rapprochez la facture fournisseur avec les réceptions et ajoutez les frais logistiques sur leurs lignes de charge réelles (transport, douane, manutention, par exemple).</li>
-        <li>Vérifiez le poids converti de chaque article et la ventilation des frais logistiques avant validation.</li>
-        <li>Dans <span class="path">Fournisseurs → Paiements</span>, enregistrez uniquement les règlements effectivement effectués. Un achat à crédit reste dû tant qu’il n’est pas payé.</li>
+        <li>Pour une marchandise, ouvrez <span class="path">Stock → Commandes</span> et créez un bon avec le fournisseur, les produits, quantités, unités, prix fournisseur et frais logistiques prévisionnels.</li>
+        <li>Vous pouvez corriger le bon avant la première réception. Après la réception, le bon n’est plus modifiable.</li>
+        <li>À l’arrivée, enregistrez les quantités réellement reçues et corrigez les écarts avant de valider. La réception met le stock à jour et crée le suivi des coûts logistiques non facturés.</li>
+        <li>Quand les justificatifs arrivent, rapprochez la facture des réceptions dans <span class="path">Fournisseurs → Réceptions &amp; factures de stock</span>. Vérifiez les frais réels, les comptes de charge et la ventilation par poids avant validation.</li>
+        <li>Pour un service ou un achat sans stock, utilisez la saisie directe des factures fournisseur; ne créez pas une réception de stock pour ces dépenses.</li>
+        <li>Enregistrez uniquement les règlements effectivement effectués dans <span class="path">Fournisseurs → Paiements</span>. Un achat à crédit reste dû tant qu’il n’est pas payé.</li>
       </ol>
-      <p>Si la facture n’est pas encore disponible, les rapports <span class="path">Stock → Non facturé</span> et <span class="path">Fournisseurs → Facturation</span> aident à repérer les réceptions et frais en attente.</p>
+      <p>Si la facture n’est pas encore disponible, consultez les coûts logistiques non facturés. Un retour physique fournisseur peut produire un avoir et un mouvement de stock; un avoir qualité sans retour ajuste le compte fournisseur sans changer la quantité en stock.</p>
     </section>
 
     <section id="ventes">
@@ -217,6 +243,8 @@
         <li>Quand la vente est confirmée, convertissez le devis en facture ou créez la facture dans <span class="path">Clients → Factures Client</span>.</li>
         <li>Si la livraison est suivie séparément, créez le bon dans <span class="path">Clients → Bons de Livraison</span>.</li>
         <li>Dans <span class="path">Clients → Paiements</span>, saisissez la date, le montant, le mode et le compte réellement utilisés. Pour un paiement partiel, enregistrez seulement la somme reçue.</li>
+        <li>Pour un retour physique, utilisez l’action « Avoir / retour » sur la facture concernée : le client est crédité et le stock retourné reprend le coût historique de la vente. Une note de débit client sert à augmenter une créance pour un ajustement distinct d’un retour.</li>
+        <li>Si un escompte de règlement est applicable, vérifiez son délai et son montant avant de confirmer le paiement : la remise est calculée sur le HT, tandis que la facture et la TVA restent inchangées.</li>
       </ol>
       <p>Vérifiez l’état du compte client et le solde restant après chaque règlement. Les factures validées peuvent générer des écritures comptables et diminuer le stock.</p>
     </section>
@@ -226,6 +254,7 @@
       <p>Dans <span class="path">Trésorerie</span>, commencez par vérifier les comptes bancaires et de caisse. Les sections disponibles comprennent le tableau de bord, les comptes, les transactions, les prévisions et le rapprochement.</p>
       <ul>
         <li>Saisissez les encaissements et décaissements réels à la bonne date et sur le bon compte.</li>
+        <li>Un chèque client est enregistré à sa réception au compte « chèques à encaisser »; lors du dépôt, transférez-le vers le compte bancaire. La réception du chèque et le dépôt sont deux opérations distinctes.</li>
         <li>Ne saisissez pas un achat fournisseur deux fois : la facture constate la dette ou la charge, le paiement constate le règlement.</li>
         <li>Comparez périodiquement le solde du logiciel avec le relevé bancaire ou le journal de caisse.</li>
         <li>Utilisez les prévisions pour les montants attendus, sans les confondre avec des paiements exécutés.</li>
@@ -236,11 +265,12 @@
       <h2>9. Contrôler la comptabilité</h2>
       <p>Le module <span class="path">Comptabilité</span> regroupe le plan comptable, les écritures, le contrôle d’audit, les écritures récurrentes, le grand livre, la balance, les rapports et les paramètres.</p>
       <ul>
-        <li>Contrôlez les journaux et le plan comptable avant les premières saisies.</li>
+        <li>Contrôlez les journaux et le plan comptable avant les premières saisies. SYSCOHADA est le modèle par défaut; une entreprise peut utiliser son plan personnalisé après avoir vérifié les comptes et correspondances.</li>
         <li>Examinez les écritures générées par les factures, paiements, achats et projets.</li>
         <li>Consultez la balance et le grand livre pour repérer les erreurs, comptes inattendus ou soldes anormaux.</li>
+        <li>Les états de compte client et fournisseur se retrouvent par leur identifiant auxiliaire unique, même si les écritures utilisent un compte collectif dans le grand livre.</li>
         <li>Dans les états financiers, cliquez sur les montants détaillables pour ouvrir les opérations qui les composent, lorsque cette action est disponible.</li>
-        <li>Vérifiez la période sélectionnée avant d’imprimer ou d’exporter un rapport.</li>
+        <li>Les rapports affichent le choix de période dans un sélecteur compact en haut de l’écran. Choisissez une période prédéfinie ou ouvrez les dates personnalisées; pour la balance, cliquez sur « Générer » après avoir choisi la période.</li>
       </ul>
       <p class="small">Une écriture déséquilibrée ou un mauvais compte doit être corrigé selon la procédure comptable de votre entreprise. Ne modifiez pas une opération historique sans conserver les justificatifs et suivre l’historique d’audit.</p>
     </section>
@@ -302,7 +332,7 @@
         <li>Enregistrer les ventes et règlements réellement reçus.</li>
         <li>Saisir les achats et paiements réellement effectués.</li>
         <li>Comparer les soldes de caisse et de banque.</li>
-        <li>Contrôler les réceptions, livraisons et quantités de stock.</li>
+        <li>Contrôler les commandes, réceptions, livraisons et quantités de stock.</li>
         <li>Rattacher les dépenses aux projets concernés.</li>
         <li>Conserver les factures, reçus et pièces justificatives.</li>
       </ul>

@@ -1,15 +1,18 @@
 import React from 'react';
 import './commercial-offers.css';
 
-const BASE_FEATURES = [
-  'Clients, devis, factures et règlements',
-  'Fournisseurs, achats et échéances',
-  'Trésorerie : banque, caisse et prévisions',
-  'Gestion du stock, unités et conversions',
-  'Saisie des factures fournisseur',
-  'Comptabilité générale, journaux et états financiers',
+const CORE_FEATURES = [
+  'Clients et fournisseurs avec identifiant unique et état de compte',
+  'Devis, factures, règlements, échéances et escompte de règlement',
+  'Retours et avoirs, notes de débit client et avoirs qualité fournisseur',
+  'Commandes fournisseur, réceptions de stock et factures directes pour les services sans stock',
+  'Trésorerie : banque, caisse, prévisions, réception et dépôt des chèques clients',
+  'Stock, entrepôts, unités et conversions',
+  'Dépenses et import de fichiers compatibles',
+  'Comptabilité générale, journaux, balance, grand livre et états financiers',
+  'SYSCOHADA par défaut, avec plan comptable personnalisé facultatif',
+  'Impôts : relevés et brouillons indicatifs, sans dépôt auprès de l’OTR',
   'Gestion des utilisateurs et des droits par module',
-  'Invitation gratuite d’un comptable externe (1 compte par entreprise, hors quota des 3 utilisateurs)',
   'Tableau de bord de suivi'
 ];
 
@@ -19,7 +22,7 @@ const OFFERS = [
     audience: 'Pour démarrer avec une gestion centralisée',
     description: 'Les fonctions essentielles pour suivre l’activité et tenir les comptes.',
     features: [
-      ...BASE_FEATURES,
+      ...CORE_FEATURES,
       'Coût de revient et prix de vente définis manuellement'
     ],
     monthlyPrice: '9 900,00 XOF',
@@ -29,9 +32,9 @@ const OFFERS = [
   {
     name: 'Standard',
     audience: 'Pour mieux maîtriser les achats et les marges',
-    description: 'Le socle Base avec une gestion manuelle des coûts et prix produits.',
+    description: 'Le socle Base avec la lecture OCR des factures fournisseurs.',
     features: [
-      ...BASE_FEATURES,
+      ...CORE_FEATURES,
       'Coût de revient et prix de vente définis manuellement',
       'Lecture OCR des factures fournisseurs par photo (français)'
     ],
@@ -45,11 +48,10 @@ const OFFERS = [
     audience: 'Pour les organisations et activités par projet',
     description: 'Le socle Standard, avec le calcul automatique du coût réel et du prix de vente.',
     features: [
-      ...BASE_FEATURES,
+      ...CORE_FEATURES,
       'Lecture OCR des factures fournisseurs par photo (français)',
-      'Coût moyen pondéré avec frais logistiques répartis selon le poids',
-      'Catalogue de prix de vente calculé selon la marge définie',
-      'Prix de vente calculé depuis le coût réel et la marge choisie',
+      'Coût moyen pondéré calculé depuis les réceptions, avec frais logistiques répartis selon le poids',
+      'Prix de vente calculé depuis le coût réel reçu et la majoration choisie; aucun prix calculé avant réception',
       'Comptabilité associative : budgets, financements et dépenses par projet',
       'Suivi des paiements partiels et du solde des projets',
       'Détail des montants des états financiers et accès aux opérations'
@@ -108,8 +110,10 @@ export default function CommercialOffers() {
         <span>
           Paie &amp; RH, Assistant IA et Immobilisations sont exclus de l’offre actuelle.
           Un utilisateur supplémentaire est proposé à 2 500,00 XOF par mois.
-          Le traitement HT/TTC doit être confirmé avant facturation. Les limites par forfait et la facturation
-          automatique ne sont pas encore appliquées dans le parcours d’inscription.
+          Le calcul automatique du coût est contrôlé côté serveur pour Premium et l’essai; les autres différences
+          Standard/Premium doivent encore être vérifiées côté serveur avant de promettre une restriction par forfait.
+          L’accès gratuit d’un comptable invité reste un avantage prévu, mais son parcours de connexion, notamment le lien WhatsApp,
+          doit être validé avant de le présenter comme opérationnel. Le traitement HT/TTC doit être confirmé avant facturation.
           Ne pas présenter la préparation fiscale comme un dépôt officiel.
         </span>
       </aside>

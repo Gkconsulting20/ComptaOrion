@@ -59,11 +59,11 @@ La démo destinée aux prospects doit montrer les modules métiers importants de
 
 **How to apply:** présenter les fonctionnalités métiers avec des données fictives; ne pas ajouter Paie & RH ni Assistant IA au menu public de démonstration ou à la liste des fonctionnalités vendues.
 
-La répartition commerciale approuvée est : Base pour le socle ERP et les droits par module; Standard ajoute l’OCR fournisseur, le coût moyen pondéré avec frais répartis au poids et la bibliothèque de prix; Premium ajoute la comptabilité associative par projet, les paiements partiels et le détail des états financiers.
+La répartition commerciale approuvée est : Base pour le socle ERP et les droits par module avec coût et prix saisis manuellement; Standard ajoute l’OCR fournisseur en conservant la saisie manuelle des coûts; Premium ajoute le coût moyen pondéré avec frais répartis au poids, les prix calculés, la comptabilité associative et les rapports détaillables. L’essai de 30 jours inclut aussi le calcul automatique.
 
-**Why:** l’utilisateur a autorisé la publication Cloudflare après avoir vu et reçu le résumé de cette répartition.
+**Why:** l’utilisateur a précisé que le calcul automatique de coût est réservé à Premium, mais doit aussi être inclus dans l’essai, et que les autres forfaits saisissent leurs coûts et prix manuellement.
 
-**How to apply:** conserver cette répartition dans l’offre; exclure Paie & RH, Assistant IA et Immobilisations. Ne pas inventer de tarifs ni prétendre que les limites par forfait sont appliquées avant configuration et validation.
+**How to apply:** conserver cette répartition dans l’offre; exclure Paie & RH, Assistant IA et Immobilisations. Les prix restent ceux acceptés dans l’offre. Ne pas prétendre que les différences autres que le calcul automatique sont verrouillées côté serveur avant vérification.
 
 La version à jour du guide de mise en route doit rester accessible à l’administrateur de la plateforme dans l’espace Admin SaaS et être actualisée au fil des changements de ComptaOrion.
 
