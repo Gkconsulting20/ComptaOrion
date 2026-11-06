@@ -564,8 +564,9 @@ function FacturationTab({ fournisseurs }) {
                     required
                     aria-invalid={!String(factureForm.numeroFactureFournisseur || '').trim()}
                     onChange={(e) => {
+                      const value = e.currentTarget.value;
                       setFactureSubmitError('');
-                      setFactureForm(prev => ({ ...prev, numeroFactureFournisseur: e.target.value }));
+                      setFactureForm(prev => ({ ...prev, numeroFactureFournisseur: value }));
                     }}
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
                   <small style={{ display: 'block', marginTop: 4, color: '#52606d' }}>
