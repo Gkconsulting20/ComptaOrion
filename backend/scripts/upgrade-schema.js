@@ -19,6 +19,7 @@ const migrationScopes = new Map([
     'clients', 'fournisseurs', 'factures', 'factures_achat',
     'paiements', 'paiements_fournisseurs', 'notes_credit', 'notes_credit_items',
   ])],
+  ['supplier-invoice-reconciliation', new Set(['factures_achat', 'stock_pending', 'logistique_pending'])],
   ['custom-accounting', new Set(['comptes_automatiques'])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
@@ -61,7 +62,7 @@ try {
     if (!present.has(name)) {
       if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations' &&
           scope !== 'credit-notes-cheques' && scope !== 'commercial-adjustments' &&
-          scope !== 'custom-accounting') {
+          scope !== 'supplier-invoice-reconciliation' && scope !== 'custom-accounting') {
         throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
       }
       actions.push(statement);

@@ -23,3 +23,4 @@
 - [Éditeur ComptaOrion](publisher-identity.md) — ORIONEXA édite ComptaOrion; utiliser ses coordonnées uniquement pour les contacts éditeur.
 - [Compte collectif clients](collective-client-account.md) — numéro auxiliaire unique par client, mais toutes les écritures au compte général collectif 4111.
 - [Identifiants auxiliaires des tiers](third-party-identifiers.md) — numéro client/fournisseur unique affiché et utilisé pour retrouver l’état de compte.
+- [Rapprochement des factures fournisseur](supplier-invoice-reconciliation.md) — tester ensemble le schéma, les réceptions en attente et l’écriture comptable du rapprochement.

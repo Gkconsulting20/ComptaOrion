@@ -246,6 +246,7 @@ export const facturesAchat = pgTable('factures_achat', {
   montantPaye: decimal('montant_paye', { precision: 15, scale: 2 }).default('0'),
   soldeRestant: decimal('solde_restant', { precision: 15, scale: 2 }).default('0'),
   notes: text('notes'),
+  ecritureComptableId: integer('ecriture_comptable_id').references(() => ecritures.id),
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -502,7 +503,12 @@ export const stockPending = pgTable('stock_pending', {
   entrepotId: integer('entrepot_id').references(() => entrepots.id),
   
   statut: varchar('statut', { length: 50 }).default('pending'),
+  factureAchatId: integer('facture_achat_id'),
+  dateFacturation: timestamp('date_facturation'),
+  prixReel: decimal('prix_reel', { precision: 15, scale: 2 }),
+  ecartPrix: decimal('ecart_prix', { precision: 15, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 export const logistiquePending = pgTable('logistique_pending', {
@@ -517,12 +523,16 @@ export const logistiquePending = pgTable('logistique_pending', {
   description: text('description'),
   montantEstime: decimal('montant_estime', { precision: 15, scale: 2 }).notNull(),
   montantFacture: decimal('montant_facture', { precision: 15, scale: 2 }),
+  montantReel: decimal('montant_reel', { precision: 15, scale: 2 }),
+  ecartMontant: decimal('ecart_montant', { precision: 15, scale: 2 }),
   
   dateReception: date('date_reception').notNull(),
+  dateFacturation: timestamp('date_facturation'),
   
   statut: varchar('statut', { length: 50 }).default('pending'),
   factureAchatId: integer('facture_achat_id'),
   createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // ==========================================

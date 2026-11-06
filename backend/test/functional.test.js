@@ -700,6 +700,46 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       'La réception met aussi à jour la quantité dans l’entrepôt choisi');
     assert.ok(firstReceipt.data.receptionNumero,
       'Chaque réception issue d’une commande reçoit un numéro de bon');
+    const pendingReceipts = await api(
+      `/achats/receptions-en-attente?fournisseurId=${supplierRecord.data.id}`,
+    );
+    assert.equal(pendingReceipts.data.length, 2,
+      'Les réceptions de la commande doivent être proposées au rapprochement de facture');
+    const stockPendingReport = await api('/stock/rapports/stock-non-facture');
+    const logisticsPendingReport = await api('/stock/rapports/logistique-non-facturee');
+    assert.equal(stockPendingReport.items.length, 4,
+      'Le rapport doit exposer le stock non facturé des réceptions');
+    assert.equal(logisticsPendingReport.items.length, 2,
+      'Le rapport doit exposer les frais logistiques non facturés des réceptions');
+    const matchedInvoice = await api('/achats/factures-avec-rapprochement', 'POST', {
+      fournisseurId: supplierRecord.data.id,
+      numeroFactureFournisseur: 'FACT-FOURN-TEST',
+      dateFacture: new Date().toISOString().slice(0, 10),
+      receptionsIds: pendingReceipts.data.map(receipt => receipt.id),
+      totalTVA: 0,
+      lignes: [
+        { produitId: productId, quantite: 10, uniteSaisie: 'pièce', prixUnitaireReel: 500, description: 'Produit recette' },
+        { produitId: secondCostProduct.data.id, quantite: 10, uniteSaisie: 'pièce', prixUnitaireReel: 2000, description: 'Produit léger recette' },
+      ],
+      coutsLogistiques: [
+        { type: 'transport', montantReel: 100, description: 'Transport commun' },
+      ],
+    }, 201);
+    assert.equal(matchedInvoice.data.receptionsRapprochees, 2,
+      'La facture doit rapprocher toutes les réceptions sélectionnées');
+    const linkedAccountingEntry = await admin.query(
+      `SELECT ecriture_comptable_id FROM "${schema}".factures_achat
+       WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId, matchedInvoice.data.id],
+    );
+    assert.ok(linkedAccountingEntry.rows[0]?.ecriture_comptable_id,
+      'La facture rapprochée doit conserver le lien vers son écriture comptable');
+    const stockPendingAfterMatch = await api('/stock/rapports/stock-non-facture');
+    const logisticsPendingAfterMatch = await api('/stock/rapports/logistique-non-facturee');
+    assert.equal(stockPendingAfterMatch.items.length, 0,
+      'Le rapprochement doit solder les lignes de stock non facturées');
+    assert.equal(logisticsPendingAfterMatch.items.length, 0,
+      'Le rapprochement doit solder les frais logistiques non facturés');
     const receivedProduct = (await admin.query(
       `SELECT prix_achat, cout_moyen, prix_vente FROM "${schema}".produits WHERE entreprise_id = $1 AND id = $2`,
       [signup.user.entrepriseId,productId],
