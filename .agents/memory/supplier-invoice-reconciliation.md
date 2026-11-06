@@ -14,3 +14,9 @@ Le numéro externe de facture fournisseur est saisi manuellement par l’utilisa
 **Why:** L’utilisateur a signalé plusieurs fois que le champ du numéro externe ne permettait pas de garder le curseur ni de saisir le numéro.
 
 **How to apply:** Garder ce champ directement éditable dans le formulaire de rapprochement, synchroniser la saisie avec l’état envoyé à l’API et vérifier qu’aucun pied fixe ou élément superposé ne bloque le clic.
+
+Quand l’écart de prix est non nul, l’utilisateur choisit lui-même le compte actif de charge ou de produit adapté à la situation, parmi les comptes du plan de l’entreprise.
+
+**Why:** L’utilisateur a précisé que le traitement comptable peut varier selon la situation et qu’il ne faut pas imposer un compte unique.
+
+**How to apply:** Présenter une liste réellement sélectionnable et consultable des comptes admissibles du plan courant; conserver le compte choisi dans la facture et vérifier côté serveur qu’il appartient à l’entreprise.

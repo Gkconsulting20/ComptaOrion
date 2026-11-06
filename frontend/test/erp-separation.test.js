@@ -90,7 +90,6 @@ test('le rapprochement charge les comptes via l’API achats dédiée', async ()
   const suppliers = await read('../src/modules/GestionFournisseurs.jsx');
   assert.match(suppliers, /api\.get\('\/achats\/comptes-ecarts'\)/);
   assert.doesNotMatch(suppliers, /api\.get\('\/comptabilite\/comptes'\)/);
-  assert.match(suppliers, /required=\{hasVariance\}/);
   assert.match(suppliers, /if \(hasVariance && !factureForm\.compteEcartId\)/);
   assert.match(suppliers, /compteEcartId: factureForm\.compteEcartId \? Number\(factureForm\.compteEcartId\) : null/);
   assert.match(suppliers, /if \(!numeroFactureFournisseur\)/);
@@ -100,6 +99,10 @@ test('le rapprochement charge les comptes via l’API achats dédiée', async ()
   assert.match(suppliers, /numeroFactureFournisseur: value/);
   assert.doesNotMatch(suppliers, /numeroFactureInputRef/);
   assert.doesNotMatch(suppliers, /position: 'sticky',\s*bottom: 0/);
+  assert.match(suppliers, /role="combobox"/);
+  assert.match(suppliers, /role="option"/);
+  assert.match(suppliers, /compteEcartId: String\(account\.id\)/);
+  assert.match(suppliers, /aria-expanded=\{compteEcartPickerOpen\}/);
 });
 
 test('la réception d’une commande accepte le poids des produits', async () => {

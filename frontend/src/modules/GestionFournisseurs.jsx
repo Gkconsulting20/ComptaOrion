@@ -37,6 +37,8 @@ function FacturationTab({ fournisseurs }) {
   const [comptesEcartError, setComptesEcartError] = useState('');
   const [totalComptesPlan, setTotalComptesPlan] = useState(null);
   const [comptesEcartInactifs, setComptesEcartInactifs] = useState(0);
+  const [compteEcartSearch, setCompteEcartSearch] = useState('');
+  const [compteEcartPickerOpen, setCompteEcartPickerOpen] = useState(false);
   const [chargementComptesEcart, setChargementComptesEcart] = useState(true);
   const [initialisationPlan, setInitialisationPlan] = useState(false);
   const [tauxTva, setTauxTva] = useState(18);
@@ -337,6 +339,13 @@ function FacturationTab({ fournisseurs }) {
   ) + factureForm.coutsLogistiques.reduce((sum, cost) => sum + Number(cost.montantEstime || 0), 0);
   const totalVariance = totals.totalHT - estimatedHT;
   const hasVariance = Math.abs(totalVariance) >= 0.01;
+  const selectedVarianceAccount = comptesEcart.find(
+    (account) => String(account.id) === String(factureForm.compteEcartId)
+  );
+  const normalizedAccountQuery = compteEcartSearch.trim().toLocaleLowerCase('fr');
+  const filteredVarianceAccounts = comptesEcart.filter((account) =>
+    `${account.numero || ''} ${account.nom || ''}`.toLocaleLowerCase('fr').includes(normalizedAccountQuery)
+  );
   const totalTTC = totals.totalHT + totals.totalTVA;
   const fournisseursAvecReception = [...new Map(
     allReceptionsEnAttente
@@ -710,19 +719,128 @@ function FacturationTab({ fournisseurs }) {
                 <label style={{ display: 'block', marginBottom: 5 }}>
                   Compte comptable des écarts{hasVariance ? ' *' : ''}
                 </label>
-                <select value={factureForm.compteEcartId}
-                  onChange={(e) => setFactureForm((current) => ({ ...current, compteEcartId: e.target.value }))}
-                  required={hasVariance}
-                  style={{ width: '100%', maxWidth: 520, padding: 8, borderRadius: 4, border: '1px solid #ddd' }}>
-                  <option value="">
-                    {hasVariance ? 'Sélectionner un compte de charge ou de produit' : 'Aucun compte requis si l’écart est nul'}
-                  </option>
-                  {comptesEcart.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.numero} — {account.nom}{String(account.id) === compteEcartParDefaut ? ' (compte par défaut)' : ''}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ width: '100%', maxWidth: 520, position: 'relative' }}>
+                  <input
+                    type="text"
+                    role="combobox"
+                    aria-label="Rechercher un compte comptable pour l’écart"
+                    aria-autocomplete="list"
+                    aria-expanded={compteEcartPickerOpen}
+                    aria-controls="supplier-variance-account-options"
+                    autoComplete="off"
+                    value={compteEcartPickerOpen
+                      ? compteEcartSearch
+                      : selectedVarianceAccount
+                        ? `${selectedVarianceAccount.numero} — ${selectedVarianceAccount.nom}`
+                        : ''}
+                    placeholder={chargementComptesEcart
+                      ? 'Chargement des comptes…'
+                      : hasVariance
+                        ? 'Rechercher un compte de charge ou de produit'
+                        : 'Aucun compte requis si l’écart est nul'}
+                    onFocus={() => {
+                      setCompteEcartSearch('');
+                      setCompteEcartPickerOpen(true);
+                    }}
+                    onClick={() => setCompteEcartPickerOpen(true)}
+                    onChange={(event) => {
+                      setCompteEcartSearch(event.target.value);
+                      setCompteEcartPickerOpen(true);
+                    }}
+                    onBlur={(event) => {
+                      const picker = event.currentTarget.parentElement;
+                      window.setTimeout(() => {
+                        if (!picker?.contains(document.activeElement)) {
+                          setCompteEcartPickerOpen(false);
+                        }
+                      }, 150);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        setCompteEcartPickerOpen(false);
+                      } else if (event.key === 'Enter' && compteEcartPickerOpen && filteredVarianceAccounts.length) {
+                        event.preventDefault();
+                        const account = filteredVarianceAccounts[0];
+                        setFactureForm((current) => ({ ...current, compteEcartId: String(account.id) }));
+                        setCompteEcartSearch('');
+                        setCompteEcartPickerOpen(false);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: 10,
+                      borderRadius: 4,
+                      border: '1px solid #9aa7b2',
+                      background: '#fff',
+                      color: '#17212b',
+                      fontSize: 14,
+                      cursor: 'text',
+                      pointerEvents: 'auto',
+                    }}
+                  />
+                  {compteEcartPickerOpen && (
+                    <div
+                      id="supplier-variance-account-options"
+                      role="listbox"
+                      aria-label="Comptes de charge ou de produit disponibles"
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 3px)',
+                        left: 0,
+                        right: 0,
+                        zIndex: 20,
+                        maxHeight: 220,
+                        overflowY: 'auto',
+                        border: '1px solid #9aa7b2',
+                        borderRadius: 5,
+                        background: '#fff',
+                        boxShadow: '0 6px 16px rgba(20, 35, 50, 0.18)',
+                      }}
+                    >
+                      {filteredVarianceAccounts.length ? filteredVarianceAccounts.map((account) => {
+                        const isSelected = String(account.id) === String(factureForm.compteEcartId);
+                        return (
+                          <button
+                            key={account.id}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              setFactureForm((current) => ({ ...current, compteEcartId: String(account.id) }));
+                              setCompteEcartSearch('');
+                              setCompteEcartPickerOpen(false);
+                            }}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              padding: '9px 10px',
+                              border: 0,
+                              borderBottom: '1px solid #edf0f2',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              background: isSelected ? '#e8f1ff' : '#fff',
+                              color: '#17212b',
+                            }}
+                          >
+                            {account.numero} — {account.nom}
+                            {String(account.id) === compteEcartParDefaut ? ' (compte par défaut)' : ''}
+                          </button>
+                        );
+                      }) : (
+                        <div style={{ padding: 10, color: '#667085' }}>
+                          {comptesEcart.length ? 'Aucun compte ne correspond à cette recherche.' : 'Aucun compte de charge ou de produit actif disponible.'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {selectedVarianceAccount && (
+                  <p style={{ color: '#247a45', fontSize: 13, margin: '6px 0 0' }}>
+                    Compte sélectionné : {selectedVarianceAccount.numero} — {selectedVarianceAccount.nom}
+                  </p>
+                )}
                 <p style={{ color: '#52606d', fontSize: 13, margin: '6px 0 0' }}>
                   Écart HT constaté : {totalVariance.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF. Il sera débité si défavorable, crédité si favorable.
                 </p>
