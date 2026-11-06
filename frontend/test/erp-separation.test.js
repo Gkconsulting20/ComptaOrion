@@ -99,4 +99,5 @@ test('le rapprochement charge les comptes via l’API achats dédiée', async ()
   assert.match(suppliers, /htmlFor="supplier-invoice-number"/);
   assert.match(suppliers, /numeroFactureInputRef\.current\?\.value/);
   assert.match(suppliers, /onBlur=\{\(e\) =>/);
+  assert.match(suppliers, /position: 'sticky',\s*bottom: 0/);
 });

@@ -562,24 +562,6 @@ function FacturationTab({ fournisseurs }) {
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                 <div>
-                  <label htmlFor="supplier-invoice-number" style={{ display: 'block', marginBottom: '5px' }}>
-                    N° Facture Fournisseur *
-                  </label>
-                  <input id="supplier-invoice-number" name="numeroFactureFournisseur" type="text"
-                    ref={numeroFactureInputRef}
-                    defaultValue={factureForm.numeroFactureFournisseur || ''}
-                    required
-                    onBlur={(e) => {
-                      const value = e.currentTarget.value;
-                      if (value.trim()) setFactureSubmitError('');
-                      setFactureForm(prev => ({ ...prev, numeroFactureFournisseur: value }));
-                    }}
-                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
-                  <small style={{ display: 'block', marginTop: 4, color: '#52606d' }}>
-                    Saisissez la référence figurant sur la facture reçue du fournisseur.
-                  </small>
-                </div>
-                <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Date Facture *</label>
                   <input type="date" value={factureForm.dateFacture}
                     onChange={(e) => setFactureForm(prev => ({
@@ -809,16 +791,44 @@ function FacturationTab({ fournisseurs }) {
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minHeight: '60px' }} />
               </div>
 
-              {factureSubmitError && (
-                <p role="alert" style={{ color: '#b42318', background: '#fff1f0', padding: 10, borderRadius: 5, marginBottom: 12 }}>
-                  {factureSubmitError}
-                </p>
-              )}
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <Button variant="secondary" onClick={() => setStep(1)}>← Retour</Button>
-                <Button variant="success" onClick={submitFacture} disabled={submitting}>
-                  {submitting ? 'Création...' : 'Créer la Facture'}
-                </Button>
+              <div style={{
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 5,
+                background: '#fff',
+                padding: '12px 0 0',
+                borderTop: '1px solid #e5e7eb',
+                marginTop: 12,
+              }}>
+                {factureSubmitError && (
+                  <p role="alert" style={{ color: '#b42318', background: '#fff1f0', padding: 10, borderRadius: 5, margin: '0 0 10px' }}>
+                    {factureSubmitError}
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'end', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 280px', minWidth: 0 }}>
+                    <label htmlFor="supplier-invoice-number" style={{ display: 'block', marginBottom: 5, fontWeight: 600 }}>
+                      N° Facture Fournisseur *
+                    </label>
+                    <input id="supplier-invoice-number" name="numeroFactureFournisseur" type="text"
+                      ref={numeroFactureInputRef}
+                      defaultValue={factureForm.numeroFactureFournisseur || ''}
+                      required
+                      autoComplete="off"
+                      onBlur={(e) => {
+                        const value = e.currentTarget.value;
+                        if (value.trim()) setFactureSubmitError('');
+                        setFactureForm(prev => ({ ...prev, numeroFactureFournisseur: value }));
+                      }}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: 9, borderRadius: 4, border: '1px solid #8998a7', fontSize: 14 }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <Button variant="secondary" onClick={() => setStep(1)}>← Retour</Button>
+                    <Button variant="success" onClick={submitFacture} disabled={submitting}>
+                      {submitting ? 'Création...' : 'Créer la Facture'}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
