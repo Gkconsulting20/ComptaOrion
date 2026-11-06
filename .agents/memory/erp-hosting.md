@@ -21,6 +21,12 @@ Le preview Replit et le Worker Cloudflare utilisent des bases distinctes : le pr
 
 **How to apply:** Avant toute modification de compte ou de données, identifier la base réellement utilisée par l’environnement ciblé et vérifier ce dernier directement après l’opération.
 
+La version d’essai client de 30 jours est servie par le Worker public ComptaOrion (`comptaorion.com`); `orion-test` concerne un autre produit et ne doit pas être utilisé pour l’ERP.
+
+**Why:** L’utilisateur a précisé que la version à partager aux prospects est l’inscription gratuite de 30 jours sur ComptaOrion, et que le Worker `orion-test` n’est pas la comptabilité.
+
+**How to apply:** Pour publier l’essai destiné aux clients, mettre à jour le Worker existant `comptaorion` et vérifier `/inscription`; ne pas créer ou déployer l’ERP sur `orion-test`.
+
 Pour les opérations de base de données et de Cloudflare, l’utilisateur préfère que l’agent réalise les étapes possibles et lui donne des instructions simples uniquement pour les actions qui exigent son intervention.
 
 **Why:** L’utilisateur a indiqué ne pas pouvoir créer lui-même les bases de données et a demandé de l’aide pour ces opérations.
