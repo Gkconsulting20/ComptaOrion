@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '../components/Modal';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
@@ -54,6 +54,7 @@ function FacturationTab({ fournisseurs }) {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [factureSubmitError, setFactureSubmitError] = useState('');
+  const numeroFactureInputRef = useRef(null);
 
   const getSupplierDueDate = (supplierId, invoiceDate) => {
     const supplier = fournisseurs.find((item) => Number(item.id) === Number(supplierId));
@@ -283,7 +284,9 @@ function FacturationTab({ fournisseurs }) {
 
   const submitFacture = async () => {
     setFactureSubmitError('');
-    const numeroFactureFournisseur = String(factureForm.numeroFactureFournisseur || '').trim();
+    const numeroFactureFournisseur = String(
+      numeroFactureInputRef.current?.value ?? factureForm.numeroFactureFournisseur ?? ''
+    ).trim();
     if (!numeroFactureFournisseur) {
       setFactureSubmitError('Saisissez le numéro de la facture du fournisseur avant de créer la facture.');
       return;
@@ -563,11 +566,12 @@ function FacturationTab({ fournisseurs }) {
                     N° Facture Fournisseur *
                   </label>
                   <input id="supplier-invoice-number" name="numeroFactureFournisseur" type="text"
+                    ref={numeroFactureInputRef}
                     defaultValue={factureForm.numeroFactureFournisseur || ''}
                     required
-                    onChange={(e) => {
+                    onBlur={(e) => {
                       const value = e.currentTarget.value;
-                      setFactureSubmitError('');
+                      if (value.trim()) setFactureSubmitError('');
                       setFactureForm(prev => ({ ...prev, numeroFactureFournisseur: value }));
                     }}
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
