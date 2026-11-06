@@ -18,9 +18,7 @@
     "test:worker": "ERP_TEST_WORKER=1 npm run test:functional",
     "test:cloudflare": "node cloudflare/smoke-test.mjs",
     "cloudflare:check": "npm run build && wrangler deploy --dry-run --outdir generated-artifacts/worker",
-    "cloudflare:deploy": "npm run build && wrangler deploy",
-    "cloudflare:test:check": "npm run build && wrangler deploy --dry-run --outdir generated-artifacts/worker-test --config wrangler.test.jsonc",
-    "cloudflare:test:deploy": "npm run build && wrangler deploy --config wrangler.test.jsonc"
+    "cloudflare:deploy": "npm run build && wrangler deploy"
   },
   "keywords": [
     "erp",
