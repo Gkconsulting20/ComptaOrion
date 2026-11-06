@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import { readApiList, readAutomaticCosting } from '../utils/apiList.js';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -218,16 +219,16 @@ export function StockInventaire() {
           api.get('/stock/receptions').catch(() => ({ data: [] })),
           api.get('/fournisseurs').catch(() => ({ data: { data: [] } })),
           api.get('/commandes-achat').catch(() => ({ data: { data: [] } })),
-          api.get('/produits/capacites').catch(() => ({ data: { automaticCosting: false } }))
+          api.get('/produits/capacites').catch(() => ({ automaticCosting: false }))
         ]);
-        setAutomaticCosting(Boolean(capabilities.data?.automaticCosting));
+        setAutomaticCosting(readAutomaticCosting(capabilities));
         setData({
-          produits: p.data.data || p.data || [],
-          categories: c.data || [],
-          entrepots: e.data || [],
-          receptions: r.data || [],
-          fournisseurs: f.data.data || f.data || [],
-          commandes: cmd.data?.data || cmd.data || []
+          produits: readApiList(p, 'data'),
+          categories: readApiList(c),
+          entrepots: readApiList(e),
+          receptions: readApiList(r),
+          fournisseurs: readApiList(f, 'data'),
+          commandes: readApiList(cmd, 'data')
         });
       } catch (err) {
         console.error('Load error:', err);
@@ -240,19 +241,19 @@ export function StockInventaire() {
     try {
       if (type === 'produits') {
         const res = await api.get('/produits');
-        setData(d => ({ ...d, produits: res.data.data || res.data || [] }));
+        setData(d => ({ ...d, produits: readApiList(res, 'data') }));
       } else if (type === 'categories') {
         const res = await api.get('/stock/categories');
-        setData(d => ({ ...d, categories: res.data || [] }));
+        setData(d => ({ ...d, categories: readApiList(res) }));
       } else if (type === 'entrepots') {
         const res = await api.get('/stock/entrepots');
-        setData(d => ({ ...d, entrepots: res.data || [] }));
+        setData(d => ({ ...d, entrepots: readApiList(res) }));
       } else if (type === 'receptions') {
         const res = await api.get('/stock/receptions');
-        setData(d => ({ ...d, receptions: res.data || [] }));
+        setData(d => ({ ...d, receptions: readApiList(res) }));
       } else if (type === 'commandes') {
         const res = await api.get('/commandes-achat');
-        setData(d => ({ ...d, commandes: res.data?.data || res.data || [] }));
+        setData(d => ({ ...d, commandes: readApiList(res, 'data') }));
       }
     } catch (err) {
       console.error('Reload error:', err);
@@ -1024,7 +1025,7 @@ export function StockInventaire() {
         <form onSubmit={handleSubmit}>
           {modal.type === 'produit' && (
             <>
-              <FormField label="Référence" value={form.reference || ''} onChange={(e) => setForm({...form, reference: e.target.value})} required />
+              <FormField label="Référence (facultative)" value={form.reference || ''} onChange={(e) => setForm({...form, reference: e.target.value})} />
               <FormField label="Nom" value={form.nom || ''} onChange={(e) => setForm({...form, nom: e.target.value})} required />
               <FormField label="Catégorie" type="select" value={form.categorieId || ''} 
                 onChange={(e) => setForm({...form, categorieId: parseInt(e.target.value) || null})}

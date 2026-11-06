@@ -597,6 +597,14 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const productRecord=await api('/produits','POST',{reference:'TEST-ERP',nom:'Produit recette',
       quantite:10,prixVente:0,prixAchat:900,poidsParUnite:2,unitePoids:'kg'},201);
     const productId=productRecord.data.id;
+    const listedProducts=await api('/produits');
+    assert.ok(listedProducts.data.some(product => product.id === productId),
+      'Le produit créé doit apparaître immédiatement dans la liste de son entreprise');
+    const productWithoutReference=await api('/produits','POST',{
+      nom:'Produit sans référence recette',prixAchat:0,prixVente:0,
+    },201);
+    assert.equal(productWithoutReference.data.reference,null,
+      'Une référence produit facultative ne doit pas bloquer sa création');
     const warehouseRecord = await api('/stock/entrepots','POST',{
       nom:'Entrepôt test temporaire',
     });
