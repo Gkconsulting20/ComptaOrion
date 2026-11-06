@@ -9,8 +9,19 @@ import {
   createStockValuationLayer,
   ensureOpeningValuationLayer,
 } from '../services/stockValuation.js';
+import { getPlanCapabilities } from '../services/planEntitlements.js';
 
 const router = express.Router();
+
+router.get('/capacites', async (req, res) => {
+  try {
+    const capabilities = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    res.json({ success: true, ...capabilities });
+  } catch (error) {
+    console.error('Erreur GET /api/produits/capacites:', error);
+    res.status(500).json({ success: false, message: 'Impossible de récupérer les options du forfait.' });
+  }
+});
 
 /**
  * GET /api/produits
@@ -139,6 +150,7 @@ router.post('/', async (req, res) => {
       stockMinimum,
       prixAchat,
       prixVente,
+      coutMoyen,
       fournisseurId,
       emplacement,
       actif,
@@ -180,10 +192,23 @@ router.post('/', async (req, res) => {
         message: 'Le prix de vente doit être un nombre positif',
       });
     }
-    if (Number(prixVente || 0) > 0) {
+    if (coutMoyen !== undefined && (!Number.isFinite(Number(coutMoyen)) || Number(coutMoyen) < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le coût de revient manuel doit être un nombre positif ou nul.',
+      });
+    }
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    if (automaticCosting && Number(prixVente || 0) > 0) {
       return res.status(409).json({
         success: false,
         message: 'Le prix de vente sera calculé après une réception fournisseur, à partir du coût moyen réel. Le coût standard ne sert pas à établir ce prix.',
+      });
+    }
+    if (automaticCosting && coutMoyen !== undefined && Number(coutMoyen) > 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'Le coût de revient est calculé automatiquement avec le forfait Premium.',
       });
     }
     const normalizedWeight = poidsParUnite === undefined || poidsParUnite === null || poidsParUnite === ''
@@ -214,7 +239,8 @@ router.post('/', async (req, res) => {
         quantite: quantite || '0',
         stockMinimum: stockMinimum || '0',
         prixAchat: prixAchat || '0', // Coût standard : devis fournisseur, non utilisé comme CMV.
-        prixVente: '0',
+        coutMoyen: automaticCosting ? '0' : String(coutMoyen || '0'),
+        prixVente: automaticCosting ? '0' : String(prixVente || '0'),
         fournisseurId: fournisseurId || null,
         emplacement: emplacement || null,
         actif: actif !== undefined ? actif : true,
@@ -275,6 +301,7 @@ router.put('/:id', async (req, res) => {
       stockMinimum,
       prixAchat,
       prixVente,
+      coutMoyen,
       fournisseurId,
       emplacement,
       actif,
@@ -296,10 +323,11 @@ router.put('/:id', async (req, res) => {
         message: 'Produit non trouvé ou accès non autorisé',
       });
     }
-    if (prixVente !== undefined) {
-      return res.status(400).json({
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    if (automaticCosting && (prixVente !== undefined || coutMoyen !== undefined)) {
+      return res.status(403).json({
         success: false,
-        message: 'Le prix de vente est géré par la bibliothèque de prix et calculé depuis le coût moyen réel.',
+        message: 'Le coût de revient et le prix de vente sont gérés automatiquement avec le forfait Premium.',
       });
     }
 
@@ -329,6 +357,12 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Le prix de vente doit être un nombre positif',
+      });
+    }
+    if (coutMoyen !== undefined && (!Number.isFinite(Number(coutMoyen)) || Number(coutMoyen) < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le coût de revient manuel doit être un nombre positif ou nul.',
       });
     }
     const normalizedWeight = poidsParUnite === undefined
@@ -366,6 +400,8 @@ router.put('/:id', async (req, res) => {
     if (quantite !== undefined) updateData.quantite = quantite;
     if (stockMinimum !== undefined) updateData.stockMinimum = stockMinimum;
     if (prixAchat !== undefined) updateData.prixAchat = prixAchat;
+    if (coutMoyen !== undefined) updateData.coutMoyen = Number(coutMoyen).toFixed(2);
+    if (prixVente !== undefined) updateData.prixVente = Number(prixVente).toFixed(2);
     if (fournisseurId !== undefined) updateData.fournisseurId = fournisseurId;
     if (emplacement !== undefined) updateData.emplacement = emplacement;
     if (actif !== undefined) updateData.actif = actif;

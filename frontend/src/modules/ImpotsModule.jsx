@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
+import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
 
 export function ImpotsModule() {
@@ -283,15 +284,20 @@ export function ImpotsModule() {
   const renderTVA = () => {
     return (
       <div>
-        <h3 style={{ marginBottom: '20px' }}>Suivi indicatif de la TVA</h3>
-        
-        <PeriodFilter
-          dateDebut={periodeTVA.dateDebut}
-          dateFin={periodeTVA.dateFin}
-          onDateDebutChange={(val) => setPeriodeTVA({...periodeTVA, dateDebut: val})}
-          onDateFinChange={(val) => setPeriodeTVA({...periodeTVA, dateFin: val})}
-          onApply={loadTVAResume}
-        />
+        <ReportPageHeader
+          title="Suivi indicatif de la TVA"
+          description="Montants calculés à partir des écritures comptabilisées"
+        >
+          <PeriodFilter
+            dateDebut={periodeTVA.dateDebut}
+            dateFin={periodeTVA.dateFin}
+            onDateDebutChange={(val) => setPeriodeTVA((current) => ({ ...current, dateDebut: val }))}
+            onDateFinChange={(val) => setPeriodeTVA((current) => ({ ...current, dateFin: val }))}
+            onApply={loadTVAResume}
+            compactSelector={true}
+            ariaLabel="Période du rapport TVA"
+          />
+        </ReportPageHeader>
         
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '15px' }} className="no-print">
           <button
@@ -430,17 +436,20 @@ export function ImpotsModule() {
 
   const renderIS = () => (
     <div>
-      <h3 style={{ marginBottom: '8px' }}>Résultat comptable pour l’Impôt sur les Sociétés</h3>
-      <p style={{ marginTop: 0, color: '#52606d' }}>
-        Ce relevé présente le résultat comptable de la période. Il ne calcule pas le bénéfice imposable ni l’impôt dû.
-      </p>
-      <PeriodFilter
-        dateDebut={periodeTVA.dateDebut}
-        dateFin={periodeTVA.dateFin}
-        onDateDebutChange={(val) => setPeriodeTVA({...periodeTVA, dateDebut: val})}
-        onDateFinChange={(val) => setPeriodeTVA({...periodeTVA, dateFin: val})}
-        onApply={loadISResume}
-      />
+      <ReportPageHeader
+        title="Résultat comptable pour l’Impôt sur les Sociétés"
+        description="Ce relevé présente le résultat comptable de la période. Il ne calcule pas le bénéfice imposable ni l’impôt dû."
+      >
+        <PeriodFilter
+          dateDebut={periodeTVA.dateDebut}
+          dateFin={periodeTVA.dateFin}
+          onDateDebutChange={(val) => setPeriodeTVA((current) => ({ ...current, dateDebut: val }))}
+          onDateFinChange={(val) => setPeriodeTVA((current) => ({ ...current, dateFin: val }))}
+          onApply={loadISResume}
+          compactSelector={true}
+          ariaLabel="Période du résultat IS"
+        />
+      </ReportPageHeader>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, margin: '20px 0' }}>
         {[
           { title: 'Produits comptabilisés', value: resultatIS.produits, color: '#3498db' },

@@ -36,6 +36,7 @@ import {
 } from '../services/stockValuation.js';
 import { calculateCreditNoteVat, calculateReturnedLine } from '../services/creditNoteCalculations.js';
 import { generateCreditNoteNumber } from '../services/creditNoteNumbering.js';
+import { getPlanCapabilities } from '../services/planEntitlements.js';
 
 const router = express.Router();
 
@@ -183,6 +184,7 @@ router.get('/factures/:id', async (req, res) => {
 // POST /api/achats/factures - Créer une facture fournisseur
 router.post('/factures', async (req, res) => {
   try {
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
     const {
       fournisseurId,
       commandeId, // Optionnel - si depuis une commande
@@ -440,15 +442,17 @@ router.put('/factures/:id/valider', async (req, res) => {
         ))
         : [];
       const weightsByProduct = new Map(weightProducts.map((product) => [product.id, product]));
-      const directLogisticsAllocation = allocateLogisticsByWeight(
-        stockItems.map((item) => ({
-          ...item,
-          uniteMesure: weightsByProduct.get(item.produitId)?.uniteMesure,
-          poidsParUnite: weightsByProduct.get(item.produitId)?.poidsParUnite,
-          unitePoids: weightsByProduct.get(item.produitId)?.unitePoids,
-        })),
-        directLogisticsTotal
-      );
+      const directLogisticsAllocation = automaticCosting
+        ? allocateLogisticsByWeight(
+          stockItems.map((item) => ({
+            ...item,
+            uniteMesure: weightsByProduct.get(item.produitId)?.uniteMesure,
+            poidsParUnite: weightsByProduct.get(item.produitId)?.poidsParUnite,
+            unitePoids: weightsByProduct.get(item.produitId)?.unitePoids,
+          })),
+          directLogisticsTotal
+        )
+        : { allocations: stockItems.map(() => 0), unallocated: directLogisticsTotal, totalWeightKg: 0, missingWeightIndexes: [] };
       const logisticsByItemId = new Map(stockItems.map((item, index) => [
         item.id,
         directLogisticsAllocation.allocations[index] || 0,
@@ -498,18 +502,22 @@ router.put('/factures/:id/valider', async (req, res) => {
         movements.push(movement);
         const itemCost = Math.max(0, Number(item.totalLigne) || Number(item.quantite) * Number(item.prixUnitaire));
         const landedCost = itemCost + (logisticsByItemId.get(item.id) || 0);
-        await createStockValuationLayer(tx, {
-          entrepriseId: req.entrepriseId,
-          produitId: product.id,
-          mouvementId: movement.id,
-          quantity: item.quantite,
-          totalCost: landedCost,
-          unitCost: Number(item.quantite) > 0 ? landedCost / Number(item.quantite) : Number(item.prixUnitaire),
-          productSnapshot: product,
-          ensureOpening: false,
-        });
+        if (automaticCosting) {
+          await createStockValuationLayer(tx, {
+            entrepriseId: req.entrepriseId,
+            produitId: product.id,
+            mouvementId: movement.id,
+            quantity: item.quantite,
+            totalCost: landedCost,
+            unitCost: Number(item.quantite) > 0 ? landedCost / Number(item.quantite) : Number(item.prixUnitaire),
+            productSnapshot: product,
+            ensureOpening: false,
+          });
+        }
         await tx.update(factureAchatItems).set({
-          coutUnitaireFinal: Number(item.quantite) > 0 ? (landedCost / Number(item.quantite)).toFixed(4) : '0.0000',
+          ...(automaticCosting
+            ? { coutUnitaireFinal: Number(item.quantite) > 0 ? (landedCost / Number(item.quantite)).toFixed(4) : '0.0000' }
+            : {}),
           mouvementStockId: movement.id,
         }).where(and(
           eq(factureAchatItems.id, item.id),
@@ -902,6 +910,7 @@ router.get('/logistique-pending/:receptionId', async (req, res) => {
 // POST /api/achats/factures-avec-rapprochement - Créer facture avec rapprochement des réceptions
 router.post('/factures-avec-rapprochement', async (req, res) => {
   try {
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
     const {
       fournisseurId,
       numeroFactureFournisseur,
@@ -1043,7 +1052,14 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       unitePoids: weightsByProductId.get(parseInt(ligne.produitId, 10))?.unitePoids,
       uniteMesure: weightsByProductId.get(parseInt(ligne.produitId, 10))?.uniteMesure,
     }));
-    const repartitionLogistique = allocateLogisticsByWeight(lignesPourRepartition, totalLogistique);
+    const repartitionLogistique = automaticCosting
+      ? allocateLogisticsByWeight(lignesPourRepartition, totalLogistique)
+      : {
+        allocations: lignesPourRepartition.map(() => 0),
+        unallocated: totalLogistique,
+        totalWeightKg: 0,
+        missingWeightIndexes: [],
+      };
     const produitsSansPoids = repartitionLogistique.missingWeightIndexes
       .map((index) => weightsByProductId.get(parseInt(lignesArticles[index]?.produitId, 10))?.nom)
       .filter(Boolean);

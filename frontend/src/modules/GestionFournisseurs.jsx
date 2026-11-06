@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
+import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 import { formatPeriodeFR } from '../utils/dateUtils';
@@ -1747,8 +1748,19 @@ export function GestionFournisseurs() {
 
       {activeTab === 'rapports' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ margin: 0 }}>📊 Rapports Fournisseurs</h3>
+          <ReportPageHeader
+            title="Rapports fournisseurs"
+            description="Suivi des achats, règlements et soldes sur la période choisie"
+          >
+            <PeriodFilter
+              dateDebut={periode.dateDebut}
+              dateFin={periode.dateFin}
+              onDateDebutChange={(val) => setPeriode((current) => ({ ...current, dateDebut: val }))}
+              onDateFinChange={(val) => setPeriode((current) => ({ ...current, dateFin: val }))}
+              onApply={loadAllData}
+              compactSelector={true}
+              ariaLabel="Période du rapport fournisseur"
+            />
             <div style={{ display: 'flex', gap: '10px' }} className="no-print">
               <button 
                 onClick={() => {
@@ -1812,17 +1824,9 @@ export function GestionFournisseurs() {
                 ⬇️ Télécharger
               </button>
             </div>
-          </div>
+          </ReportPageHeader>
           
           <div id="fournisseur-rapport-content">
-
-          <PeriodFilter
-            dateDebut={periode.dateDebut}
-            dateFin={periode.dateFin}
-            onDateDebutChange={(val) => setPeriode({...periode, dateDebut: val})}
-            onDateFinChange={(val) => setPeriode({...periode, dateFin: val})}
-            onApply={loadAllData}
-          />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
             <div 

@@ -63,8 +63,9 @@ const FIELD_LABELS = {
   produits: {
     nom: 'Nom du produit',
     description: 'Description',
-    prixVente: 'Prix de vente historique (non repris avant coût réel)',
+    prixVente: 'Prix de vente manuel (forfaits hors Premium)',
     prixAchat: 'Prix d\'achat',
+    coutMoyen: 'Coût de revient manuel (forfaits hors Premium)',
     reference: 'Référence',
     uniteMesure: 'Unité de vente',
     poidsParUnite: 'Poids par unité',

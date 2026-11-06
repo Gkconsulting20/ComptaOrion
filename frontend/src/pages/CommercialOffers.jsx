@@ -6,6 +6,7 @@ const BASE_FEATURES = [
   'Fournisseurs, achats et échéances',
   'Trésorerie : banque, caisse et prévisions',
   'Gestion du stock, unités et conversions',
+  'Saisie des factures fournisseur',
   'Comptabilité générale, journaux et états financiers',
   'Gestion des utilisateurs et des droits par module',
   'Invitation gratuite d’un comptable externe (1 compte par entreprise, hors quota des 3 utilisateurs)',
@@ -17,7 +18,10 @@ const OFFERS = [
     name: 'Base',
     audience: 'Pour démarrer avec une gestion centralisée',
     description: 'Les fonctions essentielles pour suivre l’activité et tenir les comptes.',
-    features: BASE_FEATURES,
+    features: [
+      ...BASE_FEATURES,
+      'Coût de revient et prix de vente définis manuellement'
+    ],
     monthlyPrice: '9 900,00 XOF',
     annualPrice: '99 000,00 XOF',
     accent: 'base'
@@ -25,12 +29,11 @@ const OFFERS = [
   {
     name: 'Standard',
     audience: 'Pour mieux maîtriser les achats et les marges',
-    description: 'Le socle Base, complété par l’automatisation des factures et du coût de revient.',
+    description: 'Le socle Base avec une gestion manuelle des coûts et prix produits.',
     features: [
       ...BASE_FEATURES,
-      'Lecture OCR des factures fournisseurs par photo (français)',
-      'Coût moyen pondéré avec frais logistiques répartis selon le poids',
-      'Catalogue de prix de vente calculé selon la marge définie'
+      'Coût de revient et prix de vente définis manuellement',
+      'Lecture OCR des factures fournisseurs par photo (français)'
     ],
     monthlyPrice: '17 900,00 XOF',
     annualPrice: '179 000,00 XOF',
@@ -40,12 +43,13 @@ const OFFERS = [
   {
     name: 'Premium',
     audience: 'Pour les organisations et activités par projet',
-    description: 'Le socle Standard, avec un suivi approfondi des projets et des comptes.',
+    description: 'Le socle Standard, avec le calcul automatique du coût réel et du prix de vente.',
     features: [
       ...BASE_FEATURES,
       'Lecture OCR des factures fournisseurs par photo (français)',
       'Coût moyen pondéré avec frais logistiques répartis selon le poids',
       'Catalogue de prix de vente calculé selon la marge définie',
+      'Prix de vente calculé depuis le coût réel et la marge choisie',
       'Comptabilité associative : budgets, financements et dépenses par projet',
       'Suivi des paiements partiels et du solde des projets',
       'Détail des montants des états financiers et accès aux opérations'
@@ -64,6 +68,7 @@ export default function CommercialOffers() {
           <span className="commercial-offers__eyebrow">OFFRE COMMERCIALE</span>
           <h2 id="commercial-offers-title">Les forfaits ComptaOrion</h2>
           <p>Une gestion comptable et opérationnelle adaptée à la taille de l’activité.</p>
+          <p>Essai gratuit de 30 jours avec accès au calcul automatique Premium pour évaluer le logiciel.</p>
         </div>
         <span className="commercial-offers__status">Tarifs proposés</span>
       </div>

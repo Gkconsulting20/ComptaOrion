@@ -12,6 +12,7 @@ import {
   createStockValuationLayer,
   ensureOpeningValuationLayer,
 } from '../services/stockValuation.js';
+import { getPlanCapabilities } from '../services/planEntitlements.js';
 
 const router = express.Router();
 
@@ -160,11 +161,15 @@ router.get('/produits', async (req, res) => {
 
 router.post('/produits', async (req, res) => {
   try {
-    const { reference, nom, categoriId, prixAchat, prixVente, valorisationMethod } = req.body;
-    if (Number(prixVente || 0) > 0) {
+    const { reference, nom, categoriId, prixAchat, prixVente, coutMoyen, valorisationMethod } = req.body;
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    if (automaticCosting && Number(prixVente || 0) > 0) {
       return res.status(409).json({
         error: 'Le prix de vente sera calculé après une réception fournisseur, à partir du coût réel du système.',
       });
+    }
+    if (automaticCosting && Number(coutMoyen || 0) > 0) {
+      return res.status(403).json({ error: 'Le coût de revient est calculé automatiquement avec le forfait Premium.' });
     }
     const result = await db.insert(produits).values({
       entrepriseId: req.entrepriseId,
@@ -172,7 +177,8 @@ router.post('/produits', async (req, res) => {
       nom,
       categoriId: categoriId ? parseInt(categoriId) : null,
       prixAchat: parseFloat(prixAchat) || 0,
-      prixVente: 0,
+      coutMoyen: automaticCosting ? '0' : String(Number(coutMoyen) || 0),
+      prixVente: automaticCosting ? '0' : String(Number(prixVente) || 0),
       valorisationMethod: valorisationMethod || 'FIFO'
     }).returning();
 

@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { produitPrix, produits, valorisationsStock } from '../schema.js';
+import { getPlanCapabilities } from './planEntitlements.js';
 
 const toCents = (value) => Math.round((Number(value) + Number.EPSILON) * 100);
 const fromCents = (value) => Number(value || 0) / 100;
@@ -214,6 +215,8 @@ export function calculateWeightedAverageSaleCost(cmv, quantity) {
 }
 
 export async function synchronizeActiveProductPrices(executor, entrepriseId, produitId, cmv) {
+  const { automaticCosting } = await getPlanCapabilities(executor, entrepriseId);
+  if (!automaticCosting) return;
   if (!Number.isFinite(Number(cmv)) || Number(cmv) <= 0) return;
 
   const activePrices = await executor.select().from(produitPrix).where(and(
@@ -253,6 +256,8 @@ export async function synchronizeActiveProductPrices(executor, entrepriseId, pro
 }
 
 export async function updateProductAverageCost(executor, entrepriseId, produitId) {
+  const { automaticCosting } = await getPlanCapabilities(executor, entrepriseId);
+  if (!automaticCosting) return false;
   const [totals] = await executor.select({
     quantity: sql`COALESCE(SUM(${valorisationsStock.quantite}), 0)`,
     value: sql`COALESCE(SUM(${valorisationsStock.coutTotal}), 0)`,
@@ -283,9 +288,12 @@ export async function updateProductAverageCost(executor, entrepriseId, produitId
     eq(produits.entrepriseId, entrepriseId)
   ));
   await synchronizeActiveProductPrices(executor, entrepriseId, produitId, nextCost);
+  return true;
 }
 
 export async function ensureOpeningValuationLayer(executor, { entrepriseId, produitId, productSnapshot }) {
+  const { automaticCosting } = await getPlanCapabilities(executor, entrepriseId);
+  if (!automaticCosting) return false;
   let [product] = await executor.select().from(produits).where(and(
     eq(produits.id, produitId),
     eq(produits.entrepriseId, entrepriseId)
@@ -329,6 +337,8 @@ export async function createStockValuationLayer(executor, {
   productSnapshot,
   ensureOpening = true,
 }) {
+  const { automaticCosting } = await getPlanCapabilities(executor, entrepriseId);
+  if (!automaticCosting) return null;
   const quantityValue = Number(quantity);
   if (!Number.isFinite(quantityValue) || quantityValue <= 0) {
     throw new Error('La quantité de la couche de valorisation doit être positive.');
@@ -382,6 +392,24 @@ export async function consumeStockValuation(executor, { entrepriseId, produitId,
     eq(produits.id, produitId),
     eq(produits.entrepriseId, entrepriseId)
   )).for('update').limit(1);
+  const { automaticCosting } = await getPlanCapabilities(executor, entrepriseId);
+  if (!automaticCosting) {
+    const availableMilli = Math.max(0, toMilliUnits(product?.quantite || 0));
+    const consumedMilli = Math.min(requestedMilli, availableMilli);
+    const manualUnitCost = Number(product?.coutMoyen || 0);
+    if (manualUnitCost <= 0) {
+      return {
+        trackedQuantity: 0,
+        untrackedQuantity: fromMilliUnits(requestedMilli),
+        coutConsomme: 0,
+      };
+    }
+    return {
+      trackedQuantity: fromMilliUnits(consumedMilli),
+      untrackedQuantity: fromMilliUnits(requestedMilli - consumedMilli),
+      coutConsomme: fromCents(toCents(manualUnitCost * fromMilliUnits(consumedMilli))),
+    };
+  }
   if (product) {
     await ensureOpeningValuationLayer(executor, {
       entrepriseId,
@@ -493,6 +521,10 @@ export async function revalueRemainingStockLayer(executor, {
   originalQuantity,
   totalActualCost,
 }) {
+  const { automaticCosting } = await getPlanCapabilities(executor, entrepriseId);
+  if (!automaticCosting) {
+    return { found: false, layerId: null, remainingQuantity: 0, oldValue: 0, newValue: 0, adjustment: 0 };
+  }
   await executor.select({ id: produits.id }).from(produits).where(and(
     eq(produits.id, produitId),
     eq(produits.entrepriseId, entrepriseId)
@@ -538,6 +570,15 @@ export async function applySupplierInvoiceCostsToRemainingLayers(executor, {
   receiptRows,
   invoiceCostsByProduct,
 }) {
+  const { automaticCosting } = await getPlanCapabilities(executor, entrepriseId);
+  if (!automaticCosting) {
+    return {
+      ajustementStock: 0,
+      avertissements: ['Le coût de revient reste à saisir manuellement avec ce forfait.'],
+      produitsRevalorises: [],
+      couchesRevalorisees: [],
+    };
+  }
   const rowsByProduct = new Map();
   for (const row of receiptRows) {
     const productId = Number(row.produit_id);

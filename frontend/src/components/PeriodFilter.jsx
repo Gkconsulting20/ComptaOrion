@@ -196,7 +196,8 @@ export default function PeriodFilter({
   showTitle = true,
   compact = false,
   compactSelector = true,
-  showFiscalPeriods = true
+  showFiscalPeriods = true,
+  ariaLabel = 'Période du rapport'
 }) {
   const [periodeActive, setPeriodeActive] = useState('fiscal_courant');
   const [fiscalStart, setFiscalStart] = useState(null);
@@ -291,7 +292,7 @@ export default function PeriodFilter({
       {compactSelector ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '205px' }}>
           <select
-            aria-label="Période du tableau de bord"
+            aria-label={ariaLabel}
             value={periodeActive}
             onChange={(event) => handleCompactPeriodChange(event.target.value)}
             disabled={loading}
@@ -351,23 +352,25 @@ export default function PeriodFilter({
                   style={{ padding: '6px', border: '1px solid #dce4e9', borderRadius: '5px', fontSize: '11px' }}
                 />
               </label>
-              <button
-                type="button"
-                onClick={onApply}
-                disabled={loading}
-                style={{
-                  padding: '7px 11px',
-                  color: '#fff',
-                  backgroundColor: '#315f78',
-                  border: 'none',
-                  borderRadius: '5px',
-                  fontSize: '11px',
-                  fontWeight: 650,
-                  cursor: loading ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {loading ? '...' : 'Appliquer'}
-              </button>
+              {onApply && (
+                <button
+                  type="button"
+                  onClick={onApply}
+                  disabled={loading}
+                  style={{
+                    padding: '7px 11px',
+                    color: '#fff',
+                    backgroundColor: '#315f78',
+                    border: 'none',
+                    borderRadius: '5px',
+                    fontSize: '11px',
+                    fontWeight: 650,
+                    cursor: loading ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {loading ? '...' : 'Appliquer'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -459,23 +462,26 @@ export default function PeriodFilter({
             }}
           />
         </div>
-        <button 
-          onClick={onApply}
-          disabled={loading}
-          style={{ 
-            padding: compact ? '6px 14px' : '10px 20px', 
-            backgroundColor: '#28a745', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '4px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontWeight: 'bold',
-            opacity: loading ? 0.7 : 1,
-            fontSize: compact ? '11px' : '13px'
-          }}
-        >
-          {loading ? '...' : 'Appliquer'}
-        </button>
+        {onApply && (
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={loading}
+            style={{
+              padding: compact ? '6px 14px' : '10px 20px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold',
+              opacity: loading ? 0.7 : 1,
+              fontSize: compact ? '11px' : '13px'
+            }}
+          >
+            {loading ? '...' : 'Appliquer'}
+          </button>
+        )}
       </div>
         </>
       )}

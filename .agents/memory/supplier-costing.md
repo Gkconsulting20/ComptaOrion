@@ -44,3 +44,9 @@ Les achats destinés au stock passent par un bon de commande qui contient les fr
 **Why:** L’utilisateur a demandé de séparer le cycle d’achat de stock du simple enregistrement d’une facture de charge, tout en préparant l’imputation des frais de transport au coût des articles.
 
 **How to apply:** Au premier mouvement de réception lié, verrouiller le bon et ses lignes. Suivre les montants reçus et les coûts logistiques estimés comme non facturés jusqu’au rapprochement de la facture réelle; ne pas forcer les achats hors stock dans le processus de réception.
+
+Le calcul automatique du coût de revient, la répartition des frais logistiques et la bibliothèque de prix calculée sont réservés au forfait Premium. L’essai gratuit de 30 jours inclut ces fonctions pour permettre leur évaluation. Les autres forfaits saisissent les factures, puis renseignent manuellement le coût de revient et le prix de vente; les réceptions ne doivent pas modifier ces valeurs.
+
+**Why:** L’utilisateur a choisi de réserver le modèle de calcul aux clients Premium tout en laissant l’accès complet à ce calcul pendant l’essai gratuit.
+
+**How to apply:** Vérifier le forfait actif côté serveur avant toute valorisation ou calcul de prix. Pour les forfaits manuels, conserver le coût saisi pour calculer le CMV à la vente, sans créer de couches automatiques ni écraser les prix lors des réceptions.

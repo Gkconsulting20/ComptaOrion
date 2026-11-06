@@ -65,7 +65,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       actif: true,
     }).returning();
     const [legacyPaidPlan] = await adminSchemaDb.insert(databaseSchema.plansAbonnement).values({
-      nom: 'Ancien forfait de test',
+      nom: 'Standard',
       prix: '29900.00',
       devise: 'XOF',
       periode: 'mensuel',
@@ -293,6 +293,75 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.ok(refreshBeforeRotation && refreshAfterRotation && refreshBeforeRotation !== refreshAfterRotation,
       'Le refresh token doit tourner sans être exposé dans le JSON');
     await api('/auth-security/session');
+    const { clearPlanCapabilitiesCache } = await import('../src/services/planEntitlements.js');
+    const trialCapabilities = await api('/produits/capacites');
+    assert.equal(trialCapabilities.automaticCosting, true,
+      'L’essai gratuit doit inclure le calcul Premium pour permettre aux prospects de le tester');
+
+    await adminSchemaPool.query(
+      'UPDATE abonnements SET plan_id = $1 WHERE entreprise_id = $2',
+      [legacyPaidPlan.id, signup.user.entrepriseId],
+    );
+    clearPlanCapabilitiesCache();
+    const standardCapabilities = await api('/produits/capacites');
+    assert.equal(standardCapabilities.automaticCosting, false,
+      'Le forfait Standard doit rester en saisie manuelle');
+    const manualProduct = await api('/produits', 'POST', {
+      reference: 'MANUEL-PLAN',
+      nom: 'Produit coût manuel',
+      quantite: 2,
+      prixAchat: 80,
+      coutMoyen: 125,
+      prixVente: 180,
+    }, 201);
+    assert.equal(Number(manualProduct.data.coutMoyen), 125);
+    assert.equal(Number(manualProduct.data.prixVente), 180,
+      'Les forfaits non-Premium doivent pouvoir saisir manuellement coût et prix');
+    await api('/clients/prix-produits/calculer', 'POST', {
+      produitId: manualProduct.data.id,
+      margeBruteCible: 30,
+    }, 403);
+
+    const { consumeStockValuation, createStockValuationLayer, updateProductAverageCost } =
+      await import('../src/services/stockValuation.js');
+    const manualSaleCost = await adminSchemaDb.transaction((tx) => consumeStockValuation(tx, {
+      entrepriseId: signup.user.entrepriseId,
+      produitId: manualProduct.data.id,
+      quantity: 2,
+    }));
+    assert.equal(manualSaleCost.trackedQuantity, 2);
+    assert.equal(manualSaleCost.coutConsomme, 250,
+      'La sortie de stock doit reprendre le coût unitaire saisi manuellement');
+    const noAutomaticLayer = await adminSchemaDb.transaction((tx) => createStockValuationLayer(tx, {
+      entrepriseId: signup.user.entrepriseId,
+      produitId: manualProduct.data.id,
+      quantity: 2,
+      totalCost: 999,
+      unitCost: 499.5,
+    }));
+    assert.equal(noAutomaticLayer, null,
+      'Un forfait manuel ne doit pas créer de couche de coût calculée');
+    await adminSchemaDb.transaction((tx) =>
+      updateProductAverageCost(tx, signup.user.entrepriseId, manualProduct.data.id));
+    const manualProductAfterReceipt = await adminSchemaPool.query(
+      'SELECT cout_moyen, prix_vente FROM produits WHERE entreprise_id = $1 AND id = $2',
+      [signup.user.entrepriseId, manualProduct.data.id],
+    );
+    assert.equal(Number(manualProductAfterReceipt.rows[0].cout_moyen), 125,
+      'Une réception ne doit pas écraser le coût saisi pour Standard');
+    assert.equal(Number(manualProductAfterReceipt.rows[0].prix_vente), 180,
+      'Une réception ne doit pas recalculer le prix saisi pour Standard');
+    await adminSchemaPool.query(
+      'UPDATE produits SET quantite = 0 WHERE entreprise_id = $1 AND id = $2',
+      [signup.user.entrepriseId, manualProduct.data.id],
+    );
+    await adminSchemaPool.query(
+      'UPDATE abonnements SET plan_id = $1 WHERE entreprise_id = $2',
+      [freeTrialPlan.id, signup.user.entrepriseId],
+    );
+    clearPlanCapabilitiesCache();
+    assert.equal((await api('/produits/capacites')).automaticCosting, true,
+      'Le retour à l’essai doit réactiver le calcul automatique');
     const importEntityTypes = await api('/import/entity-types');
     assert.deepEqual(importEntityTypes.data.map(item => item.id), [
       'clients', 'fournisseurs', 'plan_comptable', 'produits',

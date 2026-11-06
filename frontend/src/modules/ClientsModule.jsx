@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
+import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
 import { formatPeriodeFR } from '../utils/dateUtils';
@@ -1476,16 +1477,22 @@ function RapportsTab() {
 
       {/* RAPPORT PAR PÉRIODE */}
       <div className="form-card" style={{ marginTop: '20px', backgroundColor: '#fff' }}>
-        <h3 style={{ marginBottom: '20px', color: '#2c3e50' }}>📅 Rapport Client par Période</h3>
-        <PeriodFilter
-          dateDebut={dateDebut}
-          dateFin={dateFin}
-          onDateDebutChange={setDateDebut}
-          onDateFinChange={setDateFin}
-          onApply={genererRapportPeriode}
-          loading={loadingPeriode}
-          compact={true}
-        />
+        <ReportPageHeader
+          title="Rapport client par période"
+          description="Chiffre d’affaires, règlements et soldes sur la période choisie"
+          surface={false}
+        >
+          <PeriodFilter
+            dateDebut={dateDebut}
+            dateFin={dateFin}
+            onDateDebutChange={setDateDebut}
+            onDateFinChange={setDateFin}
+            onApply={genererRapportPeriode}
+            loading={loadingPeriode}
+            compactSelector={true}
+            ariaLabel="Période du rapport client"
+          />
+        </ReportPageHeader>
 
         {erreurPeriode && (
           <div style={{
@@ -3573,6 +3580,7 @@ function TablePrixTab() {
   const [prixList, setPrixList] = useState([]);
   const [produits, setProduits] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [automaticCosting, setAutomaticCosting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingPrix, setEditingPrix] = useState(null);
   const [calculPreview, setCalculPreview] = useState(null);
@@ -3593,12 +3601,19 @@ function TablePrixTab() {
 
   const loadData = async () => {
     try {
-      const [prixRes, produitsRes] = await Promise.all([
-        api.get('/clients/prix-produits'),
+      const [capabilitiesRes, produitsRes] = await Promise.all([
+        api.get('/produits/capacites'),
         api.get('/produits')
       ]);
-      setPrixList(prixRes.data || []);
-      setProduits(produitsRes.data || []);
+      const hasAutomaticCosting = Boolean(capabilitiesRes.data?.automaticCosting);
+      setAutomaticCosting(hasAutomaticCosting);
+      setProduits(produitsRes.data?.data || produitsRes.data || []);
+      if (hasAutomaticCosting) {
+        const prixRes = await api.get('/clients/prix-produits');
+        setPrixList(prixRes.data?.data || []);
+      } else {
+        setPrixList([]);
+      }
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -3685,6 +3700,17 @@ function TablePrixTab() {
   };
 
   if (loading) return <div>Chargement...</div>;
+  if (!automaticCosting) {
+    return (
+      <div style={{ padding: 24, background: '#f4f7fa', borderRadius: 10 }}>
+        <h3>Prix de vente saisis manuellement</h3>
+        <p>
+          Le calcul automatique du coût de revient et la bibliothèque de prix sont réservés au forfait Premium.
+          Pour les autres forfaits, renseignez le coût de revient et le prix de vente dans Stock → Produits.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div>

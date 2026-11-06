@@ -11,6 +11,7 @@ import {
 import { isValidPaymentDelay, isValidCashDiscountTerms, isValidPreferredPaymentMethods } from '../services/paymentTerms.js';
 import { buildThirdPartyStatement } from '../services/thirdPartyLedger.js';
 import { formatClientNumberFromId } from '../services/clientIdentity.js';
+import { getPlanCapabilities } from '../services/planEntitlements.js';
 
 const router = express.Router();
 
@@ -469,6 +470,13 @@ router.get('/rapport-periode', async (req, res) => {
  */
 router.get('/prix-produits', async (req, res) => {
   try {
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    if (!automaticCosting) {
+      return res.status(403).json({
+        success: false,
+        error: 'La bibliothèque de prix calculée est réservée au forfait Premium. Saisissez le coût de revient et le prix de vente dans la fiche produit.',
+      });
+    }
     const { categorieClient, canalVente, actifOnly } = req.query;
     
     let conditions = [eq(produitPrix.entrepriseId, req.entrepriseId)];
@@ -532,6 +540,13 @@ router.get('/prix-produits', async (req, res) => {
  */
 router.post('/prix-produits/calculer', async (req, res) => {
   try {
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    if (!automaticCosting) {
+      return res.status(403).json({
+        success: false,
+        error: 'Le calcul automatique du coût de revient et du prix est réservé au forfait Premium.',
+      });
+    }
     const { produitId, margeBruteCible } = req.body;
     
     if (!produitId || margeBruteCible === undefined) {
@@ -588,6 +603,13 @@ router.post('/prix-produits/calculer', async (req, res) => {
  */
 router.post('/prix-produits', async (req, res) => {
   try {
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    if (!automaticCosting) {
+      return res.status(403).json({
+        success: false,
+        error: 'La bibliothèque de prix calculée est réservée au forfait Premium. Saisissez les prix manuellement dans la fiche produit.',
+      });
+    }
     const { 
       produitId, 
       coutAchat, 
@@ -685,6 +707,13 @@ router.post('/prix-produits', async (req, res) => {
  */
 router.put('/prix-produits/:id', async (req, res) => {
   try {
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    if (!automaticCosting) {
+      return res.status(403).json({
+        success: false,
+        error: 'La bibliothèque de prix calculée est réservée au forfait Premium. Saisissez les prix manuellement dans la fiche produit.',
+      });
+    }
     const { id } = req.params;
     const {
       margeBruteCible,

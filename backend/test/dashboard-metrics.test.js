@@ -67,6 +67,10 @@ test('valorise le stock au coût moyen ou par couches FIFO, sans reprendre prixA
   assert.deepEqual(calculateCurrentInventoryValue([
     { id: 3, quantite: '2', coutMoyen: '0', prixAchat: '15.00', valorisationMethod: 'CMP' },
   ], []), { value: null, complete: false });
+
+  assert.deepEqual(calculateCurrentInventoryValue([
+    { id: 4, quantite: '3', coutMoyen: '25.50', valorisationMethod: 'FIFO' },
+  ], [], { manualCosting: true }), { value: 76.5, complete: true });
 });
 
 test('ne calcule pas le cycle de conversion si le DIO manque', () => {

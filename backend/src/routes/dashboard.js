@@ -32,6 +32,7 @@ import {
   outstandingBalanceAt,
   sumMoney,
 } from '../services/dashboardMetrics.js';
+import { getPlanCapabilities } from '../services/planEntitlements.js';
 
 const router = express.Router();
 const SALES_STATUS_VALUES = [...VALID_SALES_STATUSES];
@@ -301,7 +302,10 @@ router.get('/global', async (req, res) => {
     const cashflow = calculateNetCashflow(treasuryMovementHistory);
     const dso = calculateWeightedPaymentDelay(salesHistory, clientPaymentHistory);
     const dpo = calculateWeightedPaymentDelay(purchasesHistory, supplierPaymentHistory);
-    const inventoryValue = calculateCurrentInventoryValue(allProducts, valuationLayers);
+    const { automaticCosting } = await getPlanCapabilities(db, eId, { cache: false });
+    const inventoryValue = calculateCurrentInventoryValue(allProducts, valuationLayers, {
+      manualCosting: !automaticCosting,
+    });
 
     // Il n'existe pas encore d'instantanés historiques permettant d'obtenir le stock moyen de la période.
     const dio = null;

@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
+import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
 
 export function DepensesModule() {
@@ -199,27 +200,30 @@ export function DepensesModule() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>💸 Dépenses (ORION EXPENSE)</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
+      <ReportPageHeader
+        title="Dépenses"
+        description="Suivi des dépenses sur la période sélectionnée"
+        actions={<>
           <Button variant="outline" onClick={() => setShowCategoryModal(true)}>
             Gérer Catégories
           </Button>
           <Button onClick={() => { resetForm(); setEditingDepense(null); setShowModal(true); }}>
             + Nouvelle Dépense
           </Button>
-        </div>
-      </div>
-
-      <PeriodFilter
-        dateDebut={dateDebut}
-        dateFin={dateFin}
-        onDateDebutChange={setDateDebut}
-        onDateFinChange={setDateFin}
-        onApply={loadData}
-        loading={loading}
-        showFiscalPeriods={true}
-      />
+        </>}
+      >
+        <PeriodFilter
+          dateDebut={dateDebut}
+          dateFin={dateFin}
+          onDateDebutChange={setDateDebut}
+          onDateFinChange={setDateFin}
+          onApply={loadData}
+          loading={loading}
+          showFiscalPeriods={true}
+          compactSelector={true}
+          ariaLabel="Période des dépenses"
+        />
+      </ReportPageHeader>
 
       <Table 
         columns={columns} 

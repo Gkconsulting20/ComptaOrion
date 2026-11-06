@@ -4,6 +4,7 @@ import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
+import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
 
 const CLASSES_SYSCOHADA = {
@@ -240,7 +241,9 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
                     borderRadius: '8px',
                     border: '1px solid #e0e0e0'
                   }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>Classe {classe.classe}</div>
+                    <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
+                      {classe.classe === 'PERSONNALISE' ? classe.nom : `Classe ${classe.classe}`}
+                    </div>
                     <div style={{ fontSize: '12px', color: '#666' }}>{classe.nombreComptes} comptes</div>
                   </div>
                 ))}
@@ -262,7 +265,9 @@ function PlanComptableTab({ data, loadAllData, openModal, api }) {
                     }}
                   >
                     <div>
-                      <strong style={{ fontSize: '16px' }}>Classe {classe.classe} - {classe.nom}</strong>
+                      <strong style={{ fontSize: '16px' }}>
+                        {classe.classe === 'PERSONNALISE' ? classe.nom : `Classe ${classe.classe} - ${classe.nom}`}
+                      </strong>
                       <span style={{ marginLeft: '15px', color: '#666', fontSize: '14px' }}>
                         ({classe.nombreComptes} comptes) | Type: {classe.type}
                       </span>
@@ -701,6 +706,49 @@ export function ModuleComptabilite() {
     }
   };
 
+  const loadGrandLivre = async () => {
+    const compteId = document.getElementById('grandLivreCompte')?.value;
+    try {
+      const params = { dateDebut: periode.dateDebut, dateFin: periode.dateFin };
+      if (compteId) params.compteId = compteId;
+      const response = await api.get('/comptabilite/grand-livre', params);
+      setData((current) => ({
+        ...current,
+        grandLivreComptes: response.comptes || [],
+        grandLivreTotaux: response.totaux
+      }));
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
+  const loadBalance = async () => {
+    try {
+      const response = await api.get('/comptabilite/balance', {
+        dateDebut: periode.dateDebut,
+        dateFin: periode.dateFin
+      });
+      const balanceData = (response.comptes || []).map((compte) => ({
+        id: compte.compteId,
+        numero: compte.numero,
+        nom: compte.nom,
+        type: compte.type,
+        totalDebit: compte.debit || 0,
+        totalCredit: compte.credit || 0,
+        soldeDebit: compte.solde > 0 ? compte.solde : 0,
+        soldeCredit: compte.solde < 0 ? Math.abs(compte.solde) : 0
+      }));
+      setData((current) => ({
+        ...current,
+        balanceData,
+        balanceTotaux: response.totaux,
+        balanceEquilibre: response.equilibre
+      }));
+    } catch (error) {
+      alert('Erreur: ' + error.message);
+    }
+  };
+
   const requestReportDrillDown = async (query, title, page = 1) => {
     setDrillModal({
       open: true,
@@ -1114,44 +1162,33 @@ export function ModuleComptabilite() {
 
       {activeTab === 'grandlivre' && (
         <div>
-          <h3>📖 Grand Livre</h3>
-          
-          <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 15px 0' }}>🔍 Filtres</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 60px', gap: '15px', alignItems: 'end' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Compte</label>
-                <select id="grandLivreCompte" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}>
-                  <option value="">Tous les comptes</option>
-                  {data.comptes.map(c => (
-                    <option key={c.id} value={c.id}>{c.numero} - {c.nom}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Début</label>
-                <input type="date" value={periode.dateDebut}
-                  onChange={(e) => setPeriode({...periode, dateDebut: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#666' }}>Date Fin</label>
-                <input type="date" value={periode.dateFin}
-                  onChange={(e) => setPeriode({...periode, dateFin: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
-              </div>
-              <Button variant="success" style={{ fontWeight: 'bold', padding: '10px 20px' }} onClick={async () => {
-                const compteId = document.getElementById('grandLivreCompte').value;
-                try {
-                  const params = { dateDebut: periode.dateDebut, dateFin: periode.dateFin };
-                  if (compteId) params.compteId = compteId;
-                  const response = await api.get('/comptabilite/grand-livre', params);
-                  setData(prev => ({ ...prev, grandLivreComptes: response.comptes || [], grandLivreTotaux: response.totaux }));
-                } catch (err) {
-                  alert('Erreur: ' + err.message);
-                }
-              }}>Générer</Button>
-            </div>
+          <ReportPageHeader
+            title="Grand Livre"
+            description="Mouvements et soldes des comptes pour la période sélectionnée"
+          >
+            <PeriodFilter
+              dateDebut={periode.dateDebut}
+              dateFin={periode.dateFin}
+              onDateDebutChange={(val) => setPeriode((current) => ({ ...current, dateDebut: val }))}
+              onDateFinChange={(val) => setPeriode((current) => ({ ...current, dateFin: val }))}
+              onApply={loadGrandLivre}
+              compactSelector={true}
+              ariaLabel="Période du grand livre"
+            />
+          </ReportPageHeader>
+          <div className="report-filter-row">
+            <label className="report-filter-field" htmlFor="grandLivreCompte">
+              Compte
+              <select id="grandLivreCompte">
+                <option value="">Tous les comptes</option>
+                {data.comptes.map(c => (
+                  <option key={c.id} value={c.id}>{c.numero} - {c.nom}</option>
+                ))}
+              </select>
+            </label>
+            <Button variant="success" style={{ fontWeight: 'bold', padding: '10px 20px' }} onClick={loadGrandLivre}>
+              Générer
+            </Button>
           </div>
 
           {data.grandLivreComptes && data.grandLivreComptes.length > 0 ? (
@@ -1271,33 +1308,21 @@ export function ModuleComptabilite() {
 
       {activeTab === 'balance' && (
         <div>
-          <h3>⚖️ Balance Générale</h3>
-          
-          <PeriodFilter
-            dateDebut={periode.dateDebut}
-            dateFin={periode.dateFin}
-            onDateDebutChange={(val) => setPeriode({...periode, dateDebut: val})}
-            onDateFinChange={(val) => setPeriode({...periode, dateFin: val})}
-            onApply={async () => {
-              try {
-                const response = await api.get('/comptabilite/balance', { dateDebut: periode.dateDebut, dateFin: periode.dateFin });
-                const balanceComptes = response.comptes || [];
-                const balanceData = balanceComptes.map(c => ({
-                  id: c.compteId,
-                  numero: c.numero,
-                  nom: c.nom,
-                  type: c.type,
-                  totalDebit: c.debit || 0,
-                  totalCredit: c.credit || 0,
-                  soldeDebit: c.solde > 0 ? c.solde : 0,
-                  soldeCredit: c.solde < 0 ? Math.abs(c.solde) : 0
-                }));
-                setData(prev => ({ ...prev, balanceData, balanceTotaux: response.totaux, balanceEquilibre: response.equilibre }));
-              } catch (err) {
-                alert('Erreur: ' + err.message);
-              }
-            }}
-          />
+          <ReportPageHeader
+            title="Balance générale"
+            description="Mouvements débit/crédit et soldes par compte sur la période"
+            actions={<Button variant="success" onClick={loadBalance}>Générer</Button>}
+          >
+            <PeriodFilter
+              dateDebut={periode.dateDebut}
+              dateFin={periode.dateFin}
+              onDateDebutChange={(val) => setPeriode((current) => ({ ...current, dateDebut: val }))}
+              onDateFinChange={(val) => setPeriode((current) => ({ ...current, dateFin: val }))}
+              onApply={loadBalance}
+              compactSelector={true}
+              ariaLabel="Période de la balance"
+            />
+          </ReportPageHeader>
 
           {data.balanceData && data.balanceData.length > 0 ? (
             <>
@@ -1392,7 +1417,7 @@ export function ModuleComptabilite() {
             </>
           ) : (
             <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
-              <p style={{ color: '#7f8c8d', margin: 0 }}>Sélectionnez la période et cliquez sur "Générer" pour afficher la balance</p>
+              <p style={{ color: '#7f8c8d', margin: 0 }}>Choisissez la période puis cliquez sur « Générer » pour afficher la balance.</p>
             </div>
           )}
         </div>
@@ -1400,14 +1425,19 @@ export function ModuleComptabilite() {
 
       {activeTab === 'rapports' && (
         <div>
-          <h3>📊 Rapports Financiers</h3>
-          
-          <PeriodFilter
-            dateDebut={periode.dateDebut}
-            dateFin={periode.dateFin}
-            onDateDebutChange={(val) => setPeriode({...periode, dateDebut: val})}
-            onDateFinChange={(val) => setPeriode({...periode, dateFin: val})}
-          />
+          <ReportPageHeader
+            title="Rapports financiers"
+            description="Choisissez une période, puis ouvrez le bilan, le résultat ou les journaux"
+          >
+            <PeriodFilter
+              dateDebut={periode.dateDebut}
+              dateFin={periode.dateFin}
+              onDateDebutChange={(val) => setPeriode((current) => ({ ...current, dateDebut: val }))}
+              onDateFinChange={(val) => setPeriode((current) => ({ ...current, dateFin: val }))}
+              compactSelector={true}
+              ariaLabel="Période des rapports financiers"
+            />
+          </ReportPageHeader>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '30px' }}>
             <div style={{ padding: '30px', background: '#e3f2fd', borderRadius: '8px', cursor: 'pointer' }}

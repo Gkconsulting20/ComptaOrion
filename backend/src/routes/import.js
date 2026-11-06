@@ -10,6 +10,7 @@ import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { formatClientNumberFromId } from '../services/clientIdentity.js';
 import { formatSupplierNumberFromId } from '../services/supplierIdentity.js';
 import { parseCSV, parseExcel, parseIIF, parseLocalizedNumber } from '../services/dataImportParsers.js';
+import { getPlanCapabilities } from '../services/planEntitlements.js';
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ const ENTITY_TYPES = [
   { id: 'clients', name: 'Clients', champsRequis: ['nom'], champsOptionnels: ['email', 'telephone', 'adresse', 'ville', 'pays'] },
   { id: 'fournisseurs', name: 'Fournisseurs', champsRequis: ['raisonSociale'], champsOptionnels: ['email', 'telephone', 'adresse'] },
   { id: 'plan_comptable', name: 'Plan Comptable', champsRequis: ['numeroCompte', 'libelle'], champsOptionnels: ['typeCompte', 'classe'] },
-  { id: 'produits', name: 'Produits/Services', champsRequis: ['nom'], champsOptionnels: ['description', 'prixVente', 'prixAchat', 'reference', 'uniteMesure', 'poidsParUnite', 'unitePoids'] }
+  { id: 'produits', name: 'Produits/Services', champsRequis: ['nom'], champsOptionnels: ['description', 'prixVente', 'prixAchat', 'coutMoyen', 'reference', 'uniteMesure', 'poidsParUnite', 'unitePoids'] }
 ];
 const AUDIT_TABLE_BY_ENTITY = {
   clients: 'clients',
@@ -317,7 +318,7 @@ router.post('/batches/:id/validate', async (req, res) => {
       }
 
       if (batch.typeEntite === 'produits') {
-        for (const champ of ['prixVente', 'prixAchat', 'poidsParUnite']) {
+        for (const champ of ['prixVente', 'prixAchat', 'coutMoyen', 'poidsParUnite']) {
           if (donneesTransformees[champ] === undefined || String(donneesTransformees[champ]).trim() === '') continue;
           try {
             const valeur = parseLocalizedNumber(donneesTransformees[champ]);
@@ -495,18 +496,22 @@ router.post('/batches/:id/commit', async (req, res) => {
               }
 
             case 'produits':
+              {
+                const { automaticCosting } = await getPlanCapabilities(tx, req.entrepriseId);
               [created] = await tx.insert(produits).values({
                 entrepriseId: req.entrepriseId,
                 nom: donnees.nom,
                 description: donnees.description || null,
-                prixVente: 0,
+                prixVente: automaticCosting ? 0 : (parseLocalizedNumber(donnees.prixVente) ?? 0),
                 prixAchat: parseLocalizedNumber(donnees.prixAchat) ?? 0,
+                coutMoyen: automaticCosting ? 0 : (parseLocalizedNumber(donnees.coutMoyen) ?? 0),
                 reference: donnees.reference || null,
                 uniteMesure: donnees.uniteMesure || 'pièce',
                 poidsParUnite: parseLocalizedNumber(donnees.poidsParUnite),
                 unitePoids: donnees.unitePoids || 'kg'
               }).returning();
               break;
+              }
 
             default:
               throw new Error(`Type d'entité non supporté: ${batch.typeEntite}`);

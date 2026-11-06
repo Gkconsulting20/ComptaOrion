@@ -49,6 +49,9 @@ const COMPTES_SYSCOHADA = {
 };
 
 const DEFAULT_ROLE_BY_ACCOUNT_NUMBER = new Map();
+const ACCOUNT_ROLE_LABEL_BY_KEY = new Map(
+  ACCOUNTING_ACCOUNT_ROLES.map((role) => [role.key, role.label]),
+);
 for (const role of ACCOUNTING_ACCOUNT_ROLES) {
   if (!DEFAULT_ROLE_BY_ACCOUNT_NUMBER.has(role.defaultNumber)) {
     DEFAULT_ROLE_BY_ACCOUNT_NUMBER.set(role.defaultNumber, role.key);
@@ -86,8 +89,9 @@ async function getMappedAccount(entrepriseId, roleKey, executor) {
     eq(comptesAutomatiques.entrepriseId, Number(entrepriseId)),
     eq(comptesAutomatiques.roleKey, roleKey),
   )).limit(1);
+  const roleLabel = ACCOUNT_ROLE_LABEL_BY_KEY.get(roleKey) || roleKey;
   if (!mapping) {
-    throw new Error(`Le compte automatique « ${roleKey} » n’est pas associé au plan personnalisé.`);
+    throw new Error(`Le compte automatique « ${roleLabel} » n’est pas associé au plan personnalisé.`);
   }
 
   const [account] = await executor.select().from(comptesComptables).where(and(
@@ -96,7 +100,7 @@ async function getMappedAccount(entrepriseId, roleKey, executor) {
     eq(comptesComptables.actif, true),
   )).limit(1);
   if (!account) {
-    throw new Error(`Le compte associé à « ${roleKey} » est absent ou inactif.`);
+    throw new Error(`Le compte associé à « ${roleLabel} » est absent ou inactif.`);
   }
   return account;
 }

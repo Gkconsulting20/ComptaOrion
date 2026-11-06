@@ -6,6 +6,7 @@ import { Modal } from '../components/Modal';
 import { FormField } from '../components/FormField';
 import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
+import ReportPageHeader from '../components/ReportPageHeader';
 import { convertPriceFromBase, getMeasurementUnitOptions, isMassUnit } from '../utils/measurementUnits';
 
 function NonFactureTab({ fournisseurs, produits }) {
@@ -199,6 +200,7 @@ export function StockInventaire() {
   const [form, setForm] = useState({});
   const [formError, setFormError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [automaticCosting, setAutomaticCosting] = useState(false);
   const [selectedProduit, setSelectedProduit] = useState(null);
   const [showProduitDetails, setShowProduitDetails] = useState(false);
   const [periode, setPeriode] = useState({
@@ -209,14 +211,16 @@ export function StockInventaire() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [p, c, e, r, f, cmd] = await Promise.all([
+        const [p, c, e, r, f, cmd, capabilities] = await Promise.all([
           api.get('/produits').catch(() => ({ data: { data: [] } })),
           api.get('/stock/categories').catch(() => ({ data: [] })),
           api.get('/stock/entrepots').catch(() => ({ data: [] })),
           api.get('/stock/receptions').catch(() => ({ data: [] })),
           api.get('/fournisseurs').catch(() => ({ data: { data: [] } })),
-          api.get('/commandes-achat').catch(() => ({ data: { data: [] } }))
+          api.get('/commandes-achat').catch(() => ({ data: { data: [] } })),
+          api.get('/produits/capacites').catch(() => ({ data: { automaticCosting: false } }))
         ]);
+        setAutomaticCosting(Boolean(capabilities.data?.automaticCosting));
         setData({
           produits: p.data.data || p.data || [],
           categories: c.data || [],
@@ -265,6 +269,7 @@ export function StockInventaire() {
         categorieId: null,
         prixAchat: 0,
         prixVente: 0,
+        coutMoyen: 0,
         stockMinimum: 10,
         uniteMesure: 'pièce',
         poidsParUnite: '',
@@ -377,7 +382,10 @@ export function StockInventaire() {
       
       if (type === 'produit') {
         const productData = { ...form };
-        delete productData.prixVente;
+        if (automaticCosting) {
+          delete productData.prixVente;
+          delete productData.coutMoyen;
+        }
         if (item) {
           await api.put(`/produits/${item.id}`, productData);
         } else {
@@ -595,12 +603,12 @@ export function StockInventaire() {
                     </span>;
                   }},
                   { key: 'prixAchat', label: 'Coût standard', render: (val) => `${Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
-                  { key: 'coutMoyen', label: 'Coût calculé', render: (val) => Number(val || 0) > 0
+                  { key: 'coutMoyen', label: automaticCosting ? 'Coût calculé' : 'Coût de revient manuel', render: (val) => Number(val || 0) > 0
                     ? `${Number(val).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
-                    : 'En attente de réception' },
-                  { key: 'prixVente', label: 'Prix de vente', render: (val, row) => Number(row.coutMoyen || 0) > 0
+                    : automaticCosting ? 'En attente de réception' : 'À saisir' },
+                  { key: 'prixVente', label: automaticCosting ? 'Prix de vente calculé' : 'Prix de vente manuel', render: (val, row) => Number(row.coutMoyen || 0) > 0
                     ? `${Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
-                    : 'Non calculé' }
+                    : automaticCosting ? 'Non calculé' : 'À saisir' }
                 ]}
                 data={data.produits}
                 onRowClick={(item) => { setSelectedProduit(item); setShowProduitDetails(true); }}
@@ -849,9 +857,10 @@ export function StockInventaire() {
 
       {activeTab === 'rapports' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ margin: 0 }}>📊 Rapports d'Inventaire</h3>
-            <div style={{ display: 'flex', gap: '10px' }} className="no-print">
+          <ReportPageHeader
+            title="Rapports d’inventaire"
+            description="Vue synthétique des quantités et de la valorisation du stock"
+            actions={<div style={{ display: 'flex', gap: '10px' }} className="no-print">
               <button 
                 onClick={() => {
                   const content = document.getElementById('stock-rapport-content');
@@ -915,8 +924,18 @@ export function StockInventaire() {
               >
                 ⬇️ Télécharger
               </button>
-            </div>
-          </div>
+            </div>}
+          >
+            <PeriodFilter
+              dateDebut={periode.dateDebut}
+              dateFin={periode.dateFin}
+              onDateDebutChange={(val) => setPeriode((current) => ({ ...current, dateDebut: val }))}
+              onDateFinChange={(val) => setPeriode((current) => ({ ...current, dateFin: val }))}
+              onApply={() => reload('produits')}
+              compactSelector={true}
+              ariaLabel="Période du rapport de stock"
+            />
+          </ReportPageHeader>
           
           <div id="stock-rapport-content">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '20px', marginBottom: '30px' }}>
@@ -933,14 +952,6 @@ export function StockInventaire() {
               <h2 style={{ margin: '10px 0 0 0', color: '#388e3c' }}>{Number(valorisation || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</h2>
             </div>
           </div>
-
-          <PeriodFilter
-            dateDebut={periode.dateDebut}
-            dateFin={periode.dateFin}
-            onDateDebutChange={(val) => setPeriode({...periode, dateDebut: val})}
-            onDateFinChange={(val) => setPeriode({...periode, dateFin: val})}
-            onApply={() => reload('produits')}
-          />
 
           <div style={{ marginBottom: '30px' }}>
             <h4 style={{ marginBottom: '15px' }}>📋 Rapport de Valorisation par Produit (Méthode CMP)</h4>
@@ -1072,23 +1083,48 @@ export function StockInventaire() {
               <small style={{ display: 'block', margin: '-8px 0 12px', color: '#666' }}>
                 Référence de devis uniquement. Ce montant n’est pas le CMV et ne calcule pas le prix de vente.
               </small>
-              <div style={{ padding: '12px', marginBottom: '12px', borderRadius: '6px', background: Number(form.coutMoyen || 0) > 0 ? '#eef7ee' : '#fff7e6' }}>
-                <strong>Coût calculé par le système :</strong>{' '}
-                {Number(form.coutMoyen || 0) > 0
-                  ? `${Number(form.coutMoyen).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
-                  : 'disponible après validation d’une réception fournisseur'}
-                <div style={{ marginTop: 6, fontSize: 12, color: '#666' }}>
-                  Le prix de vente se calcule ensuite depuis ce coût réel et la majoration choisie dans la bibliothèque de prix.
+              {automaticCosting ? (
+                <div style={{ padding: '12px', marginBottom: '12px', borderRadius: '6px', background: Number(form.coutMoyen || 0) > 0 ? '#eef7ee' : '#fff7e6' }}>
+                  <strong>Coût calculé par le système :</strong>{' '}
+                  {Number(form.coutMoyen || 0) > 0
+                    ? `${Number(form.coutMoyen).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
+                    : 'disponible après validation d’une réception fournisseur'}
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#666' }}>
+                    Le prix de vente se calcule ensuite depuis ce coût réel et la majoration choisie dans la bibliothèque de prix.
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <FormField
+                    label="Coût de revient manuel"
+                    type="number"
+                    value={form.coutMoyen ?? 0}
+                    onChange={(e) => setForm({ ...form, coutMoyen: e.target.value })}
+                    min="0"
+                    step="0.01"
+                  />
+                  <FormField
+                    label="Prix de vente manuel"
+                    type="number"
+                    value={form.prixVente ?? 0}
+                    onChange={(e) => setForm({ ...form, prixVente: e.target.value })}
+                    min="0"
+                    step="0.01"
+                  />
+                  <small style={{ display: 'block', margin: '-8px 0 12px', color: '#666' }}>
+                    Les factures et les quantités de stock restent suivies; le coût et le prix ne sont pas recalculés par le logiciel.
+                  </small>
+                </>
+              )}
               <FormField label="Stock Min" type="number" value={form.stockMinimum || 10} onChange={(e) => setForm({...form, stockMinimum: parseFloat(e.target.value) || 0})} />
-              <FormField label="Méthode de Valorisation" type="select" value={form.valorisationMethod || 'FIFO'} 
-                onChange={(e) => setForm({...form, valorisationMethod: e.target.value})}
-                options={[
-                  { value: 'FIFO', label: 'FIFO (Premier Entré, Premier Sorti)' },
-                  { value: 'CMP', label: 'CMP (Coût Moyen Pondéré)' },
-                  { value: 'LIFO', label: 'LIFO (Dernier Entré, Premier Sorti)' }
-                ]} />
+              {automaticCosting && (
+                <FormField label="Méthode de Valorisation" type="select" value={form.valorisationMethod || 'FIFO'}
+                  onChange={(e) => setForm({...form, valorisationMethod: e.target.value})}
+                  options={[
+                    { value: 'FIFO', label: 'FIFO (Premier Entré, Premier Sorti)' },
+                    { value: 'CMP', label: 'CMP (Coût Moyen Pondéré)' },
+                  ]} />
+              )}
             </>
           )}
 
@@ -1490,11 +1526,11 @@ export function StockInventaire() {
               fields: [
                 { label: 'Stock Actuel', value: `${selectedProduit.quantite || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
                 { label: 'Stock Minimum', value: `${selectedProduit.stockMinimum || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
-                { label: 'Méthode de Valorisation', value: selectedProduit.valorisationMethod || 'FIFO' },
+                ...(automaticCosting ? [{ label: 'Méthode de Valorisation', value: selectedProduit.valorisationMethod || 'FIFO' }] : []),
                 { label: 'Coût standard (devis)', value: `${Number(selectedProduit.prixAchat || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
-                { label: 'Coût calculé (CMV)', value: Number(selectedProduit.coutMoyen || 0) > 0 ? `${Number(selectedProduit.coutMoyen).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : 'En attente de réception fournisseur' },
-                { label: 'Prix de vente', value: Number(selectedProduit.coutMoyen || 0) > 0 ? `${Number(selectedProduit.prixVente || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : 'Non calculé' },
-                { label: 'Marge ajoutée', value: Number(selectedProduit.coutMoyen || 0) > 0 ? `${(Number(selectedProduit.prixVente || 0) - Number(selectedProduit.coutMoyen || 0)).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : '—' }
+                { label: automaticCosting ? 'Coût calculé (CMV)' : 'Coût de revient manuel', value: Number(selectedProduit.coutMoyen || 0) > 0 ? `${Number(selectedProduit.coutMoyen).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : automaticCosting ? 'En attente de réception fournisseur' : 'À saisir' },
+                { label: automaticCosting ? 'Prix de vente calculé' : 'Prix de vente manuel', value: Number(selectedProduit.prixVente || 0) > 0 ? `${Number(selectedProduit.prixVente).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : automaticCosting ? 'Non calculé' : 'À saisir' },
+                ...(automaticCosting ? [{ label: 'Marge ajoutée', value: Number(selectedProduit.coutMoyen || 0) > 0 ? `${(Number(selectedProduit.prixVente || 0) - Number(selectedProduit.coutMoyen || 0)).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : '—' }] : [])
               ]
             }
           ]}

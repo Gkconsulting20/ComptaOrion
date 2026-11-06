@@ -1372,6 +1372,8 @@ router.get('/export/charte-comptes', async (req, res) => {
         numero: c.numero,
         nom: c.nom,
         categorie: c.categorie || c.type || '',
+        type: c.type || '',
+        compteParent: c.compteParent || '',
         devise: c.devise || 'XOF',
         solde: soldeNet,
         soldeDebiteur: soldeDebit,
@@ -1403,12 +1405,14 @@ router.get('/export/charte-comptes', async (req, res) => {
     const csv = [
       `CHARTE DES COMPTES - ${entreprise?.nom || 'Entreprise'}`,
       `Date de génération: ${new Date().toLocaleDateString('fr-FR')}`,
-      `Système comptable: SYSCOHADA`,
+      `Système comptable: ${entreprise?.systemeComptable || 'SYSCOHADA'}`,
       '',
-      'Classe;Numéro;Intitulé;Catégorie;Débit;Crédit;Solde;Devise;Statut',
+      'Classe;Numéro;Intitulé;Nature;État;Compte parent;Débit;Crédit;Solde;Devise;Statut',
       ...allComptes.map(c => {
-        const classe = c.numero ? c.numero.charAt(0) : '';
-        return `${classe};${c.numero};${c.nom};${c.categorie || ''};${c.soldeDebiteur};${c.soldeCrediteur};${c.solde};${c.devise};${c.actif ? 'Actif' : 'Inactif'}`;
+        const classe = entreprise?.systemeComptable === 'PERSONNALISE'
+          ? (c.compteParent || 'Personnalisé')
+          : (c.numero ? c.numero.charAt(0) : '');
+        return `${classe};${c.numero};${c.nom};${c.type || ''};${c.categorie || ''};${c.compteParent || ''};${c.soldeDebiteur};${c.soldeCrediteur};${c.solde};${c.devise};${c.actif ? 'Actif' : 'Inactif'}`;
       })
     ].join('\n');
 
@@ -1570,13 +1574,14 @@ router.put('/comptes-automatiques', async (req, res) => {
     const requiredRoles = ACCOUNTING_ACCOUNT_ROLES.map((role) => role.key);
     const submittedKeys = Object.keys(submittedMappings);
     const missingRoles = requiredRoles.filter((key) => !Number.isInteger(Number(submittedMappings[key])) || Number(submittedMappings[key]) <= 0);
-    const unknownRoles = submittedKeys.filter((key) => !requiredRoles.includes(key));
+    const unknownRoles = submittedKeys.filter((key) => key !== 'entrepriseId' && !requiredRoles.includes(key));
     if (missingRoles.length || unknownRoles.length) {
       return res.status(400).json({
         error: missingRoles.length
           ? 'Associez un compte à chaque fonction comptable avant d’activer le plan personnalisé.'
           : 'Une fonction comptable inconnue a été transmise.',
         missingRoles,
+        unknownRoles,
       });
     }
 

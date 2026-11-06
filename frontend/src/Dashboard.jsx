@@ -320,6 +320,7 @@ export function DashboardView() {
           showTitle={false}
           compactSelector={true}
           showFiscalPeriods={true}
+          ariaLabel="Période du tableau de bord"
         />
       </div>
 

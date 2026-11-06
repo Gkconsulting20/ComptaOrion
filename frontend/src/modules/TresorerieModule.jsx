@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
+import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
 
 export function TresorerieModule() {
@@ -354,9 +355,10 @@ export function TresorerieModule() {
 
   const renderTransactions = () => (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-        <h3 style={{ margin: 0 }}>Historique des Transactions</h3>
-        <button
+      <ReportPageHeader
+        title="Historique des transactions"
+        description="Mouvements de trésorerie sur la période sélectionnée"
+        actions={<button
           onClick={() => openModal('transaction')}
           style={{
             padding: '10px 20px',
@@ -369,47 +371,19 @@ export function TresorerieModule() {
           }}
         >
           + Nouvelle Transaction
-        </button>
-      </div>
-
-      <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ fontSize: '14px', color: '#666' }}>Du:</label>
-            <input
-              type="date"
-              value={transactionDateDebut}
-              onChange={(e) => setTransactionDateDebut(e.target.value)}
-              style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ fontSize: '14px', color: '#666' }}>Au:</label>
-            <input
-              type="date"
-              value={transactionDateFin}
-              onChange={(e) => setTransactionDateFin(e.target.value)}
-              style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
-            />
-          </div>
-          <button 
-            onClick={loadTransactionsFiltered}
-            disabled={loading}
-            style={{ 
-              padding: '10px 20px', 
-              backgroundColor: '#28a745', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              opacity: loading ? 0.7 : 1
-            }}
-          >
-            {loading ? 'Chargement...' : 'Générer'}
-          </button>
-        </div>
-      </div>
+        </button>}
+      >
+        <PeriodFilter
+          dateDebut={transactionDateDebut}
+          dateFin={transactionDateFin}
+          onDateDebutChange={setTransactionDateDebut}
+          onDateFinChange={setTransactionDateFin}
+          onApply={loadTransactionsFiltered}
+          loading={loading}
+          compactSelector={true}
+          ariaLabel="Période des transactions de trésorerie"
+        />
+      </ReportPageHeader>
 
       {loading ? (
         <p>Chargement...</p>

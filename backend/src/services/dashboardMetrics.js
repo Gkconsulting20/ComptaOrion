@@ -165,7 +165,7 @@ export function calculateNetCashflow(transactions) {
   return cents / 100;
 }
 
-export function calculateCurrentInventoryValue(products, valuationLayers) {
+export function calculateCurrentInventoryValue(products, valuationLayers, { manualCosting = false } = {}) {
   const layersByProduct = new Map();
   for (const layer of valuationLayers) {
     const productId = Number(layer.produitId);
@@ -182,6 +182,12 @@ export function calculateCurrentInventoryValue(products, valuationLayers) {
 
     const layerTotals = layersByProduct.get(Number(product.id)) || { quantity: 0, value: 0 };
     if (String(product.valorisationMethod || 'CMP').toUpperCase() === 'FIFO') {
+      if (manualCosting) {
+        const manualUnitCost = toNumber(product.coutMoyen);
+        if (manualUnitCost <= 0) return { value: null, complete: false };
+        total += quantity * manualUnitCost;
+        continue;
+      }
       if (Math.abs(layerTotals.quantity - quantity) > 0.001) return { value: null, complete: false };
       total += layerTotals.value;
       continue;
