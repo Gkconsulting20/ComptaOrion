@@ -8,7 +8,7 @@ import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
-import { formatPeriodeFR } from '../utils/dateUtils';
+import { addDaysToIsoDate, formatPeriodeFR } from '../utils/dateUtils';
 import { getCashDiscountPreview } from '../utils/cashDiscount';
 import {
   convertPriceBetweenUnits,
@@ -29,18 +29,27 @@ function FacturationTab({ fournisseurs }) {
   const [receptionsEnAttente, setReceptionsEnAttente] = useState([]);
   const [selectedReceptions, setSelectedReceptions] = useState([]);
   const [produits, setProduits] = useState([]);
+  const [comptesEcart, setComptesEcart] = useState([]);
+  const [compteEcartParDefaut, setCompteEcartParDefaut] = useState('');
+  const [tauxTva, setTauxTva] = useState(18);
   const [factureForm, setFactureForm] = useState({
     fournisseurId: '',
     numeroFactureFournisseur: '',
     dateFacture: new Date().toISOString().split('T')[0],
     dateEcheance: '',
-    montantTVA: '',
+    compteEcartId: '',
+    tvaExoneree: false,
     lignes: [],
     coutsLogistiques: [],
     notes: ''
   });
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+
+  const getSupplierDueDate = (supplierId, invoiceDate) => {
+    const supplier = fournisseurs.find((item) => Number(item.id) === Number(supplierId));
+    return supplier ? addDaysToIsoDate(invoiceDate, supplier.delaiPaiement ?? 30) : '';
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -69,6 +78,39 @@ function FacturationTab({ fournisseurs }) {
 
   useEffect(() => { loadData(); }, [filters]);
 
+  useEffect(() => {
+    const loadAccountingSettings = async () => {
+      try {
+        const [companyRes, accountsRes, mappingsRes] = await Promise.all([
+          api.get('/parametres/entreprise'),
+          api.get('/comptabilite/comptes'),
+          api.get('/comptabilite/comptes-automatiques'),
+        ]);
+        const company = companyRes?.data?.data ?? companyRes?.data ?? {};
+        const accounts = readApiList(accountsRes).filter((account) =>
+          account.actif !== false && ['charge', 'produit'].includes(String(account.type || '').toLowerCase())
+        );
+        const mappings = mappingsRes?.data?.mappings ?? mappingsRes?.mappings ?? {};
+        const roles = mappingsRes?.data?.roles ?? mappingsRes?.roles ?? [];
+        const varianceRole = roles.find((role) => role.key === 'price_variances');
+        const mappedAccount = mappings.price_variances
+          ? accounts.find((account) => String(account.id) === String(mappings.price_variances))
+          : accounts.find((account) => String(account.numero) === String(varianceRole?.defaultNumber || '603'));
+        const defaultAccountId = mappedAccount ? String(mappedAccount.id) : '';
+        setTauxTva(Number.isFinite(Number(company.tauxTva)) ? Number(company.tauxTva) : 18);
+        setComptesEcart(accounts);
+        setCompteEcartParDefaut(defaultAccountId);
+        setFactureForm((current) => ({
+          ...current,
+          compteEcartId: current.compteEcartId || defaultAccountId,
+        }));
+      } catch (error) {
+        console.error('Impossible de charger les paramètres de TVA et de comptes:', error);
+      }
+    };
+    loadAccountingSettings();
+  }, []);
+
   const typeLabels = { transport: 'Transport', douane: 'Douane', manutention: 'Manutention', assurance: 'Assurance', autre: 'Autres' };
 
   const openFactureModal = () => {
@@ -80,7 +122,8 @@ function FacturationTab({ fournisseurs }) {
       numeroFactureFournisseur: '',
       dateFacture: new Date().toISOString().split('T')[0],
       dateEcheance: '',
-      montantTVA: '',
+      compteEcartId: compteEcartParDefaut,
+      tvaExoneree: false,
       lignes: [],
       coutsLogistiques: [],
       notes: ''
@@ -168,13 +211,16 @@ function FacturationTab({ fournisseurs }) {
   const calculateTotals = () => {
     const totalArticles = factureForm.lignes.reduce((sum, l) => sum + (parseFloat(l.quantite) * parseFloat(l.prixUnitaireReel || 0)), 0);
     const totalLogistique = factureForm.coutsLogistiques.reduce((sum, c) => sum + parseFloat(c.montantReel || 0), 0);
-    return { totalArticles, totalLogistique, totalHT: totalArticles + totalLogistique };
+    const totalHT = totalArticles + totalLogistique;
+    const totalTVA = factureForm.tvaExoneree
+      ? 0
+      : Math.round((totalHT * tauxTva / 100) * 100) / 100;
+    return { totalArticles, totalLogistique, totalHT, totalTVA };
   };
 
   const submitFacture = async () => {
-    const totalTVA = Number(factureForm.montantTVA);
-    if (factureForm.montantTVA === '' || !Number.isFinite(totalTVA) || totalTVA < 0) {
-      alert('Saisissez la TVA indiquée sur la facture, ou 0 si elle est exonérée.');
+    if (!factureForm.compteEcartId) {
+      alert('Sélectionnez un compte comptable pour enregistrer les écarts de prix.');
       return;
     }
     setSubmitting(true);
@@ -183,8 +229,8 @@ function FacturationTab({ fournisseurs }) {
         fournisseurId: factureForm.fournisseurId,
         numeroFactureFournisseur: factureForm.numeroFactureFournisseur,
         dateFacture: factureForm.dateFacture,
-        dateEcheance: factureForm.dateEcheance || null,
-        totalTVA,
+        compteEcartId: Number(factureForm.compteEcartId),
+        tvaExoneree: factureForm.tvaExoneree,
         receptionsIds: selectedReceptions,
         lignes: factureForm.lignes.map(l => ({
           produitId: l.produitId,
@@ -217,7 +263,11 @@ function FacturationTab({ fournisseurs }) {
   };
 
   const totals = calculateTotals();
-  const totalTTC = totals.totalHT + (Number(factureForm.montantTVA) || 0);
+  const estimatedHT = factureForm.lignes.reduce((sum, line) =>
+    sum + Number(line.quantite || 0) * Number(line.prixEstime || 0), 0
+  ) + factureForm.coutsLogistiques.reduce((sum, cost) => sum + Number(cost.montantEstime || 0), 0);
+  const totalVariance = totals.totalHT - estimatedHT;
+  const totalTTC = totals.totalHT + totals.totalTVA;
 
   return (
     <div>
@@ -345,7 +395,12 @@ function FacturationTab({ fournisseurs }) {
                 <select 
                   value={factureForm.fournisseurId} 
                   onChange={(e) => {
-                    setFactureForm(prev => ({ ...prev, fournisseurId: e.target.value }));
+                    const fournisseurId = e.target.value;
+                    setFactureForm(prev => ({
+                      ...prev,
+                      fournisseurId,
+                      dateEcheance: getSupplierDueDate(fournisseurId, prev.dateFacture),
+                    }));
                     loadReceptionsForFournisseur(e.target.value);
                     setSelectedReceptions([]);
                   }}
@@ -411,14 +466,17 @@ function FacturationTab({ fournisseurs }) {
                 <div>
                   <label style={{ display: 'block', marginBottom: '5px' }}>Date Facture *</label>
                   <input type="date" value={factureForm.dateFacture}
-                    onChange={(e) => setFactureForm(prev => ({ ...prev, dateFacture: e.target.value }))}
+                    onChange={(e) => setFactureForm(prev => ({
+                      ...prev,
+                      dateFacture: e.target.value,
+                      dateEcheance: getSupplierDueDate(prev.fournisseurId, e.target.value),
+                    }))}
                     style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '5px' }}>Date Échéance</label>
-                  <input type="date" value={factureForm.dateEcheance}
-                    onChange={(e) => setFactureForm(prev => ({ ...prev, dateEcheance: e.target.value }))}
-                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Date Échéance (automatique)</label>
+                  <input type="date" value={factureForm.dateEcheance} readOnly
+                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', background: '#f3f5f7' }} />
                 </div>
               </div>
 
@@ -541,11 +599,39 @@ function FacturationTab({ fournisseurs }) {
                 </>
               )}
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '5px' }}>TVA figurant sur la facture (XOF) — 0 si exonérée *</label>
-                <input type="number" min="0" step="0.01" value={factureForm.montantTVA}
-                  onChange={(e) => setFactureForm(prev => ({ ...prev, montantTVA: e.target.value }))}
-                  style={{ width: '100%', maxWidth: 320, padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
+              <div style={{ margin: '0 0 16px', padding: '12px', background: '#f3f7fb', borderRadius: 8 }}>
+                TVA calculée automatiquement au taux de {tauxTva}% configuré pour l’entreprise.
+                {tauxTva === 0 && ' Le taux configuré est nul : aucune TVA ne sera ajoutée.'}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={factureForm.tvaExoneree}
+                    onChange={(e) => setFactureForm((current) => ({ ...current, tvaExoneree: e.target.checked }))}
+                  />
+                  Facture fournisseur exonérée de TVA
+                </label>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 5 }}>Compte comptable des écarts *</label>
+                <select value={factureForm.compteEcartId}
+                  onChange={(e) => setFactureForm((current) => ({ ...current, compteEcartId: e.target.value }))}
+                  required
+                  style={{ width: '100%', maxWidth: 520, padding: 8, borderRadius: 4, border: '1px solid #ddd' }}>
+                  <option value="">Sélectionner un compte de charge ou de produit</option>
+                  {comptesEcart.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.numero} — {account.nom}{String(account.id) === compteEcartParDefaut ? ' (compte par défaut)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p style={{ color: '#52606d', fontSize: 13, margin: '6px 0 0' }}>
+                  Écart HT constaté : {totalVariance.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF. Il sera débité si défavorable, crédité si favorable.
+                </p>
+                {!comptesEcart.length && (
+                  <p style={{ color: '#b42318', fontSize: 13, margin: '6px 0 0' }}>
+                    Aucun compte actif de charge ou de produit n’est disponible dans le plan comptable.
+                  </p>
+                )}
               </div>
               <div style={{ background: '#e8f5e9', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -562,7 +648,7 @@ function FacturationTab({ fournisseurs }) {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
                   <span>TVA facturée:</span>
-                  <strong>{Number(factureForm.montantTVA || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong>
+                  <strong>{totals.totalTVA.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
                   <span style={{ fontSize: '18px' }}>Total TTC:</span>
@@ -1999,7 +2085,17 @@ export function GestionFournisseurs() {
             <>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                 <FormField label="Fournisseur" name="fournisseurId" type="select" value={form.fournisseurId}
-                  onChange={(e) => setForm({...form, fournisseurId: e.target.value})}
+                  onChange={(e) => {
+                    const fournisseurId = e.target.value;
+                    const supplier = data.fournisseurs.find((item) => Number(item.id) === Number(fournisseurId));
+                    setForm((current) => ({
+                      ...current,
+                      fournisseurId,
+                      dateEcheance: supplier
+                        ? addDaysToIsoDate(current.dateFacture, supplier.delaiPaiement ?? 30)
+                        : '',
+                    }));
+                  }}
                   options={data.fournisseurs.map(f => ({ value: f.id, label: f.nom || f.raisonSociale }))} required />
                 <FormField label="Date Commande" name="dateCommande" type="date" value={form.dateCommande}
                   onChange={(e) => setForm({...form, dateCommande: e.target.value})} required />
@@ -2095,9 +2191,19 @@ export function GestionFournisseurs() {
                 <FormField label="N° facture fournisseur" name="numeroFactureFournisseur" value={form.numeroFactureFournisseur}
                   onChange={(e) => setForm({...form, numeroFactureFournisseur: e.target.value})} required />
                 <FormField label="Date Facture" name="dateFacture" type="date" value={form.dateFacture}
-                  onChange={(e) => setForm({...form, dateFacture: e.target.value})} required />
-                <FormField label="Date Échéance" name="dateEcheance" type="date" value={form.dateEcheance}
-                  onChange={(e) => setForm({...form, dateEcheance: e.target.value})} />
+                  onChange={(e) => {
+                    const dateFacture = e.target.value;
+                    const supplier = data.fournisseurs.find((item) => Number(item.id) === Number(form.fournisseurId));
+                    setForm((current) => ({
+                      ...current,
+                      dateFacture,
+                      dateEcheance: supplier
+                        ? addDaysToIsoDate(dateFacture, supplier.delaiPaiement ?? 30)
+                        : '',
+                    }));
+                  }} required />
+                <FormField label="Date Échéance (automatique)" name="dateEcheance" type="date" value={form.dateEcheance}
+                  disabled />
                 <FormField label="Montant HT (XOF)" name="montantHT" type="number" value={form.montantHT}
                   onChange={(e) => {
                     const montantHT = e.target.value;
@@ -2128,7 +2234,8 @@ export function GestionFournisseurs() {
               <FormField label="Notes" name="notes" value={form.notes}
                 onChange={(e) => setForm({...form, notes: e.target.value})} />
               <p style={{ color: '#52606d', fontSize: 13 }}>
-                Vérifiez les montants extraits. La facture sera enregistrée comme brouillon, sans envoi de la photo ni écriture automatique.
+                Vérifiez les montants extraits. L’échéance est calculée automatiquement selon le délai du fournisseur.
+                La facture sera enregistrée comme brouillon, sans envoi de la photo ni écriture automatique.
               </p>
               <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>

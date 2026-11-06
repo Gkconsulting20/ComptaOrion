@@ -2,7 +2,7 @@ import React from 'react';
 
 export function FormField({
   label, name, type = 'text', value, onChange, required = false, options = [],
-  placeholder = '', min, max, step,
+  placeholder = '', min, max, step, disabled = false,
 }) {
   const inputStyle = {
     width: '100%',
@@ -31,6 +31,7 @@ export function FormField({
           value={value}
           onChange={onChange}
           required={required}
+          disabled={disabled}
           style={inputStyle}
         >
           <option value="">-- Sélectionner --</option>
@@ -44,6 +45,7 @@ export function FormField({
           value={value}
           onChange={onChange}
           required={required}
+          disabled={disabled}
           min={min}
           max={max}
           step={step}
@@ -58,6 +60,7 @@ export function FormField({
           value={value}
           onChange={onChange}
           required={required}
+          disabled={disabled}
           placeholder={placeholder}
           min={min}
           max={max}

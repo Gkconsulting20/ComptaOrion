@@ -227,7 +227,7 @@ router.post('/lite-sale', async (req, res) => {
       const [invoice] = await tx.insert(factures).values({
         entrepriseId: req.entrepriseId, numeroFacture, clientId: effectiveClientId, statut: status,
         dateFacture: effectiveDateFacture,
-        dateEcheance: dateEcheance || addDaysToIsoDate(effectiveDateFacture, client.delaiPaiement ?? 30),
+        dateEcheance: addDaysToIsoDate(effectiveDateFacture, client.delaiPaiement ?? 30),
         totalHT: totalHT.toFixed(2), totalTVA: totalTVA.toFixed(2), totalTTC: totalTTC.toFixed(2),
         montantPaye: requestedPayment.toFixed(2), soldeRestant: Math.max(0, totalTTC - requestedPayment).toFixed(2),
         notes: notes || null, userId: req.user.id,
@@ -448,7 +448,7 @@ router.post('/', async (req, res) => {
         clientId: parseInt(clientId),
         statut: 'brouillon',
         dateFacture: effectiveDateFacture,
-        dateEcheance: dateEcheance || addDaysToIsoDate(effectiveDateFacture, ownedClient.delaiPaiement ?? 30),
+        dateEcheance: addDaysToIsoDate(effectiveDateFacture, ownedClient.delaiPaiement ?? 30),
         escomptePourcentage: String(ownedClient.escomptePourcentage || 0),
         dateLimiteEscompte: Number(ownedClient.escomptePourcentage || 0) > 0
           ? addDaysToIsoDate(effectiveDateFacture, ownedClient.delaiEscompte || 0)

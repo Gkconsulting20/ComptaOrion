@@ -9,7 +9,7 @@ import {
   comptesAutomatiques,
   entreprises,
 } from '../schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { formatJournalEntryNumber } from './sequentialNumbering.js';
 import { buildCashSettlementEntryLines } from './cashDiscountAccounting.js';
 import { ACCOUNTING_ACCOUNT_ROLES } from './accountingAccountMappings.js';
@@ -386,6 +386,7 @@ export async function createEcritureFactureAchat(params) {
     ecartPrix = 0,
     montantValorisationStock = 0,
     montantStockDirect = 0,
+    compteEcartId = null,
     executor = db
   } = params;
 
@@ -395,18 +396,41 @@ export async function createEcritureFactureAchat(params) {
   }
   const compte408 = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.FOURNISSEURS_FACTURES_NON_PARVENUES, executor);
   const compteTVA = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_DEDUCTIBLE, executor);
-  const compteEcarts = await getCompteByNumero(
-    entrepriseId,
-    COMPTES_SYSCOHADA.ECARTS_PRIX,
-    executor,
-    'price_variances',
-  );
+  let compteEcarts = null;
+  if (compteEcartId != null) {
+    [compteEcarts] = await executor.select().from(comptesComptables).where(and(
+      eq(comptesComptables.id, Number(compteEcartId)),
+      eq(comptesComptables.entrepriseId, Number(entrepriseId)),
+      eq(comptesComptables.actif, true),
+      inArray(comptesComptables.type, ['charge', 'produit']),
+    )).limit(1);
+    if (!compteEcarts) {
+      throw new Error('Le compte choisi pour les écarts est absent, inactif ou n’appartient pas à cette entreprise.');
+    }
+  } else {
+    compteEcarts = await getCompteByNumero(
+      entrepriseId,
+      COMPTES_SYSCOHADA.ECARTS_PRIX,
+      executor,
+      'price_variances',
+    );
+  }
   const compteAchatsServices = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ACHATS_SERVICES, executor);
   const compteStock = Number(montantValorisationStock) !== 0 || Number(montantStockDirect) > 0
     ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.STOCK_MARCHANDISES, executor)
     : null;
 
   const ecrituresLignes = [];
+
+  if (Number(montantPending) > 0 && !compte408) {
+    throw new Error('Le compte 408 des factures non parvenues est requis pour rapprocher la facture fournisseur.');
+  }
+  if (Number(totalTVA) > 0 && !compteTVA) {
+    throw new Error('Le compte de TVA déductible est requis pour comptabiliser la TVA de la facture fournisseur.');
+  }
+  if (Number(montantPending) > 0 && Number(ecartPrix) !== 0 && !compteEcarts) {
+    throw new Error('Un compte comptable est requis pour enregistrer l’écart de prix fournisseur.');
+  }
 
   if (montantPending > 0 && compte408) {
     ecrituresLignes.push({

@@ -14,6 +14,8 @@ import {
   valorisationsStock,
   notesCredit,
   notesCreditItems,
+  comptesComptables,
+  entreprises,
 } from '../schema.js';
 import { eq, and, inArray, sql, desc } from 'drizzle-orm';
 import {
@@ -337,7 +339,7 @@ router.post('/factures', async (req, res) => {
         commandeId: commandeId ? parseInt(commandeId) : null,
         statut: 'brouillon',
         dateFacture: effectiveDateFacture,
-        dateEcheance: dateEcheance || addDaysToIsoDate(effectiveDateFacture, fournisseur.delaiPaiement ?? 30),
+        dateEcheance: addDaysToIsoDate(effectiveDateFacture, fournisseur.delaiPaiement ?? 30),
         escomptePourcentage: String(fournisseur.escomptePourcentage || 0),
         dateLimiteEscompte: Number(fournisseur.escomptePourcentage || 0) > 0
           ? addDaysToIsoDate(effectiveDateFacture, fournisseur.delaiEscompte || 0)
@@ -915,11 +917,11 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       fournisseurId,
       numeroFactureFournisseur,
       dateFacture,
-      dateEcheance,
       receptionsIds, // Array des IDs de bons de réception à rapprocher
       lignes, // Lignes avec coûts réels: { produitId, quantite, prixUnitaireReel, description }
       coutsLogistiques, // Coûts logistiques réels: { type, montantReel, description }
-      totalTVA: totalTVADeclare,
+      compteEcartId,
+      tvaExoneree = false,
       notes
     } = req.body;
 
@@ -933,12 +935,9 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     if (!Array.isArray(lignes) || lignes.length === 0) {
       return res.status(400).json({ success: false, message: 'Ajoutez au moins une ligne d’article à la facture.' });
     }
-    if (totalTVADeclare === undefined || totalTVADeclare === null || String(totalTVADeclare).trim() === '') {
-      return res.status(400).json({ success: false, message: 'Saisissez la TVA figurant sur la facture; saisissez 0 si elle est exonérée.' });
-    }
-    const totalTVA = Number(totalTVADeclare);
-    if (!Number.isFinite(totalTVA) || totalTVA < 0) {
-      return res.status(400).json({ success: false, message: 'Le montant de TVA doit être un nombre positif ou nul.' });
+    const varianceAccountId = Number(compteEcartId);
+    if (!Number.isSafeInteger(varianceAccountId) || varianceAccountId <= 0) {
+      return res.status(400).json({ success: false, message: 'Choisissez un compte comptable pour les écarts de prix.' });
     }
     const ligneInvalide = lignes.some((ligne) => {
       const quantite = Number(ligne.quantite);
@@ -964,6 +963,21 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Fournisseur non trouvé' });
     }
     const fournisseur = fournisseurResult.rows[0];
+    const [varianceAccount] = await db.select({ id: comptesComptables.id })
+      .from(comptesComptables)
+      .where(and(
+        eq(comptesComptables.id, varianceAccountId),
+        eq(comptesComptables.entrepriseId, req.entrepriseId),
+        eq(comptesComptables.actif, true),
+        inArray(comptesComptables.type, ['charge', 'produit']),
+      ))
+      .limit(1);
+    if (!varianceAccount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le compte d’écart doit être un compte actif de charge ou de produit de cette entreprise.',
+      });
+    }
 
     // Vérifier que les réceptions existent et appartiennent au fournisseur
     for (const recId of receptionsIds) {
@@ -1044,7 +1058,18 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     });
 
     const totalHT = totalArticlesHT + totalLogistique;
-    const totalTTC = totalHT + totalTVA;
+    const [company] = await db.select({ tauxTva: entreprises.tauxTva })
+      .from(entreprises)
+      .where(eq(entreprises.id, req.entrepriseId))
+      .limit(1);
+    const tauxTva = Number(company?.tauxTva ?? 18);
+    if (!Number.isFinite(tauxTva) || tauxTva < 0 || tauxTva > 100) {
+      return res.status(400).json({ success: false, message: 'Le taux de TVA configuré pour l’entreprise est invalide.' });
+    }
+    const totalTVA = tvaExoneree === true
+      ? 0
+      : Math.round((totalHT * tauxTva / 100) * 100) / 100;
+    const totalTTC = Math.round((totalHT + totalTVA) * 100) / 100;
     const lignesArticles = lignesProcessed.filter((ligne) => Number.isSafeInteger(parseInt(ligne.produitId, 10)) && parseInt(ligne.produitId, 10) > 0);
     const lignesPourRepartition = lignesArticles.map((ligne) => ({
       ...ligne,
@@ -1073,9 +1098,11 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     }
 
     // Créer la facture
+    const effectiveDateFacture = dateFacture || new Date().toISOString().split('T')[0];
+    const dateEcheanceCalculee = addDaysToIsoDate(effectiveDateFacture, fournisseur.delai_paiement ?? 30);
     const factureResult = await db.execute(sql`
       INSERT INTO factures_achat (entreprise_id, numero_facture, numero_facture_fournisseur, fournisseur_id, statut, date_facture, date_echeance, total_ht, total_tva, total_ttc, montant_paye, solde_restant, notes, user_id)
-      VALUES (${req.entrepriseId}, ${numeroFacture}, ${numeroFactureFournisseur || null}, ${parseInt(fournisseurId)}, 'brouillon', ${dateFacture || new Date().toISOString().split('T')[0]}, ${dateEcheance || addDaysToIsoDate(dateFacture || new Date().toISOString().split('T')[0], fournisseur.delai_paiement ?? 30)}, ${totalHT.toFixed(2)}, ${totalTVA.toFixed(2)}, ${totalTTC.toFixed(2)}, '0', ${totalTTC.toFixed(2)}, ${notes || null}, ${req.user?.id || null})
+      VALUES (${req.entrepriseId}, ${numeroFacture}, ${numeroFactureFournisseur || null}, ${parseInt(fournisseurId)}, 'brouillon', ${effectiveDateFacture}, ${dateEcheanceCalculee}, ${totalHT.toFixed(2)}, ${totalTVA.toFixed(2)}, ${totalTTC.toFixed(2)}, '0', ${totalTTC.toFixed(2)}, ${notes || null}, ${req.user?.id || null})
       RETURNING *
     `);
     const newFacture = factureResult.rows[0];
@@ -1209,6 +1236,7 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
           montantPending: totalPending,
           ecartPrix: variance.expenseVariance,
           montantValorisationStock: variance.inventoryAdjustment,
+          compteEcartId: varianceAccountId,
           executor: tx,
         });
 

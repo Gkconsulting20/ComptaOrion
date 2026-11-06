@@ -711,12 +711,21 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       'Le rapport doit exposer le stock non facturé des réceptions');
     assert.equal(logisticsPendingReport.items.length, 2,
       'Le rapport doit exposer les frais logistiques non facturés des réceptions');
+    const varianceAccount = await admin.query(
+      `SELECT id FROM "${schema}".comptes_comptables
+       WHERE entreprise_id = $1 AND actif = true AND type IN ('charge', 'produit')
+       ORDER BY numero LIMIT 1`,
+      [signup.user.entrepriseId],
+    );
+    assert.ok(varianceAccount.rows[0]?.id,
+      'Le plan comptable de test doit offrir un compte actif pour enregistrer les écarts');
     const matchedInvoice = await api('/achats/factures-avec-rapprochement', 'POST', {
       fournisseurId: supplierRecord.data.id,
       numeroFactureFournisseur: 'FACT-FOURN-TEST',
       dateFacture: new Date().toISOString().slice(0, 10),
+      dateEcheance: '1999-01-01',
       receptionsIds: pendingReceipts.data.map(receipt => receipt.id),
-      totalTVA: 0,
+      compteEcartId: varianceAccount.rows[0].id,
       lignes: [
         { produitId: productId, quantite: 10, uniteSaisie: 'pièce', prixUnitaireReel: 500, description: 'Produit recette' },
         { produitId: secondCostProduct.data.id, quantite: 10, uniteSaisie: 'pièce', prixUnitaireReel: 2000, description: 'Produit léger recette' },
@@ -727,6 +736,36 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     }, 201);
     assert.equal(matchedInvoice.data.receptionsRapprochees, 2,
       'La facture doit rapprocher toutes les réceptions sélectionnées');
+    const matchedInvoiceAmounts = await admin.query(
+      `SELECT total_ht, total_tva, total_ttc, date_facture, date_echeance
+       FROM "${schema}".factures_achat
+       WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId, matchedInvoice.data.id],
+    );
+    const matchedAmounts = matchedInvoiceAmounts.rows[0];
+    const companyTax = await admin.query(
+      `SELECT taux_tva FROM "${schema}".entreprises WHERE id = $1`,
+      [signup.user.entrepriseId],
+    );
+    const expectedVat = Math.round(Number(matchedAmounts.total_ht) * Number(companyTax.rows[0]?.taux_tva ?? 18)) / 100;
+    assert.equal(Number(matchedAmounts.total_tva), expectedVat,
+      'La TVA du rapprochement doit être calculée avec le taux configuré pour l’entreprise');
+    assert.equal(Number(matchedAmounts.total_ttc), Number(matchedAmounts.total_ht) + expectedVat,
+      'Le TTC doit être recalculé à partir du HT et de la TVA automatique');
+    const supplierTerms = await admin.query(
+      `SELECT delai_paiement FROM "${schema}".fournisseurs WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId, supplierRecord.data.id],
+    );
+    const invoiceDateIso = matchedAmounts.date_facture instanceof Date
+      ? matchedAmounts.date_facture.toISOString().slice(0, 10)
+      : String(matchedAmounts.date_facture).slice(0, 10);
+    const expectedDueDate = new Date(`${invoiceDateIso}T00:00:00.000Z`);
+    expectedDueDate.setUTCDate(expectedDueDate.getUTCDate() + Number(supplierTerms.rows[0]?.delai_paiement ?? 30));
+    const supplierDueDateIso = matchedAmounts.date_echeance instanceof Date
+      ? matchedAmounts.date_echeance.toISOString().slice(0, 10)
+      : String(matchedAmounts.date_echeance).slice(0, 10);
+    assert.equal(supplierDueDateIso, expectedDueDate.toISOString().slice(0, 10),
+      'La date d’échéance fournisseur doit suivre le délai enregistré, pas la date envoyée par le navigateur');
     const linkedAccountingEntry = await admin.query(
       `SELECT ecriture_comptable_id FROM "${schema}".factures_achat
        WHERE entreprise_id = $1 AND id = $2`,
@@ -769,6 +808,17 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const f=invoice.data;
     assert.equal(Number(f.totalHT),1317.34);
     assert.equal(Number(f.totalTTC),1554.46);
+    const clientTerms = await admin.query(
+      `SELECT delai_paiement FROM "${schema}".clients WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId, clientId],
+    );
+    const expectedClientDueDate = new Date(`${testYear}-01-16T00:00:00.000Z`);
+    expectedClientDueDate.setUTCDate(expectedClientDueDate.getUTCDate() + Number(clientTerms.rows[0]?.delai_paiement ?? 30));
+    const actualClientDueDate = f.dateEcheance instanceof Date
+      ? f.dateEcheance.toISOString().slice(0, 10)
+      : String(f.dateEcheance).slice(0, 10);
+    assert.equal(actualClientDueDate, expectedClientDueDate.toISOString().slice(0, 10),
+      'La date d’échéance client doit suivre le délai enregistré sur la fiche client');
     const createdChartAccount = await api('/comptabilite/comptes', 'POST', {
       numero: 'TEST-PLAN-001',
       nom: 'Compte personnalisé de recette',

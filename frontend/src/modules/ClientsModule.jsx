@@ -8,7 +8,7 @@ import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
 import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceStatus';
-import { formatPeriodeFR } from '../utils/dateUtils';
+import { addDaysToIsoDate, formatPeriodeFR } from '../utils/dateUtils';
 import { getCashDiscountPreview } from '../utils/cashDiscount';
 
 export function ClientsModule() {
@@ -762,6 +762,11 @@ function FacturesClientTab() {
     statut: 'brouillon',
   });
 
+  const getClientDueDate = (clientId, dateFacture) => {
+    const client = clients.find((item) => Number(item.id) === Number(clientId));
+    return client ? addDaysToIsoDate(dateFacture, client.delaiPaiement ?? 30) : '';
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -1002,7 +1007,14 @@ function FacturesClientTab() {
               label="Client *"
               type="select"
               value={factureData.clientId}
-              onChange={(e) => setFactureData({ ...factureData, clientId: parseInt(e.target.value) })}
+              onChange={(e) => {
+                const clientId = e.target.value ? Number(e.target.value) : '';
+                setFactureData((current) => ({
+                  ...current,
+                  clientId,
+                  dateEcheance: getClientDueDate(clientId, current.dateFacture),
+                }));
+              }}
               options={[
                 { value: '', label: '-- Sélectionner un client --' },
                 ...clients.map(c => ({ value: c.id, label: c.nom }))
@@ -1013,15 +1025,22 @@ function FacturesClientTab() {
                 label="Date Facture"
                 type="date"
                 value={factureData.dateFacture}
-                onChange={(e) => setFactureData({ ...factureData, dateFacture: e.target.value })}
+                onChange={(e) => setFactureData((current) => ({
+                  ...current,
+                  dateFacture: e.target.value,
+                  dateEcheance: getClientDueDate(current.clientId, e.target.value),
+                }))}
               />
               <FormField
                 label="Date Échéance"
                 type="date"
                 value={factureData.dateEcheance}
-                onChange={(e) => setFactureData({ ...factureData, dateEcheance: e.target.value })}
+                disabled
               />
             </div>
+            <p style={{ color: '#52606d', fontSize: 13, marginTop: 6 }}>
+              Échéance calculée automatiquement selon le délai de paiement enregistré pour ce client.
+            </p>
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
               <Button onClick={() => setWizardStep(2)} disabled={!factureData.clientId}>
                 Suivant &gt;
