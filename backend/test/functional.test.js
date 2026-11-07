@@ -898,6 +898,59 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     );
     assert.ok(financialPosition.actif.stocksCreances.some((account) => account.compte.startsWith('31')),
       'Le bilan doit reprendre le stock comptabilisé lors de la réception');
+    const [bilanJournalResult, bilanAccountsResult] = await Promise.all([
+      admin.query(
+        `SELECT id FROM "${schema}".journaux WHERE entreprise_id = $1 AND code = 'AC' LIMIT 1`,
+        [signup.user.entrepriseId],
+      ),
+      admin.query(
+        `SELECT id, numero FROM "${schema}".comptes_comptables
+         WHERE entreprise_id = $1 AND numero IN ('401', '610')`,
+        [signup.user.entrepriseId],
+      ),
+    ]);
+    const bilanJournal = bilanJournalResult.rows[0];
+    const bilanPayableAccount = bilanAccountsResult.rows.find((account) => account.numero === '401');
+    const bilanExpenseAccount = bilanAccountsResult.rows.find((account) => account.numero === '610');
+    assert.ok(bilanJournal && bilanPayableAccount && bilanExpenseAccount,
+      'Le test du bilan doit disposer du journal d’achats, du compte 401 et d’un compte de charge 610');
+    const bilanBeforeExpense = await api(
+      `/comptabilite/rapports/bilan?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
+    );
+    const incomeBeforeExpense = await api(
+      `/comptabilite/rapports/resultat?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
+    );
+    await api('/comptabilite/ecritures', 'POST', {
+      journalId: bilanJournal.id,
+      dateEcriture: `${testYear}-11-07`,
+      reference: 'TEST-BILAN-RESULTAT-CHARGE',
+      description: 'Test du résultat net dans le bilan',
+      lignes: [
+        { compteComptableId: bilanExpenseAccount.id, debit: '5.00', credit: '0.00', libelle: 'Écart de transport test' },
+        { compteComptableId: bilanPayableAccount.id, debit: '0.00', credit: '5.00', libelle: 'Dette fournisseur test' },
+      ],
+    }, 201);
+    const bilanAfterExpense = await api(
+      `/comptabilite/rapports/bilan?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
+    );
+    const incomeAfterExpense = await api(
+      `/comptabilite/rapports/resultat?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
+    );
+    assert.equal(Number((bilanAfterExpense.resultatNet - bilanBeforeExpense.resultatNet).toFixed(2)), -5,
+      'Le bilan doit intégrer les charges de classe 6 dans le résultat de la période');
+    assert.equal(Number((incomeAfterExpense.resultatNet - incomeBeforeExpense.resultatNet).toFixed(2)), -5,
+      'Le compte de résultat doit exposer la même charge que le bilan');
+    assert.equal(bilanAfterExpense.equilibre, true,
+      `Le résultat net doit équilibrer le total actif et le total passif: ${JSON.stringify({
+        actif: bilanAfterExpense.actif.total,
+        passif: bilanAfterExpense.passif.total,
+        resultat: bilanAfterExpense.resultatNet,
+      })}`);
+    const displayedExerciseResult = bilanAfterExpense.passif.capitaux.find((account) => account.isResultat);
+    assert.ok(displayedExerciseResult,
+      'Le résultat de période doit apparaître dans les capitaux propres du bilan');
+    assert.equal(Boolean(displayedExerciseResult.isPerte), bilanAfterExpense.resultatNet < 0,
+      'Le bilan doit distinguer correctement un bénéfice d’une perte');
     const receivedProduct = (await admin.query(
       `SELECT prix_achat, cout_moyen, prix_vente FROM "${schema}".produits WHERE entreprise_id = $1 AND id = $2`,
       [signup.user.entrepriseId,productId],
