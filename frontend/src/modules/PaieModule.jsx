@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import { NumberInput } from '../components/NumberInput.jsx';
 
 const ENTREPRISE_ID = 1;
 
@@ -263,35 +264,35 @@ function EmployesTab() {
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Salaire de base (XOF) *</label>
-                <input type="number" value={formData.salaireBase}
+                <NumberInput value={formData.salaireBase}
                   onChange={(e) => setFormData({ ...formData, salaireBase: e.target.value })}
                   required style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Indemnité transport (XOF)</label>
-                <input type="number" value={formData.indemnitesRegulieresTransport}
+                <NumberInput value={formData.indemnitesRegulieresTransport}
                   onChange={(e) => setFormData({ ...formData, indemnitesRegulieresTransport: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Indemnité logement (XOF)</label>
-                <input type="number" value={formData.indemnitesRegulieresLogement}
+                <NumberInput value={formData.indemnitesRegulieresLogement}
                   onChange={(e) => setFormData({ ...formData, indemnitesRegulieresLogement: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Avantage nature logement (XOF)</label>
-                <input type="number" value={formData.avantagesNatureLogement}
+                <NumberInput value={formData.avantagesNatureLogement}
                   onChange={(e) => setFormData({ ...formData, avantagesNatureLogement: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Avantage nature véhicule (XOF)</label>
-                <input type="number" value={formData.avantagesNatureVehicule}
+                <NumberInput value={formData.avantagesNatureVehicule}
                   onChange={(e) => setFormData({ ...formData, avantagesNatureVehicule: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
@@ -514,42 +515,42 @@ function FichesPaieTab() {
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Salaire de base *</label>
-                <input type="number" value={formData.salaireBase}
+                <NumberInput value={formData.salaireBase}
                   onChange={(e) => setFormData({ ...formData, salaireBase: e.target.value })}
                   required style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Indemnités transport</label>
-                <input type="number" value={formData.indemnitesTransport}
+                <NumberInput value={formData.indemnitesTransport}
                   onChange={(e) => setFormData({ ...formData, indemnitesTransport: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Primes</label>
-                <input type="number" value={formData.primes}
+                <NumberInput value={formData.primes}
                   onChange={(e) => setFormData({ ...formData, primes: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Cotisations CNPS</label>
-                <input type="number" value={formData.cotisationsCNPS}
+                <NumberInput value={formData.cotisationsCNPS}
                   onChange={(e) => setFormData({ ...formData, cotisationsCNPS: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Impôt sur revenu</label>
-                <input type="number" value={formData.impotSurRevenu}
+                <NumberInput value={formData.impotSurRevenu}
                   onChange={(e) => setFormData({ ...formData, impotSurRevenu: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Avances sur salaire</label>
-                <input type="number" value={formData.avancesSalaire}
+                <NumberInput value={formData.avancesSalaire}
                   onChange={(e) => setFormData({ ...formData, avancesSalaire: e.target.value })}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }} />
               </div>

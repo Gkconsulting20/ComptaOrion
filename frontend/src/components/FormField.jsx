@@ -1,8 +1,9 @@
 import React from 'react';
+import { NumberInput } from './NumberInput.jsx';
 
 export function FormField({
   label, name, type = 'text', value, onChange, required = false, options = [],
-  placeholder = '', min, max, step, disabled = false,
+  placeholder = '', min, max, step, disabled = false, onBlur, onFocus,
 }) {
   const inputStyle = {
     width: '100%',
@@ -53,6 +54,21 @@ export function FormField({
           rows={4}
           style={inputStyle}
         />
+      ) : type === 'number' ? (
+        <NumberInput
+          name={name}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          onFocus={onFocus}
+          required={required}
+          disabled={disabled}
+          placeholder={placeholder}
+          min={min}
+          max={max}
+          step={step ?? 'any'}
+          style={inputStyle}
+        />
       ) : (
         <input
           type={type}
@@ -64,7 +80,7 @@ export function FormField({
           placeholder={placeholder}
           min={min}
           max={max}
-          step={step ?? (type === 'number' ? 'any' : undefined)}
+          step={step}
           style={inputStyle}
         />
       )}

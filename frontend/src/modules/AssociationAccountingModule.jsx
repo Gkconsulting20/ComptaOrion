@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../api';
+import { NumberInput } from '../components/NumberInput.jsx';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const amount = (value) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
@@ -350,7 +351,7 @@ export function AssociationAccountingModule() {
                 <section style={{ display: 'grid', gap: 15 }}>
                   <form onSubmit={addBudget} style={{ ...styles.panel, display: 'grid', gridTemplateColumns: 'minmax(160px,1.5fr) minmax(140px,.7fr) auto', gap: 11, alignItems: 'end' }}>
                     <Field label="Poste budgétaire"><input style={styles.input} value={budgetPost.poste} maxLength={160} placeholder="Ex. Formation communautaire" onChange={(event) => setBudgetPost({ ...budgetPost, poste: event.target.value })} required /></Field>
-                    <Field label={`Montant alloué (${selected.devise})`}><input style={styles.input} type="number" step="0.01" min="0.01" value={budgetPost.montantAlloue} onChange={(event) => setBudgetPost({ ...budgetPost, montantAlloue: event.target.value })} required /></Field>
+                    <Field label={`Montant alloué (${selected.devise})`}><NumberInput style={styles.input} step="0.01" min="0.01" value={budgetPost.montantAlloue} onChange={(event) => setBudgetPost({ ...budgetPost, montantAlloue: event.target.value })} required /></Field>
                     <button style={styles.button} disabled={saving} type="submit">Ajouter</button>
                   </form>
                   <section style={styles.panel}>
@@ -371,7 +372,7 @@ export function AssociationAccountingModule() {
                   <form onSubmit={addFunding} style={{ ...styles.panel, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(155px,1fr))', gap: 11, alignItems: 'end' }}>
                     <Field label="Bailleur / partenaire"><input style={styles.input} value={pledge.bailleur} onChange={(event) => setPledge({ ...pledge, bailleur: event.target.value })} maxLength={255} required /></Field>
                     <Field label="Convention / référence"><input style={styles.input} value={pledge.referenceConvention} onChange={(event) => setPledge({ ...pledge, referenceConvention: event.target.value })} maxLength={120} /></Field>
-                    <Field label={`Financement engagé (${selected.devise})`}><input style={styles.input} type="number" min="0.01" step="0.01" value={pledge.montantEngage} onChange={(event) => setPledge({ ...pledge, montantEngage: event.target.value })} required /></Field>
+                    <Field label={`Financement engagé (${selected.devise})`}><NumberInput style={styles.input} min="0.01" step="0.01" value={pledge.montantEngage} onChange={(event) => setPledge({ ...pledge, montantEngage: event.target.value })} required /></Field>
                     <button type="submit" style={styles.button} disabled={saving}>Enregistrer l’engagement</button>
                   </form>
                   {report.financings.length === 0 ? <section style={styles.panel}><Empty>Aucun engagement financier enregistré pour ce projet.</Empty></section> :
@@ -384,7 +385,7 @@ export function AssociationAccountingModule() {
                         </div>
                         {paid + 0.005 < Number(financing.montantEngage) && (
                           <form onSubmit={(event) => recordReceipt(event, financing.id)} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(135px,1fr))', gap: 10, paddingTop: 13, borderTop: '1px solid #e8ecef' }}>
-                            <Field label={`Versement reçu (${selected.devise})`}><input style={styles.input} type="number" min="0.01" max={Number(financing.montantEngage) - paid} step="0.01" value={receipt.financementId === String(financing.id) ? receipt.montant : ''} onChange={(event) => setReceipt({ ...receipt, financementId: String(financing.id), montant: event.target.value })} required /></Field>
+                            <Field label={`Versement reçu (${selected.devise})`}><NumberInput style={styles.input} min="0.01" max={Number(financing.montantEngage) - paid} step="0.01" value={receipt.financementId === String(financing.id) ? receipt.montant : ''} onChange={(event) => setReceipt({ ...receipt, financementId: String(financing.id), montant: event.target.value })} required /></Field>
                             <Field label="Date du reçu"><input style={styles.input} type="date" value={receipt.dateVersement} onChange={(event) => setReceipt({ ...receipt, dateVersement: event.target.value })} required /></Field>
                             <Field label="Nº de pièce"><input style={styles.input} value={receipt.numeroPiece} maxLength={120} onChange={(event) => setReceipt({ ...receipt, numeroPiece: event.target.value })} /></Field>
                             <Field label="Compte banque / caisse"><select style={styles.input} value={receipt.financementId === String(financing.id) ? receipt.compteTresorerieId : ''} onChange={(event) => setReceipt({ ...receipt, financementId: String(financing.id), compteTresorerieId: event.target.value })} required><option value="">Choisir</option>{accounts.treasury.map((item) => <option key={item.id} value={item.id}>{item.numero} · {item.nom}</option>)}</select></Field>
@@ -468,7 +469,7 @@ export function AssociationAccountingModule() {
                                 </div>}
                                 {paymentExpenseId === item.id && <form onSubmit={(event) => recordExpensePayment(event, item)} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, alignItems: 'end', paddingTop: 11, borderTop: item.paiements?.length ? '1px solid #e1e9e5' : 0 }}>
                                   <div style={{ gridColumn: '1/-1', color: '#53636e', fontSize: 12 }}>Solde restant : <strong>{cash(due, selected.devise)}</strong>. Un paiement partiel est possible.</div>
-                                  <Field label={`Montant payé (${selected.devise})`}><input style={styles.input} type="number" min="0.01" max={due} step="0.01" value={paymentForm.montant} onChange={(event) => setPaymentForm({ ...paymentForm, montant: event.target.value })} required /></Field>
+                                  <Field label={`Montant payé (${selected.devise})`}><NumberInput style={styles.input} min="0.01" max={due} step="0.01" value={paymentForm.montant} onChange={(event) => setPaymentForm({ ...paymentForm, montant: event.target.value })} required /></Field>
                                   <Field label="Date du paiement"><input style={styles.input} type="date" value={paymentForm.datePaiement} onChange={(event) => setPaymentForm({ ...paymentForm, datePaiement: event.target.value })} required /></Field>
                                   <Field label="Numéro de pièce"><input style={styles.input} value={paymentForm.numeroPiece} maxLength={120} onChange={(event) => setPaymentForm({ ...paymentForm, numeroPiece: event.target.value })} /></Field>
                                   <Field label="Compte banque / caisse"><select style={styles.input} value={paymentForm.compteTresorerieId} onChange={(event) => setPaymentForm({ ...paymentForm, compteTresorerieId: event.target.value })} required><option value="">Choisir un compte</option>{accounts.treasury.map((account) => <option key={account.id} value={account.id}>{account.numero} · {account.nom}</option>)}</select></Field>
@@ -521,7 +522,7 @@ export function AssociationAccountingModule() {
             <Field label="Nom du projet"><input style={styles.input} value={projectForm.nom} maxLength={255} onChange={(event) => setProjectForm({ ...projectForm, nom: event.target.value })} required /></Field>
             <Field label="Bailleur principal"><input style={styles.input} value={projectForm.bailleur} maxLength={255} onChange={(event) => setProjectForm({ ...projectForm, bailleur: event.target.value })} /></Field>
             <Field label="Convention"><input style={styles.input} value={projectForm.referenceConvention} maxLength={120} onChange={(event) => setProjectForm({ ...projectForm, referenceConvention: event.target.value })} /></Field>
-            <Field label="Budget total approuvé"><input style={styles.input} type="number" min="0.01" step="0.01" value={projectForm.budgetTotal} onChange={(event) => setProjectForm({ ...projectForm, budgetTotal: event.target.value })} required /></Field>
+            <Field label="Budget total approuvé"><NumberInput style={styles.input} min="0.01" step="0.01" value={projectForm.budgetTotal} onChange={(event) => setProjectForm({ ...projectForm, budgetTotal: event.target.value })} required /></Field>
             <Field label="Devise"><select style={styles.input} value={projectForm.devise} onChange={(event) => setProjectForm({ ...projectForm, devise: event.target.value })}>{[['XOF','XOF'],['XAF','XAF'],['EUR','EUR'],['USD','USD'],['CDF','CDF'],['GNF','GNF'],['NGN','NGN'],['GHS','GHS']].map(([value,label]) => <option value={value} key={value}>{label}</option>)}</select></Field>
             <Field label="Date de début"><input style={styles.input} type="date" value={projectForm.dateDebut} onChange={(event) => setProjectForm({ ...projectForm, dateDebut: event.target.value })} required /></Field>
             <Field label="Date de fin"><input style={styles.input} type="date" value={projectForm.dateFin} onChange={(event) => setProjectForm({ ...projectForm, dateFin: event.target.value })} /></Field>

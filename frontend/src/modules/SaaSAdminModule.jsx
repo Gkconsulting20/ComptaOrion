@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import { NumberInput } from '../components/NumberInput.jsx';
 import guideUrl from '../../../docs/Guide-demarrage-ComptaOrion.html?url';
 
 export function SaaSAdminModule() {
@@ -761,15 +762,13 @@ export function SaaSAdminModule() {
                   onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                   style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
                 />
-                <input
-                  type="number"
+                <NumberInput
                   placeholder="Commission (%)"
                   value={formData.commission || ''}
                   onChange={(e) => setFormData({ ...formData, commission: e.target.value })}
                   style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
                 />
-                <input
-                  type="number"
+                <NumberInput
                   placeholder="Objectif mensuel (XOF)"
                   value={formData.objectifMensuel || ''}
                   onChange={(e) => setFormData({ ...formData, objectifMensuel: e.target.value })}
@@ -804,8 +803,7 @@ export function SaaSAdminModule() {
                   required
                   style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
                 />
-                <input
-                  type="number"
+                <NumberInput
                   placeholder="Prix *"
                   value={formData.prix || ''}
                   onChange={(e) => setFormData({ ...formData, prix: e.target.value })}
@@ -820,8 +818,7 @@ export function SaaSAdminModule() {
                   <option value="mensuel">Mensuel</option>
                   <option value="annuel">Annuel</option>
                 </select>
-                <input
-                  type="number"
+                <NumberInput
                   placeholder="Limite utilisateurs"
                   value={formData.limiteUtilisateurs || ''}
                   onChange={(e) => setFormData({ ...formData, limiteUtilisateurs: e.target.value })}
@@ -829,8 +826,7 @@ export function SaaSAdminModule() {
                   step="1"
                   style={{ width: '100%', padding: '10px', marginBottom: '15px', border: '1px solid #ddd', borderRadius: '4px' }}
                 />
-                <input
-                  type="number"
+                <NumberInput
                   placeholder="Stockage (Go)"
                   value={formData.stockageGb || ''}
                   onChange={(e) => setFormData({ ...formData, stockageGb: e.target.value })}

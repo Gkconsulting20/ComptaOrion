@@ -20,6 +20,7 @@
 - [Recettes multi-tenant](tenant-functional-tests.md) — isoler les sessions par identité et attendre les statuts réellement imposés par les contrôles.
 - [Immobilisations en pause](immobilisations-paused.md) — garder le registre caché tant qu’il ne suit pas les emplacements et ne génère pas d’écritures comptables.
 - [Affichage des devises](currency-display.md) — afficher XOF groupé par espaces avec deux décimales, sans conversion ni modification des montants enregistrés.
+- [Saisie numérique localisée](localized-number-entry.md) — accepter virgule, point et espaces de milliers sans déplacer le curseur.
 - [Éditeur ComptaOrion](publisher-identity.md) — ORIONEXA édite ComptaOrion; utiliser ses coordonnées uniquement pour les contacts éditeur.
 - [Compte collectif clients](collective-client-account.md) — ID auxiliaire unique; 4111 pour les ventes de biens, 4112 pour les services.
 - [Identifiants auxiliaires des tiers](third-party-identifiers.md) — numéro client/fournisseur unique affiché et utilisé pour retrouver l’état de compte.

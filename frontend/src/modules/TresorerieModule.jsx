@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { NumberInput } from '../components/NumberInput.jsx';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
@@ -871,8 +872,7 @@ export function TresorerieModule() {
             {!editingCompte && (
               <div style={{ marginBottom: '15px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Solde initial</label>
-                <input
-                  type="number"
+                <NumberInput
                   value={formData.soldeInitial || '0'}
                   onChange={(e) => setFormData({ ...formData, soldeInitial: e.target.value })}
                   style={{
@@ -1523,8 +1523,7 @@ export function TresorerieModule() {
 
               <div style={{ marginBottom: '15px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Solde Relevé Bancaire</label>
-                <input
-                  type="number"
+                <NumberInput
                   step="0.01"
                   value={formData.soldeReleve || ''}
                   onChange={(e) => setFormData({ ...formData, soldeReleve: e.target.value })}

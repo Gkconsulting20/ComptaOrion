@@ -5,6 +5,7 @@ import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { FormField } from '../components/FormField';
+import { NumberInput } from '../components/NumberInput.jsx';
 import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import ReportPageHeader from '../components/ReportPageHeader';
@@ -1299,8 +1300,7 @@ export function StockInventaire() {
                     </div>
                     <div>
                       <label style={{ fontSize: '12px', color: '#666' }}>Quantité</label>
-                      <input 
-                        type="number" 
+                      <NumberInput
                         value={ligne.quantiteRecue || ''} 
                         onChange={(e) => {
                           const newLignes = [...form.lignes];
@@ -1312,8 +1312,7 @@ export function StockInventaire() {
                     </div>
                     <div>
                       <label style={{ fontSize: '12px', color: '#666' }}>Prix Unit. Estimé</label>
-                      <input 
-                        type="number" 
+                      <NumberInput
                         value={ligne.prixUnitaireEstime || ''} 
                         onChange={(e) => {
                           const newLignes = [...form.lignes];
@@ -1396,8 +1395,7 @@ export function StockInventaire() {
                     </div>
                     <div>
                       <label style={{ fontSize: '12px', color: '#666' }}>Quantité</label>
-                      <input 
-                        type="number" 
+                      <NumberInput
                         min="0.001"
                         step="0.001"
                         value={ligne.quantite || ''} 
@@ -1411,8 +1409,7 @@ export function StockInventaire() {
                     </div>
                     <div>
                       <label style={{ fontSize: '12px', color: '#666' }}>Prix Unitaire</label>
-                      <input 
-                        type="number" 
+                      <NumberInput
                         min="0"
                         step="0.01"
                         value={ligne.prixUnitaire || ''} 
@@ -1511,9 +1508,8 @@ export function StockInventaire() {
                     </div>
                     <label style={{ fontSize: 12, color: '#52606d' }}>
                       Quantité reçue
-                      <input
+                      <NumberInput
                         aria-label={`Quantité reçue ${line.description}`}
-                        type="number"
                         min="0"
                         max={line.quantiteRestante}
                         step="0.001"
@@ -1536,9 +1532,8 @@ export function StockInventaire() {
                       <>
                         <label style={{ fontSize: 12, color: '#52606d' }}>
                           Poids par unité{Number(modal.item?.totalLogistique || 0) > 0 ? ' *' : ''}
-                          <input
+                          <NumberInput
                             aria-label={`Poids par unité ${line.description}`}
-                            type="number"
                             min="0.000001"
                             step="0.000001"
                             value={line.poidsParUnite ?? ''}

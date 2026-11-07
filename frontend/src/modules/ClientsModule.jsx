@@ -3,6 +3,7 @@ import { Modal } from '../components/Modal';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
+import { NumberInput } from '../components/NumberInput.jsx';
 import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import ReportPageHeader from '../components/ReportPageHeader';
@@ -1256,8 +1257,7 @@ function FacturesClientTab() {
             <div key={line.factureItemId} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) 130px 150px', gap: 12, alignItems: 'center', marginBottom: 10 }}>
               <span>{line.description}{!line.stockable ? ' — non stockable' : !line.costAvailable ? ' — coût historique absent' : ''}</span>
               <span>Facturé : {line.quantiteOriginale}</span>
-              <input
-                type="number"
+              <NumberInput
                 min="0"
                 max={line.quantiteOriginale}
                 step="0.001"

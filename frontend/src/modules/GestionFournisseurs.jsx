@@ -3,6 +3,7 @@ import { Modal } from '../components/Modal';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
+import { NumberInput } from '../components/NumberInput.jsx';
 import { DetailsModal } from '../components/DetailsModal';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import ReportPageHeader from '../components/ReportPageHeader';
@@ -604,8 +605,7 @@ function FacturationTab({ fournisseurs }) {
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>{ligne.produitNom || ligne.description}</td>
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>
                           <div style={{ display: 'flex', gap: '5px' }}>
-                            <input
-                              type="number"
+                            <NumberInput
                               min="0.001"
                               step="0.001"
                               value={ligne.quantite}
@@ -654,7 +654,7 @@ function FacturationTab({ fournisseurs }) {
                         </td>
                         <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: '#999' }}>{ligne.prixEstime.toLocaleString('fr-FR')}</td>
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                          <input type="number" value={ligne.prixUnitaireReel}
+                          <NumberInput value={ligne.prixUnitaireReel}
                             onChange={(e) => updateLigne(idx, 'prixUnitaireReel', parseFloat(e.target.value) || 0)}
                             style={{ width: '100%', padding: '5px', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'right' }} />
                         </td>
@@ -686,7 +686,7 @@ function FacturationTab({ fournisseurs }) {
                             <td style={{ padding: '8px', border: '1px solid #ddd' }}>{cout.description}</td>
                             <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: '#999' }}>{cout.montantEstime.toLocaleString('fr-FR')}</td>
                             <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                              <input type="number" value={cout.montantReel}
+                              <NumberInput value={cout.montantReel}
                                 onChange={(e) => updateCout(idx, 'montantReel', parseFloat(e.target.value) || 0)}
                                 style={{ width: '100%', padding: '5px', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'right' }} />
                             </td>
@@ -2111,8 +2111,7 @@ export function GestionFournisseurs() {
                 <div key={line.factureAchatItemId} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) 130px 150px', gap: 12, alignItems: 'center', marginBottom: 10 }}>
                   <span>{line.description}{!line.stockable ? ' — stock d’origine indisponible' : ''}</span>
                   <span>Facturé : {line.quantiteOriginale}</span>
-                  <input
-                    type="number"
+                  <NumberInput
                     min="0"
                     max={line.quantiteOriginale}
                     step="0.001"
@@ -2153,8 +2152,7 @@ export function GestionFournisseurs() {
                 <div key={line.factureAchatItemId} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1fr) 140px 160px', gap: 12, alignItems: 'center', marginBottom: 10 }}>
                   <span>{line.description}</span>
                   <span>HT d’origine : {Number(line.totalHTOriginal).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</span>
-                  <input
-                    type="number"
+                  <NumberInput
                     min="0"
                     max={line.totalHTOriginal}
                     step="0.01"
@@ -3101,8 +3099,7 @@ export function GestionFournisseurs() {
               </div>
               <div style={{ marginBottom: '15px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Montant (XOF) *</label>
-                <input
-                  type="number"
+                <NumberInput
                   value={chequeForm.montant}
                   onChange={(e) => setChequeForm({...chequeForm, montant: e.target.value})}
                   style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}

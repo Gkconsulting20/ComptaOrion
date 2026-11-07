@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
+import { NumberInput } from '../components/NumberInput.jsx';
 import api from '../api';
 import { UserAccessPanel } from './UserAccessPanel';
 import { roleCanAccessModule } from '@shared/access-policy.js';
@@ -474,8 +475,7 @@ function EntrepriseForm({ initialData, devises, systemes, pays, onSave, onCancel
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
         <div>
           <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '600' }}>Taux TVA (%)</label>
-          <input
-            type="number"
+          <NumberInput
             step="0.01"
             value={formData.tauxTva}
             onChange={(e) => setFormData({ ...formData, tauxTva: parseFloat(e.target.value) })}
@@ -943,8 +943,7 @@ function TauxChangeTab({ entreprise }) {
         <div style={{ padding: '20px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #ddd' }}>
           <h4 style={{ margin: '0 0 15px 0' }}>🔄 Convertisseur Rapide</h4>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              type="number"
+            <NumberInput
               value={converteur.montant}
               onChange={(e) => setConverteur({ ...converteur, montant: e.target.value, resultat: null })}
               style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', width: '120px' }}
@@ -1013,8 +1012,7 @@ function TauxChangeTab({ entreprise }) {
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>Taux (1 {formData.deviseSource} = X {deviseMaison})</label>
-              <input
-                type="number"
+              <NumberInput
                 step="0.0001"
                 value={formData.taux}
                 onChange={(e) => setFormData({ ...formData, taux: e.target.value })}
