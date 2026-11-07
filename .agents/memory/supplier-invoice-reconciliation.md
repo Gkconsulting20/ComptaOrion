@@ -20,3 +20,9 @@ Quand l’écart de prix est non nul, l’utilisateur choisit lui-même le compt
 **Why:** L’utilisateur a précisé que le traitement comptable peut varier selon la situation et qu’il ne faut pas imposer un compte unique.
 
 **How to apply:** Présenter une liste réellement sélectionnable et consultable des comptes admissibles du plan courant; conserver le compte choisi dans la facture et vérifier côté serveur qu’il appartient à l’entreprise.
+
+Après rapprochement, la réception est liée à la facture et ne figure plus dans la liste des réceptions en attente, mais elle reste dans l’historique. Si l’écriture comptable échoue, la facture demeure visible en brouillon et peut être reprise; aucun des deux documents ne doit être supprimé.
+
+**Why:** L’utilisateur a constaté que facture et réception semblaient disparaître après une erreur et souhaite refaire le test sans perdre les documents.
+
+**How to apply:** Tester le cas d’échec comptable en vérifiant la facture dans la liste des brouillons et la réception dans l’historique, tout en confirmant qu’elle n’apparaît plus dans les réceptions en attente.

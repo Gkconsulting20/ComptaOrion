@@ -1099,12 +1099,13 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     );
     assert.equal(recoveryPendingReceipts.data.length, 1,
       'La réception de reprise doit être retrouvée dans la liste des réceptions à rapprocher');
+    const recoveryReceiptId = Number(recoveryPendingReceipts.data[0].id);
     await admin.query(`DROP TABLE "${schema}".ecriture_sequences`);
     const incompleteInvoice = await api('/achats/factures-avec-rapprochement', 'POST', {
       fournisseurId: supplierRecord.data.id,
       numeroFactureFournisseur: 'FACT-FOURN-REPRISE-SEQUENCE',
       dateFacture: new Date().toISOString().slice(0, 10),
-      receptionsIds: recoveryPendingReceipts.data.map(receipt => receipt.id),
+      receptionsIds: [recoveryReceiptId],
       lignes: [{
         produitId: secondCostProduct.data.id,
         quantite: 2,
@@ -1117,6 +1118,38 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.equal(incompleteInvoice.data.ecritureComptableId, null,
       'Une panne comptable ne doit pas prétendre avoir créé une écriture');
     assert.match(incompleteInvoice.message, /comptabilisation à reprendre/i);
+    const invoicesAfterAccountingFailure = await api('/achats/factures?statut=brouillon');
+    const visibleIncompleteInvoice = invoicesAfterAccountingFailure.data.find(
+      invoice => Number(invoice.id) === Number(incompleteInvoice.data.id),
+    );
+    assert.ok(visibleIncompleteInvoice,
+      'La facture doit rester visible en brouillon après l’échec comptable');
+    assert.equal(visibleIncompleteInvoice.hasStockPending, true,
+      'La facture visible doit proposer la reprise de comptabilisation');
+    const receiptHistoryAfterMatch = await api('/stock/receptions');
+    const preservedReceipt = receiptHistoryAfterMatch.find(
+      receipt => Number(receipt.id) === recoveryReceiptId,
+    );
+    assert.ok(preservedReceipt,
+      'La réception rapprochée doit rester dans l’historique, pas être supprimée');
+    assert.equal(Number(preservedReceipt.facture_achat_id), Number(incompleteInvoice.data.id),
+      'La réception doit conserver le lien vers la facture brouillon');
+    const receiptsStillAwaitingInvoice = await api(
+      `/achats/receptions-en-attente?fournisseurId=${supplierRecord.data.id}`,
+    );
+    assert.equal(receiptsStillAwaitingInvoice.data.length, 0,
+      'Une réception rapprochée ne doit plus apparaître dans les réceptions en attente');
+    const pendingLinesAfterAccountingFailure = await admin.query(
+      `SELECT COUNT(*) FILTER (WHERE statut = 'invoiced')::int AS invoiced_count,
+              COUNT(*) FILTER (WHERE facture_achat_id = $3)::int AS linked_count
+       FROM "${schema}".stock_pending
+       WHERE entreprise_id = $1 AND bon_reception_id = $2`,
+      [signup.user.entrepriseId, recoveryReceiptId, incompleteInvoice.data.id],
+    );
+    assert.ok(pendingLinesAfterAccountingFailure.rows[0].invoiced_count > 0,
+      'Les lignes de stock doivent être liées à la facture même si l’écriture est à reprendre');
+    assert.ok(pendingLinesAfterAccountingFailure.rows[0].linked_count > 0,
+      'Le lien de stock non facturé vers la facture doit être conservé');
 
     await admin.query(`
       CREATE TABLE "${schema}".ecriture_sequences (
