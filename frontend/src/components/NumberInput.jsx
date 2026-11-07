@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import {
   formatLocalizedNumber,
   normalizeLocalizedNumber,
@@ -29,14 +29,18 @@ export function NumberInput({
   ...inputProps
 }) {
   const inputRef = useRef(null);
-  const [focused, setFocused] = useState(false);
-  const [draft, setDraft] = useState(() =>
+  const initialValue = useRef(
     formatLocalizedNumber(value, { step, minimumFractionDigits, maximumFractionDigits }),
   );
+  const [focused, setFocused] = useState(false);
 
-  useEffect(() => {
-    if (!focused) {
-      setDraft(formatLocalizedNumber(value, { step, minimumFractionDigits, maximumFractionDigits }));
+  useLayoutEffect(() => {
+    if (!focused && inputRef.current) {
+      inputRef.current.value = formatLocalizedNumber(value, {
+        step,
+        minimumFractionDigits,
+        maximumFractionDigits,
+      });
     }
   }, [value, focused, step, minimumFractionDigits, maximumFractionDigits]);
 
@@ -68,7 +72,6 @@ export function NumberInput({
   const handleChange = (event) => {
     const nextDraft = event.currentTarget.value;
     const normalized = normalizeLocalizedNumber(nextDraft);
-    setDraft(nextDraft);
     updateValidity(normalized);
     if (normalized != null) onChange?.(makeValueEvent(event, normalized));
   };
@@ -81,11 +84,12 @@ export function NumberInput({
   const handleBlur = (event) => {
     const normalized = normalizeLocalizedNumber(event.currentTarget.value);
     const valueIsValid = updateValidity(normalized);
-    setDraft(normalized == null
+    const nextDisplayValue = normalized == null
       ? formatLocalizedNumber(value, { step, minimumFractionDigits, maximumFractionDigits })
       : valueIsValid
         ? formatLocalizedNumber(normalized, { step, minimumFractionDigits, maximumFractionDigits })
-        : numberForEditing(normalized));
+        : numberForEditing(normalized);
+    event.currentTarget.value = nextDisplayValue;
     setFocused(false);
     onBlur?.(normalized == null ? event : makeValueEvent(event, normalized));
   };
@@ -97,7 +101,7 @@ export function NumberInput({
       type="text"
       inputMode={inputMode}
       autoComplete={inputProps.autoComplete || 'off'}
-      value={draft}
+      defaultValue={initialValue.current}
       onChange={handleChange}
       onFocus={handleFocus}
       onBlur={handleBlur}
