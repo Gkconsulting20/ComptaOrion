@@ -297,7 +297,7 @@ router.put('/factures/:id/compte-ecart', async (req, res) => {
       const [invoice] = await tx.select().from(facturesAchat).where(and(
         eq(facturesAchat.id, factureId),
         eq(facturesAchat.entrepriseId, req.entrepriseId),
-      )).limit(1);
+      )).for('update').limit(1);
       if (!invoice) {
         const error = new Error('Facture fournisseur introuvable.');
         error.statusCode = 404;
@@ -1499,6 +1499,7 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
     };
     let comptabiliteAvertissement = null;
     let ecritureComptableId = newFacture.ecritureComptableId ?? null;
+    let factureComptabilisee = false;
     try {
       const result = await db.transaction(async (tx) => {
         const pendingRowsResult = await tx.execute(sql`
@@ -1532,15 +1533,45 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
           executor: tx,
         });
 
-        if (!ecriture && variance.inventoryAdjustment !== 0) {
-          throw new Error('La correction du stock n’a pas pu être enregistrée dans le journal comptable.');
+        if (!ecriture) {
+          throw new Error('L’écriture comptable n’a pas pu être enregistrée; le rapprochement est annulé.');
         }
         if (ecriture) {
-          await tx.execute(sql`
-            UPDATE factures_achat
-            SET ecriture_comptable_id = ${ecriture.id}
-            WHERE id = ${newFacture.id} AND entreprise_id = ${req.entrepriseId}
-          `);
+          const [updatedInvoice] = await tx.update(facturesAchat).set({
+            ecritureComptableId: ecriture.id,
+            statut: 'validee',
+            updatedAt: new Date(),
+          }).where(and(
+            eq(facturesAchat.id, newFacture.id),
+            eq(facturesAchat.entrepriseId, req.entrepriseId),
+          )).returning();
+          if (!updatedInvoice) {
+            throw new Error('La facture rapprochée n’a pas pu être finalisée.');
+          }
+          const [updatedSupplier] = await tx.update(fournisseurs).set({
+            soldeDu: sql`COALESCE(${fournisseurs.soldeDu}, 0) + ${Number(totalTTC).toFixed(2)}`,
+            updatedAt: new Date(),
+          }).where(and(
+            eq(fournisseurs.id, parseInt(fournisseurId, 10)),
+            eq(fournisseurs.entrepriseId, req.entrepriseId),
+          )).returning({ id: fournisseurs.id });
+          if (!updatedSupplier) {
+            throw new Error('Le solde du fournisseur n’a pas pu être mis à jour.');
+          }
+          await logAudit({
+            ...extractAuditInfo(req),
+            action: 'UPDATE',
+            table: 'factures_achat',
+            recordId: updatedInvoice.id,
+            ancienneValeur: { statut: 'brouillon', ecritureComptableId: null },
+            nouvelleValeur: {
+              statut: updatedInvoice.statut,
+              ecritureComptableId: updatedInvoice.ecritureComptableId,
+            },
+            description: `Facture fournisseur comptabilisée au rapprochement: ${numeroFacture}`,
+            executor: tx,
+            required: true,
+          });
         }
         for (const layer of valuation.couchesRevalorisees) {
           await logAudit({
@@ -1570,6 +1601,7 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       });
       coutRevient = result.valuation;
       ecritureComptableId = result.ecriture?.id ?? null;
+      factureComptabilisee = Boolean(result.ecriture);
       if (!result.ecriture) comptabiliteAvertissement = 'L’écriture comptable n’a pas été créée : vérifiez les comptes configurés.';
     } catch (comptaError) {
       comptabiliteAvertissement = 'La facture est créée, mais sa comptabilisation reste à reprendre. Ouvrez « Factures fournisseurs » et utilisez « Reprendre l’écriture ».';
@@ -1587,9 +1619,10 @@ router.post('/factures-avec-rapprochement', async (req, res) => {
       success: true,
       message: comptabiliteAvertissement
         ? 'Facture créée, mais comptabilisation à reprendre'
-        : 'Facture créée avec rapprochement réussi',
+        : 'Facture rapprochée et comptabilisée',
       data: {
         ...newFacture,
+        statut: factureComptabilisee ? 'validee' : newFacture.statut,
         ecritureComptableId,
         totalArticles: totalArticlesHT,
         totalLogistique,
@@ -1655,7 +1688,7 @@ router.post('/factures/:id/reprendre-comptabilisation', async (req, res) => {
       const [invoice] = await tx.select().from(facturesAchat).where(and(
         eq(facturesAchat.id, factureId),
         eq(facturesAchat.entrepriseId, req.entrepriseId),
-      )).limit(1);
+      )).for('update').limit(1);
       if (!invoice) {
         const error = new Error('Facture fournisseur introuvable.');
         error.statusCode = 404;
@@ -1772,13 +1805,44 @@ router.post('/factures/:id/reprendre-comptabilisation', async (req, res) => {
         throw new Error('L’écriture comptable n’a pas pu être créée. Vérifiez les comptes configurés.');
       }
 
-      await tx.update(facturesAchat).set({
+      const [updatedInvoice] = await tx.update(facturesAchat).set({
         ecritureComptableId: ecriture.id,
+        statut: 'validee',
         updatedAt: new Date(),
       }).where(and(
         eq(facturesAchat.id, invoice.id),
         eq(facturesAchat.entrepriseId, req.entrepriseId),
-      ));
+      )).returning();
+      if (!updatedInvoice) {
+        throw new Error('La facture fournisseur n’a pas pu être finalisée après la reprise.');
+      }
+      const [updatedSupplier] = await tx.update(fournisseurs).set({
+        soldeDu: sql`COALESCE(${fournisseurs.soldeDu}, 0) + ${Number(invoice.totalTTC || 0).toFixed(2)}`,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(fournisseurs.id, invoice.fournisseurId),
+        eq(fournisseurs.entrepriseId, req.entrepriseId),
+      )).returning({ id: fournisseurs.id });
+      if (!updatedSupplier) {
+        throw new Error('Le solde du fournisseur n’a pas pu être mis à jour après la reprise.');
+      }
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'factures_achat',
+        recordId: invoice.id,
+        ancienneValeur: {
+          statut: invoice.statut,
+          ecritureComptableId: invoice.ecritureComptableId,
+        },
+        nouvelleValeur: {
+          statut: 'validee',
+          ecritureComptableId: ecriture.id,
+        },
+        description: `Facture fournisseur comptabilisée après reprise: ${invoice.numeroFacture}`,
+        executor: tx,
+        required: true,
+      });
       for (const layer of valuation.couchesRevalorisees) {
         await logAudit({
           ...extractAuditInfo(req),
@@ -1808,9 +1872,10 @@ router.post('/factures/:id/reprendre-comptabilisation', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'La comptabilisation et la correction de valorisation ont été reprises.',
+      message: 'La facture est comptabilisée et sa correction de valorisation est reprise.',
       data: {
         ecritureComptableId: result.ecritureId,
+        statut: 'validee',
         coutRevient: result.valuation,
         avertissements: result.logisticsAllocation.unallocated > 0
           ? ['Certains frais logistiques restent non répartis : vérifiez le poids par unité des produits.']

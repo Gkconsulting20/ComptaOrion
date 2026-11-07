@@ -27,8 +27,8 @@ Après rapprochement, la réception est liée à la facture et ne figure plus da
 
 **How to apply:** Tester le cas d’échec comptable en vérifiant la facture dans la liste des brouillons et la réception dans l’historique, tout en confirmant qu’elle n’apparaît plus dans les réceptions en attente.
 
-Une réception validée publie immédiatement l’écriture stock/408. Une facture rapprochée reste brouillon jusqu’à sa validation; celle-ci valide l’écriture 408/TVA/401 déjà liée, sans recréer le mouvement de stock ni une seconde écriture. Les rapports officiels ne reprennent que les écritures validées.
+Toute écriture comptable complète et équilibrée est validée au moment de son enregistrement; il n’y a pas d’étape séparée de validation d’écriture. Le rapprochement publie l’écriture 408/TVA/401 et finalise la facture fournisseur dans la même transaction, puis met à jour le solde auxiliaire. En cas d’échec comptable, la facture reste brouillon sans écriture partielle; la reprise finalise la facture et son solde. Ne jamais recréer le stock déjà reçu.
 
-**Why:** Une écriture peut exister en base tout en restant invisible si elle est brouillon; valider la facture rapprochée comme une facture directe pouvait aussi dupliquer le stock.
+**Why:** L’utilisateur demande que les écritures soient validées dès leur enregistrement et que le rapprochement fournisseur soit comptabilisé immédiatement.
 
-**How to apply:** Pour tout changement de ce parcours, vérifier la réception au grand livre et à la balance, puis valider la facture et contrôler le solde 408, la dette 401, la TVA, l’absence de doublon d’écriture et l’absence de mouvement stock supplémentaire.
+**How to apply:** Vérifier par test de bout en bout que la réception apparaît au grand livre et à la balance, que le rapprochement publie 408/401/TVA et met à jour le solde fournisseur une seule fois, et qu’il ne duplique ni écriture ni mouvement de stock. Examiner séparément les anciens brouillons avant toute régularisation historique.

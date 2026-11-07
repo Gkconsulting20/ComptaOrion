@@ -1597,9 +1597,9 @@ export function GestionFournisseurs() {
     }
   };
 
-  const handleValidateSupplierInvoice = async (invoice) => {
+  const handleConfirmSupplierInvoice = async (invoice) => {
     const confirmed = window.confirm(
-      `Valider la facture ${invoice.numeroFactureFournisseur || invoice.numeroFacture} ? Cette action comptabilisera la dette fournisseur. Les réceptions déjà enregistrées ne seront pas ajoutées une seconde fois.`,
+      `Confirmer la facture ${invoice.numeroFactureFournisseur || invoice.numeroFacture} ? La dette fournisseur sera comptabilisée. Les réceptions déjà enregistrées ne seront pas ajoutées une seconde fois.`,
     );
     if (!confirmed) return;
 
@@ -1608,9 +1608,9 @@ export function GestionFournisseurs() {
       const response = await api.put(`/achats/factures/${invoice.id}/valider`, {});
       const payload = response.data || response;
       await loadAllData();
-      alert(payload.message || 'Facture fournisseur validée.');
+      alert(payload.message || 'Facture fournisseur confirmée et comptabilisée.');
     } catch (error) {
-      alert(error.response?.data?.message || error.message || 'La facture fournisseur n’a pas pu être validée.');
+      alert(error.response?.data?.message || error.message || 'La facture fournisseur n’a pas pu être confirmée.');
     } finally {
       setValidatingInvoiceId(null);
     }
@@ -1953,14 +1953,16 @@ export function GestionFournisseurs() {
               actions={true}
               customActions={facture => (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                    {facture.statut === 'brouillon' && (
+                    {facture.statut === 'brouillon'
+                      && (!facture.hasStockPending || facture.ecritureComptableId)
+                      && (
                       <Button
                         size="small"
                         variant="success"
                         disabled={validatingInvoiceId === facture.id}
-                        onClick={() => handleValidateSupplierInvoice(facture)}
+                        onClick={() => handleConfirmSupplierInvoice(facture)}
                       >
-                        {validatingInvoiceId === facture.id ? 'Validation…' : 'Valider la facture'}
+                        {validatingInvoiceId === facture.id ? 'Confirmation…' : 'Confirmer la facture'}
                       </Button>
                     )}
                     {facture.statut === 'brouillon' && facture.hasStockPending && !facture.ecritureComptableId && (

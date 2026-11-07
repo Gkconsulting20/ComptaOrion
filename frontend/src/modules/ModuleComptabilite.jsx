@@ -749,27 +749,6 @@ export function ModuleComptabilite() {
     }
   };
 
-  const validateReceiptEntry = async (entry) => {
-    const confirmed = window.confirm(
-      `Valider l’écriture de réception ${entry.reference || entry.numeroEcriture || ''} ? Elle sera alors incluse dans le grand livre et la balance.`,
-    );
-    if (!confirmed) return;
-    try {
-      await api.post(`/comptabilite/ecritures/${entry.id}/valider`, {});
-      await loadAllData();
-      alert('Écriture de réception validée.');
-    } catch (error) {
-      alert('Erreur: ' + (error.response?.data?.error || error.message));
-    }
-  };
-
-  const brouillonsSurPeriode = data.ecritures.filter((entry) => {
-    if (entry.valide) return false;
-    const date = String(entry.dateEcriture || '').slice(0, 10);
-    return (!periode.dateDebut || date >= periode.dateDebut)
-      && (!periode.dateFin || date <= periode.dateFin);
-  }).length;
-
   const requestReportDrillDown = async (query, title, page = 1) => {
     setDrillModal({
       open: true,
@@ -959,9 +938,7 @@ export function ModuleComptabilite() {
           description: form.libelle,
           lignes: lignesEcriture,
         };
-        const ecritureCreated = await api.post('/comptabilite/ecritures', ecritureData);
-        
-        await api.post(`/comptabilite/ecritures/${ecritureCreated.id}/valider`, {});
+        await api.post('/comptabilite/ecritures', ecritureData);
       } else if (type === 'recurrente') {
         if (item) {
           await api.put(`/ecritures-recurrentes/${item.id}`, form);
@@ -1077,8 +1054,8 @@ export function ModuleComptabilite() {
                 { key: 'totalDebit', label: 'Débit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { key: 'totalCredit', label: 'Crédit', render: (val) => `${parseFloat(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { key: 'valide', label: 'Statut', render: (val) => {
-                  const status = val ? 'validée' : 'brouillon';
-                  const colors = { brouillon: '#ff9800', validée: '#4caf50' };
+                  const status = val ? 'validée' : 'à reprendre';
+                  const colors = { 'à reprendre': '#d97706', validée: '#4caf50' };
                   return <span style={{ color: colors[status], fontWeight: 'bold' }}>{status.toUpperCase()}</span>;
                 }}
               ]}
@@ -1086,18 +1063,7 @@ export function ModuleComptabilite() {
               onRowClick={(ecriture) => {
                 setModal({ open: true, type: 'details_ecriture', item: ecriture });
               }}
-              actions={true}
-              customActions={(entry) => !entry.valide
-                && String(entry.reference || '').startsWith('REC-')
-                && (
-                  <Button
-                    size="small"
-                    variant="success"
-                    onClick={() => validateReceiptEntry(entry)}
-                  >
-                    Valider la réception
-                  </Button>
-                )}
+              actions={false}
             />
           ) : (
             <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
@@ -1334,9 +1300,7 @@ export function ModuleComptabilite() {
           ) : (
             <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
               <p style={{ color: '#7f8c8d', margin: 0 }}>
-                {brouillonsSurPeriode > 0
-                  ? `Aucune écriture validée sur cette période. ${brouillonsSurPeriode} écriture(s) en brouillon doivent être validées avant d’apparaître dans le grand livre.`
-                  : 'Aucune écriture validée sur cette période. Cliquez sur « Générer » après avoir choisi les dates.'}
+                Aucune écriture comptabilisée sur cette période. Choisissez les dates puis cliquez sur « Générer ».
               </p>
             </div>
           )}
@@ -1455,9 +1419,7 @@ export function ModuleComptabilite() {
           ) : (
             <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
               <p style={{ color: '#7f8c8d', margin: 0 }}>
-                {brouillonsSurPeriode > 0
-                  ? `Aucune écriture validée sur cette période. ${brouillonsSurPeriode} écriture(s) en brouillon doivent être validées avant d’apparaître dans la balance.`
-                  : 'Aucune écriture validée sur cette période. Choisissez les dates puis cliquez sur « Générer ».'}
+                Aucune écriture comptabilisée sur cette période. Choisissez les dates puis cliquez sur « Générer ».
               </p>
             </div>
           )}

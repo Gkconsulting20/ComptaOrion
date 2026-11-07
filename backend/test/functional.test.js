@@ -549,37 +549,18 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       ],
     },201);
     assert.ok(manualSalaryEntry.id,'La création atomique doit retourner l’identifiant de l’écriture');
-    const validatedSalaryEntry = await api(
-      `/comptabilite/ecritures/${manualSalaryEntry.id}/valider`,'POST',{},
-    );
-    assert.equal(validatedSalaryEntry.totalDebit,550000);
-    assert.equal(validatedSalaryEntry.totalCredit,550000);
-    const legacyDraft = await api('/comptabilite/ecritures','POST',{
+    assert.equal(manualSalaryEntry.valide, true,
+      'Une écriture manuelle équilibrée doit être validée dès son enregistrement');
+    assert.equal(manualSalaryEntry.totalDebit,550000);
+    assert.equal(manualSalaryEntry.totalCredit,550000);
+    const incompleteManualEntry = await api('/comptabilite/ecritures','POST',{
       journalId:salaryJournal.id,
       dateEcriture:`${testYear}-11-06`,
-      reference:'TEST-ECRITURE-ANCIEN-CLIENT',
-      description:'Compatibilité ancienne saisie',
-    },201);
-    await api('/comptabilite/lignes','POST',{
-      ecritureId:legacyDraft.id,
-      compteId:salaryAccount.id,
-      montant:100,
-      type:'debit',
-      description:'Ligne débit ancienne interface',
-    },201);
-    await api('/comptabilite/lignes','POST',{
-      ecritureId:legacyDraft.id,
-      compteId:bankAccount.id,
-      montant:100,
-      type:'credit',
-      description:'Ligne crédit ancienne interface',
-    },201);
-    const validatedLegacyEntry = await api(
-      `/comptabilite/ecritures/${legacyDraft.id}/valider`,'POST',{},
-    );
-    assert.equal(validatedLegacyEntry.totalDebit,100);
-    assert.equal(validatedLegacyEntry.totalCredit,100,
-      'L’ancien format compteId/montant/type reste accepté pour les pages déjà ouvertes');
+      reference:'TEST-ECRITURE-INCOMPLETE',
+      description:'Écriture sans lignes',
+    },400);
+    assert.match(incompleteManualEntry.error, /liste|lignes/i,
+      'Le logiciel ne doit pas enregistrer d’écriture vide en brouillon');
     const savedSalaryEntry = await admin.query(
       `SELECT valide, numero_ecriture FROM "${schema}".ecritures
        WHERE entreprise_id = $1 AND id = $2`,
@@ -799,6 +780,12 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       ],
       coutsLogistiques: [{ type: 'transport', montantReel: 100, description: 'Transport commun' }],
     }, 400);
+    const quantitiesBeforeInvoiceMatch = await admin.query(
+      `SELECT id, quantite FROM "${schema}".produits
+       WHERE entreprise_id = $1 AND id = ANY($2::int[])
+       ORDER BY id`,
+      [signup.user.entrepriseId, [productId, secondCostProduct.data.id]],
+    );
     const matchedInvoice = await api('/achats/factures-avec-rapprochement', 'POST', {
       fournisseurId: supplierRecord.data.id,
       numeroFactureFournisseur: 'FACT-FOURN-TEST',
@@ -852,90 +839,55 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     );
     assert.ok(linkedAccountingEntry.rows[0]?.ecriture_comptable_id,
       'La facture rapprochée doit conserver le lien vers son écriture comptable');
-    const alternateVarianceAccount = await admin.query(
-      `INSERT INTO "${schema}".comptes_comptables
-         (entreprise_id, numero, nom, type, categorie, actif)
-       VALUES ($1, 'TEST-ECART-PRODUIT', 'Compte test autre écart', 'produits', 'Produits', true)
-       RETURNING id`,
-      [signup.user.entrepriseId],
-    );
-    await admin.query(
-      `INSERT INTO "${schema}".lignes_ecriture
-         (entreprise_id, ecriture_id, compte_comptable_id, debit, credit, libelle)
-       SELECT $1, ecriture_comptable_id, $2, 0, 0, 'Écart de prix défavorable - ' || numero_facture
-       FROM "${schema}".factures_achat
-       WHERE entreprise_id = $1 AND id = $3`,
-      [signup.user.entrepriseId, varianceAccount.rows[0].id, matchedInvoice.data.id],
-    );
-    await api(`/achats/factures/${matchedInvoice.data.id}/compte-ecart`, 'PUT', {
-      compteEcartId: alternateVarianceAccount.rows[0].id,
-    });
-    const changedVarianceLine = await admin.query(
-      `SELECT le.compte_comptable_id
-       FROM "${schema}".lignes_ecriture le
-       JOIN "${schema}".factures_achat fa ON fa.ecriture_comptable_id = le.ecriture_id
-       WHERE fa.entreprise_id = $1 AND fa.id = $2
-         AND le.libelle ILIKE 'Écart de prix %'`,
-      [signup.user.entrepriseId, matchedInvoice.data.id],
-    );
-    assert.equal(Number(changedVarianceLine.rows[0]?.compte_comptable_id), Number(alternateVarianceAccount.rows[0].id),
-      'Le compte d’écart doit pouvoir être remplacé sur une facture brouillon');
     const stockPendingAfterMatch = await api('/stock/rapports/stock-non-facture');
     const logisticsPendingAfterMatch = await api('/stock/rapports/logistique-non-facturee');
     assert.equal(stockPendingAfterMatch.items.length, 0,
       'Le rapprochement doit solder les lignes de stock non facturées');
     assert.equal(logisticsPendingAfterMatch.items.length, 0,
       'Le rapprochement doit solder les frais logistiques non facturés');
-    const quantitiesBeforeInvoiceValidation = await admin.query(
-      `SELECT id, quantite FROM "${schema}".produits
-       WHERE entreprise_id = $1 AND id = ANY($2::int[])
-       ORDER BY id`,
-      [signup.user.entrepriseId, [productId, secondCostProduct.data.id]],
-    );
-    const draftInvoiceEntry = await admin.query(
-      `SELECT e.valide
-       FROM "${schema}".factures_achat fa
-       JOIN "${schema}".ecritures e ON e.id = fa.ecriture_comptable_id
-       WHERE fa.entreprise_id = $1 AND fa.id = $2`,
-      [signup.user.entrepriseId, matchedInvoice.data.id],
-    );
-    assert.equal(draftInvoiceEntry.rows[0]?.valide, false,
-      'Une facture rapprochée reste en brouillon comptable jusqu’à sa validation');
-    await api(`/achats/factures/${matchedInvoice.data.id}/valider`, 'PUT', {});
-    const quantitiesAfterInvoiceValidation = await admin.query(
-      `SELECT id, quantite FROM "${schema}".produits
-       WHERE entreprise_id = $1 AND id = ANY($2::int[])
-       ORDER BY id`,
-      [signup.user.entrepriseId, [productId, secondCostProduct.data.id]],
-    );
-    assert.deepEqual(
-      quantitiesAfterInvoiceValidation.rows.map((row) => Number(row.quantite)),
-      quantitiesBeforeInvoiceValidation.rows.map((row) => Number(row.quantite)),
-      'La validation d’une facture rapprochée ne doit pas ajouter une seconde fois le stock déjà reçu',
-    );
-    const validatedInvoiceEntry = await admin.query(
+    assert.equal(matchedInvoice.data.statut, 'validee',
+      'Le rapprochement doit confirmer la facture et publier son écriture immédiatement');
+    const matchedInvoiceEntry = await admin.query(
       `SELECT fa.statut, e.valide,
               COUNT(DISTINCT e2.id)::int AS entries_for_invoice
        FROM "${schema}".factures_achat fa
        JOIN "${schema}".ecritures e ON e.id = fa.ecriture_comptable_id
        LEFT JOIN "${schema}".ecritures e2
          ON e2.entreprise_id = fa.entreprise_id AND e2.numero_piece = fa.numero_facture
-       WHERE fa.entreprise_id = $1 AND fa.id = $2
-       GROUP BY fa.statut, fa.ecriture_comptable_id, e.valide`,
+        WHERE fa.entreprise_id = $1 AND fa.id = $2
+        GROUP BY fa.statut, fa.ecriture_comptable_id, e.valide`,
       [signup.user.entrepriseId, matchedInvoice.data.id],
     );
-    assert.equal(validatedInvoiceEntry.rows[0]?.statut, 'validee');
-    assert.equal(validatedInvoiceEntry.rows[0]?.valide, true,
-      'La validation de la facture doit publier l’écriture qui solde 408 et crédite 401');
-    assert.equal(validatedInvoiceEntry.rows[0]?.entries_for_invoice, 1,
-      'La validation ne doit pas créer une seconde écriture pour la même facture');
+    assert.equal(matchedInvoiceEntry.rows[0]?.statut, 'validee');
+    assert.equal(matchedInvoiceEntry.rows[0]?.valide, true,
+      'L’écriture fournisseur doit être validée dès le rapprochement');
+    assert.equal(matchedInvoiceEntry.rows[0]?.entries_for_invoice, 1,
+      'Le rapprochement ne doit créer qu’une seule écriture fournisseur');
+    const supplierBalanceAfterMatch = await admin.query(
+      `SELECT solde_du FROM "${schema}".fournisseurs
+       WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId, supplierRecord.data.id],
+    );
+    assert.equal(Number(supplierBalanceAfterMatch.rows[0]?.solde_du), Number(matchedAmounts.total_ttc),
+      'Le rapprochement doit mettre à jour le compte auxiliaire fournisseur une seule fois');
+    const quantitiesAfterInvoiceMatch = await admin.query(
+      `SELECT id, quantite FROM "${schema}".produits
+       WHERE entreprise_id = $1 AND id = ANY($2::int[])
+       ORDER BY id`,
+      [signup.user.entrepriseId, [productId, secondCostProduct.data.id]],
+    );
+    assert.deepEqual(
+      quantitiesAfterInvoiceMatch.rows.map((row) => Number(row.quantite)),
+      quantitiesBeforeInvoiceMatch.rows.map((row) => Number(row.quantite)),
+      'Le rapprochement ne doit pas ajouter une seconde fois le stock déjà reçu',
+    );
     const invoiceBalance = await api(
       `/comptabilite/balance?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
     );
     assert.ok(invoiceBalance.comptes.some((account) => account.numero.startsWith('401')),
-      'La balance doit afficher le compte fournisseur après validation de la facture');
+      'La balance doit afficher le compte fournisseur dès le rapprochement');
     assert.ok(invoiceBalance.comptes.some((account) => account.numero.startsWith('445')),
-      'La balance doit afficher la TVA déductible après validation de la facture');
+      'La balance doit afficher la TVA déductible dès le rapprochement');
     const generalLedger = await api(
       `/comptabilite/grand-livre?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
     );
@@ -1276,12 +1228,22 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     );
     assert.ok(resumedInvoice.data.ecritureComptableId,
       'La facture déjà créée doit pouvoir reprendre sa comptabilisation après correction du schéma');
+    assert.equal(resumedInvoice.data.statut, 'validee',
+      'La reprise doit comptabiliser la facture sans seconde validation manuelle');
     const resumedInvoiceLink = await admin.query(
-      `SELECT ecriture_comptable_id FROM "${schema}".factures_achat
+      `SELECT ecriture_comptable_id, statut FROM "${schema}".factures_achat
        WHERE entreprise_id = $1 AND id = $2`,
       [signup.user.entrepriseId, incompleteInvoice.data.id],
     );
     assert.equal(Number(resumedInvoiceLink.rows[0]?.ecriture_comptable_id), Number(resumedInvoice.data.ecritureComptableId));
+    assert.equal(resumedInvoiceLink.rows[0]?.statut, 'validee');
+    const supplierBalanceAfterRecovery = await admin.query(
+      `SELECT solde_du FROM "${schema}".fournisseurs
+       WHERE entreprise_id = $1 AND id = $2`,
+      [signup.user.entrepriseId, supplierRecord.data.id],
+    );
+    assert.ok(Number(supplierBalanceAfterRecovery.rows[0]?.solde_du) > Number(supplierBalanceAfterMatch.rows[0]?.solde_du),
+      'La reprise doit ajouter la dette fournisseur une seule fois');
 
     const secondSignup=await api('/public/inscription','POST',{
       nomEntreprise:'Autre entreprise isolée',

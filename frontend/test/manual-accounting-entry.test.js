@@ -12,4 +12,5 @@ test('la saisie manuelle envoie les lignes avec le contrat comptable attendu', (
   assert.match(source, /lignes:\s*lignesEcriture/);
   assert.match(source, /api\.post\('\/comptabilite\/ecritures',\s*ecritureData\)/);
   assert.doesNotMatch(source, /api\.post\('\/comptabilite\/lignes'/);
+  assert.doesNotMatch(source, /\/comptabilite\/ecritures\/\$\{ecritureCreated\.id\}\/valider/);
 });

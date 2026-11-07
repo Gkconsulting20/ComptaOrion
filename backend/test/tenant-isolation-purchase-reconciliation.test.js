@@ -22,6 +22,6 @@ test('le rapprochement fournisseur limite chaque mise à jour au tenant courant'
   );
   assert.match(
     purchasesRoute,
-    /UPDATE factures_achat[\s\S]*?WHERE id = \$\{newFacture\.id\} AND entreprise_id = \$\{req\.entrepriseId\}/
+    /tx\.update\(facturesAchat\)\.set\(\{[\s\S]*?ecritureComptableId: ecriture\.id,[\s\S]*?\}\)\.where\(and\(\s*eq\(facturesAchat\.id, newFacture\.id\),\s*eq\(facturesAchat\.entrepriseId, req\.entrepriseId\),?\s*\)\)/
   );
 });
