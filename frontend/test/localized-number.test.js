@@ -47,3 +47,10 @@ test('les champs numériques de l’ERP utilisent la saisie localisée partagée
   const formField = sources[files.findIndex((path) => path.endsWith('/components/FormField.jsx'))];
   assert.match(formField, /type === 'number' \? \([\s\S]*?<NumberInput/);
 });
+
+test('le navigateur conserve le curseur pendant la saisie numérique', async () => {
+  const source = await readFile(new URL('../src/components/NumberInput.jsx', import.meta.url), 'utf8');
+  assert.match(source, /defaultValue=\{initialValue\.current\}/);
+  assert.match(source, /if \(!focused && inputRef\.current\)/);
+  assert.doesNotMatch(source, /value=\{draft\}/);
+});
