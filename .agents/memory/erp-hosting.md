@@ -27,6 +27,12 @@ La version d’essai client de 30 jours est servie par le Worker public ComptaOr
 
 **How to apply:** Pour publier l’essai destiné aux clients, mettre à jour le Worker existant `comptaorion` et vérifier `/inscription`; ne pas créer ou déployer l’ERP sur `orion-test`.
 
+L’essai gratuit client commence le jour où l’organisation est créée et expire 30 jours plus tard.
+
+**Why:** L’utilisateur a précisé que le test commence au moment où le client crée son organisation.
+
+**How to apply:** Calculer l’expiration depuis la création de l’organisation; une modification ultérieure du forfait ne doit pas redémarrer les 30 jours.
+
 Pour les opérations de base de données et de Cloudflare, l’utilisateur préfère que l’agent réalise les étapes possibles et lui donne des instructions simples uniquement pour les actions qui exigent son intervention.
 
 **Why:** L’utilisateur a indiqué ne pas pouvoir créer lui-même les bases de données et a demandé de l’aide pour ces opérations.

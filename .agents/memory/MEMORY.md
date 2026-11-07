@@ -1,6 +1,6 @@
 - [Intégrité hors ligne de Lite](lite-offline-integrity.md) — exiger idempotence transactionnelle et ordre déterministe pour les verrous par lot.
 - [Séparation de Lite](lite-separation.md) — partir de l’ancien code pour créer un projet Lite indépendant, pas une interface de l’ERP.
-- [Hébergement ERP](erp-hosting.md) — l’essai public 30 jours passe par comptaorion.com; Render reste la base, orion-test est un autre produit.
+- [Hébergement ERP](erp-hosting.md) — essai public de 30 jours dès la création; comptaorion.com, Render et orion-test restent distincts.
 - [Rotation des jetons](jwt-refresh-rotation.md) — ajouter un identifiant aléatoire à chaque refresh JWT pour garantir une rotation effective.
 - [Authentification GitHub](github-auth.md) — l’état OAuth d’intégration ne prouve pas que les opérations Git sont autorisées.
 - [Push Git depuis Replit](git-push-replit.md) — un push distant peut réussir même si Replit bloque la mise à jour locale de `origin/main`.
