@@ -315,7 +315,6 @@ export async function createEcritureComptable(params) {
     libelle,
     numeroPiece,
     lignes,
-    valide = false,
     sourceType = null,
     sourceId = null,
     executor = requestedExecutor
@@ -338,7 +337,7 @@ export async function createEcritureComptable(params) {
     dateEcriture,
     libelle,
     numeroPiece,
-    valide,
+    valide: true,
     totalDebit: totalDebit.toFixed(2),
     totalCredit: totalCredit.toFixed(2)
   }).returning();
@@ -431,7 +430,7 @@ export async function createEcritureFactureAchat(params) {
     montantValorisationStock = 0,
     montantStockDirect = 0,
     compteEcartId = null,
-    valide = false,
+    valide = true,
     executor = db
   } = params;
 
@@ -652,7 +651,7 @@ export async function createEcritureFactureVente(params) {
     libelle: `Facture ${numeroFacture} - ${clientNom}`,
     numeroPiece: numeroFacture,
     lignes: ecrituresLignes,
-    valide: false,
+    valide: true,
     executor
   });
 }
@@ -703,7 +702,7 @@ export async function createEcritureCoutVente({
         libelle: `Sortie du stock - ${numeroFacture}`,
       },
     ],
-    valide: false,
+    valide: true,
     executor,
   });
 }
@@ -764,7 +763,7 @@ export async function createEcriturePaiementFournisseur(params) {
     libelle: `Paiement ${fournisseurNom} - ${reference}`,
     numeroPiece: reference,
     lignes: ecrituresLignes,
-    valide: false,
+    valide: true,
     executor
   });
 }
@@ -828,7 +827,7 @@ export async function createEcriturePaiementClient(params) {
     libelle: `Encaissement ${clientNom} - ${reference}`,
     numeroPiece: reference,
     lignes: ecrituresLignes,
-    valide: false,
+    valide: true,
     executor
   });
 }
@@ -878,7 +877,7 @@ export async function createEcritureAvoirClient({
     sourceType: 'note_credit',
     sourceId,
     lignes: lines,
-    valide: false,
+    valide: true,
     executor,
   });
 }
@@ -913,7 +912,7 @@ export async function createEcritureNoteDebitClient({
     sourceType: 'note_debit_client',
     sourceId,
     lignes: lines,
-    valide: false,
+    valide: true,
     executor,
   });
 }
@@ -964,7 +963,7 @@ export async function createEcritureAvoirFournisseur({
     sourceType: 'note_credit',
     sourceId,
     lignes: lines,
-    valide: false,
+    valide: true,
     executor,
   });
 }
@@ -1020,7 +1019,7 @@ export async function createEcritureAvoirQualiteFournisseur({
     sourceType: 'note_credit',
     sourceId,
     lignes: lines,
-    valide: false,
+    valide: true,
     executor,
   });
 }
@@ -1047,7 +1046,7 @@ export async function createEcritureEncaissementCheque({
       { compteComptableId: bank.id, debit: montant, credit: 0, libelle: `Dépôt du chèque ${reference}` },
       { compteComptableId: checks.id, debit: 0, credit: montant, libelle: `Transfert du compte 5112 - ${reference}` },
     ],
-    valide: false,
+    valide: true,
     executor,
   });
 }
@@ -1181,7 +1180,7 @@ export async function createEcritureDepense(params) {
     libelle: `Remboursement dépense ${employeNom} - ${description}`,
     numeroPiece: reference,
     lignes: ecrituresLignes,
-    valide: false,
+    valide: true,
     executor
   });
 }
@@ -1244,7 +1243,7 @@ export async function createEcriturePaiementImpot(params) {
     libelle: `Paiement ${typeImpot.toUpperCase()} - ${periode}`,
     numeroPiece: reference,
     lignes: ecrituresLignes,
-    valide: false
+    valide: true
   });
 }
 

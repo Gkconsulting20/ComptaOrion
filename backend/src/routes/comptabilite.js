@@ -1951,58 +1951,54 @@ router.post('/ecritures', async (req, res) => {
       return res.status(400).json({ error: 'Journal non trouvé ou n\'appartient pas à l\'entreprise' });
     }
 
-    if (lignes !== undefined && !Array.isArray(lignes)) {
+    if (!Array.isArray(lignes)) {
       return res.status(400).json({ error: 'Les lignes de l’écriture doivent être une liste' });
     }
 
-    // Valider toutes les lignes avant de créer l'en-tête pour éviter les brouillons partiels.
-    if (Array.isArray(lignes)) {
-      if (lignes.length < 2) {
-        return res.status(400).json({ error: 'Une écriture doit contenir au moins deux lignes' });
+    // Une écriture est créée complète et équilibrée; il n'existe plus de brouillon d'écriture manuelle.
+    if (lignes.length < 2) {
+      return res.status(400).json({ error: 'Une écriture doit contenir au moins deux lignes' });
+    }
+    let totalDebitCentimes = 0;
+    let totalCreditCentimes = 0;
+    for (const ligne of lignes) {
+      const accountId = Number(ligne.compteComptableId);
+      const debit = Number(ligne.debit || 0);
+      const credit = Number(ligne.credit || 0);
+      if (!Number.isInteger(accountId) || accountId <= 0) {
+        return res.status(400).json({ error: 'Chaque ligne doit avoir un compte comptable valide' });
       }
-      let totalDebitCentimes = 0;
-      let totalCreditCentimes = 0;
-      for (const ligne of lignes) {
-        const accountId = Number(ligne.compteComptableId);
-        const debit = Number(ligne.debit || 0);
-        const credit = Number(ligne.credit || 0);
-        if (!Number.isInteger(accountId) || accountId <= 0) {
-          return res.status(400).json({ error: 'Chaque ligne doit avoir un compte comptable valide' });
-        }
-        if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0) {
-          return res.status(400).json({ error: 'Les montants de chaque ligne doivent être positifs ou nuls' });
-        }
-        if ((debit === 0 && credit === 0) || (debit > 0 && credit > 0)) {
-          return res.status(400).json({ error: 'Chaque ligne doit contenir un débit ou un crédit, mais pas les deux' });
-        }
-        totalDebitCentimes += Math.round(debit * 100);
-        totalCreditCentimes += Math.round(credit * 100);
+      if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit < 0 || credit < 0) {
+        return res.status(400).json({ error: 'Les montants de chaque ligne doivent être positifs ou nuls' });
       }
-      if (totalDebitCentimes !== totalCreditCentimes) {
-        const totalDebit = totalDebitCentimes / 100;
-        const totalCredit = totalCreditCentimes / 100;
-        return res.status(400).json({ 
-          error: 'L\'écriture n\'est pas équilibrée', 
-          totalDebit, 
-          totalCredit,
-          difference: totalDebit - totalCredit
-        });
+      if ((debit === 0 && credit === 0) || (debit > 0 && credit > 0)) {
+        return res.status(400).json({ error: 'Chaque ligne doit contenir un débit ou un crédit, mais pas les deux' });
       }
+      totalDebitCentimes += Math.round(debit * 100);
+      totalCreditCentimes += Math.round(credit * 100);
+    }
+    if (totalDebitCentimes !== totalCreditCentimes) {
+      const totalDebit = totalDebitCentimes / 100;
+      const totalCredit = totalCreditCentimes / 100;
+      return res.status(400).json({
+        error: 'L\'écriture n\'est pas équilibrée',
+        totalDebit,
+        totalCredit,
+        difference: totalDebit - totalCredit
+      });
     }
 
     const ecriture = await db.transaction(async (tx) => {
-      if (Array.isArray(lignes)) {
-        for (const ligne of lignes) {
-          const [compte] = await tx.select({ id: comptesComptables.id })
-            .from(comptesComptables)
-            .where(and(
-              eq(comptesComptables.id, Number(ligne.compteComptableId)),
-              eq(comptesComptables.entrepriseId, Number(entrepriseId))
-            ))
-            .limit(1);
-          if (!compte) {
-            throw Object.assign(new Error('Un compte comptable de l’écriture est introuvable dans cette entreprise'), { status: 400 });
-          }
+      for (const ligne of lignes) {
+        const [compte] = await tx.select({ id: comptesComptables.id })
+          .from(comptesComptables)
+          .where(and(
+            eq(comptesComptables.id, Number(ligne.compteComptableId)),
+            eq(comptesComptables.entrepriseId, Number(entrepriseId))
+          ))
+          .limit(1);
+        if (!compte) {
+          throw Object.assign(new Error('Un compte comptable de l’écriture est introuvable dans cette entreprise'), { status: 400 });
         }
       }
 
@@ -2020,7 +2016,7 @@ router.post('/ecritures', async (req, res) => {
         numeroPiece: reference || null,
         libelle: description || null,
         userId: req.user?.id || req.userId || null,
-        valide: false
+        valide: true
       }).returning();
 
       const lignesCreees = lignes?.length
@@ -2052,7 +2048,13 @@ router.post('/ecritures', async (req, res) => {
         required: true
       });
 
-      return { ...created, totalDebit, totalCredit };
+      const treasurySync = await synchroniserTransactionDepuisEcriture({
+        entrepriseId: Number(entrepriseId),
+        ecritureId: created.id,
+        auditInfo: extractAuditInfo(req),
+        executor: tx,
+      });
+      return { ...created, totalDebit, totalCredit, treasurySync };
     });
 
     res.status(201).json(ecriture);
