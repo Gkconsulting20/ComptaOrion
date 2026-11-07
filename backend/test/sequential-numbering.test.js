@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import {
   formatJournalEntryNumber,
   getJournalNumberWidth,
@@ -25,4 +26,10 @@ test('l’ancien numéro permet de reprendre la séquence à son suffixe', () =>
   assert.equal(parseTrailingSequence('AC-2026-01-000127'), 127);
   assert.equal(parseTrailingSequence('AC-2026-000006'), 6);
   assert.equal(parseTrailingSequence('sans-suffixe'), 0);
+});
+
+test('le déclencheur convertit le type enum en texte avant COALESCE', async () => {
+  const migration = await readFile(new URL('../scripts/upgrade-schema.js', import.meta.url), 'utf8');
+  assert.match(migration, /LOWER\(COALESCE\(type::text,\s*''\)\)/);
+  assert.doesNotMatch(migration, /COALESCE\(type,\s*''\)/);
 });

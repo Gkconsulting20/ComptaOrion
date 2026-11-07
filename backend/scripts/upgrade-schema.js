@@ -325,7 +325,7 @@ try {
         digit_width integer;
         explicit_sequence bigint;
       BEGIN
-        SELECT UPPER(code), LOWER(COALESCE(type, ''))
+        SELECT UPPER(code), LOWER(COALESCE(type::text, ''))
           INTO journal_code, journal_type
           FROM journaux
           WHERE id = NEW.journal_id AND entreprise_id = NEW.entreprise_id;

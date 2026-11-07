@@ -9,8 +9,8 @@ Chaque journal doit conserver son propre compteur annuel : achats/fournisseurs s
 
 **How to apply:** vérifier les chemins d’écriture directs et les suppressions; le compteur doit être transactionnel, isolé par entreprise, journal et exercice, et ne doit pas renuméroter les pièces historiques.
 
-Avant de créer une écriture, réparer un journal existant dont le type est vide ou invalide en utilisant le type métier attendu par l’opération. Des déclencheurs historiques peuvent convertir ce champ en enum et faire échouer l’écriture, ce qui annule aussi la réception ou la facture dans la même transaction.
+Certaines bases existantes ont `journaux.type` en enum, même si le schéma applicatif le déclare comme texte. Dans les déclencheurs PostgreSQL, convertir ce champ en texte avant `COALESCE`; `COALESCE(type, '')` peut faire caster la chaîne vide en enum et bloquer chaque écriture, même avec un type valide. Garder aussi la réparation applicative des types vides ou invalides pour les bases où le champ est textuel.
 
-**Why:** une réception de stock a échoué parce que le journal d’achats existant avait un type vide; le déclencheur PostgreSQL rejetait cette valeur avant la création de l’écriture.
+**Why:** une réception de stock a échoué au moment de l’écriture comptable car la base de test avait un type enum; PostgreSQL rejetait la chaîne vide de `COALESCE` avant la création de l’écriture.
 
-**How to apply:** garder cette réparation dans la transaction qui crée l’écriture et couvrir le scénario avec un test fonctionnel utilisant un journal volontairement incomplet.
+**How to apply:** employer `COALESCE(type::text, '')` dans les fonctions SQL de numérotation, appliquer la mise à niveau comptable ciblée aux bases concernées et vérifier l’insertion d’une écriture dans une transaction annulée avant de retester la réception complète.

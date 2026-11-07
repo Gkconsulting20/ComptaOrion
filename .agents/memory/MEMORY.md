@@ -12,7 +12,7 @@
 - [Espace commercial](saas-commercial-portal.md) — tarifs approuvés, trois utilisateurs inclus; accès cabinet comptable gratuit hors quota.
 - [Interface ComptaOrion](comptaorion-interface.md) — garder la navigation regroupée et la barre latérale sombre, avec ComptaOrion distinct de l’entreprise NERU.
 - [Piste d’audit](audit-trail-policy.md) — les traces de création, modification et suppression sont une exigence de sécurité pour les clients.
-- [Séquences comptables](accounting-sequences.md) — compteurs par journal et réparation des journaux historiques incomplets avant écriture.
+- [Séquences comptables](accounting-sequences.md) — cast explicite du type enum et séquences par journal pour éviter le blocage des écritures.
 - [Plans comptables personnalisés](custom-chart-of-accounts.md) — SYSCOHADA reste le plan par défaut; chaque entreprise peut choisir un plan personnalisé avec ses propres correspondances.
 - [Avoirs, ajustements et chèques](credit-notes-cheques.md) — distinguer retours physiques, notes d’ajustement et échéancier des chèques reçus.
 - [Priorité fiscale Togo](togo-tax-priority.md) — commencer par les déclarations togolaises et ne pas prétendre qu’un brouillon est un dépôt officiel.
