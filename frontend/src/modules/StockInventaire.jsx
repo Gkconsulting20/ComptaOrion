@@ -201,6 +201,7 @@ export function StockInventaire() {
   const [form, setForm] = useState({});
   const [formError, setFormError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingReceptionOrder, setPendingReceptionOrder] = useState(null);
   const [automaticCosting, setAutomaticCosting] = useState(false);
   const [selectedProduit, setSelectedProduit] = useState(null);
   const [showProduitDetails, setShowProduitDetails] = useState(false);
@@ -262,6 +263,7 @@ export function StockInventaire() {
 
   const openModal = (type, item = null) => {
     setFormError('');
+    setPendingReceptionOrder(null);
     setModal({ open: true, type, item });
     if (type === 'produit') {
       setForm(item || {
@@ -335,13 +337,20 @@ export function StockInventaire() {
 
   const handleOpenCommandeReception = async (order) => {
     try {
-      const response = await api.get(`/commandes-achat/${order.id}`);
+      const [response, warehousesResponse] = await Promise.all([
+        api.get(`/commandes-achat/${order.id}`),
+        api.get('/stock/entrepots'),
+      ]);
       const details = response.data;
+      const activeWarehouses = readApiList(warehousesResponse)
+        .filter((warehouse) => warehouse.actif !== false);
+      setData((current) => ({ ...current, entrepots: activeWarehouses }));
+      setPendingReceptionOrder(activeWarehouses.length === 0 ? details : null);
       setModal({ open: true, type: 'commandeReception', item: details });
       setForm({
         commandeId: details.id,
         dateReception: new Date().toISOString().slice(0, 10),
-        entrepotId: '',
+        entrepotId: activeWarehouses.length === 1 ? String(activeWarehouses[0].id) : '',
         numeroLivraison: '',
         notes: '',
         items: (details.items || [])
@@ -362,6 +371,12 @@ export function StockInventaire() {
     }
   };
 
+  const createWarehouseForPendingReception = () => {
+    setModal({ open: true, type: 'entrepot', item: null });
+    setForm({ nom: 'Entrepôt principal', adresse: '', responsable: '' });
+    setFormError('');
+  };
+
   const handleConfirmerCommande = async (order) => {
     try {
       await api.put(`/commandes-achat/${order.id}/confirmer`, {});
@@ -375,6 +390,7 @@ export function StockInventaire() {
     setModal({ open: false, type: null, item: null });
     setForm({});
     setFormError('');
+    setPendingReceptionOrder(null);
   };
 
   const handleSubmit = async (e) => {
@@ -526,7 +542,13 @@ export function StockInventaire() {
         await Promise.all([reload('commandes'), reload('produits'), reload('receptions')]);
       }
       
-      closeModal();
+      if (type === 'entrepot' && !item && pendingReceptionOrder) {
+        const orderToResume = pendingReceptionOrder;
+        setPendingReceptionOrder(null);
+        await handleOpenCommandeReception(orderToResume);
+      } else {
+        closeModal();
+      }
     } catch (err) {
       console.error('Échec de l’enregistrement du formulaire Stock:', err);
       setFormError(err.message || 'Enregistrement impossible. Réessayez.');
@@ -560,6 +582,7 @@ export function StockInventaire() {
     const coutUnit = parseFloat(p.coutMoyen || 0);
     return s + (qty * coutUnit);
   }, 0);
+  const activeEntrepots = data.entrepots.filter((warehouse) => warehouse.actif !== false);
 
   return (
     <div>
@@ -1459,12 +1482,20 @@ export function StockInventaire() {
                 type="select"
                 value={form.entrepotId || ''}
                 onChange={(event) => setForm({ ...form, entrepotId: event.target.value })}
-                options={[
-                  { value: '', label: '-- Sélectionner --' },
-                  ...data.entrepots.map((warehouse) => ({ value: warehouse.id, label: warehouse.nom })),
-                ]}
+                options={activeEntrepots.map((warehouse) => ({ value: warehouse.id, label: warehouse.nom }))}
+                disabled={activeEntrepots.length === 0}
                 required
               />
+              {activeEntrepots.length === 0 && (
+                <div role="alert" style={{ margin: '-8px 0 16px', padding: 12, color: '#664d03', background: '#fff3cd', border: '1px solid #ffecb5', borderRadius: 6 }}>
+                  Aucun entrepôt actif n’est disponible, donc la liste est vide. Créez-en un pour recevoir cette commande.
+                  <div style={{ marginTop: 10 }}>
+                    <Button type="button" variant="outline" onClick={createWarehouseForPendingReception}>
+                      Créer un entrepôt et revenir à la réception
+                    </Button>
+                  </div>
+                </div>
+              )}
               <FormField label="Date de réception" type="date" value={form.dateReception || ''}
                 onChange={(event) => setForm({ ...form, dateReception: event.target.value })} required />
               <FormField label="N° du bon de livraison" value={form.numeroLivraison || ''}
@@ -1556,7 +1587,7 @@ export function StockInventaire() {
           )}
           <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-            <Button type="submit" variant="success" disabled={isSaving}>
+            <Button type="submit" variant="success" disabled={isSaving || (modal.type === 'commandeReception' && activeEntrepots.length === 0)}>
               {isSaving ? 'Enregistrement…' : modal.type === 'commandeReception' ? 'Enregistrer la réception' : modal.item ? 'Mettre à jour' : 'Créer'}
             </Button>
           </div>
