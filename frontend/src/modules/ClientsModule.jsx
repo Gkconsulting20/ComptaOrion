@@ -2570,6 +2570,11 @@ function ParametresTab() {
 
   const loadData = async () => {
     try {
+      try {
+        await api.post('/clients/ensure-collective-accounts', {});
+      } catch (error) {
+        console.error('Impossible de vérifier les comptes collectifs clients:', error);
+      }
       const [clientsRes, accountsRes] = await Promise.all([
         api.get('/clients'),
         api.get('/comptabilite/comptes'),

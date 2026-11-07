@@ -25,3 +25,4 @@
 - [Compte collectif clients](collective-client-account.md) — ID auxiliaire unique; 4111 pour les ventes de biens, 4112 pour les services.
 - [Identifiants auxiliaires des tiers](third-party-identifiers.md) — numéro client/fournisseur unique affiché et utilisé pour retrouver l’état de compte.
 - [Rapprochement des factures fournisseur](supplier-invoice-reconciliation.md) — après rapprochement, la réception reste en historique et la facture en brouillon si l’écriture échoue.
+- [Validation réelle des actions](ui-action-validation.md) — un build ou une API 2xx ne prouve pas qu’un bouton fonctionne; vérifier le résultat dans le navigateur et nettoyer les données de test.

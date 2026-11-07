@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, onRowClick, customActions, actions = true }) {
+export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, onRowClick, customActions, actions = true, deleteLabel = 'Supprimer' }) {
   const safeData = Array.isArray(data) ? data : [];
   
   return (
@@ -111,7 +111,7 @@ export function Table({ columns, data = [], onEdit, onDelete, onSendEmail, onRow
                         borderRadius: '4px',
                         cursor: 'pointer',
                         fontSize: '12px',
-                      }}>Supprimer</button>
+                      }}>{deleteLabel}</button>
                     )}
                   </td>
                 )}

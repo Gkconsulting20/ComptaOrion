@@ -1866,10 +1866,11 @@ export function GestionFournisseurs() {
                   { key: 'delaiPaiement', label: 'Échéance', render: (val) => Number(val ?? 30) === 0 ? 'À réception' : `${val ?? 30} jours` },
                   { key: 'evaluation', label: 'Évaluation', render: (val) => '⭐'.repeat(val || 3) }
                 ]}
-                data={data.fournisseurs}
+                data={data.fournisseurs.filter((fournisseur) => fournisseur.actif !== false)}
                 onRowClick={(item) => { setSelectedFournisseur(item); setShowFournisseurDetails(true); }}
                 onEdit={(item) => openModal('fournisseur', item)}
                 onDelete={(item) => handleDelete('fournisseur', item.id)}
+                deleteLabel="Désactiver"
               />
             </div>
           )}

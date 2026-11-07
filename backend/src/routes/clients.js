@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db.js';
-import { clients, comptesComptables, factures, paiements, produitPrix, produits, notesCredit } from '../schema.js';
-import { eq, and, desc, sql, gte, lte, between, gt, isNull, or } from 'drizzle-orm';
+import { clients, comptesComptables, entreprises, factures, paiements, produitPrix, produits, notesCredit } from '../schema.js';
+import { eq, and, desc, sql, gte, lte, between, gt, isNull, or, inArray } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import emailService from '../services/emailService.js';
 import {
@@ -29,6 +29,88 @@ async function findClientCollectiveAccount(entrepriseId, numero) {
   )).limit(1);
   return account || null;
 }
+
+const DEFAULT_CLIENT_COLLECTIVE_ACCOUNTS = [
+  { numero: '4111', nom: 'Clients - Ventes de biens' },
+  { numero: '4112', nom: 'Clients - Ventes de services' },
+];
+
+async function ensureDefaultClientCollectiveAccounts(entrepriseId, req) {
+  const [enterprise] = await db.select({
+    systemeComptable: entreprises.systemeComptable,
+  }).from(entreprises).where(eq(entreprises.id, Number(entrepriseId))).limit(1);
+
+  if (!enterprise) {
+    throw Object.assign(new Error('Entreprise non trouvée.'), { status: 404 });
+  }
+
+  // SYSCOHADA est le plan par défaut. Les plans personnalisés gardent leurs propres comptes.
+  if (enterprise.systemeComptable !== 'SYSCOHADA') {
+    return { created: [], accounts: [], systemeComptable: enterprise.systemeComptable };
+  }
+
+  return db.transaction(async (tx) => {
+    const created = [];
+    for (const account of DEFAULT_CLIENT_COLLECTIVE_ACCOUNTS) {
+      const lockKey = `comptaorion:account-number:${Number(entrepriseId)}:${account.numero}`;
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+
+      const [existing] = await tx.select({ id: comptesComptables.id })
+        .from(comptesComptables)
+        .where(and(
+          eq(comptesComptables.entrepriseId, Number(entrepriseId)),
+          eq(comptesComptables.numero, account.numero),
+        ))
+        .limit(1);
+      if (existing) continue;
+
+      const [newAccount] = await tx.insert(comptesComptables).values({
+        entrepriseId: Number(entrepriseId),
+        numero: account.numero,
+        nom: account.nom,
+        type: 'actif',
+        categorie: 'bilan',
+        actif: true,
+      }).returning();
+      created.push(newAccount);
+    }
+
+    if (created.length) {
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'CREATE',
+        table: 'comptes_comptables',
+        recordId: Number(entrepriseId),
+        nouvelleValeur: created,
+        description: `Comptes collectifs clients SYSCOHADA initialisés: ${created.map(({ numero }) => numero).join(', ')}`,
+        executor: tx,
+        required: true,
+      });
+    }
+
+    const accounts = await tx.select({
+      id: comptesComptables.id,
+      numero: comptesComptables.numero,
+      nom: comptesComptables.nom,
+      actif: comptesComptables.actif,
+    }).from(comptesComptables).where(and(
+      eq(comptesComptables.entrepriseId, Number(entrepriseId)),
+      inArray(comptesComptables.numero, DEFAULT_CLIENT_COLLECTIVE_ACCOUNTS.map(({ numero }) => numero)),
+    ));
+
+    return { created, accounts, systemeComptable: enterprise.systemeComptable };
+  });
+}
+
+router.post('/ensure-collective-accounts', async (req, res) => {
+  try {
+    const result = await ensureDefaultClientCollectiveAccounts(req.entrepriseId, req);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Erreur initialisation des comptes collectifs clients:', error);
+    res.status(error.status || 500).json({ success: false, message: error.message });
+  }
+});
 
 async function findClientByIdentifier(identifier, entrepriseId) {
   const value = String(identifier ?? '').trim();
