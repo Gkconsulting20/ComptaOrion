@@ -666,7 +666,21 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
         unitePoids:'kg',
       })),
     });
+    await admin.query(
+      `UPDATE "${schema}".journaux SET type = ''
+       WHERE entreprise_id = $1 AND code = 'AC'`,
+      [signup.user.entrepriseId],
+    );
     const firstReceipt = await receivePart(5);
+    const repairedPurchaseJournal = await admin.query(
+      `SELECT type FROM "${schema}".journaux
+       WHERE entreprise_id = $1 AND code = 'AC'`,
+      [signup.user.entrepriseId],
+    );
+    assert.equal(repairedPurchaseJournal.rows[0]?.type, 'achats',
+      'Un journal des achats existant sans type doit être réparé avant de créer l’écriture de réception');
+    assert.ok(firstReceipt.data?.receptionId,
+      'La réception doit être créée même si le journal des achats était mal configuré');
     const recordedReceiptWeights = await admin.query(
       `SELECT id, poids_par_unite, unite_poids
        FROM "${schema}".produits

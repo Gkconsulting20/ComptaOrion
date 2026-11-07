@@ -23,6 +23,8 @@ const JOURNAL_CODES = {
   OD: 'OD'
 };
 
+const VALID_JOURNAL_TYPES = new Set(['achats', 'ventes', 'banque', 'caisse', 'od']);
+
 const COMPTES_SYSCOHADA = {
   STOCK_MARCHANDISES: '31',
   FOURNISSEURS: '401',
@@ -74,7 +76,22 @@ export async function getOrCreateJournal(entrepriseId, code, nom, type, executor
     }).returning();
     return newJournal;
   }
-  return journal[0];
+
+  const existingJournal = journal[0];
+  const existingType = String(existingJournal.type || '').trim().toLowerCase();
+  if (!VALID_JOURNAL_TYPES.has(existingType)) {
+    const requestedType = String(type || '').trim().toLowerCase();
+    const repairedType = VALID_JOURNAL_TYPES.has(requestedType) ? requestedType : 'od';
+    const [repairedJournal] = await executor.update(journaux).set({
+      type: repairedType,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(journaux.id, existingJournal.id),
+      eq(journaux.entrepriseId, entrepriseId),
+    )).returning();
+    return repairedJournal;
+  }
+  return existingJournal;
 }
 
 async function getMappedAccount(entrepriseId, roleKey, executor) {
