@@ -2877,7 +2877,10 @@ router.get('/bilan', async (req, res) => {
     });
 
     // Calculer les soldes basés sur les écritures validées
-    const conditions = [eq(lignesEcritures.entrepriseId, entrepriseId)];
+    const conditions = [
+      eq(lignesEcritures.entrepriseId, entrepriseId),
+      eq(ecritures.valide, true),
+    ];
     if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
     if (dateFin) conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
 
@@ -2968,7 +2971,10 @@ router.get('/compte-resultat', async (req, res) => {
     });
 
     // Construire les conditions de filtrage
-    const conditions = [eq(lignesEcritures.entrepriseId, entrepriseId)];
+    const conditions = [
+      eq(lignesEcritures.entrepriseId, entrepriseId),
+      eq(ecritures.valide, true),
+    ];
     if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
     if (dateFin) conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
 

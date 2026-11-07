@@ -594,6 +594,7 @@ router.post('/factures', async (req, res) => {
 router.put('/factures/:id/valider', async (req, res) => {
   try {
     const { id } = req.params;
+    const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
     const result = await db.transaction(async (tx) => {
       const [facture] = await tx.select().from(facturesAchat).where(and(
         eq(facturesAchat.id, parseInt(id)),
@@ -614,6 +615,20 @@ router.put('/factures/:id/valider', async (req, res) => {
         eq(factureAchatItems.factureId, facture.id),
         eq(factureAchatItems.entrepriseId, req.entrepriseId)
       ));
+      const linkedReceiptsResult = await tx.execute(sql`
+        SELECT id
+        FROM bons_reception
+        WHERE entreprise_id = ${req.entrepriseId}
+          AND facture_achat_id = ${facture.id}
+        LIMIT 1
+      `);
+      const isReceiptMatchedInvoice = (linkedReceiptsResult.rows || []).length > 0;
+      if (isReceiptMatchedInvoice && !facture.ecritureComptableId) {
+        throw Object.assign(
+          new Error('La facture rapprochée doit d’abord avoir son écriture comptable. Utilisez « Reprendre l’écriture ».'),
+          { status: 409 },
+        );
+      }
       const stockItems = factureItems.filter((item) => Number(item.produitId) > 0);
       const logisticsItems = factureItems.filter((item) =>
         !item.produitId && /frais|transport|douane|manutention|assurance|logistique/i.test(item.description || '')
@@ -653,7 +668,7 @@ router.put('/factures/:id/valider', async (req, res) => {
         (sum, item) => sum + Math.max(0, Number(item.totalLigne) || 0) + (logisticsByItemId.get(item.id) || 0),
         0
       );
-      const [updated] = await tx.update(facturesAchat).set({
+      let [updated] = await tx.update(facturesAchat).set({
         statut: 'validee',
         updatedAt: new Date()
       }).where(and(
@@ -669,74 +684,129 @@ router.put('/factures/:id/valider', async (req, res) => {
       ));
 
       const movements = [];
-      for (const item of factureItems) {
-        if (!item.produitId) continue;
-        const [product] = await tx.select().from(produits).where(and(
-          eq(produits.id, item.produitId),
-          eq(produits.entrepriseId, req.entrepriseId)
-        )).for('update').limit(1);
-        if (!product) throw Object.assign(new Error(`Produit ${item.produitId} introuvable ou non autorisé.`), { status: 409 });
-        await ensureOpeningValuationLayer(tx, {
-          entrepriseId: req.entrepriseId,
-          produitId: product.id,
-          productSnapshot: product,
-        });
-        const [movement] = await tx.insert(mouvementsStock).values({
-          entrepriseId: req.entrepriseId,
-          produitId: product.id,
-          type: 'entree',
-          quantite: item.quantite,
-          prixUnitaire: item.prixUnitaire,
-          reference: `Facture ${updated.numeroFacture}`,
-          notes: `Réception depuis facture fournisseur ${updated.numeroFactureFournisseur || updated.numeroFacture}`,
-          userId: req.user.id
-        }).returning();
-        movements.push(movement);
-        const itemCost = Math.max(0, Number(item.totalLigne) || Number(item.quantite) * Number(item.prixUnitaire));
-        const landedCost = itemCost + (logisticsByItemId.get(item.id) || 0);
-        if (automaticCosting) {
-          await createStockValuationLayer(tx, {
+      if (!isReceiptMatchedInvoice) {
+        for (const item of factureItems) {
+          if (!item.produitId) continue;
+          const [product] = await tx.select().from(produits).where(and(
+            eq(produits.id, item.produitId),
+            eq(produits.entrepriseId, req.entrepriseId)
+          )).for('update').limit(1);
+          if (!product) throw Object.assign(new Error(`Produit ${item.produitId} introuvable ou non autorisé.`), { status: 409 });
+          await ensureOpeningValuationLayer(tx, {
             entrepriseId: req.entrepriseId,
             produitId: product.id,
-            mouvementId: movement.id,
-            quantity: item.quantite,
-            totalCost: landedCost,
-            unitCost: Number(item.quantite) > 0 ? landedCost / Number(item.quantite) : Number(item.prixUnitaire),
             productSnapshot: product,
-            ensureOpening: false,
           });
+          const [movement] = await tx.insert(mouvementsStock).values({
+            entrepriseId: req.entrepriseId,
+            produitId: product.id,
+            type: 'entree',
+            quantite: item.quantite,
+            prixUnitaire: item.prixUnitaire,
+            reference: `Facture ${updated.numeroFacture}`,
+            notes: `Réception depuis facture fournisseur ${updated.numeroFactureFournisseur || updated.numeroFacture}`,
+            userId: req.user.id
+          }).returning();
+          movements.push(movement);
+          const itemCost = Math.max(0, Number(item.totalLigne) || Number(item.quantite) * Number(item.prixUnitaire));
+          const landedCost = itemCost + (logisticsByItemId.get(item.id) || 0);
+          if (automaticCosting) {
+            await createStockValuationLayer(tx, {
+              entrepriseId: req.entrepriseId,
+              produitId: product.id,
+              mouvementId: movement.id,
+              quantity: item.quantite,
+              totalCost: landedCost,
+              unitCost: Number(item.quantite) > 0 ? landedCost / Number(item.quantite) : Number(item.prixUnitaire),
+              productSnapshot: product,
+              ensureOpening: false,
+            });
+          }
+          await tx.update(factureAchatItems).set({
+            ...(automaticCosting
+              ? { coutUnitaireFinal: Number(item.quantite) > 0 ? (landedCost / Number(item.quantite)).toFixed(4) : '0.0000' }
+              : {}),
+            mouvementStockId: movement.id,
+          }).where(and(
+            eq(factureAchatItems.id, item.id),
+            eq(factureAchatItems.entrepriseId, req.entrepriseId)
+          ));
+          await tx.update(produits).set({
+            quantite: sql`${produits.quantite} + ${item.quantite}`,
+            updatedAt: new Date()
+          }).where(and(
+            eq(produits.id, product.id),
+            eq(produits.entrepriseId, req.entrepriseId)
+          ));
         }
-        await tx.update(factureAchatItems).set({
-          ...(automaticCosting
-            ? { coutUnitaireFinal: Number(item.quantite) > 0 ? (landedCost / Number(item.quantite)).toFixed(4) : '0.0000' }
-            : {}),
-          mouvementStockId: movement.id,
-        }).where(and(
-          eq(factureAchatItems.id, item.id),
-          eq(factureAchatItems.entrepriseId, req.entrepriseId)
-        ));
-        await tx.update(produits).set({
-          quantite: sql`${produits.quantite} + ${item.quantite}`,
-          updatedAt: new Date()
-        }).where(and(
-          eq(produits.id, product.id),
-          eq(produits.entrepriseId, req.entrepriseId)
-        ));
       }
 
       let accountingEntry = null;
       try {
-        accountingEntry = await createEcritureFactureAchat({
-          entrepriseId: req.entrepriseId,
-          numeroFacture: updated.numeroFacture,
-          dateFacture: updated.dateFacture,
-          fournisseurNom: fournisseur.raisonSociale || fournisseur.nom || 'Fournisseur',
-          totalHT: updated.totalHT,
-          totalTVA: updated.totalTVA,
-          totalTTC: updated.totalTTC,
-          montantStockDirect,
-          executor: tx
-        });
+        if (facture.ecritureComptableId) {
+          const [existingEntry] = await tx.select().from(ecritures).where(and(
+            eq(ecritures.id, facture.ecritureComptableId),
+            eq(ecritures.entrepriseId, req.entrepriseId),
+          )).for('update').limit(1);
+          if (!existingEntry) {
+            throw Object.assign(new Error('L’écriture comptable liée à cette facture est introuvable.'), { status: 409 });
+          }
+          const entryLines = await tx.select().from(lignesEcritures).where(and(
+            eq(lignesEcritures.ecritureId, existingEntry.id),
+            eq(lignesEcritures.entrepriseId, req.entrepriseId),
+          ));
+          const debitCentimes = entryLines.reduce((sum, line) => sum + Math.round(Number(line.debit || 0) * 100), 0);
+          const creditCentimes = entryLines.reduce((sum, line) => sum + Math.round(Number(line.credit || 0) * 100), 0);
+          if (entryLines.length < 2 || debitCentimes !== creditCentimes) {
+            throw Object.assign(new Error('L’écriture comptable liée à cette facture est déséquilibrée et ne peut pas être validée.'), { status: 409 });
+          }
+          if (!existingEntry.valide) {
+            const [validatedEntry] = await tx.update(ecritures).set({
+              valide: true,
+              updatedAt: new Date(),
+            }).where(and(
+              eq(ecritures.id, existingEntry.id),
+              eq(ecritures.entrepriseId, req.entrepriseId),
+            )).returning();
+            await logAudit({
+              ...extractAuditInfo(req),
+              action: 'UPDATE',
+              table: 'ecritures',
+              recordId: existingEntry.id,
+              ancienneValeur: { ecriture: existingEntry, lignes: entryLines },
+              nouvelleValeur: { ecriture: validatedEntry, lignes: entryLines, totalDebit: debitCentimes / 100, totalCredit: creditCentimes / 100 },
+              description: `Écriture fournisseur validée avec la facture ${updated.numeroFacture}`,
+              executor: tx,
+              required: true,
+            });
+            accountingEntry = validatedEntry;
+          } else {
+            accountingEntry = existingEntry;
+          }
+        } else {
+          accountingEntry = await createEcritureFactureAchat({
+            entrepriseId: req.entrepriseId,
+            numeroFacture: updated.numeroFacture,
+            dateFacture: updated.dateFacture,
+            fournisseurNom: fournisseur.raisonSociale || fournisseur.nom || 'Fournisseur',
+            totalHT: updated.totalHT,
+            totalTVA: updated.totalTVA,
+            totalTTC: updated.totalTTC,
+            montantStockDirect,
+            valide: true,
+            executor: tx
+          });
+          if (!accountingEntry) {
+            throw Object.assign(new Error('Écriture comptable de la facture fournisseur impossible.'), { status: 409 });
+          }
+          [updated] = await tx.update(facturesAchat).set({
+            ecritureComptableId: accountingEntry.id,
+            updatedAt: new Date(),
+          }).where(and(
+            eq(facturesAchat.id, updated.id),
+            eq(facturesAchat.entrepriseId, req.entrepriseId),
+          )).returning();
+        }
       } catch (accountingError) {
         console.error('Erreur création de l’écriture de facture fournisseur:', accountingError.message);
         throw accountingError;
@@ -757,6 +827,8 @@ router.put('/factures/:id/valider', async (req, res) => {
       return {
         status: 200,
         updated,
+        accountingEntry,
+        isReceiptMatchedInvoice,
         movementsCount: movements.length,
         montantStockDirect,
         fraisLogistiquesAlloues: directLogisticsAllocation.allocations.reduce((sum, amount) => sum + amount, 0),
@@ -772,8 +844,12 @@ router.put('/factures/:id/valider', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Facture validée avec succès et stock mis à jour',
-      data: updated,
+      message: result.isReceiptMatchedInvoice
+        ? 'Facture validée; les réceptions déjà enregistrées n’ont pas été ajoutées une seconde fois.'
+        : result.movementsCount > 0
+          ? 'Facture validée avec succès et stock mis à jour'
+          : 'Facture validée et écriture comptable enregistrée.',
+      data: { ...updated, ecritureComptableId: result.accountingEntry.id },
       coutRevient: {
         valeurStockCapitalisee: result.montantStockDirect,
         fraisLogistiquesAlloues: result.fraisLogistiquesAlloues,
@@ -786,9 +862,9 @@ router.put('/factures/:id/valider', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur lors de la validation de la facture:', error);
-    return res.status(500).json({
+    return res.status(error.status || 500).json({
       success: false,
-      message: 'Erreur lors de la validation de la facture',
+      message: error.status ? error.message : 'Erreur lors de la validation de la facture',
       error: error.message
     });
   }

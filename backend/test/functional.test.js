@@ -733,6 +733,36 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       'La réception met aussi à jour la quantité dans l’entrepôt choisi');
     assert.ok(firstReceipt.data.receptionNumero,
       'Chaque réception issue d’une commande reçoit un numéro de bon');
+    const receiptAccountingRows = await admin.query(
+      `SELECT e.valide, cc.numero,
+              SUM(le.debit)::numeric AS debit,
+              SUM(le.credit)::numeric AS credit
+       FROM "${schema}".ecritures e
+       JOIN "${schema}".bons_reception br
+         ON br.ecriture_stock_id = e.id AND br.entreprise_id = e.entreprise_id
+       JOIN "${schema}".lignes_ecriture le ON le.ecriture_id = e.id
+       JOIN "${schema}".comptes_comptables cc ON cc.id = le.compte_comptable_id
+       WHERE e.entreprise_id = $1 AND br.id = $2
+       GROUP BY e.valide, cc.numero`,
+      [signup.user.entrepriseId, firstReceipt.data.receptionId],
+    );
+    assert.ok(receiptAccountingRows.rows.length > 0,
+      'La réception doit créer une écriture comptable');
+    assert.ok(receiptAccountingRows.rows.every((row) => row.valide),
+      'Une réception validée doit immédiatement publier son écriture comptable');
+    const receiptStockLine = receiptAccountingRows.rows.find((row) => row.numero.startsWith('31'));
+    const receiptPendingLine = receiptAccountingRows.rows.find((row) => row.numero.startsWith('408'));
+    assert.ok(receiptStockLine && receiptPendingLine,
+      'La réception doit utiliser un compte de stock 31 et le compte temporaire 408');
+    assert.equal(Number(receiptStockLine.debit), Number(receiptPendingLine.credit),
+      'La réception doit débiter le stock et créditer le compte temporaire du même montant');
+    const receiptAccountingBalance = await api(
+      `/comptabilite/balance?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
+    );
+    assert.ok(receiptAccountingBalance.comptes.some((account) => account.numero === receiptStockLine.numero),
+      'La balance doit afficher le compte de stock de la réception validée');
+    assert.ok(receiptAccountingBalance.comptes.some((account) => account.numero === receiptPendingLine.numero),
+      'La balance doit afficher le compte temporaire de la réception validée');
     const pendingReceipts = await api(
       `/achats/receptions-en-attente?fournisseurId=${supplierRecord.data.id}`,
     );
@@ -856,6 +886,66 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       'Le rapprochement doit solder les lignes de stock non facturées');
     assert.equal(logisticsPendingAfterMatch.items.length, 0,
       'Le rapprochement doit solder les frais logistiques non facturés');
+    const quantitiesBeforeInvoiceValidation = await admin.query(
+      `SELECT id, quantite FROM "${schema}".produits
+       WHERE entreprise_id = $1 AND id = ANY($2::int[])
+       ORDER BY id`,
+      [signup.user.entrepriseId, [productId, secondCostProduct.data.id]],
+    );
+    const draftInvoiceEntry = await admin.query(
+      `SELECT e.valide
+       FROM "${schema}".factures_achat fa
+       JOIN "${schema}".ecritures e ON e.id = fa.ecriture_comptable_id
+       WHERE fa.entreprise_id = $1 AND fa.id = $2`,
+      [signup.user.entrepriseId, matchedInvoice.data.id],
+    );
+    assert.equal(draftInvoiceEntry.rows[0]?.valide, false,
+      'Une facture rapprochée reste en brouillon comptable jusqu’à sa validation');
+    await api(`/achats/factures/${matchedInvoice.data.id}/valider`, 'PUT', {});
+    const quantitiesAfterInvoiceValidation = await admin.query(
+      `SELECT id, quantite FROM "${schema}".produits
+       WHERE entreprise_id = $1 AND id = ANY($2::int[])
+       ORDER BY id`,
+      [signup.user.entrepriseId, [productId, secondCostProduct.data.id]],
+    );
+    assert.deepEqual(
+      quantitiesAfterInvoiceValidation.rows.map((row) => Number(row.quantite)),
+      quantitiesBeforeInvoiceValidation.rows.map((row) => Number(row.quantite)),
+      'La validation d’une facture rapprochée ne doit pas ajouter une seconde fois le stock déjà reçu',
+    );
+    const validatedInvoiceEntry = await admin.query(
+      `SELECT fa.statut, e.valide,
+              COUNT(DISTINCT e2.id)::int AS entries_for_invoice
+       FROM "${schema}".factures_achat fa
+       JOIN "${schema}".ecritures e ON e.id = fa.ecriture_comptable_id
+       LEFT JOIN "${schema}".ecritures e2
+         ON e2.entreprise_id = fa.entreprise_id AND e2.numero_piece = fa.numero_facture
+       WHERE fa.entreprise_id = $1 AND fa.id = $2
+       GROUP BY fa.statut, fa.ecriture_comptable_id, e.valide`,
+      [signup.user.entrepriseId, matchedInvoice.data.id],
+    );
+    assert.equal(validatedInvoiceEntry.rows[0]?.statut, 'validee');
+    assert.equal(validatedInvoiceEntry.rows[0]?.valide, true,
+      'La validation de la facture doit publier l’écriture qui solde 408 et crédite 401');
+    assert.equal(validatedInvoiceEntry.rows[0]?.entries_for_invoice, 1,
+      'La validation ne doit pas créer une seconde écriture pour la même facture');
+    const invoiceBalance = await api(
+      `/comptabilite/balance?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
+    );
+    assert.ok(invoiceBalance.comptes.some((account) => account.numero.startsWith('401')),
+      'La balance doit afficher le compte fournisseur après validation de la facture');
+    assert.ok(invoiceBalance.comptes.some((account) => account.numero.startsWith('445')),
+      'La balance doit afficher la TVA déductible après validation de la facture');
+    const generalLedger = await api(
+      `/comptabilite/grand-livre?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
+    );
+    assert.ok(generalLedger.comptes.some((account) => account.numero.startsWith('408')),
+      'Le grand livre doit afficher le compte 408 après réception et rapprochement validés');
+    const financialPosition = await api(
+      `/comptabilite/bilan?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`,
+    );
+    assert.ok(financialPosition.actif.stocksCreances.some((account) => account.compte.startsWith('31')),
+      'Le bilan doit reprendre le stock comptabilisé lors de la réception');
     const receivedProduct = (await admin.query(
       `SELECT prix_achat, cout_moyen, prix_vente FROM "${schema}".produits WHERE entreprise_id = $1 AND id = $2`,
       [signup.user.entrepriseId,productId],

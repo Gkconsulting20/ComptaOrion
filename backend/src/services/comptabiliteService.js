@@ -412,7 +412,7 @@ export async function createEcritureReception(params) {
     libelle: `Réception ${receptionNumero} - ${fournisseurNom}`,
     numeroPiece: receptionNumero,
     lignes: ecrituresLignes,
-    valide: false,
+    valide: true,
     executor
   });
 }
@@ -431,6 +431,7 @@ export async function createEcritureFactureAchat(params) {
     montantValorisationStock = 0,
     montantStockDirect = 0,
     compteEcartId = null,
+    valide = false,
     executor = db
   } = params;
 
@@ -583,7 +584,7 @@ export async function createEcritureFactureAchat(params) {
     libelle: `Facture ${numeroFacture} - ${fournisseurNom}`,
     numeroPiece: numeroFacture,
     lignes: ecrituresLignes,
-    valide: false,
+    valide,
     executor
   });
 }

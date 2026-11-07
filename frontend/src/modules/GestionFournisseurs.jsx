@@ -1207,6 +1207,7 @@ export function GestionFournisseurs() {
     open: false, invoice: null, accounts: [], selectedId: '', query: '',
     loading: false, saving: false, error: '',
   });
+  const [validatingInvoiceId, setValidatingInvoiceId] = useState(null);
 
   const nombreEnLettres = (n) => {
     const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
@@ -1596,6 +1597,25 @@ export function GestionFournisseurs() {
     }
   };
 
+  const handleValidateSupplierInvoice = async (invoice) => {
+    const confirmed = window.confirm(
+      `Valider la facture ${invoice.numeroFactureFournisseur || invoice.numeroFacture} ? Cette action comptabilisera la dette fournisseur. Les réceptions déjà enregistrées ne seront pas ajoutées une seconde fois.`,
+    );
+    if (!confirmed) return;
+
+    setValidatingInvoiceId(invoice.id);
+    try {
+      const response = await api.put(`/achats/factures/${invoice.id}/valider`, {});
+      const payload = response.data || response;
+      await loadAllData();
+      alert(payload.message || 'Facture fournisseur validée.');
+    } catch (error) {
+      alert(error.response?.data?.message || error.message || 'La facture fournisseur n’a pas pu être validée.');
+    } finally {
+      setValidatingInvoiceId(null);
+    }
+  };
+
   const openModal = (type, item = null) => {
     setModal({ open: true, type, item });
     if (type === 'fournisseur') {
@@ -1933,6 +1953,16 @@ export function GestionFournisseurs() {
               actions={true}
               customActions={facture => (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {facture.statut === 'brouillon' && (
+                      <Button
+                        size="small"
+                        variant="success"
+                        disabled={validatingInvoiceId === facture.id}
+                        onClick={() => handleValidateSupplierInvoice(facture)}
+                      >
+                        {validatingInvoiceId === facture.id ? 'Validation…' : 'Valider la facture'}
+                      </Button>
+                    )}
                     {facture.statut === 'brouillon' && facture.hasStockPending && !facture.ecritureComptableId && (
                       <Button
                         size="small"

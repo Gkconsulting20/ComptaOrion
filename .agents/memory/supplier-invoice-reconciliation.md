@@ -26,3 +26,9 @@ Après rapprochement, la réception est liée à la facture et ne figure plus da
 **Why:** L’utilisateur a constaté que facture et réception semblaient disparaître après une erreur et souhaite refaire le test sans perdre les documents.
 
 **How to apply:** Tester le cas d’échec comptable en vérifiant la facture dans la liste des brouillons et la réception dans l’historique, tout en confirmant qu’elle n’apparaît plus dans les réceptions en attente.
+
+Une réception validée publie immédiatement l’écriture stock/408. Une facture rapprochée reste brouillon jusqu’à sa validation; celle-ci valide l’écriture 408/TVA/401 déjà liée, sans recréer le mouvement de stock ni une seconde écriture. Les rapports officiels ne reprennent que les écritures validées.
+
+**Why:** Une écriture peut exister en base tout en restant invisible si elle est brouillon; valider la facture rapprochée comme une facture directe pouvait aussi dupliquer le stock.
+
+**How to apply:** Pour tout changement de ce parcours, vérifier la réception au grand livre et à la balance, puis valider la facture et contrôler le solde 408, la dette 401, la TVA, l’absence de doublon d’écriture et l’absence de mouvement stock supplémentaire.
