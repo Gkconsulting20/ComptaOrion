@@ -398,13 +398,23 @@ function ClotureExerciceTab({ api }) {
   };
 
   const executerCloture = async () => {
-    if (!confirm(`ATTENTION: Vous allez clôturer l'exercice ${annee}.\n\nCette opération va:\n- Solder tous les comptes de charges (classe 6)\n- Solder tous les comptes de produits (classe 7)\n- Reporter le résultat sur le compte ${preview?.compteResultat}\n- Créer le bilan d'ouverture ${annee + 1}\n\nContinuer ?`)) {
+    if (!preview?.canClose) {
+      alert(preview?.messageBlocage || 'La clôture n’est pas disponible pour cet exercice.');
+      return;
+    }
+    if (!confirm(`ATTENTION : vous allez clôturer la période ${preview.dateDebut} au ${preview.dateFin}.\n\nCette opération va solder les comptes de charges et de produits, reporter le résultat sur le compte ${preview.compteResultat}, puis créer l’ouverture au ${preview.dateOuvertureSuivante}.\n\nContinuer ?`)) {
       return;
     }
     setExecuting(true);
     try {
       const res = await api.post('/comptabilite/cloture-exercice', { annee });
       setResult(res);
+      setPreview((current) => current ? {
+        ...current,
+        alreadyClosed: true,
+        canClose: false,
+        messageBlocage: 'Cet exercice vient d’être clôturé.'
+      } : current);
       alert('Clôture effectuée avec succès !');
     } catch (err) {
       alert('Erreur clôture: ' + err.message);
@@ -421,7 +431,7 @@ function ClotureExerciceTab({ api }) {
     <div>
       <h3 style={{ marginBottom: '20px' }}>Clôture d'Exercice Comptable</h3>
 
-      <div style={{ 
+      <div style={{
         padding: '20px', 
         background: '#fff3e0', 
         borderRadius: '8px', 
@@ -452,7 +462,11 @@ function ClotureExerciceTab({ api }) {
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Exercice à clôturer</label>
           <select 
             value={annee}
-            onChange={(e) => setAnnee(parseInt(e.target.value))}
+            onChange={(e) => {
+              setAnnee(parseInt(e.target.value));
+              setPreview(null);
+              setResult(null);
+            }}
             style={{ 
               padding: '10px 15px', 
               fontSize: '16px', 
@@ -461,7 +475,7 @@ function ClotureExerciceTab({ api }) {
               minWidth: '150px'
             }}
           >
-            {[2023, 2024, 2025, 2026].map(a => (
+            {Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - 9 + index).map(a => (
               <option key={a} value={a}>{a}</option>
             ))}
           </select>
@@ -473,25 +487,29 @@ function ClotureExerciceTab({ api }) {
 
       {preview && (
         <div style={{ display: 'grid', gap: '20px' }}>
-          <div style={{ 
+            <div style={{ 
             padding: '25px', 
-            background: preview.typeResultat === 'benefice' ? '#e8f5e9' : '#ffebee',
+              background: preview.resultatNet >= 0 ? '#e8f5e9' : '#ffebee',
             borderRadius: '12px',
-            border: `2px solid ${preview.typeResultat === 'benefice' ? '#4caf50' : '#f44336'}`
+              border: `2px solid ${preview.resultatNet >= 0 ? '#4caf50' : '#f44336'}`
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h3 style={{ margin: 0, color: preview.typeResultat === 'benefice' ? '#2e7d32' : '#c62828' }}>
+                  <h3 style={{ margin: 0, color: preview.resultatNet >= 0 ? '#2e7d32' : '#c62828' }}>
                   Résultat de l'exercice {annee}
                 </h3>
-                <p style={{ margin: '5px 0 0 0', color: '#666' }}>{preview.message}</p>
+                  <p style={{ margin: '5px 0 0 0', color: '#666' }}>
+                    Période : {preview.dateDebut} au {preview.dateFin}. {preview.message}
+                  </p>
               </div>
               <div style={{ 
                 fontSize: '32px', 
                 fontWeight: 'bold', 
-                color: preview.typeResultat === 'benefice' ? '#2e7d32' : '#c62828'
+                  color: preview.resultatNet >= 0 ? '#2e7d32' : '#c62828'
               }}>
-                {preview.typeResultat === 'benefice' ? '+' : '-'}{formatMontant(preview.resultatNet)}
+                {preview.typeResultat === 'equilibre'
+                  ? formatMontant(0)
+                  : `${preview.typeResultat === 'benefice' ? '+' : '-'}${formatMontant(preview.resultatNet)}`}
               </div>
             </div>
           </div>
@@ -565,19 +583,21 @@ function ClotureExerciceTab({ api }) {
             <h4 style={{ margin: '0 0 15px 0', color: '#1565c0' }}>Écritures qui seront générées</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>
-                <strong>1. Écriture de clôture (CLO-{annee}-001)</strong>
+                <strong>1. Écriture de clôture dans le journal OD</strong>
                 <p style={{ margin: '10px 0 0 0', color: '#666', fontSize: '14px' }}>
-                  - Crédit des comptes de charges pour les solder<br/>
-                  - Débit des comptes de produits pour les solder<br/>
-                  - {preview.typeResultat === 'benefice' ? 'Crédit' : 'Débit'} du compte {preview.compteResultat}
+                  - Crédit des comptes de charges et débit des comptes de produits pour les solder<br/>
+                  - {preview.typeResultat === 'equilibre'
+                    ? 'Aucun résultat à reporter'
+                    : `${preview.typeResultat === 'benefice' ? 'Crédit' : 'Débit'} du compte ${preview.compteResultat}`}
                 </p>
               </div>
               <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>
-                <strong>2. Bilan d'ouverture (AN-{annee + 1}-001)</strong>
+                <strong>2. Écriture d’ouverture au {preview.dateOuvertureSuivante} dans le journal AN</strong>
                 <p style={{ margin: '10px 0 0 0', color: '#666', fontSize: '14px' }}>
-                  - Report des soldes de tous les comptes de bilan<br/>
+                  - Report des soldes cumulés des comptes de bilan jusqu’à la clôture<br/>
                   - Incluant le résultat de l'exercice {annee}<br/>
-                  - {preview.comptesBilan.length} comptes à reporter
+                  - {preview.nombreComptesOuverture} lignes à reporter<br/>
+                  - Totaux débit/crédit : {formatMontant(preview.totalDebitOuverture)} / {formatMontant(preview.totalCreditOuverture)}
                 </p>
               </div>
             </div>
@@ -587,11 +607,16 @@ function ClotureExerciceTab({ api }) {
             <Button 
               variant="danger" 
               onClick={executerCloture}
-              disabled={executing}
+              disabled={executing || !preview.canClose}
               style={{ padding: '15px 40px', fontSize: '16px' }}
             >
               {executing ? 'Clôture en cours...' : `Exécuter la clôture de l'exercice ${annee}`}
             </Button>
+            {!preview.canClose && (
+              <p role="status" style={{ color: '#9a3412', marginTop: '12px' }}>
+                {preview.messageBlocage}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -608,8 +633,10 @@ function ClotureExerciceTab({ api }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
             <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>
               <strong>Résultat</strong>
-              <p style={{ margin: '5px 0 0 0', color: result.details.typeResultat === 'benefice' ? '#4caf50' : '#f44336' }}>
-                {result.details.typeResultat === 'benefice' ? 'Bénéfice' : 'Perte'}: {formatMontant(result.details.resultatNet)}
+              <p style={{ margin: '5px 0 0 0', color: result.details.typeResultat === 'benefice' ? '#4caf50' : result.details.typeResultat === 'perte' ? '#f44336' : '#666' }}>
+                {result.details.typeResultat === 'benefice'
+                  ? 'Bénéfice'
+                  : result.details.typeResultat === 'perte' ? 'Perte' : 'Résultat nul'}: {formatMontant(result.details.resultatNet)}
               </p>
             </div>
             <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>

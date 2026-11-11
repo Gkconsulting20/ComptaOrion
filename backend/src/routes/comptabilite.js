@@ -9,6 +9,7 @@ import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { synchroniserTransactionDepuisEcriture } from '../services/treasuryJournalSync.js';
 import { generateNumeroEcriture } from '../services/comptabiliteService.js';
 import { ACCOUNTING_ACCOUNT_ROLES } from '../services/accountingAccountMappings.js';
+import fiscalYearClosingRouter from './fiscal-year-closing.js';
 
 const router = express.Router();
 
@@ -3151,6 +3152,10 @@ router.get('/rapport-journaux', async (req, res) => {
 // ==========================================
 // CLÔTURE D'EXERCICE
 // ==========================================
+
+// Use the transactional closing workflow that carries forward the cumulative
+// balance-sheet balances and derives dates from the company's fiscal-year setup.
+router.use('/cloture-exercice', fiscalYearClosingRouter);
 
 // Prévisualisation de la clôture (sans exécution)
 router.get('/cloture-exercice/preview', async (req, res) => {
