@@ -22,6 +22,14 @@ test('le guide couvre commandes de stock, retours, chèques et rapports compacts
   assert.match(guide, /sélecteur compact en haut de l’écran/);
 });
 
+test('le guide décrit la clôture annuelle et avertit sur les périodes non verrouillées', () => {
+  assert.match(guide, /Comptabilité → Paramètres → Clôture Exercice/);
+  assert.match(guide, /journal OD/);
+  assert.match(guide, /journal AN/);
+  assert.match(guide, /ne bloque pas encore les écritures antidatées/i);
+  assert.match(guide, /utilisez une entreprise de test distincte/i);
+});
+
 test('l’offre distingue la saisie manuelle, l’OCR et le calcul Premium', () => {
   assert.match(offer, /Coût de revient et prix de vente définis manuellement/);
   assert.match(offer, /Lecture OCR des factures fournisseurs par photo/);

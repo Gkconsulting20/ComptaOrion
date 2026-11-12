@@ -273,6 +273,20 @@
         <li>Les rapports affichent le choix de période dans un sélecteur compact en haut de l’écran. Choisissez une période prédéfinie ou ouvrez les dates personnalisées; pour la balance, cliquez sur « Générer » après avoir choisi la période.</li>
       </ul>
       <p class="small">Une écriture déséquilibrée ou un mauvais compte doit être corrigé selon la procédure comptable de votre entreprise. Ne modifiez pas une opération historique sans conserver les justificatifs et suivre l’historique d’audit.</p>
+      <h3>Clôturer un exercice et ouvrir le suivant</h3>
+      <p>Ouvrez <span class="path">Comptabilité → Paramètres → Clôture Exercice</span>, choisissez l’année de début de l’exercice et générez la prévisualisation. Les dates affichées suivent l’exercice fiscal configuré pour l’entreprise.</p>
+      <ol>
+        <li>Attendez la fin réelle de l’exercice et saisissez toutes les opérations et régularisations avant de lancer la clôture.</li>
+        <li>Vérifiez les comptes de charges et de produits, le résultat net et les soldes de bilan à reprendre. Le total débit doit être égal au total crédit dans le bilan d’ouverture prévisionnel.</li>
+        <li>Faites une sauvegarde et demandez la validation de votre comptable avant d’exécuter cette opération, qui crée des écritures comptables définitives.</li>
+        <li>La clôture solde les comptes de résultat des classes 6 et 7 dans le journal OD. Le bénéfice est reporté au crédit du compte 120 ou la perte au débit du compte 129.</li>
+        <li>Le logiciel crée ensuite, le lendemain de la fin de l’exercice, une écriture d’ouverture dans le journal AN avec les soldes cumulés des comptes de bilan et le résultat de l’exercice.</li>
+        <li>Après l’exécution, vérifiez les deux écritures dans le grand livre, puis contrôlez la balance et les états financiers de la nouvelle période.</li>
+      </ol>
+      <div class="callout callout--blue">
+        <strong>Limites de la clôture actuelle</strong>
+        Le module réalise une clôture annuelle, pas la clôture séparée de chaque mois. Il empêche de relancer la même clôture, mais ne bloque pas encore les écritures antidatées dans une période déjà clôturée. Pendant les tests, utilisez une entreprise de test distincte et ne clôturez pas les comptes réels. Le verrouillage des périodes doit être vérifié avant d’utiliser cette fonction en production.
+      </div>
     </section>
 
     <section id="associations">
