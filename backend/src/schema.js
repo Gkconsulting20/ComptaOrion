@@ -1273,6 +1273,32 @@ export const ecritures = pgTable('ecritures', {
     .where(sql`${table.numeroEcriture} IS NOT NULL`),
 }));
 
+// Persists each fiscal-year close/reopen cycle and links its generated entries.
+export const cloturesExercices = pgTable('clotures_exercices', {
+  id: serial('id').primaryKey(),
+  entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
+  exercice: integer('exercice').notNull(),
+  revision: integer('revision').notNull().default(1),
+  dateDebut: date('date_debut').notNull(),
+  dateFin: date('date_fin').notNull(),
+  dateOuvertureSuivante: date('date_ouverture_suivante').notNull(),
+  statut: varchar('statut', { length: 20 }).notNull().default('ferme'),
+  ecritureClotureId: integer('ecriture_cloture_id').references(() => ecritures.id),
+  ecritureOuvertureId: integer('ecriture_ouverture_id').references(() => ecritures.id),
+  ecritureContrepassationClotureId: integer('ecriture_contrepassation_cloture_id').references(() => ecritures.id),
+  ecritureContrepassationOuvertureId: integer('ecriture_contrepassation_ouverture_id').references(() => ecritures.id),
+  fermePar: integer('ferme_par').references(() => users.id),
+  fermeLe: timestamp('ferme_le').defaultNow().notNull(),
+  reouvertPar: integer('reouvert_par').references(() => users.id),
+  reouvertLe: timestamp('reouvert_le'),
+  motifReouverture: text('motif_reouverture'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  entrepriseExerciceRevisionUnique: uniqueIndex('clotures_exercices_entreprise_exercice_revision_unique')
+    .on(table.entrepriseId, table.exercice, table.revision),
+}));
+
 // Persists the latest issued sequence even if a numbered entry is later deleted.
 export const ecritureSequences = pgTable('ecriture_sequences', {
   id: serial('id').primaryKey(),

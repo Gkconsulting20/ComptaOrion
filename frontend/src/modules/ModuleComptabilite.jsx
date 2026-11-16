@@ -381,7 +381,33 @@ function ClotureExerciceTab({ api }) {
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [reopeningReason, setReopeningReason] = useState('');
+  const [history, setHistory] = useState([]);
   const [result, setResult] = useState(null);
+
+  const loadHistory = async () => {
+    try {
+      const rows = await api.get('/comptabilite/cloture-exercice/historique');
+      setHistory(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      console.error('Impossible de charger l’historique des clôtures:', err);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      api.get('/auth/me').catch(() => null),
+      api.get('/comptabilite/cloture-exercice/historique').catch(() => [])
+    ]).then(([profile, rows]) => {
+      if (!active) return;
+      setIsAdmin(profile?.user?.role === 'admin');
+      setHistory(Array.isArray(rows) ? rows : []);
+    });
+    return () => { active = false; };
+  }, [api]);
 
   const loadPreview = async () => {
     setLoading(true);
@@ -390,6 +416,7 @@ function ClotureExerciceTab({ api }) {
     try {
       const res = await api.get(`/comptabilite/cloture-exercice/preview?annee=${annee}`);
       setPreview(res);
+      await loadHistory();
     } catch (err) {
       alert('Erreur: ' + err.message);
     } finally {
@@ -409,17 +436,44 @@ function ClotureExerciceTab({ api }) {
     try {
       const res = await api.post('/comptabilite/cloture-exercice', { annee });
       setResult(res);
+      await loadHistory();
       setPreview((current) => current ? {
         ...current,
         alreadyClosed: true,
+        statut: 'ferme',
         canClose: false,
-        messageBlocage: 'Cet exercice vient d’être clôturé.'
+        messageBlocage: 'Cet exercice vient d’être clôturé. Seul un administrateur peut le réouvrir.'
       } : current);
       alert('Clôture effectuée avec succès !');
     } catch (err) {
       alert('Erreur clôture: ' + err.message);
     } finally {
       setExecuting(false);
+    }
+  };
+
+  const executerReouverture = async () => {
+    const motif = reopeningReason.trim();
+    if (motif.length < 10 || motif.length > 500) {
+      alert('Veuillez indiquer un motif de 10 à 500 caractères.');
+      return;
+    }
+    if (!confirm(`Réouvrir l’exercice ${annee} ? Les écritures de clôture et d’ouverture seront contrepassées, sans effacer l’historique. Le motif sera conservé dans la piste d’audit.`)) {
+      return;
+    }
+    setReopening(true);
+    setResult(null);
+    try {
+      const response = await api.post(`/comptabilite/cloture-exercice/${annee}/reouverture`, { motif });
+      setResult(response);
+      setReopeningReason('');
+      await loadPreview();
+      await loadHistory();
+      alert(response.message || 'Exercice réouvert.');
+    } catch (err) {
+      alert('Erreur de réouverture: ' + err.message);
+    } finally {
+      setReopening(false);
     }
   };
 
@@ -440,12 +494,13 @@ function ClotureExerciceTab({ api }) {
       }}>
         <h4 style={{ margin: '0 0 10px 0', color: '#e65100' }}>Information importante</h4>
         <p style={{ margin: 0, color: '#e65100' }}>
-          La clôture d'exercice est une opération irréversible qui:
+          Une fois l’exercice fermé, toute nouvelle écriture dans ses dates est bloquée.
         </p>
         <ul style={{ margin: '10px 0 0 0', color: '#e65100' }}>
           <li>Solde tous les comptes de résultat (classes 6 et 7)</li>
           <li>Transfère le résultat net vers le compte de bilan approprié (120 ou 129)</li>
           <li>Crée automatiquement les écritures d'ouverture du nouvel exercice</li>
+          <li>Une réouverture réservée à l’administrateur crée des contrepassations et conserve le motif dans l’audit</li>
         </ul>
       </div>
 
@@ -618,6 +673,40 @@ function ClotureExerciceTab({ api }) {
               </p>
             )}
           </div>
+
+          {preview.statut === 'ferme' && (
+            <section style={{ padding: '20px', border: '1px solid #f0ad4e', background: '#fff8e8', borderRadius: '8px' }}>
+              <h4 style={{ marginTop: 0 }}>Exercice fermé</h4>
+              <p>Les écritures de cet exercice sont bloquées. Une réouverture contrepassera les écritures de clôture et d’ouverture; elle ne les supprimera pas.</p>
+              {isAdmin ? (
+                <>
+                  <label htmlFor="motif-reouverture" style={{ display: 'block', fontWeight: 600, marginBottom: '6px' }}>
+                    Motif obligatoire (10 à 500 caractères)
+                  </label>
+                  <textarea
+                    id="motif-reouverture"
+                    value={reopeningReason}
+                    onChange={(event) => setReopeningReason(event.target.value)}
+                    maxLength={500}
+                    rows={3}
+                    placeholder="Expliquez pourquoi cet exercice doit être réouvert"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px', marginBottom: '12px' }}
+                  />
+                  <Button
+                    variant="danger"
+                    onClick={executerReouverture}
+                    disabled={reopening || reopeningReason.trim().length < 10}
+                  >
+                    {reopening ? 'Réouverture en cours…' : `Réouvrir l’exercice ${annee}`}
+                  </Button>
+                </>
+              ) : (
+                <p role="status" style={{ color: '#7c2d12', marginBottom: 0 }}>
+                  Seul l’administrateur de l’entreprise peut demander cette réouverture.
+                </p>
+              )}
+            </section>
+          )}
         </div>
       )}
 
@@ -629,7 +718,10 @@ function ClotureExerciceTab({ api }) {
           borderRadius: '8px',
           border: '2px solid #4caf50'
         }}>
-          <h4 style={{ margin: '0 0 15px 0', color: '#2e7d32' }}>Clôture effectuée avec succès</h4>
+          <h4 style={{ margin: '0 0 15px 0', color: '#2e7d32' }}>
+            {result.details?.typeResultat ? 'Clôture effectuée avec succès' : 'Exercice réouvert'}
+          </h4>
+          {result.details?.typeResultat ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
             <div style={{ padding: '15px', background: '#fff', borderRadius: '6px' }}>
               <strong>Résultat</strong>
@@ -652,8 +744,50 @@ function ClotureExerciceTab({ api }) {
               </p>
             </div>
           </div>
+          ) : (
+            <p style={{ margin: 0 }}>
+              {result.message} Motif enregistré : {result.details?.motif}
+            </p>
+          )}
         </div>
       )}
+
+      <section style={{ marginTop: '24px', padding: '20px', background: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <h4 style={{ margin: 0 }}>Historique des clôtures et réouvertures</h4>
+          <Button onClick={loadHistory}>Actualiser</Button>
+        </div>
+        {history.length ? (
+          <div style={{ overflowX: 'auto', marginTop: '12px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '1px solid #ddd' }}>
+                  <th style={{ padding: '8px' }}>Exercice</th>
+                  <th style={{ padding: '8px' }}>Révision</th>
+                  <th style={{ padding: '8px' }}>Période</th>
+                  <th style={{ padding: '8px' }}>État</th>
+                  <th style={{ padding: '8px' }}>Réouverture / motif</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((row) => (
+                  <tr key={row.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '8px' }}>{row.exercice}</td>
+                    <td style={{ padding: '8px' }}>{row.revision}</td>
+                    <td style={{ padding: '8px' }}>{String(row.dateDebut).slice(0, 10)} – {String(row.dateFin).slice(0, 10)}</td>
+                    <td style={{ padding: '8px' }}>{row.statut === 'ferme' ? 'Fermé' : 'Réouvert'}</td>
+                    <td style={{ padding: '8px' }}>
+                      {row.reouvertLe ? `${String(row.reouvertLe).slice(0, 10)} — ${row.motifReouverture || ''}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p style={{ marginBottom: 0, color: '#64748b' }}>Aucune clôture enregistrée.</p>
+        )}
+      </section>
     </div>
   );
 }

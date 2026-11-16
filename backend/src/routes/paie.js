@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { employes, fichesPaie, avancesSalaire, ecritures, lignesEcritures } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { markClosedFiscalPeriodConflict } from '../services/fiscalPeriodErrors.js';
 
 const router = express.Router();
 
@@ -261,7 +262,8 @@ router.post('/fiches-paie', async (req, res) => {
     res.json({ success: true, message: 'Fiche de paie créée avec succès', data: newFiche });
   } catch (error) {
     console.error('Erreur POST /fiches-paie:', error);
-    res.status(500).json({ success: false, message: error.message });
+    markClosedFiscalPeriodConflict(error);
+    res.status(error.status || error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 

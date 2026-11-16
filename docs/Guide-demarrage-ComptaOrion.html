@@ -284,8 +284,8 @@
         <li>Après l’exécution, vérifiez les deux écritures dans le grand livre, puis contrôlez la balance et les états financiers de la nouvelle période.</li>
       </ol>
       <div class="callout callout--blue">
-        <strong>Limites de la clôture actuelle</strong>
-        Le module réalise une clôture annuelle, pas la clôture séparée de chaque mois. Il empêche de relancer la même clôture, mais ne bloque pas encore les écritures antidatées dans une période déjà clôturée. Pendant les tests, utilisez une entreprise de test distincte et ne clôturez pas les comptes réels. Le verrouillage des périodes doit être vérifié avant d’utiliser cette fonction en production.
+        <strong>Protection et réouverture</strong>
+        Une fois la clôture enregistrée, le logiciel bloque les nouvelles écritures, modifications et suppressions datées dans l’exercice fermé, y compris celles générées automatiquement. Seul l’administrateur peut réouvrir l’exercice en indiquant un motif. Le logiciel conserve la clôture et crée des écritures de contrepassation pour annuler la clôture et l’ouverture; aucune écriture historique n’est effacée. Après correction, une nouvelle clôture crée une nouvelle révision et de nouvelles écritures d’ouverture. Le contrôle reste annuel: il ne ferme pas séparément les mois.
       </div>
     </section>
 

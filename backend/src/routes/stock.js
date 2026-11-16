@@ -13,6 +13,7 @@ import {
   ensureOpeningValuationLayer,
 } from '../services/stockValuation.js';
 import { getPlanCapabilities } from '../services/planEntitlements.js';
+import { markClosedFiscalPeriodConflict } from '../services/fiscalPeriodErrors.js';
 
 const router = express.Router();
 
@@ -940,7 +941,8 @@ router.post('/receptions/:id/valider', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur validation réception:', error);
-    res.status(500).json({ error: error.message });
+    markClosedFiscalPeriodConflict(error);
+    res.status(error.status || error.statusCode || 500).json({ error: error.message });
   }
 });
 

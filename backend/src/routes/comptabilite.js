@@ -9,6 +9,7 @@ import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { synchroniserTransactionDepuisEcriture } from '../services/treasuryJournalSync.js';
 import { generateNumeroEcriture } from '../services/comptabiliteService.js';
 import { ACCOUNTING_ACCOUNT_ROLES } from '../services/accountingAccountMappings.js';
+import { markClosedFiscalPeriodConflict } from '../services/fiscalPeriodErrors.js';
 import fiscalYearClosingRouter from './fiscal-year-closing.js';
 
 const router = express.Router();
@@ -1634,7 +1635,8 @@ router.put('/comptes-automatiques', async (req, res) => {
     });
     res.json({ ...saved, roles: ACCOUNTING_ACCOUNT_ROLES });
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message });
+    markClosedFiscalPeriodConflict(error);
+    res.status(error.status || error.statusCode || 500).json({ error: error.message });
   }
 });
 
@@ -2060,7 +2062,8 @@ router.post('/ecritures', async (req, res) => {
 
     res.status(201).json(ecriture);
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message });
+    markClosedFiscalPeriodConflict(error);
+    res.status(error.status || error.statusCode || 500).json({ error: error.message });
   }
 });
 
@@ -2339,7 +2342,8 @@ router.post('/ecritures/:id/valider', async (req, res) => {
       treasurySync: validation.treasurySync,
     });
   } catch (error) {
-    res.status(error.status || 500).json({
+    markClosedFiscalPeriodConflict(error);
+    res.status(error.status || error.statusCode || 500).json({
       error: error.message,
       totalDebit: error.totalDebit,
       totalCredit: error.totalCredit,
@@ -2539,7 +2543,8 @@ router.put('/ecritures/:id', async (req, res) => {
 
     res.json(updated);
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message });
+    markClosedFiscalPeriodConflict(error);
+    res.status(error.status || error.statusCode || 500).json({ error: error.message });
   }
 });
 
@@ -2577,7 +2582,8 @@ router.delete('/ecritures/:id', async (req, res) => {
     });
     res.json({ message: 'Écriture supprimée' });
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message });
+    markClosedFiscalPeriodConflict(error);
+    res.status(error.status || error.statusCode || 500).json({ error: error.message });
   }
 });
 

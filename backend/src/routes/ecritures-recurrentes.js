@@ -12,6 +12,7 @@ import {
 import { eq, and, sql, gte, lte } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { generateNumeroEcriture } from '../services/comptabiliteService.js';
+import { markClosedFiscalPeriodConflict } from '../services/fiscalPeriodErrors.js';
 
 const router = express.Router();
 
@@ -431,7 +432,8 @@ router.post('/:id/generer', async (req, res) => {
       })
       .catch(() => {});
     
-    res.status(500).json({ error: err.message });
+    markClosedFiscalPeriodConflict(err);
+    res.status(err.status || err.statusCode || 500).json({ error: err.message });
   }
 });
 

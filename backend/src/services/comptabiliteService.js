@@ -12,6 +12,7 @@ import {
 } from '../schema.js';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { formatJournalEntryNumber } from './sequentialNumbering.js';
+import { markClosedFiscalPeriodConflict } from './fiscalPeriodErrors.js';
 import { buildCashSettlementEntryLines } from './cashDiscountAccounting.js';
 import { ACCOUNTING_ACCOUNT_ROLES, isPriceVarianceAccount } from './accountingAccountMappings.js';
 
@@ -340,7 +341,9 @@ export async function createEcritureComptable(params) {
     valide: true,
     totalDebit: totalDebit.toFixed(2),
     totalCredit: totalCredit.toFixed(2)
-  }).returning();
+  }).returning().catch((error) => {
+    throw markClosedFiscalPeriodConflict(error);
+  });
 
   for (const ligne of lignes) {
     let compteId = ligne.compteComptableId;

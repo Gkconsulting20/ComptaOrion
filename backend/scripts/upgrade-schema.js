@@ -2,6 +2,10 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { pool } from '../src/db.js';
 import { buildAuthAuditNullabilityStatements } from './auth-audit-migration.js';
+import {
+  BACKFILL_FISCAL_PERIOD_CLOSURES_SQL,
+  FISCAL_PERIOD_LOCK_GUARD_SQL,
+} from './fiscal-period-lock-migration.js';
 
 // Additive upgrade only. Never use drizzle-kit push against an older ERP database.
 const apply = process.argv.includes('--apply');
@@ -22,6 +26,7 @@ const migrationScopes = new Map([
   ['supplier-invoice-reconciliation', new Set(['factures_achat', 'stock_pending', 'logistique_pending'])],
   ['custom-accounting', new Set(['comptes_automatiques'])],
   ['accounting-sequences', new Set(['ecriture_sequences'])],
+  ['fiscal-period-lock', new Set(['clotures_exercices'])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
@@ -63,8 +68,8 @@ try {
     if (!present.has(name)) {
       if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations' &&
           scope !== 'credit-notes-cheques' && scope !== 'commercial-adjustments' &&
-          scope !== 'supplier-invoice-reconciliation' && scope !== 'custom-accounting' &&
-          scope !== 'accounting-sequences') {
+            scope !== 'supplier-invoice-reconciliation' && scope !== 'custom-accounting' &&
+            scope !== 'accounting-sequences' && scope !== 'fiscal-period-lock') {
         throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
       }
       actions.push(statement);
@@ -194,6 +199,8 @@ try {
             ? ['comptes_comptables_entreprise_numero_unique', 'comptes_automatiques_entreprise_role_unique']
             : scope === 'accounting-sequences'
               ? ['ecriture_sequences_scope_unique', 'ecritures_entreprise_numero_unique', 'journaux_entreprise_code_unique']
+              : scope === 'fiscal-period-lock'
+                ? ['clotures_exercices_entreprise_exercice_revision_unique']
         : [])
     : permittedIndexes;
   const existingIndexes = new Set((await client.query(
@@ -391,6 +398,17 @@ try {
     `;
     console.log(`TRIGGER orion_assign_journal_entry_number_trigger (${apply ? 'application' : 'simulation'})`);
     if (apply) await client.query(sequenceTrigger);
+  }
+  if (!scopedTables || scope === 'fiscal-period-lock') {
+    if (!present.has('ecritures') || (!present.has('clotures_exercices') && !added.has('clotures_exercices'))) {
+      throw new Error('La migration de verrouillage exige les tables ecritures et clotures_exercices.');
+    }
+    console.log(`Verrouillage des exercices comptables et reprise des clôtures existantes (${apply ? 'application' : 'simulation'})`);
+    if (apply) {
+      await client.query('LOCK TABLE ecritures IN SHARE ROW EXCLUSIVE MODE');
+      await client.query(BACKFILL_FISCAL_PERIOD_CLOSURES_SQL);
+      await client.query(FISCAL_PERIOD_LOCK_GUARD_SQL);
+    }
   }
   await client.query(apply ? 'COMMIT' : 'ROLLBACK');
   console.log(apply ? 'Mise à niveau additive terminée.' : 'Aucune modification. Utiliser --apply après sauvegarde pour appliquer.');
