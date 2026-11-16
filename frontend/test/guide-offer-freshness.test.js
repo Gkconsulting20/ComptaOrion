@@ -22,12 +22,14 @@ test('le guide couvre commandes de stock, retours, chèques et rapports compacts
   assert.match(guide, /sélecteur compact en haut de l’écran/);
 });
 
-test('le guide décrit la clôture annuelle et avertit sur les périodes non verrouillées', () => {
+test('le guide décrit le verrouillage annuel et la réouverture avec audit', () => {
   assert.match(guide, /Comptabilité → Paramètres → Clôture Exercice/);
   assert.match(guide, /journal OD/);
   assert.match(guide, /journal AN/);
-  assert.match(guide, /ne bloque pas encore les écritures antidatées/i);
-  assert.match(guide, /utilisez une entreprise de test distincte/i);
+  assert.match(guide, /bloque les nouvelles écritures, modifications et suppressions/i);
+  assert.match(guide, /Seul l’administrateur peut réouvrir l’exercice en indiquant un motif/i);
+  assert.match(guide, /contrepassation/i);
+  assert.match(guide, /ne ferme pas séparément les mois/i);
 });
 
 test('l’offre distingue la saisie manuelle, l’OCR et le calcul Premium', () => {

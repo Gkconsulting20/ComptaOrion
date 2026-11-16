@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { pool } from '../src/db.js';
 import { buildAuthAuditNullabilityStatements } from './auth-audit-migration.js';
 import {
-  BACKFILL_FISCAL_PERIOD_CLOSURES_SQL,
+  backfillFiscalPeriodClosures,
   FISCAL_PERIOD_LOCK_GUARD_SQL,
 } from './fiscal-period-lock-migration.js';
 
@@ -185,6 +185,7 @@ try {
     'accountant_invitations_one_live_per_company',
     'comptes_comptables_entreprise_numero_unique',
     'comptes_automatiques_entreprise_role_unique',
+    'clotures_exercices_entreprise_exercice_revision_unique',
   ]);
   const indexesForScope = scopedTables
     ? new Set(scope === 'expense-tracking'
@@ -405,9 +406,20 @@ try {
     }
     console.log(`Verrouillage des exercices comptables et reprise des clôtures existantes (${apply ? 'application' : 'simulation'})`);
     if (apply) {
-      await client.query('LOCK TABLE ecritures IN SHARE ROW EXCLUSIVE MODE');
-      await client.query(BACKFILL_FISCAL_PERIOD_CLOSURES_SQL);
+      await client.query('LOCK TABLE ecritures, lignes_ecriture IN SHARE ROW EXCLUSIVE MODE');
+      await backfillFiscalPeriodClosures(client);
       await client.query(FISCAL_PERIOD_LOCK_GUARD_SQL);
+      await client.query(`
+        ALTER TABLE clotures_exercices ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE clotures_exercices FORCE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON clotures_exercices;
+        DROP POLICY IF EXISTS tenant_isolation_policy ON clotures_exercices;
+        CREATE POLICY tenant_isolation_policy ON clotures_exercices FOR ALL
+          USING (current_setting('app.current_tenant', true) = '*' OR
+            entreprise_id = NULLIF(NULLIF(current_setting('app.current_tenant', true), ''), '*')::integer)
+          WITH CHECK (current_setting('app.current_tenant', true) = '*' OR
+            entreprise_id = NULLIF(NULLIF(current_setting('app.current_tenant', true), ''), '*')::integer);
+      `);
     }
   }
   await client.query(apply ? 'COMMIT' : 'ROLLBACK');

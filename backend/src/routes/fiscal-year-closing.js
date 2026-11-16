@@ -1,5 +1,5 @@
 import express from 'express';
-import { and, desc, eq, like, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, like, lte, sql } from 'drizzle-orm';
 import { db } from '../db.js';
 import {
   comptesComptables,
@@ -12,6 +12,7 @@ import {
 import { generateNumeroEcriture } from '../services/comptabiliteService.js';
 import { calculateFiscalClosing, getFiscalPeriodForYear } from '../services/fiscalYearClosing.js';
 import { extractAuditInfo, logAudit } from '../utils/auditLogger.js';
+import { markClosedFiscalPeriodConflict } from '../services/fiscalPeriodErrors.js';
 
 const router = express.Router();
 
@@ -66,6 +67,22 @@ async function findLatestClosure(executor, entrepriseId, fiscalYear) {
     eq(cloturesExercices.exercice, fiscalYear)
   )).orderBy(desc(cloturesExercices.revision)).limit(1);
   return closure || null;
+}
+
+async function findEarlierReopenedExercise(executor, entrepriseId, fiscalYear) {
+  const result = await executor.execute(sql`
+    SELECT c.exercice FROM clotures_exercices c
+    WHERE c.entreprise_id = ${entrepriseId}
+      AND c.exercice < ${fiscalYear}
+      AND c.statut = 'reouvert'
+      AND NOT EXISTS (
+        SELECT 1 FROM clotures_exercices newer
+        WHERE newer.entreprise_id = c.entreprise_id AND newer.exercice = c.exercice
+          AND newer.revision > c.revision
+      )
+    ORDER BY c.exercice LIMIT 1
+  `);
+  return result.rows?.[0]?.exercice || null;
 }
 
 async function loadEntryForReversal(executor, entrepriseId, entryId, label) {
@@ -229,6 +246,7 @@ router.get('/preview', async (req, res) => {
 
     const basePeriod = fiscalPeriodFor(entreprise, fiscalYear);
     const latestClosure = await findLatestClosure(db, entrepriseId, fiscalYear);
+    const earlierReopened = await findEarlierReopenedExercise(db, entrepriseId, fiscalYear);
     const period = {
       ...basePeriod,
       balanceStartDate: await latestOpeningDate(db, entrepriseId, basePeriod.dateDebut)
@@ -277,9 +295,11 @@ router.get('/preview', async (req, res) => {
       totalCreditOuverture: summary.totalCreditOuvertureCents / 100,
       openingBalanced,
       alreadyClosed,
-      canClose: !alreadyClosed && endDateReached && openingBalanced,
+      canClose: !alreadyClosed && !earlierReopened && endDateReached && openingBalanced,
       messageBlocage: alreadyClosed
         ? 'Cet exercice est fermé. Seul un administrateur peut le réouvrir.'
+        : earlierReopened
+          ? `Reclôturez d’abord l’exercice ${earlierReopened}, qui a été réouvert, pour rétablir ses soldes d’ouverture.`
         : latestClosure?.statut === 'reouvert'
           ? `Cet exercice a été réouvert le ${dateOnly(latestClosure.reouvertLe)}; il peut être clôturé de nouveau après les corrections.`
         : !endDateReached
@@ -360,7 +380,7 @@ router.post('/:annee/reouverture', async (req, res) => {
         throw Object.assign(new Error(`L’exercice ${fiscalYear} n’est pas actuellement fermé.`), { statusCode: 409 });
       }
 
-      await lockFiscalPeriodWrites(tx, entrepriseId, closure.dateDebut, closure.dateFin);
+      await lockFiscalPeriodWrites(tx, entrepriseId, closure.dateDebut, closure.dateOuvertureSuivante);
       const closing = await loadEntryForReversal(
         tx, entrepriseId, closure.ecritureClotureId, 'de clôture'
       );
@@ -446,6 +466,7 @@ router.post('/:annee/reouverture', async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('Erreur réouverture exercice:', error);
+    markClosedFiscalPeriodConflict(error);
     return res.status(error.statusCode || 500).json({ error: error.message });
   }
 });
@@ -472,7 +493,7 @@ router.post('/', async (req, res) => {
       if (!entreprise) throw Object.assign(new Error('Entreprise non trouvée.'), { statusCode: 404 });
 
       const basePeriod = fiscalPeriodFor(entreprise, fiscalYear);
-      await lockFiscalPeriodWrites(tx, entrepriseId, basePeriod.dateDebut, basePeriod.dateFin);
+      await lockFiscalPeriodWrites(tx, entrepriseId, basePeriod.dateDebut, basePeriod.dateOuvertureSuivante);
       const period = {
         ...basePeriod,
         balanceStartDate: await latestOpeningDate(tx, entrepriseId, basePeriod.dateDebut)
@@ -481,6 +502,12 @@ router.post('/', async (req, res) => {
       if (latestClosure?.statut === 'ferme') {
         throw Object.assign(new Error(
           `L’exercice ${fiscalYear} est déjà fermé. Aucune nouvelle écriture n’a été créée.`
+        ), { statusCode: 409 });
+      }
+      const earlierReopened = await findEarlierReopenedExercise(tx, entrepriseId, fiscalYear);
+      if (earlierReopened) {
+        throw Object.assign(new Error(
+          `Reclôturez d’abord l’exercice ${earlierReopened}, qui a été réouvert, pour rétablir ses soldes d’ouverture.`
         ), { statusCode: 409 });
       }
       const revision = Number(latestClosure?.revision || 0) + 1;
@@ -600,6 +627,7 @@ router.post('/', async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('Erreur clôture exercice:', error);
+    markClosedFiscalPeriodConflict(error);
     return res.status(error.statusCode || 500).json({ error: error.message });
   }
 });

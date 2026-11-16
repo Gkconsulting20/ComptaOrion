@@ -6,6 +6,11 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as databaseSchema from '../src/schema.js';
+import {
+  FISCAL_PERIOD_LOCK_GUARD_SQL,
+  BACKFILL_FISCAL_PERIOD_CLOSURES_SQL,
+  backfillFiscalPeriodClosures,
+} from '../scripts/fiscal-period-lock-migration.js';
 
 test('parcours ERP dans un schéma jetable sans accès aux données existantes', {
   skip: process.env.ERP_FUNCTIONAL_TEST !== '1',
@@ -29,6 +34,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       await client.query(`CREATE SCHEMA "${schema}"`);
       await client.query(`SET search_path TO "${schema}"`);
       await client.query(ddl);
+      await client.query(FISCAL_PERIOD_LOCK_GUARD_SQL);
     } finally { client.release(); }
 
     const adminUrl = new URL(adminConnectionString);
@@ -1418,8 +1424,166 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       password,
     });
     assert.ok(finalAdminLogin.session?.id);
+    const closingYear = 1900;
+    const closingTenant = Number(signup.user.entrepriseId);
+    const { rows: closingJournals } = await adminSchemaPool.query(
+      "SELECT id, code FROM journaux WHERE entreprise_id = $1 AND code IN ('OD','AN')",
+      [closingTenant],
+    );
+    const closingJournal = closingJournals.find((journal) => journal.code === 'OD');
+    assert.ok(closingJournal && closingJournals.some((journal) => journal.code === 'AN'));
+    const { rows: [closingExpense] } = await adminSchemaPool.query(
+      "SELECT id FROM comptes_comptables WHERE entreprise_id = $1 AND numero LIKE '6%' ORDER BY id LIMIT 1",
+      [closingTenant],
+    );
+    assert.ok(closingExpense);
+    const historicalEntryBody = {
+      journalId: closingJournal.id,
+      dateEcriture: '1900-06-15',
+      reference: 'TEST-FISCAL-LOCK',
+      description: 'Opération dans un exercice de test ancien',
+      lignes: [
+        { compteComptableId: closingExpense.id, debit: '100.00', credit: '0' },
+        { compteComptableId: bankAccount.id, debit: '0', credit: '100.00' },
+      ],
+    };
+    const historicalEntry = await api('/comptabilite/ecritures', 'POST', historicalEntryBody, 201);
+    const firstClose = await api('/comptabilite/cloture-exercice', 'POST', { annee: closingYear });
+    assert.equal(firstClose.details.revision, 1);
+    assert.equal(firstClose.details.resultatNet, -100);
+    await api('/comptabilite/cloture-exercice', 'POST', { annee: closingYear }, 409);
+    const closedWrite = await api('/comptabilite/ecritures', 'POST', historicalEntryBody, 409);
+    assert.match(closedWrite.error, /exercice comptable 1900 fermé/);
+    const closedEdit = await api(`/comptabilite/ecritures/${historicalEntry.id}`, 'PUT', {
+      dateEcriture: '1901-06-15', description: 'Tentative de sortir la date du verrou',
+    }, 409);
+    assert.match(closedEdit.error, /fermé/);
+    await api(`/comptabilite/ecritures/${historicalEntry.id}`, 'DELETE', null, 409);
+    await assert.rejects(
+      queryAsTenant(closingTenant,
+        'UPDATE lignes_ecriture SET debit = debit + 1 WHERE ecriture_id = $1',
+        [historicalEntry.id]),
+      /exercice comptable 1900 fermé/,
+    );
+    const hiddenHistory = await queryAsTenant(Number(secondSignup.user.entrepriseId),
+      'SELECT id FROM clotures_exercices WHERE entreprise_id = $1', [closingTenant]);
+    assert.equal(hiddenHistory.rows.length, 0, 'Une autre entreprise ne voit pas les clôtures');
+    const { createEcritureComptable } = await import('../src/services/comptabiliteService.js');
+    await assert.rejects(
+      adminSchemaDb.transaction((executor) => createEcritureComptable({
+        entrepriseId: closingTenant, journalCode: 'OD', journalNom: 'Opérations diverses',
+        journalType: 'OD', dateEcriture: '1900-07-01', libelle: 'Écriture automatique interdite',
+        numeroPiece: 'TEST-AUTO-CLOSED', executor,
+        lignes: historicalEntryBody.lignes,
+      })),
+      /exercice comptable 1900 fermé/,
+    );
+    await api(`/comptabilite/cloture-exercice/${closingYear}/reouverture`, 'POST', { motif: 'court' }, 400);
+    await adminSchemaPool.query(
+      "UPDATE users SET module_permissions = module_permissions || '{\"comptabilite\":\"write\"}'::jsonb WHERE id = $1",
+      [accountantSession.user.id],
+    );
+    await api('/auth-security/logout', 'POST', { sessionId: finalAdminLogin.session.id });
+    cookieJar = new Map();
+    const accountingLogin = await api('/auth-security/login', 'POST', {
+      email: 'cabinet@example.invalid', password: 'CabinetTestPassword2026!',
+    });
+    const forbiddenReopen = await api(`/comptabilite/cloture-exercice/${closingYear}/reouverture`, 'POST', {
+      motif: 'Correction demandée par un comptable non administrateur',
+    }, 403);
+    assert.match(forbiddenReopen.error, /administrateur/);
+    await api('/auth-security/logout', 'POST', { sessionId: accountingLogin.session.id });
+    cookieJar = new Map();
+    const closingAdminLogin = await api('/auth-security/login', 'POST', {
+      email: 'recette@example.invalid', password,
+    });
+    const reopened = await api(`/comptabilite/cloture-exercice/${closingYear}/reouverture`, 'POST', {
+      motif: 'Correction autorisée pour la recette de clôture',
+    });
+    assert.equal(reopened.success, true);
+    const historyAfterReopen = await api('/comptabilite/cloture-exercice/historique');
+    assert.equal(historyAfterReopen[0].statut, 'reouvert');
+    assert.ok(historyAfterReopen[0].ecritureContrepassationClotureId);
+    assert.ok(historyAfterReopen[0].ecritureContrepassationOuvertureId);
+    const { rows: reopenAudits } = await adminSchemaPool.query(
+      "SELECT * FROM audit_logs WHERE entreprise_id = $1 AND action = 'REOUVERTURE_EXERCICE'",
+      [closingTenant],
+    );
+    assert.equal(reopenAudits.length, 1);
+    assert.equal(Number(reopenAudits[0].user_id), Number(signup.user.id));
+    assert.match(reopenAudits[0].nouvelle_valeur, /Correction autorisée/);
+    const prematureNextClose = await api('/comptabilite/cloture-exercice', 'POST', { annee: closingYear + 1 }, 409);
+    assert.match(prematureNextClose.error, /Reclôturez d’abord l’exercice 1900/);
+    await api('/comptabilite/ecritures', 'POST', {
+      ...historicalEntryBody, reference: 'TEST-AFTER-REOPEN',
+    }, 201);
+    const secondClose = await api('/comptabilite/cloture-exercice', 'POST', { annee: closingYear });
+    assert.equal(secondClose.details.revision, 2);
+    assert.equal(secondClose.details.resultatNet, -200);
+    assert.equal(secondClose.details.ecritureOuverture.totalDebit, 200);
+    assert.equal(secondClose.details.ecritureOuverture.totalCredit, 200);
+    await api('/comptabilite/ecritures', 'POST', historicalEntryBody, 409);
+    await adminSchemaPool.query(BACKFILL_FISCAL_PERIOD_CLOSURES_SQL);
+    const finalHistory = await api('/comptabilite/cloture-exercice/historique');
+    assert.equal(finalHistory.length, 2, 'La reprise est idempotente et préserve les réouvertures');
+    assert.equal(finalHistory[0].statut, 'ferme');
+    await adminSchemaPool.query('DELETE FROM clotures_exercices WHERE id = $1', [finalHistory[0].id]);
+    const migrationClient = await pool.connect();
+    try {
+      await migrationClient.query('BEGIN');
+      await migrationClient.query("SELECT set_config('app.current_tenant', '', true)");
+      const hiddenLegacyEntries = await migrationClient.query(
+        "SELECT id FROM ecritures WHERE numero_piece = 'CLOTURE-1900-R2'",
+      );
+      assert.equal(hiddenLegacyEntries.rowCount, 0,
+        'Sans contexte explicite, FORCE RLS cache bien les clôtures historiques au rôle de migration');
+      const { rows: [migrationRole] } = await migrationClient.query(
+        'SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user',
+      );
+      assert.deepEqual(migrationRole, { rolsuper: false, rolbypassrls: false });
+      const recoveredClosures = await backfillFiscalPeriodClosures(migrationClient);
+      assert.equal(recoveredClosures.rowCount, 1,
+        'La migration doit reprendre une clôture historique avec FORCE RLS, sans être superutilisateur');
+      await migrationClient.query('COMMIT');
+      const { rows: [afterMigration] } = await migrationClient.query(
+        "SELECT current_setting('app.current_tenant', true) AS tenant",
+      );
+      assert.notEqual(afterMigration.tenant, '*', 'L’accès global doit prendre fin avec la transaction');
+    } catch (error) {
+      await migrationClient.query('ROLLBACK');
+      throw error;
+    } finally {
+      migrationClient.release();
+    }
+    const legacyHistory = await api('/comptabilite/cloture-exercice/historique');
+    assert.equal(legacyHistory[0].revision, 2, 'Une clôture historique est reprise depuis ses écritures');
+    assert.equal(legacyHistory[0].statut, 'ferme');
+    assert.equal(legacyHistory[1].statut, 'reouvert');
+    await api('/comptabilite/ecritures', 'POST', historicalEntryBody, 409);
+    await api(`/comptabilite/ecritures/${historicalEntry.id}`, 'PUT', {
+      dateEcriture: '1901-06-15',
+    }, 409);
+    await api(`/comptabilite/ecritures/${historicalEntry.id}`, 'DELETE', null, 409);
+    await assert.rejects(
+      queryAsTenant(closingTenant, 'UPDATE lignes_ecriture SET debit = debit + 1 WHERE ecriture_id = $1',
+        [historicalEntry.id]),
+      /exercice comptable 1900 fermé/,
+    );
+    const nextYearClose = await api('/comptabilite/cloture-exercice', 'POST', { annee: closingYear + 1 });
+    assert.equal(nextYearClose.details.ecritureOuverture.totalDebit, 200);
+    assert.equal(nextYearClose.details.ecritureOuverture.totalCredit, 200);
+    const blockedEarlierReopening = await api(`/comptabilite/cloture-exercice/${closingYear}/reouverture`, 'POST', {
+      motif: 'Tentative alors que l’exercice suivant est fermé',
+    }, 409);
+    assert.match(blockedEarlierReopening.error, /1901 fermé/);
+    const { rows: [unchangedClosure] } = await adminSchemaPool.query(
+      'SELECT statut, reouvert_le FROM clotures_exercices WHERE entreprise_id = $1 AND exercice = $2 AND revision = 2',
+      [closingTenant, closingYear],
+    );
+    assert.equal(unchangedClosure.statut, 'ferme', 'Un échec de contrepassation ne réouvre pas partiellement l’exercice');
+    assert.equal(unchangedClosure.reouvert_le, null);
     await api('/ia/chat','POST',{message:'ne pas envoyer'},404);
-    await api('/auth-security/logout','POST',{sessionId:finalAdminLogin.session.id});
+    await api('/auth-security/logout','POST',{sessionId:closingAdminLogin.session.id});
     await api('/auth-security/session','GET',null,401);
 
     const { generateToken } = await import('../src/auth.js');

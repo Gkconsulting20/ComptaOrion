@@ -263,6 +263,12 @@ export async function generateNumeroEcriture(entrepriseId, journal, dateEcriture
     throw new Error('Une date d’écriture valide est requise pour la numérotation.');
   }
 
+  // Always lock the fiscal calendar before the numbering scope, matching closure
+  // transactions and avoiding an inverse lock order during concurrent posting.
+  const fiscalLockKey = `comptaorion:fiscal-write:${entrepriseId}:${year}`;
+  await executor.execute(sql`
+    SELECT pg_advisory_xact_lock(hashtextextended(${fiscalLockKey}, 0))
+  `);
   // The lock is scoped to tenant + journal + fiscal year and lives until the
   // surrounding transaction commits or rolls back.
   const lockKey = `comptaorion:ecritures:${entrepriseId}:${journalInfo.id}:${year}`;

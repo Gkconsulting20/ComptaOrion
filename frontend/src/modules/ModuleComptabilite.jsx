@@ -385,14 +385,16 @@ function ClotureExerciceTab({ api }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [reopeningReason, setReopeningReason] = useState('');
   const [history, setHistory] = useState([]);
+  const [historyError, setHistoryError] = useState('');
   const [result, setResult] = useState(null);
 
   const loadHistory = async () => {
     try {
       const rows = await api.get('/comptabilite/cloture-exercice/historique');
       setHistory(Array.isArray(rows) ? rows : []);
+      setHistoryError('');
     } catch (err) {
-      console.error('Impossible de charger l’historique des clôtures:', err);
+      setHistoryError('Impossible de charger l’historique des clôtures : ' + err.message);
     }
   };
 
@@ -400,7 +402,10 @@ function ClotureExerciceTab({ api }) {
     let active = true;
     Promise.all([
       api.get('/auth/me').catch(() => null),
-      api.get('/comptabilite/cloture-exercice/historique').catch(() => [])
+      api.get('/comptabilite/cloture-exercice/historique').catch((err) => {
+        if (active) setHistoryError('Impossible de charger l’historique des clôtures : ' + err.message);
+        return [];
+      })
     ]).then(([profile, rows]) => {
       if (!active) return;
       setIsAdmin(profile?.user?.role === 'admin');
@@ -465,10 +470,9 @@ function ClotureExerciceTab({ api }) {
     setResult(null);
     try {
       const response = await api.post(`/comptabilite/cloture-exercice/${annee}/reouverture`, { motif });
-      setResult(response);
       setReopeningReason('');
       await loadPreview();
-      await loadHistory();
+      setResult(response);
       alert(response.message || 'Exercice réouvert.');
     } catch (err) {
       alert('Erreur de réouverture: ' + err.message);
@@ -662,7 +666,7 @@ function ClotureExerciceTab({ api }) {
             <Button 
               variant="danger" 
               onClick={executerCloture}
-              disabled={executing || !preview.canClose}
+              disabled={executing || reopening || !preview.canClose}
               style={{ padding: '15px 40px', fontSize: '16px' }}
             >
               {executing ? 'Clôture en cours...' : `Exécuter la clôture de l'exercice ${annee}`}
@@ -757,6 +761,7 @@ function ClotureExerciceTab({ api }) {
           <h4 style={{ margin: 0 }}>Historique des clôtures et réouvertures</h4>
           <Button onClick={loadHistory}>Actualiser</Button>
         </div>
+        {historyError && <p role="alert" style={{ color: '#b91c1c' }}>{historyError}</p>}
         {history.length ? (
           <div style={{ overflowX: 'auto', marginTop: '12px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -784,7 +789,7 @@ function ClotureExerciceTab({ api }) {
               </tbody>
             </table>
           </div>
-        ) : (
+        ) : !historyError && (
           <p style={{ marginBottom: 0, color: '#64748b' }}>Aucune clôture enregistrée.</p>
         )}
       </section>

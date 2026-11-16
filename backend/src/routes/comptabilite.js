@@ -1635,8 +1635,7 @@ router.put('/comptes-automatiques', async (req, res) => {
     });
     res.json({ ...saved, roles: ACCOUNTING_ACCOUNT_ROLES });
   } catch (error) {
-    markClosedFiscalPeriodConflict(error);
-    res.status(error.status || error.statusCode || 500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
@@ -2455,7 +2454,8 @@ router.post('/lignes', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message });
+    markClosedFiscalPeriodConflict(error);
+    res.status(error.status || error.statusCode || 500).json({ error: error.message });
   }
 });
 

@@ -59,6 +59,15 @@ export const BACKFILL_FISCAL_PERIOD_CLOSURES_SQL = `
   ON CONFLICT (entreprise_id, exercice, revision) DO NOTHING
 `;
 
+// Migration-only operation: the caller must already hold a transaction.
+// FORCE RLS applies even to a table owner, so the backfill must explicitly use
+// the same platform-wide context as the project's authorized maintenance code.
+// LOCAL scope ensures this access ends when the migration commits or rolls back.
+export async function backfillFiscalPeriodClosures(client) {
+  await client.query("SELECT set_config('app.current_tenant', '*', true)");
+  return client.query(BACKFILL_FISCAL_PERIOD_CLOSURES_SQL);
+}
+
 export const FISCAL_PERIOD_LOCK_GUARD_SQL = `
   CREATE OR REPLACE FUNCTION orion_assert_fiscal_period_open(
     p_entreprise_id integer,
@@ -123,7 +132,8 @@ export const FISCAL_PERIOD_LOCK_GUARD_SQL = `
   $$;
 
   DROP TRIGGER IF EXISTS orion_guard_fiscal_period_entry_trigger ON ecritures;
-  CREATE TRIGGER orion_guard_fiscal_period_entry_trigger
+  DROP TRIGGER IF EXISTS orion_00_guard_fiscal_period_entry_trigger ON ecritures;
+  CREATE TRIGGER orion_00_guard_fiscal_period_entry_trigger
     BEFORE INSERT OR UPDATE OR DELETE ON ecritures
     FOR EACH ROW
     EXECUTE FUNCTION orion_guard_fiscal_period_entry();
