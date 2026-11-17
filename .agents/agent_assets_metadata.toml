@@ -19,14 +19,14 @@ content_type = "application/pdf"
 id = "bNheftdGUM_ituHA8jj8L"
 uri = "file://docs/Guide-demarrage-ComptaOrion.html"
 type = "html"
-title = "Guide de démarrage ComptaOrion — mise en page corrigée"
-description = "Version corrigée pour l’affichage et l’impression, avec le logo officiel et les coordonnées ORIONEXA."
+title = "Guide de démarrage ComptaOrion actualisé"
+description = "Guide avec logo, tarifs, configuration, réception, facturation, écritures et rapports. Imprimable ou enregistrable en PDF depuis le navigateur."
 logical_id = "606af9b6-2b29-471c-81b9-7a92b6231db9"
-content_hash = "sha256:6ab94906d155f435e04fbb00eba437eb3d4f320b33cc4abe1bc849efca180e63"
-size = 214386
-mtime_ms = 1793492120657
-storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:89086feb-6d2b-4b89-9a46-d43298dad57c/606af9b6-2b29-471c-81b9-7a92b6231db9/c4628a90-b4ef-4aff-a9c4-617c971774b3"
-storage_version_token = "1793492167503588"
+content_hash = "sha256:46fb9b8c35b099eac597fcbae96d4715bf3095f049f44777c0abb72bdac9fc1d"
+size = 227358
+mtime_ms = 1794875954164
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:89086feb-6d2b-4b89-9a46-d43298dad57c/606af9b6-2b29-471c-81b9-7a92b6231db9/bb21bc67-fdd5-4451-9d72-9714bc6e7c67"
+storage_version_token = "1794876109172964"
 content_type = "text/html"
 
 [[outputs]]
