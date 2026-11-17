@@ -19,14 +19,14 @@ content_type = "application/pdf"
 id = "bNheftdGUM_ituHA8jj8L"
 uri = "file://docs/Guide-demarrage-ComptaOrion.html"
 type = "html"
-title = "Guide de démarrage ComptaOrion actualisé"
-description = "Guide avec logo, tarifs, configuration, réception, facturation, écritures et rapports. Imprimable ou enregistrable en PDF depuis le navigateur."
+title = "Guide actualisé — possibilités et limites du module Impôts"
+description = "La section 11 distingue le suivi TVA, les brouillons et le résultat comptable des dépôts officiels, paiements et calculs fiscaux non intégrés."
 logical_id = "606af9b6-2b29-471c-81b9-7a92b6231db9"
-content_hash = "sha256:46fb9b8c35b099eac597fcbae96d4715bf3095f049f44777c0abb72bdac9fc1d"
-size = 227358
-mtime_ms = 1794875954164
-storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:89086feb-6d2b-4b89-9a46-d43298dad57c/606af9b6-2b29-471c-81b9-7a92b6231db9/bb21bc67-fdd5-4451-9d72-9714bc6e7c67"
-storage_version_token = "1794876109172964"
+content_hash = "sha256:c56a824f55172475448bf7c3aa4c1c679854d6a39b7f33c00642ac40e7272502"
+size = 229840
+mtime_ms = 1794876304348
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:89086feb-6d2b-4b89-9a46-d43298dad57c/606af9b6-2b29-471c-81b9-7a92b6231db9/3fc807e6-9f77-4c3a-8415-89cecc5da825"
+storage_version_token = "1794876355915439"
 content_type = "text/html"
 
 [[outputs]]
