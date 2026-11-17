@@ -754,21 +754,24 @@ router.get('/detail/fournisseurs', async (req, res) => {
 
 /**
  * GET /api/fournisseurs/detail/achats
- * Détail des commandes d'achat
+ * Détail des factures fournisseurs comptabilisées
  */
 router.get('/detail/achats', async (req, res) => {
   try {
     const { dateDebut, dateFin } = req.query;
     const eId = req.entrepriseId;
     
-    let whereConditions = [eq(facturesAchat.entrepriseId, eId)];
-    if (dateDebut) whereConditions.push(gte(facturesAchat.dateFacture, new Date(dateDebut)));
-    if (dateFin) whereConditions.push(lte(facturesAchat.dateFacture, new Date(dateFin)));
+    let whereConditions = [
+      eq(facturesAchat.entrepriseId, eId),
+      sql`${facturesAchat.statut} NOT IN ('brouillon', 'annulee')`,
+    ];
+    if (dateDebut) whereConditions.push(gte(facturesAchat.dateFacture, dateDebut));
+    if (dateFin) whereConditions.push(lte(facturesAchat.dateFacture, dateFin));
     
     const achatsData = await db
       .select({
         id: facturesAchat.id,
-        numero: facturesAchat.numero,
+        numero: facturesAchat.numeroFacture,
         date: facturesAchat.dateFacture,
         montant: facturesAchat.totalHT,
         statut: facturesAchat.statut,
@@ -781,7 +784,7 @@ router.get('/detail/achats', async (req, res) => {
     // Récupérer les noms des fournisseurs
     const fournisseurIds = [...new Set(achatsData.map(a => a.fournisseurId))];
     const fournisseursData = fournisseurIds.length > 0 ? await db
-      .select({ id: fournisseurs.id, nom: fournisseurs.nom })
+      .select({ id: fournisseurs.id, nom: fournisseurs.raisonSociale })
       .from(fournisseurs)
       .where(eq(fournisseurs.entrepriseId, eId)) : [];
     
@@ -808,8 +811,8 @@ router.get('/detail/paiements', async (req, res) => {
     const eId = req.entrepriseId;
     
     let whereConditions = [eq(paiementsFournisseurs.entrepriseId, eId)];
-    if (dateDebut) whereConditions.push(gte(paiementsFournisseurs.datePaiement, new Date(dateDebut)));
-    if (dateFin) whereConditions.push(lte(paiementsFournisseurs.datePaiement, new Date(dateFin)));
+    if (dateDebut) whereConditions.push(gte(paiementsFournisseurs.datePaiement, dateDebut));
+    if (dateFin) whereConditions.push(lte(paiementsFournisseurs.datePaiement, dateFin));
     
     const paiementsData = await db
       .select({
@@ -827,7 +830,7 @@ router.get('/detail/paiements', async (req, res) => {
     // Récupérer les noms des fournisseurs
     const fournisseurIds = [...new Set(paiementsData.map(p => p.fournisseurId))];
     const fournisseursData = fournisseurIds.length > 0 ? await db
-      .select({ id: fournisseurs.id, nom: fournisseurs.nom })
+      .select({ id: fournisseurs.id, nom: fournisseurs.raisonSociale })
       .from(fournisseurs)
       .where(eq(fournisseurs.entrepriseId, eId)) : [];
     

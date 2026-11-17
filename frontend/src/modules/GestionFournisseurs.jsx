@@ -1208,6 +1208,33 @@ export function GestionFournisseurs() {
     loading: false, saving: false, error: '',
   });
   const [validatingInvoiceId, setValidatingInvoiceId] = useState(null);
+  const [supplierReport, setSupplierReport] = useState({
+    suppliers: [], purchases: [], payments: [], loading: false, error: '',
+  });
+  const [reportRefresh, setReportRefresh] = useState(0);
+
+  useEffect(() => {
+    if (activeTab !== 'rapports') return;
+    let cancelled = false;
+    setSupplierReport({ suppliers: [], purchases: [], payments: [], loading: true, error: '' });
+    const params = { dateDebut: periode.dateDebut, dateFin: periode.dateFin };
+    Promise.all([
+      api.get('/fournisseurs/detail/fournisseurs'),
+      api.get('/fournisseurs/detail/achats', params),
+      api.get('/fournisseurs/detail/paiements', params),
+    ]).then(([suppliers, purchases, payments]) => {
+      if (![suppliers, purchases, payments].every(Array.isArray)) {
+        throw new Error('Le rapport fournisseur reçu est incomplet.');
+      }
+      if (!cancelled) setSupplierReport({ suppliers, purchases, payments, loading: false, error: '' });
+    }).catch(error => {
+      if (!cancelled) setSupplierReport({
+        suppliers: [], purchases: [], payments: [], loading: false,
+        error: error.message || 'Impossible de charger le rapport fournisseur.',
+      });
+    });
+    return () => { cancelled = true; };
+  }, [activeTab, periode.dateDebut, periode.dateFin, reportRefresh]);
 
   const nombreEnLettres = (n) => {
     const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
@@ -1786,8 +1813,8 @@ export function GestionFournisseurs() {
 
   if (loading) return <div style={{ padding: '20px' }}>Chargement...</div>;
 
-  const totalAchats = data.commandes.reduce((sum, c) => sum + parseFloat(c.commande?.totalHT || 0), 0);
-  const totalPaiements = data.paiements.reduce((sum, p) => sum + parseFloat(p.montant || 0), 0);
+  const totalAchats = supplierReport.purchases.reduce((sum, purchase) => sum + Number(purchase.montant || 0), 0);
+  const totalPaiements = supplierReport.payments.reduce((sum, payment) => sum + Number(payment.montant || 0), 0);
 
   return (
     <div style={{ padding: '20px' }}>
@@ -2358,12 +2385,13 @@ export function GestionFournisseurs() {
               dateFin={periode.dateFin}
               onDateDebutChange={(val) => setPeriode((current) => ({ ...current, dateDebut: val }))}
               onDateFinChange={(val) => setPeriode((current) => ({ ...current, dateFin: val }))}
-              onApply={loadAllData}
+              onApply={() => setReportRefresh(value => value + 1)}
               compactSelector={true}
               ariaLabel="Période du rapport fournisseur"
             />
             <div style={{ display: 'flex', gap: '10px' }} className="no-print">
               <button 
+                disabled={supplierReport.loading || Boolean(supplierReport.error)}
                 onClick={() => {
                   const content = document.getElementById('fournisseur-rapport-content');
                   const printWindow = window.open('', '_blank');
@@ -2398,6 +2426,7 @@ export function GestionFournisseurs() {
                 🖨️ Imprimer
               </button>
               <button 
+                disabled={supplierReport.loading || Boolean(supplierReport.error)}
                 onClick={() => {
                   const content = document.getElementById('fournisseur-rapport-content');
                   const htmlContent = `
@@ -2427,7 +2456,14 @@ export function GestionFournisseurs() {
             </div>
           </ReportPageHeader>
           
-          <div id="fournisseur-rapport-content">
+          {supplierReport.loading && <p role="status">Chargement du rapport fournisseur...</p>}
+          {supplierReport.error && (
+            <div role="alert">
+              <p>{supplierReport.error}</p>
+              <Button onClick={() => setReportRefresh(value => value + 1)}>Réessayer le rapport</Button>
+            </div>
+          )}
+          <div id="fournisseur-rapport-content" style={{ display: supplierReport.loading || supplierReport.error ? 'none' : undefined }}>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
             <div 
@@ -2437,7 +2473,7 @@ export function GestionFournisseurs() {
               onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
             >
               <p style={{ margin: 0, color: '#666', fontSize: '12px' }}>TOTAL FOURNISSEURS</p>
-              <h2 style={{ margin: '10px 0 0 0', color: '#1976d2' }}>{data.fournisseurs.length}</h2>
+              <h2 style={{ margin: '10px 0 0 0', color: '#1976d2' }}>{supplierReport.suppliers.length}</h2>
               <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#999' }}>Cliquer pour détails</p>
             </div>
             <div 
@@ -2467,18 +2503,18 @@ export function GestionFournisseurs() {
             <Table
               columns={[
                 { key: 'nom', label: 'Fournisseur' },
-                { key: 'nbCommandes', label: 'Nb Commandes', render: (_, row) => 
-                  data.commandes.filter(c => c.fournisseur?.id === row.id).length 
+                { key: 'nbFactures', label: 'Nb Factures', render: (_, row) => 
+                  supplierReport.purchases.filter(purchase => Number(purchase.fournisseurId) === Number(row.id)).length
                 },
                 { key: 'totalAchats', label: 'Total Achats', render: (_, row) => {
-                  const total = data.commandes
-                    .filter(c => c.fournisseur?.id === row.id)
-                    .reduce((sum, c) => sum + parseFloat(c.commande?.totalHT || 0), 0);
+                  const total = supplierReport.purchases
+                    .filter(purchase => Number(purchase.fournisseurId) === Number(row.id))
+                    .reduce((sum, purchase) => sum + Number(purchase.montant || 0), 0);
                   return `${Number(total || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`;
                 }},
                 { key: 'evaluation', label: 'Évaluation', render: (val) => '⭐'.repeat(val || 3) }
               ]}
-              data={data.fournisseurs}
+              data={supplierReport.suppliers}
               actions={false}
             />
           </div>
@@ -3014,7 +3050,7 @@ export function GestionFournisseurs() {
                       ) : drillModal.type === 'achats' ? (
                         <>
                           <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Date</th>
-                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>N° Commande</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>N° Facture</th>
                           <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Fournisseur</th>
                           <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid #dee2e6' }}>Montant HT</th>
                           <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Statut</th>

@@ -7,19 +7,21 @@ import { Modal } from '../components/Modal';
 import { FormField } from '../components/FormField';
 import { NumberInput } from '../components/NumberInput.jsx';
 import { DetailsModal } from '../components/DetailsModal';
-import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import ReportPageHeader from '../components/ReportPageHeader';
 import { convertPriceFromBase, getMeasurementUnitOptions, isMassUnit } from '../utils/measurementUnits';
+import { readPendingStockReport } from '../utils/pendingStockReport.js';
 
 function NonFactureTab({ fournisseurs, produits }) {
   const [subTab, setSubTab] = useState('stock');
   const [stockPending, setStockPending] = useState({ items: [], totaux: {}, parFournisseur: [] });
   const [logistiquePending, setLogistiquePending] = useState({ items: [], totaux: {}, parType: [], parFournisseur: [] });
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [filters, setFilters] = useState({ fournisseurId: '', dateDebut: '', dateFin: '' });
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const params = new URLSearchParams();
       if (filters.fournisseurId) params.append('fournisseurId', filters.fournisseurId);
@@ -27,15 +29,16 @@ function NonFactureTab({ fournisseurs, produits }) {
       if (filters.dateFin) params.append('dateFin', filters.dateFin);
       
       const [stockRes, logRes] = await Promise.all([
-        api.get(`/stock/rapports/stock-non-facture?${params}`).catch(() => ({ data: { items: [], totaux: {}, parFournisseur: [] } })),
-        api.get(`/stock/rapports/logistique-non-facturee?${params}`).catch(() => ({ data: { items: [], totaux: {}, parType: [], parFournisseur: [] } }))
+        api.get(`/stock/rapports/stock-non-facture?${params}`),
+        api.get(`/stock/rapports/logistique-non-facturee?${params}`)
       ]);
-      setStockPending(stockRes.data || { items: [], totaux: {}, parFournisseur: [] });
-      setLogistiquePending(logRes.data || { items: [], totaux: {}, parType: [], parFournisseur: [] });
+      const stock = readPendingStockReport(stockRes);
+      const logistics = readPendingStockReport(logRes);
+      setStockPending(stock);
+      setLogistiquePending(logistics);
     } catch (err) {
       console.error('Erreur chargement données non facturées:', err);
-      setStockPending({ items: [], totaux: {}, parFournisseur: [] });
-      setLogistiquePending({ items: [], totaux: {}, parType: [], parFournisseur: [] });
+      setLoadError(err.message || 'Impossible de charger les réceptions non facturées.');
     } finally {
       setLoading(false);
     }
@@ -44,6 +47,15 @@ function NonFactureTab({ fournisseurs, produits }) {
   useEffect(() => { loadData(); }, [filters]);
 
   const typeLabels = { transport: 'Transport', douane: 'Douane', manutention: 'Manutention', assurance: 'Assurance', autre: 'Autres' };
+
+  if (loadError) {
+    return (
+      <div role="alert">
+        <p>{loadError}</p>
+        <Button onClick={loadData}>Réessayer le chargement du non-facturé</Button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -204,12 +216,26 @@ export function StockInventaire() {
   const [isSaving, setIsSaving] = useState(false);
   const [pendingReceptionOrder, setPendingReceptionOrder] = useState(null);
   const [automaticCosting, setAutomaticCosting] = useState(false);
+  const [stockReport, setStockReport] = useState({ products: [], total: 0, loading: false, error: '' });
   const [selectedProduit, setSelectedProduit] = useState(null);
   const [showProduitDetails, setShowProduitDetails] = useState(false);
-  const [periode, setPeriode] = useState({
-    dateDebut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    dateFin: new Date().toISOString().split('T')[0]
-  });
+
+  useEffect(() => {
+    if (activeTab !== 'rapports') return;
+    let cancelled = false;
+    setStockReport({ products: [], total: 0, loading: true, error: '' });
+    api.get('/stock/rapports/valorisation').then(report => {
+      if (!Array.isArray(report.produits) || !Number.isFinite(Number(report.totalValorisation))) {
+        throw new Error('Le rapport de valorisation reçu est incomplet.');
+      }
+      if (!cancelled) setStockReport({
+        products: report.produits, total: Number(report.totalValorisation), loading: false, error: '',
+      });
+    }).catch(error => {
+      if (!cancelled) setStockReport({ products: [], total: 0, loading: false, error: error.message });
+    });
+    return () => { cancelled = true; };
+  }, [activeTab, data.produits]);
 
   useEffect(() => {
     const load = async () => {
@@ -578,11 +604,14 @@ export function StockInventaire() {
 
   const alertes = data.produits.filter(p => parseFloat(p.quantite || 0) < parseFloat(p.stockMinimum || 0) && parseFloat(p.quantite || 0) > 0);
   const totalStock = data.produits.reduce((s, p) => s + parseFloat(p.quantite || 0), 0);
-  const valorisation = data.produits.reduce((s, p) => {
-    const qty = parseFloat(p.quantite || 0);
-    const coutUnit = parseFloat(p.coutMoyen || 0);
-    return s + (qty * coutUnit);
-  }, 0);
+  const valuationProducts = stockReport.products.map(row => ({
+    ...data.produits.find(product => Number(product.id) === Number(row.id)),
+    ...row,
+    coutMoyen: Number(row.cout_unitaire),
+    valeurStock: Number(row.valeur_totale),
+    valorisationMethod: row.valorisation_method,
+  }));
+  const valorisation = stockReport.total;
   const activeEntrepots = data.entrepots.filter((warehouse) => warehouse.actif !== false);
 
   return (
@@ -722,7 +751,7 @@ export function StockInventaire() {
             <Table
               columns={[
                 { key: 'numeroCommande', label: 'N° Commande' },
-                { key: 'fournisseur', label: 'Fournisseur', render: (val, row) => row.fournisseur?.nom || val?.nom || '-' },
+                { key: 'fournisseur', label: 'Fournisseur', render: (val, row) => row.fournisseur?.raisonSociale || row.fournisseur?.nom || val?.raisonSociale || val?.nom || '-' },
                 { key: 'dateCommande', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString('fr-FR') : '-' },
                 { key: 'totalHT', label: 'Total HT', render: (val) => `${Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { key: 'statut', label: 'Statut', render: (val) => {
@@ -923,7 +952,7 @@ export function StockInventaire() {
                       </head>
                       <body>
                         <h2>Rapport d'Inventaire</h2>
-                        <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
+                        <p>Situation actuelle du stock au ${new Date().toLocaleDateString('fr-FR')}</p>
                         ${content.innerHTML}
                         <div style="margin-top: 30px; text-align: center; color: #666; font-size: 10px;">
                           Document généré par ComptaOrion le ${new Date().toLocaleDateString('fr-FR')}
@@ -948,7 +977,7 @@ export function StockInventaire() {
                       </head>
                       <body>
                         <h2>Rapport d'Inventaire</h2>
-                        <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
+                        <p>Situation actuelle du stock au ${new Date().toLocaleDateString('fr-FR')}</p>
                         ${content.innerHTML}
                       </body>
                     </html>
@@ -957,7 +986,7 @@ export function StockInventaire() {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = `Rapport_Inventaire_${periode.dateDebut}_${periode.dateFin}.html`;
+                  a.download = `Rapport_Inventaire_Actuel_${new Date().toISOString().slice(0, 10)}.html`;
                   a.click();
                   URL.revokeObjectURL(url);
                 }}
@@ -967,15 +996,9 @@ export function StockInventaire() {
               </button>
             </div>}
           >
-            <PeriodFilter
-              dateDebut={periode.dateDebut}
-              dateFin={periode.dateFin}
-              onDateDebutChange={(val) => setPeriode((current) => ({ ...current, dateDebut: val }))}
-              onDateFinChange={(val) => setPeriode((current) => ({ ...current, dateFin: val }))}
-              onApply={() => reload('produits')}
-              compactSelector={true}
-              ariaLabel="Période du rapport de stock"
-            />
+            <p style={{ margin: 0, color: '#64748b' }}>
+              Situation actuelle du stock. La valorisation historique à une date passée n’est pas encore disponible.
+            </p>
           </ReportPageHeader>
           
           <div id="stock-rapport-content">
@@ -995,10 +1018,12 @@ export function StockInventaire() {
           </div>
 
           <div style={{ marginBottom: '30px' }}>
-            <h4 style={{ marginBottom: '15px' }}>📋 Rapport de Valorisation par Produit (Méthode CMP)</h4>
+            <h4 style={{ marginBottom: '15px' }}>📋 Rapport de Valorisation par Produit</h4>
             <p style={{ color: '#7f8c8d', fontSize: '14px', marginBottom: '15px' }}>
-              Valorisation selon le <strong>Coût Moyen Pondéré (CMP)</strong> - recalculé automatiquement à chaque entrée de stock
+              Situation actuelle selon la méthode de chaque produit. Les valeurs utilisent les coûts du stock restant, sans multiplier un coût unitaire déjà arrondi.
             </p>
+            {stockReport.loading && <p role="status">Chargement de la valorisation...</p>}
+            {stockReport.error && <p role="alert">{stockReport.error}</p>}
             <Table
               columns={[
                 { key: 'reference', label: 'Référence' },
@@ -1008,17 +1033,17 @@ export function StockInventaire() {
                   return cat ? cat.nom : '-';
                 }},
                 { key: 'quantite', label: 'Quantité', render: (val, row) => `${val || 0} ${row.uniteMesure || 'pièce'}` },
-                { key: 'coutMoyen', label: 'Coût Moyen (CMP)', render: (val, row) => {
+                { key: 'valorisationMethod', label: 'Méthode' },
+                { key: 'coutMoyen', label: 'Coût unitaire moyen', render: (val, row) => {
                   const cmp = parseFloat(val || 0);
                   return `${Number(cmp || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`;
                 }},
                 { key: 'valorisation', label: 'Valorisation Totale', render: (_, row) => {
-                  const coutUnit = parseFloat(row.coutMoyen || 0);
-                  const val = parseFloat(row.quantite || 0) * coutUnit;
+                  const val = row.valeurStock;
                   return <strong style={{ color: '#388e3c' }}>{Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong>;
                 }}
               ]}
-              data={data.produits}
+              data={valuationProducts}
             />
             <div style={{ marginTop: '15px', padding: '15px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'right' }}>
               <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>VALORISATION TOTALE DU STOCK</p>
@@ -1041,9 +1066,9 @@ export function StockInventaire() {
                   return total.toFixed(0);
                 }},
                 { key: 'valorisation', label: 'Valorisation', render: (_, row) => {
-                  const val = data.produits
+                  const val = valuationProducts
                     .filter(p => p.categorieId === row.id)
-                    .reduce((sum, p) => sum + (parseFloat(p.quantite || 0) * parseFloat(p.coutMoyen || 0)), 0);
+                    .reduce((sum, p) => sum + p.valeurStock, 0);
                   return <strong style={{ color: '#388e3c' }}>{Number(val || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong>;
                 }}
               ]}

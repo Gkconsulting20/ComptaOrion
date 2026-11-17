@@ -1032,27 +1032,11 @@ router.get('/rapports/valorisation', async (req, res) => {
       SELECT 
         p.id, p.reference, p.nom, p.valorisation_method,
         COALESCE(NULLIF(vs_totals.quantite, 0), p.quantite, 0) as quantite,
-        CASE 
-          WHEN p.valorisation_method = 'FIFO' THEN (
-            COALESCE(
-              vs_totals.valeur / NULLIF(vs_totals.quantite, 0),
-              NULLIF(p.cout_moyen, 0),
-              0
-            )
-          )
-          ELSE COALESCE(NULLIF(p.cout_moyen, 0), 0)
-        END as cout_unitaire,
-        CASE 
-          WHEN p.valorisation_method = 'FIFO' THEN (
-            SELECT COALESCE(
-              NULLIF(vs_totals.valeur, 0),
-              COALESCE(NULLIF(vs_totals.quantite, 0), p.quantite, 0) *
-                COALESCE(NULLIF(p.cout_moyen, 0), 0)
-            )
-          )
-          ELSE COALESCE(NULLIF(vs_totals.quantite, 0), p.quantite, 0) *
-            COALESCE(NULLIF(p.cout_moyen, 0), 0)
-        END as valeur_totale
+        COALESCE(vs_totals.valeur / NULLIF(vs_totals.quantite, 0), p.cout_moyen, 0) as cout_unitaire,
+        COALESCE(
+          vs_totals.valeur,
+          COALESCE(p.quantite, 0) * COALESCE(p.cout_moyen, 0)
+        ) as valeur_totale
       FROM produits p
       LEFT JOIN (
         SELECT entreprise_id, produit_id,

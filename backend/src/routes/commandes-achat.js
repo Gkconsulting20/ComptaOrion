@@ -1,15 +1,25 @@
 import express from 'express';
 import { db } from '../db.js';
-import { commandesAchat, commandesAchatItems, produits, fournisseurs, mouvementsStock, coutsLogistiquesCommande, bonsReception } from '../schema.js';
+import { commandesAchat, commandesAchatItems, produits, fournisseurs, mouvementsStock, coutsLogistiquesCommande, bonsReception, entreprises } from '../schema.js';
 import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
+async function purchaseTaxRate(executor, entrepriseId) {
+  const [company] = await executor.select({ tauxTva: entreprises.tauxTva })
+    .from(entreprises).where(eq(entreprises.id, entrepriseId)).limit(1);
+  const rate = Number(company?.tauxTva ?? 18);
+  if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+    throw new Error('Le taux de TVA de l’entreprise est invalide.');
+  }
+  return rate;
+}
+
 // Génération automatique du numéro de commande
-async function genererNumeroCommande(entrepriseId) {
+async function genererNumeroCommande(entrepriseId, executor = db) {
   const annee = new Date().getFullYear();
-  const [lastCommande] = await db
+  const [lastCommande] = await executor
     .select()
     .from(commandesAchat)
     .where(eq(commandesAchat.entrepriseId, entrepriseId))
@@ -223,9 +233,6 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Générer numéro de commande
-    const numeroCommande = await genererNumeroCommande(req.entrepriseId);
-
     // Calculer les totaux articles
     let totalArticlesHT = 0;
     for (const item of items) {
@@ -245,10 +252,13 @@ router.post('/', async (req, res) => {
     }
 
     const totalHT = totalArticlesHT + totalLogistique;
-    const totalTVA = totalArticlesHT * 0.18; // TVA à récupérer depuis les paramètres entreprise
+    const totalTVA = Math.round(totalHT * await purchaseTaxRate(db, req.entrepriseId)) / 100;
     const totalTTC = totalHT + totalTVA;
 
     const creation = await db.transaction(async (tx) => {
+      // Serialize number allocation for this company until the order is stored.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${'purchase-order:' + req.entrepriseId}))`);
+      const numeroCommande = await genererNumeroCommande(req.entrepriseId, tx);
       const [newCommande] = await tx.insert(commandesAchat).values({
         entrepriseId: req.entrepriseId,
         numeroCommande,
@@ -406,7 +416,7 @@ router.put('/:id', async (req, res) => {
       const totalArticlesHT = roundMoney(items.reduce((sum, item) =>
         sum + Number(item.quantite) * Number(item.prixUnitaire) * (1 - Number(item.remise || 0) / 100), 0));
       const totalLogistique = roundMoney((coutsLogistiques || []).reduce((sum, cost) => sum + Number(cost.montant), 0));
-      const totalTVA = roundMoney(totalArticlesHT * 0.18);
+      const totalTVA = Math.round((totalArticlesHT + totalLogistique) * await purchaseTaxRate(tx, req.entrepriseId)) / 100;
       const [updatedOrder] = await tx.update(commandesAchat).set({
         fournisseurId: Number(fournisseurId),
         dateCommande: dateCommande || order.dateCommande,

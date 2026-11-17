@@ -195,7 +195,7 @@ export const fournisseurs = pgTable('fournisseurs', {
 export const commandesAchat = pgTable('commandes_achat', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  numeroCommande: varchar('numero_commande', { length: 100 }).unique(),
+  numeroCommande: varchar('numero_commande', { length: 100 }),
   fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id).notNull(),
   statut: varchar('statut', { length: 50 }).default('brouillon'), // brouillon, confirmee, recue_partiel, recue, facturee, annulee
   dateCommande: date('date_commande').defaultNow(),
@@ -211,7 +211,9 @@ export const commandesAchat = pgTable('commandes_achat', {
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  entrepriseNumeroUnique: uniqueIndex('commandes_achat_entreprise_numero_unique').on(table.entrepriseId, table.numeroCommande),
+}));
 
 export const commandesAchatItems = pgTable('commandes_achat_items', {
   id: serial('id').primaryKey(),
@@ -230,7 +232,7 @@ export const commandesAchatItems = pgTable('commandes_achat_items', {
 export const facturesAchat = pgTable('factures_achat', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  numeroFacture: varchar('numero_facture', { length: 100 }).unique(),
+  numeroFacture: varchar('numero_facture', { length: 100 }),
   numeroFactureFournisseur: varchar('numero_facture_fournisseur', { length: 100 }),
   fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id).notNull(),
   commandeId: integer('commande_id'),
@@ -250,7 +252,9 @@ export const facturesAchat = pgTable('factures_achat', {
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  entrepriseNumeroUnique: uniqueIndex('factures_achat_entreprise_numero_unique').on(table.entrepriseId, table.numeroFacture),
+}));
 
 export const factureAchatItems = pgTable('facture_achat_items', {
   id: serial('id').primaryKey(),
@@ -320,7 +324,7 @@ export const entrepots = pgTable('entrepots', {
 export const produits = pgTable('produits', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  reference: varchar('reference', { length: 100 }).unique(),
+  reference: varchar('reference', { length: 100 }),
   nom: varchar('nom', { length: 255 }).notNull(),
   description: text('description'),
   categoriId: integer('categorie_id').references(() => categoriesStock.id),
@@ -337,7 +341,9 @@ export const produits = pgTable('produits', {
   actif: boolean('actif').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  entrepriseReferenceUnique: uniqueIndex('produits_entreprise_reference_unique').on(table.entrepriseId, table.reference),
+}));
 
 // Stock par entrepôt (multi-entrepôts)
 export const stockParEntrepot = pgTable('stock_par_entrepot', {
@@ -422,7 +428,7 @@ export const alertesStock = pgTable('alertes_stock', {
 export const bonsReception = pgTable('bons_reception', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  numero: varchar('numero', { length: 100 }).unique(),
+  numero: varchar('numero', { length: 100 }),
   fournisseurId: integer('fournisseur_id').references(() => fournisseurs.id).notNull(),
   dateReception: date('date_reception').notNull(),
   statut: receptionStatusEnum('statut').default('brouillon'),
@@ -439,7 +445,9 @@ export const bonsReception = pgTable('bons_reception', {
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  entrepriseNumeroUnique: uniqueIndex('bons_reception_entreprise_numero_unique').on(table.entrepriseId, table.numero),
+}));
 
 export const lignesReception = pgTable('lignes_reception', {
   id: serial('id').primaryKey(),

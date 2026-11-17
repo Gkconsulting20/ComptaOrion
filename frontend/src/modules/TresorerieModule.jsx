@@ -24,6 +24,7 @@ export function TresorerieModule() {
   const [transactionDateDebut, setTransactionDateDebut] = useState(getPeriodeDates('annee').dateDebut);
   const [transactionDateFin, setTransactionDateFin] = useState(getPeriodeDates('annee').dateFin);
   const [transactionsFiltered, setTransactionsFiltered] = useState([]);
+  const [transactionsGenerated, setTransactionsGenerated] = useState(false);
   const [rapprochementPreview, setRapprochementPreview] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState([]);
@@ -347,6 +348,7 @@ export function TresorerieModule() {
       setError(null);
       const data = await api.get(`/tresorerie/mouvements?dateDebut=${transactionDateDebut}&dateFin=${transactionDateFin}`);
       setTransactionsFiltered(data);
+      setTransactionsGenerated(true);
     } catch (err) {
       setError(err.message || 'Erreur lors du chargement des transactions');
     } finally {
@@ -359,7 +361,16 @@ export function TresorerieModule() {
       <ReportPageHeader
         title="Historique des transactions"
         description="Mouvements de trésorerie sur la période sélectionnée"
-        actions={<button
+        actions={<div style={{ display: 'flex', gap: 10 }}>
+          <button
+            type="button"
+            onClick={loadTransactionsFiltered}
+            disabled={loading}
+            style={{ padding: '10px 20px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            {loading ? 'Chargement...' : 'Générer'}
+          </button>
+          <button
           onClick={() => openModal('transaction')}
           style={{
             padding: '10px 20px',
@@ -372,7 +383,7 @@ export function TresorerieModule() {
           }}
         >
           + Nouvelle Transaction
-        </button>}
+        </button></div>}
       >
         <PeriodFilter
           dateDebut={transactionDateDebut}
@@ -426,7 +437,9 @@ export function TresorerieModule() {
         </table>
       ) : (
         <div style={{ padding: '50px', textAlign: 'center', background: '#f8f9fa', borderRadius: '8px' }}>
-          <p style={{ color: '#7f8c8d', margin: 0 }}>Sélectionnez une période et cliquez sur "Générer" pour afficher les transactions</p>
+          <p style={{ color: '#7f8c8d', margin: 0 }}>{transactionsGenerated
+            ? 'Aucune transaction de trésorerie pour cette période.'
+            : 'Sélectionnez une période et cliquez sur "Générer" pour afficher les transactions'}</p>
         </div>
       )}
     </div>

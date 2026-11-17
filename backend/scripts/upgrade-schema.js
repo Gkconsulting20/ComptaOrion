@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { pool } from '../src/db.js';
 import { buildAuthAuditNullabilityStatements } from './auth-audit-migration.js';
+import { PURCHASE_NUMBERING_STATEMENTS } from './purchase-numbering-migration.js';
 import {
   backfillFiscalPeriodClosures,
   FISCAL_PERIOD_LOCK_GUARD_SQL,
@@ -27,6 +28,11 @@ const migrationScopes = new Map([
   ['custom-accounting', new Set(['comptes_automatiques'])],
   ['accounting-sequences', new Set(['ecriture_sequences'])],
   ['fiscal-period-lock', new Set(['clotures_exercices'])],
+  ['purchase-numbering', new Set(['commandes_achat', 'factures_achat', 'bons_reception', 'produits', 'ecritures'])],
+  ['association-reporting', new Set([
+    'budgets_projets_associatifs', 'financements_projets_associatifs',
+    'versements_financements_projets', 'paiements_depenses_projets',
+  ])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
@@ -69,7 +75,7 @@ try {
       if (scopedTables && scope !== 'expense-tracking' && scope !== 'accountant-invitations' &&
           scope !== 'credit-notes-cheques' && scope !== 'commercial-adjustments' &&
             scope !== 'supplier-invoice-reconciliation' && scope !== 'custom-accounting' &&
-            scope !== 'accounting-sequences' && scope !== 'fiscal-period-lock') {
+             scope !== 'accounting-sequences' && scope !== 'fiscal-period-lock' && scope !== 'association-reporting') {
         throw new Error(`Migration ciblée annulée : la table ${name} est absente.`);
       }
       actions.push(statement);
@@ -112,6 +118,9 @@ try {
         ALTER TABLE "depenses" ALTER COLUMN "statut" SET DEFAULT 'en_attente';
       `);
     }
+  }
+  if (!scope || scope === 'purchase-numbering') {
+    actions.push(...PURCHASE_NUMBERING_STATEMENTS);
   }
   console.log(`${actions.length} ajouts ou ajustements de schéma (${apply ? 'application' : 'simulation'}).`);
   for (const sql of actions) {
@@ -188,7 +197,9 @@ try {
     'clotures_exercices_entreprise_exercice_revision_unique',
   ]);
   const indexesForScope = scopedTables
-    ? new Set(scope === 'expense-tracking'
+    ? new Set(scope === 'association-reporting'
+      ? ['budgets_projets_associatifs_poste_idx', 'paiements_depenses_projets_piece_unique', 'paiements_depenses_projets_ecriture_unique']
+      : scope === 'expense-tracking'
       ? ['projets_associatifs_entreprise_code_idx']
       : scope === 'accountant-invitations'
         ? ['accountant_invitations_one_live_per_company']
@@ -415,6 +426,23 @@ try {
         DROP POLICY IF EXISTS tenant_isolation ON clotures_exercices;
         DROP POLICY IF EXISTS tenant_isolation_policy ON clotures_exercices;
         CREATE POLICY tenant_isolation_policy ON clotures_exercices FOR ALL
+          USING (current_setting('app.current_tenant', true) = '*' OR
+            entreprise_id = NULLIF(NULLIF(current_setting('app.current_tenant', true), ''), '*')::integer)
+          WITH CHECK (current_setting('app.current_tenant', true) = '*' OR
+            entreprise_id = NULLIF(NULLIF(current_setting('app.current_tenant', true), ''), '*')::integer);
+      `);
+    }
+  }
+  if (!scope || scope === 'association-reporting') {
+    for (const table of migrationScopes.get('association-reporting')) {
+      if (!present.has(table) && !added.has(table)) continue;
+      console.log(`Protection des données de ${table} (${apply ? 'application' : 'simulation'})`);
+      if (apply) await client.query(`
+        ALTER TABLE ${quote(table)} ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${quote(table)} FORCE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS tenant_isolation ON ${quote(table)};
+        DROP POLICY IF EXISTS tenant_isolation_policy ON ${quote(table)};
+        CREATE POLICY tenant_isolation_policy ON ${quote(table)} FOR ALL
           USING (current_setting('app.current_tenant', true) = '*' OR
             entreprise_id = NULLIF(NULLIF(current_setting('app.current_tenant', true), ''), '*')::integer)
           WITH CHECK (current_setting('app.current_tenant', true) = '*' OR

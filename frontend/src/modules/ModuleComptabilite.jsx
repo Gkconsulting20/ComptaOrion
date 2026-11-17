@@ -799,6 +799,7 @@ function ClotureExerciceTab({ api }) {
 
 export function ModuleComptabilite() {
   const [activeTab, setActiveTab] = useState('plan');
+  const [entrepriseInfo, setEntrepriseInfo] = useState(null);
   const [data, setData] = useState({
     comptes: [],
     journaux: [],
@@ -836,13 +837,17 @@ export function ModuleComptabilite() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [comptesRes, journauxRes, ecrituresRes, recurrentesRes, parametresRes] = await Promise.allSettled([
+      const [comptesRes, journauxRes, ecrituresRes, recurrentesRes, parametresRes, entrepriseRes] = await Promise.allSettled([
         api.get('/comptabilite/comptes'),
         api.get('/comptabilite/journaux'),
         api.get('/comptabilite/ecritures'),
         api.get('/ecritures-recurrentes'),
-        api.get('/ecritures-recurrentes/parametres/comptables')
+        api.get('/ecritures-recurrentes/parametres/comptables'),
+        api.get('/parametres/entreprise')
       ]);
+      setEntrepriseInfo(entrepriseRes.status === 'fulfilled'
+        ? (entrepriseRes.value.data || entrepriseRes.value)
+        : null);
       
       setData({
         comptes: comptesRes.status === 'fulfilled' ? (Array.isArray(comptesRes.value) ? comptesRes.value : []) : [],

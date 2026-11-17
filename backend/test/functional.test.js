@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as databaseSchema from '../src/schema.js';
+import { PURCHASE_NUMBERING_STATEMENTS } from '../scripts/purchase-numbering-migration.js';
 import {
   FISCAL_PERIOD_LOCK_GUARD_SQL,
   BACKFILL_FISCAL_PERIOD_CLOSURES_SQL,
@@ -628,6 +629,9 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       ],
       coutsLogistiques:[{type:'transport',description:'Transport commun',montant:100}],
     },201);
+    assert.equal(Number(purchaseOrder.data.totalTVA), 4518,
+      'La commande calcule la TVA de l’entreprise sur les articles et frais logistiques comme la facture');
+    await admin.query(`UPDATE "${schema}".entreprises SET taux_tva = 9 WHERE id = $1`, [signup.user.entrepriseId]);
     const editedPurchaseOrder = await api(`/commandes-achat/${purchaseOrder.data.id}`,'PUT',{
       fournisseurId:supplierRecord.data.id,
       dateCommande:new Date().toISOString().slice(0,10),
@@ -641,6 +645,9 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       })),
       coutsLogistiques:[{type:'transport',description:'Transport commun',montant:100}],
     });
+    assert.equal(Number(editedPurchaseOrder.data.totalTVA), 2259,
+      'La modification de commande utilise le taux de TVA configuré, pas un taux fixe');
+    await admin.query(`UPDATE "${schema}".entreprises SET taux_tva = 18 WHERE id = $1`, [signup.user.entrepriseId]);
     await api(`/commandes-achat/${purchaseOrder.data.id}/confirmer`,'PUT',{});
     const receivePart = (quantity) => api('/receptions','POST',{
       commandeId:purchaseOrder.data.id,
@@ -853,6 +860,24 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       'Le rapprochement doit solder les frais logistiques non facturés');
     assert.equal(matchedInvoice.data.statut, 'validee',
       'Le rapprochement doit confirmer la facture et publier son écriture immédiatement');
+    const supplierPurchaseReport = await api(`/fournisseurs/detail/achats?dateDebut=${invoiceDateIso}&dateFin=${invoiceDateIso}`);
+    const reportedPurchase = supplierPurchaseReport.find(row => Number(row.id) === Number(matchedInvoice.data.id));
+    assert.ok(reportedPurchase, 'La facture comptabilisée apparaît dans le rapport fournisseur');
+    assert.equal(reportedPurchase.numero, matchedInvoice.data.numero_facture);
+    assert.equal(reportedPurchase.fournisseur, supplierRecord.data.raisonSociale);
+    assert.equal(Number(reportedPurchase.montant), Number(matchedAmounts.total_ht));
+    const valuationReport = await api('/stock/rapports/valorisation');
+    const valuedProduct = valuationReport.produits.find(product => Number(product.id) === Number(productId));
+    const exactLayerValue = await admin.query(
+      `SELECT SUM(cout_total) AS valeur FROM "${schema}".valorisations_stock
+       WHERE entreprise_id = $1 AND produit_id = $2 AND quantite > 0`,
+      [signup.user.entrepriseId, productId],
+    );
+    assert.ok(valuedProduct, 'Le produit réceptionné apparaît dans le rapport de stock');
+    assert.equal(Number(valuedProduct.valeur_totale), Number(exactLayerValue.rows[0].valeur),
+      'La valorisation CMP conserve les coûts exacts sans remultiplier le prix unitaire arrondi');
+    const supplierPaymentsReport = await api(`/fournisseurs/detail/paiements?dateDebut=${invoiceDateIso}&dateFin=${invoiceDateIso}`);
+    assert.ok(Array.isArray(supplierPaymentsReport), 'Le rapport des paiements est générable sur une période');
     const matchedInvoiceEntry = await admin.query(
       `SELECT fa.statut, e.valide,
               COUNT(DISTINCT e2.id)::int AS entries_for_invoice
@@ -1304,6 +1329,35 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.ok(Number(supplierBalanceAfterRecovery.rows[0]?.solde_du) > Number(supplierBalanceAfterMatch.rows[0]?.solde_du),
       'La reprise doit ajouter la dette fournisseur une seule fois');
 
+    // Reproduce upgrading an existing database, not just a fresh Drizzle schema.
+    const numberingClient = await admin.connect();
+    try {
+      await numberingClient.query('BEGIN');
+      await numberingClient.query(`SET LOCAL search_path TO "${schema}"`);
+      for (const [table, column] of [
+        ['commandes_achat', 'numero_commande'], ['factures_achat', 'numero_facture'],
+        ['bons_reception', 'numero'], ['produits', 'reference'],
+        ['ecritures', 'numero_ecriture'],
+      ]) {
+        await numberingClient.query(`ALTER TABLE "${table}" ADD CONSTRAINT "${table}_${column}_unique" UNIQUE ("${column}")`);
+      }
+      for (const statement of PURCHASE_NUMBERING_STATEMENTS) await numberingClient.query(statement);
+      // Reapplying the targeted upgrade must be harmless.
+      for (const statement of PURCHASE_NUMBERING_STATEMENTS) await numberingClient.query(statement);
+      await numberingClient.query('COMMIT');
+    } catch (error) {
+      await numberingClient.query('ROLLBACK');
+      throw error;
+    } finally {
+      numberingClient.release();
+    }
+    await assert.rejects(
+      admin.query(`INSERT INTO "${schema}".produits (entreprise_id, reference, nom) VALUES ($1, 'TEST-ERP', 'Doublon interdit')`,
+        [signup.user.entrepriseId]),
+      { code: '23505' },
+      'Une référence produit doit rester unique dans la même entreprise',
+    );
+
     const secondSignup=await api('/public/inscription','POST',{
       nomEntreprise:'Autre entreprise isolée',
       nomAdministrateur:'Second administrateur',
@@ -1326,7 +1380,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     assert.deepEqual(tenantBClients.data.map(client=>client.id),[secondClient.data.id],
       'La liste client ne doit retourner que les données du tenant connecté');
     const secondProduct=await api('/produits','POST',{
-      reference:'TEST-TENANT-B',nom:'Produit autre entreprise',quantite:1,
+      reference:'TEST-ERP',nom:'Produit autre entreprise',quantite:1,
       prixVente:0,prixAchat:50,entrepriseId:signup.user.entrepriseId,
     },201);
     assert.notEqual(Number(secondProduct.data.entrepriseId),Number(signup.user.entrepriseId),
@@ -1336,6 +1390,30 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const tenantBProducts=await api('/produits');
     assert.deepEqual(tenantBProducts.data.map(product=>product.id),[secondProduct.data.id],
       'La liste produit ne doit retourner que les données du tenant connecté');
+    const secondSupplier = await api('/fournisseurs', 'POST', { raisonSociale: 'Fournisseur entreprise B' }, 201);
+    const secondWarehouse = await api('/stock/entrepots', 'POST', { nom: 'Entrepôt entreprise B' });
+    const secondOrder = await api('/commandes-achat', 'POST', {
+      fournisseurId: secondSupplier.data.id,
+      items: [{ produitId: secondProduct.data.id, description: 'Achat B', quantite: 1, prixUnitaire: 50 }],
+    }, 201);
+    assert.equal(secondOrder.data.numeroCommande, purchaseOrder.data.numeroCommande,
+      'Deux entreprises peuvent créer leur première commande avec le même numéro');
+    await api(`/commandes-achat/${secondOrder.data.id}/confirmer`, 'PUT', {});
+    await api('/receptions', 'POST', {
+      commandeId: secondOrder.data.id, entrepotId: secondWarehouse.id,
+      items: secondOrder.data.items.map(line => ({ commandeItemId: line.id, quantiteRecue: 1, poidsParUnite: 1, unitePoids: 'kg' })),
+    });
+    const secondPendingReceipts = await api('/achats/receptions-en-attente');
+    const secondMatchedInvoice = await api('/achats/factures-avec-rapprochement', 'POST', {
+      fournisseurId: secondSupplier.data.id, numeroFactureFournisseur: 'FACT-B',
+      dateFacture: new Date().toISOString().slice(0, 10),
+      receptionsIds: secondPendingReceipts.data.map(receipt => receipt.id),
+      lignes: [{ produitId: secondProduct.data.id, quantite: 1, uniteSaisie: 'pièce', prixUnitaireReel: 50, description: 'Achat B' }],
+      coutsLogistiques: [],
+    }, 201);
+    assert.match(secondMatchedInvoice.data.numero_facture, /^FACT-ACH-\d{4}-\d+$/);
+    assert.equal(secondMatchedInvoice.data.numero_facture, matchedInvoice.data.numero_facture,
+      'Le numéro de facture de la première entreprise ne bloque pas la facture d’une autre entreprise');
     await api('/factures','POST',{clientId:secondClient.data.id,items:[{description:'Service',quantite:1,prixUnitaire:500}]},201);
     const isolatedAssociationProjects=await api('/associations/projects');
     assert.deepEqual(isolatedAssociationProjects,[],'Les projets associatifs sont isolés par entreprise');

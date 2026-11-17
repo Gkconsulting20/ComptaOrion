@@ -12,7 +12,6 @@ const reportModulePaths = [
   '../src/modules/GestionFournisseurs.jsx',
   '../src/modules/ImpotsModule.jsx',
   '../src/modules/ModuleComptabilite.jsx',
-  '../src/modules/StockInventaire.jsx',
   '../src/modules/TresorerieModule.jsx',
 ];
 
@@ -36,4 +35,9 @@ test('les rapports métier partagent une même barre compacte de titre et de pé
   );
   assert.match(accountingSource, /title="Balance générale"/,
     'La balance doit utiliser le même en-tête que les autres rapports');
+  const stockSource = readFileSync(new URL('../src/modules/StockInventaire.jsx', import.meta.url), 'utf8');
+  assert.match(stockSource, /ReportPageHeader/);
+  assert.match(stockSource, /Situation actuelle du stock/);
+  assert.doesNotMatch(stockSource, /Période du rapport de stock/,
+    'Ne pas proposer de filtre historique tant que les valeurs ne sont pas reconstituées par date');
 });
