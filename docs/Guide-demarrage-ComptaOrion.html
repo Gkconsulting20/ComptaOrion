@@ -328,7 +328,24 @@
 
     <section id="impots">
       <h2>11. Utiliser le module Impôts sans confusion</h2>
-      <p>Le module Impôts fournit actuellement un <strong>suivi indicatif</strong>. Il peut présenter une synthèse de TVA à partir des écritures validées : comptes 443* (sauf 4434) pour la TVA collectée et comptes 445* pour la TVA déductible. Le brouillon est enregistré par période et les mouvements peuvent être consultés/exportés.</p>
+      <p>Le module Impôts est un <strong>outil de préparation et de suivi indicatif</strong>, centré sur la TVA et la consultation du résultat comptable. Il ne remplace ni les démarches auprès de l’administration fiscale ni la validation de votre comptable.</p>
+      <h3>Ce que vous pouvez faire</h3>
+      <ul>
+        <li><strong>Consulter la TVA d’une période :</strong> choisir les dates et obtenir la TVA collectée à partir des comptes 443* (hors 4434), la TVA déductible à partir des comptes 445*, puis le solde indicatif à décaisser ou le crédit de TVA.</li>
+        <li><strong>Vérifier les montants :</strong> ouvrir le détail des comptes et écritures à l’origine des totaux, puis imprimer ou télécharger le résumé TVA pour le contrôler et le partager avec votre comptable.</li>
+        <li><strong>Préparer un brouillon TVA :</strong> enregistrer les calculs de la période avec « Créer un brouillon TVA » et retrouver le document dans l’onglet Déclarations.</li>
+        <li><strong>Tracer un dépôt déjà réalisé :</strong> après avoir déposé réellement la déclaration sur le portail OTR, utiliser « Confirmer dépôt OTR » pour enregistrer manuellement sa référence et sa date dans ComptaOrion.</li>
+        <li><strong>Consulter le résultat comptable :</strong> l’onglet Impôt sur les Sociétés présente les produits, les charges et leur différence avant retraitements fiscaux.</li>
+      </ul>
+      <h3>Ce que le module ne permet pas</h3>
+      <ul>
+        <li><strong>Aucune connexion opérationnelle à l’OTR :</strong> le logiciel ne transmet pas les déclarations et ne reçoit pas de validation électronique de l’administration.</li>
+        <li><strong>Aucun paiement d’impôt depuis le module :</strong> il ne règle pas les taxes et ne crée pas automatiquement une écriture de règlement fiscal. Un paiement réel doit être effectué hors du module, puis enregistré selon la procédure comptable de l’entreprise.</li>
+        <li><strong>Pas de calcul de l’impôt sur les sociétés dû :</strong> le résultat comptable affiché n’est pas le bénéfice imposable. Les réintégrations, déductions et autres retraitements fiscaux ne sont pas calculés automatiquement.</li>
+        <li><strong>Pas de validation fiscale automatique :</strong> le résumé des comptes ne vérifie pas à lui seul les conditions légales de déductibilité, les exonérations ou toutes les règles propres à votre régime.</li>
+        <li><strong>Pas de déclaration officielle complète :</strong> un brouillon, un résumé imprimé ou un fichier téléchargé ne constitue pas une liasse fiscale officielle et ne couvre pas automatiquement tous les impôts et taxes de l’entreprise.</li>
+      </ul>
+      <h3>Procédure recommandée pour la TVA</h3>
       <ol>
         <li>Dans <span class="path">Impôts → Paramètres</span>, choisissez le Togo et vérifiez les informations de l’entreprise avec votre comptable.</li>
         <li>Dans <span class="path">TVA</span>, choisissez les dates et vérifiez que les comptes et écritures validés sont corrects.</li>
@@ -336,8 +353,8 @@
         <li>Si une déclaration réelle est déposée sur le portail OTR, vous pouvez ensuite saisir la référence et la date réelles avec « Confirmer dépôt OTR ».</li>
       </ol>
       <div class="callout">
-        <strong>Ce que le module ne fait pas</strong>
-        ComptaOrion ne transmet pas la déclaration à l’OTR et ne paie pas les taxes. Le calcul TVA doit être vérifié selon votre régime et les règles applicables. L’onglet Impôt sur les Sociétés affiche le résultat comptable avant retraitements : il ne calcule ni le bénéfice imposable ni l’impôt dû. Ne marquez un dépôt comme effectué qu’après le dépôt réel sur le portail de l’OTR.
+        <strong>Un brouillon n’est pas un dépôt officiel.</strong>
+        « Confirmer dépôt OTR » enregistre uniquement votre confirmation manuelle : ce bouton n’effectue aucun dépôt et ne vérifie pas la référence auprès de l’OTR. Même un statut « soumise » dans ComptaOrion ne vaut pas accusé de réception de l’administration. Conservez le justificatif obtenu sur le portail OTR et faites valider les montants selon votre régime fiscal.
       </div>
     </section>
 

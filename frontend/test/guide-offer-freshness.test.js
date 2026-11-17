@@ -62,3 +62,19 @@ test('toutes les entrées du sommaire du guide pointent vers une section existan
     assert.ok(ids.has(anchor), `Section absente du guide : ${anchor}`);
   }
 });
+
+test('le guide distingue les possibilités fiscales des démarches officielles non intégrées', () => {
+  const fiscalSection = guide.match(/<section id="impots">([\s\S]*?)<\/section>/)?.[1];
+  assert.ok(fiscalSection, 'La section Impôts doit être présente');
+  for (const expected of [
+    /Ce que vous pouvez faire/,
+    /Ce que le module ne permet pas/,
+    /Créer un brouillon TVA/,
+    /enregistrer manuellement sa référence et sa date/,
+    /Aucune connexion opérationnelle à l’OTR/,
+    /Aucun paiement d’impôt depuis le module/,
+    /Pas de calcul de l’impôt sur les sociétés dû/,
+    /n’est pas le bénéfice imposable/,
+    /ne vaut pas accusé de réception de l’administration/,
+  ]) assert.match(fiscalSection, expected);
+});

@@ -18,7 +18,7 @@ Les services externes d'envoi d'e-mails et de paiement y sont désactivés.
 
 | Contrôle | Résultat |
 | --- | --- |
-| Tests interface, documentation et utilitaires | 44 réussis |
+| Tests interface, documentation et utilitaires | 45 réussis |
 | Tests serveur | 114 réussis |
 | Recette fonctionnelle serveur | Réussie |
 | Même recette dans le Worker Cloudflare local | Réussie |
@@ -68,6 +68,8 @@ La mise à jour précise :
 - l'enregistrement immédiatement validé des écritures comptables ;
 - la génération, le téléchargement et l'impression des rapports ;
 - le caractère actuel, et non historique, de la valorisation de stock.
+- les possibilités et limites du module Impôts, en distinguant les brouillons
+  et confirmations manuelles des dépôts officiels et paiements non intégrés.
 
 ## Limites conservées explicitement
 
