@@ -39,3 +39,26 @@ test('l’offre distingue la saisie manuelle, l’OCR et le calcul Premium', () 
   assert.match(offer, /29 900,00 XOF/);
   assert.match(offer, /lien WhatsApp/);
 });
+
+test('les prix du guide restent alignés sur les trois forfaits de l’offre', () => {
+  const prices = [...offer.matchAll(/(?:monthlyPrice|annualPrice): '([^']+)'/g)].map(match => match[1]);
+  assert.equal(prices.length, 6, 'Trois prix mensuels et trois prix annuels doivent être documentés');
+  for (const price of prices) assert.ok(guide.includes(price), `Prix absent du guide : ${price}`);
+});
+
+test('le guide explique les comptes collectifs et le parcours réception vers facture', () => {
+  assert.match(guide, /4111 pour les ventes de biens et 4112 pour les prestations de services/);
+  assert.match(guide, /écriture comptable enregistrée est immédiatement validée/);
+  assert.match(guide, /poids par unité et l’unité de poids/);
+  assert.match(guide, /Si l’écart est nul, aucun compte d’écart n’est requis/);
+  assert.match(guide, /pas de filtre de période/);
+  assert.match(guide, /crédit du passif temporaire/);
+  assert.doesNotMatch(guide, /Les écritures de tous les clients utilisent le compte collectif 4111/);
+});
+
+test('toutes les entrées du sommaire du guide pointent vers une section existante', () => {
+  const ids = new Set([...guide.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
+  for (const [, anchor] of guide.matchAll(/href="#([^"]+)"/g)) {
+    assert.ok(ids.has(anchor), `Section absente du guide : ${anchor}`);
+  }
+});
