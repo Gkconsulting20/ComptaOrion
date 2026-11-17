@@ -28,3 +28,17 @@ mtime_ms = 1793492120657
 storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:89086feb-6d2b-4b89-9a46-d43298dad57c/606af9b6-2b29-471c-81b9-7a92b6231db9/c4628a90-b4ef-4aff-a9c4-617c971774b3"
 storage_version_token = "1793492167503588"
 content_type = "text/html"
+
+[[outputs]]
+id = "EecBh690_WDtSRXi1sFcG"
+uri = "file://generated-artifacts/recette-achats-rapports-2026-11-16.html"
+type = "html"
+title = "Bilan des tests réception, facturation et rapports"
+description = "Résultats constatés dans le navigateur, corrections apportées et limites restant à vérifier."
+logical_id = "26e62120-8947-4730-8f9b-083a9e48a37f"
+content_hash = "sha256:c1a451c08e2da0c7b814391fb335425d0e902c384c59df71d53be104b3b82d95"
+size = 7431
+mtime_ms = 1794874657836
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:89086feb-6d2b-4b89-9a46-d43298dad57c/26e62120-8947-4730-8f9b-083a9e48a37f/69a72031-cd50-40cc-a427-f8537d797314"
+storage_version_token = "1794874682221362"
+content_type = "text/html"
