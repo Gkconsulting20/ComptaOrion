@@ -3,6 +3,11 @@ import { db } from '../db.js';
 import { saasCommerciaux, saasClients, saasVentes, plansAbonnement, abonnements, facturesAbonnement, entreprises } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
+import {
+  addMonths,
+  formatDateISO,
+  subscriptionSaleTerms,
+} from '../services/subscriptionPricing.js';
 
 const router = express.Router();
 
@@ -29,7 +34,15 @@ router.get('/dashboard', async (req, res) => {
         abonnement_stats AS (
           SELECT 
             COUNT(*) as total_abonnements,
-            COALESCE(SUM(CASE WHEN statut = 'actif' THEN montant_mensuel ELSE 0 END), 0) as mrr_total
+            -- MRR = somme des prix mensuels des abonnements actifs EN FACTURATION.
+            -- Une entreprise en période gratuite (avant date_debut_facturation)
+            -- ne contribue pas au MRR ; un abonnement sans mois payé
+            -- (durée ≤ mois gratuits) ne contribue jamais. Les lignes anciennes
+            -- (date_debut_facturation et duree_en_mois NULL) contribuent normalement.
+            COALESCE(SUM(CASE WHEN statut = 'actif'
+              AND (date_debut_facturation IS NULL OR date_debut_facturation <= CURRENT_DATE)
+              AND (duree_en_mois IS NULL OR duree_en_mois > COALESCE(mois_gratuits, 0))
+              THEN montant_mensuel ELSE 0 END), 0) as mrr_total
           FROM abonnements
         ),
         vente_stats AS (
@@ -297,7 +310,10 @@ router.get('/abonnements', async (req, res) => {
       statut: abonnements.statut,
       dateDebut: abonnements.dateDebut,
       dateExpiration: abonnements.dateExpiration,
-      montantMensuel: abonnements.montantMensuel
+      montantMensuel: abonnements.montantMensuel,
+      moisGratuits: abonnements.moisGratuits,
+      dateDebutFacturation: abonnements.dateDebutFacturation,
+      dureeEnMois: abonnements.dureeEnMois
     })
     .from(abonnements)
     .leftJoin(entreprises, eq(abonnements.entrepriseId, entreprises.id))
@@ -344,8 +360,32 @@ router.post('/abonnements', async (req, res) => {
 
     // Calculer la date d'expiration
     const debut = new Date(dateDebut);
-    const expiration = new Date(debut);
-    expiration.setMonth(expiration.getMonth() + (dureeEnMois || 1));
+    const duree = dureeEnMois || 1;
+    const expiration = addMonths(debut, duree);
+
+    // Offre : 2 mois gratuits sur chaque nouvel abonnement payant. Les mois
+    // gratuits font partie de la durée : le client paie prix × (durée − 2)
+    // et la facturation commence 2 mois après le début. Durée ≤ 2 mois :
+    // le client ne paie rien sur toute la durée (montant 0, vente à 0).
+    // La commission n'est due qu'à partir du début de facturation.
+    const [commercial] = await db.select()
+      .from(saasCommerciaux)
+      .where(eq(saasCommerciaux.id, clientSaas.commercialId))
+      .limit(1);
+
+    const tauxCommission = commercial ? parseFloat(commercial.commission) / 100 : 0.10;
+    const {
+      freeMonths,
+      paidMonths,
+      billingStartDate,
+      montantVente,
+      commission,
+    } = subscriptionSaleTerms({
+      prixMensuel: plan.prix,
+      dureeEnMois: duree,
+      tauxCommission,
+      dateDebut: debut,
+    });
 
     // Créer l'abonnement
     const [abonnement] = await db.insert(abonnements).values({
@@ -355,20 +395,18 @@ router.post('/abonnements', async (req, res) => {
       dateDebut: debut,
       dateExpiration: expiration,
       prochainRenouvellement: expiration,
-      montantMensuel: plan.prix
+      montantMensuel: plan.prix,
+      moisGratuits: freeMonths,
+      dateDebutFacturation: billingStartDate,
+      dureeEnMois: duree
     }).returning();
 
-    // Récupérer le commercial pour obtenir son taux de commission
-    const [commercial] = await db.select()
-      .from(saasCommerciaux)
-      .where(eq(saasCommerciaux.id, clientSaas.commercialId))
-      .limit(1);
-
-    const tauxCommission = commercial ? parseFloat(commercial.commission) / 100 : 0.10;
-    const montantVente = parseFloat(plan.prix) * (dureeEnMois || 1);
-    const commission = montantVente * tauxCommission;
-
     // ✨ CRÉER AUTOMATIQUEMENT UNE VENTE
+    // Le montant et la commission ne sont dus qu'à partir du début de
+    // facturation (dateEcheanceCommission), après les mois gratuits.
+    const freeLabel = paidMonths === 0
+      ? ` (entièrement gratuit — ${freeMonths} mois offerts)`
+      : ` (${freeMonths} mois gratuits, facturation dès le ${formatDateISO(billingStartDate)})`;
     await db.insert(saasVentes).values({
       commercialId: clientSaas.commercialId,
       clientId: clientSaas.id,
@@ -376,7 +414,8 @@ router.post('/abonnements', async (req, res) => {
       montantVente: montantVente,
       commission: commission,
       statut: 'confirmée',
-      notes: `Vente automatique - Abonnement ${plan.nom} (${dureeEnMois || 1} mois)`
+      dateEcheanceCommission: billingStartDate,
+      notes: `Vente automatique - Abonnement ${plan.nom} (${duree} mois${freeLabel})`
     });
 
     // Mettre à jour le statut du client SaaS
@@ -386,7 +425,7 @@ router.post('/abonnements', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Abonnement créé avec succès. Vente enregistrée automatiquement.',
+      message: `Abonnement créé avec succès (${freeMonths} mois gratuits, facturation dès le ${formatDateISO(billingStartDate)}). Vente enregistrée automatiquement.`,
       abonnement
     });
   } catch (error) {
@@ -423,6 +462,7 @@ router.get('/ventes', async (req, res) => {
       client: entreprises.nom,
       montantVente: saasVentes.montantVente,
       commission: saasVentes.commission,
+      dateEcheanceCommission: saasVentes.dateEcheanceCommission,
       dateVente: saasVentes.dateVente,
       statut: saasVentes.statut,
       source: saasVentes.source

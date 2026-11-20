@@ -150,7 +150,7 @@ export function SaaSAdminModule() {
           <div style={{ padding: '20px', backgroundColor: '#27ae60', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>MRR (Revenu Mensuel)</div>
             <div style={{ fontSize: '32px', fontWeight: 'bold', margin: '10px 0' }}>{Number(stats.mrr_total || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>{stats.total_abonnements || 0} abonnements actifs</div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>{stats.total_abonnements || 0} abonnements actifs • hors période gratuite (2 mois offerts)</div>
           </div>
 
           <div style={{ padding: '20px', backgroundColor: '#f39c12', color: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
@@ -439,6 +439,9 @@ export function SaaSAdminModule() {
           💡 <strong>Automatisation activée :</strong> Lorsque vous créez un abonnement payant pour un client SaaS, 
           une vente sera automatiquement enregistrée dans l'onglet "Ventes" avec le commercial assigné.
         </div>
+        <div style={{ fontSize: '13px', color: '#2e7d32', marginTop: '8px' }}>
+          🎁 <strong>Offre de lancement :</strong> chaque nouvel abonnement payant inclut 2 mois gratuits — la facturation commence au 3e mois. Le montant de la vente est calculé sur les mois payés seulement.
+        </div>
       </div>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
@@ -449,6 +452,7 @@ export function SaaSAdminModule() {
             <th style={{ padding: '12px', textAlign: 'left' }}>Montant/mois</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Date Début</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Date Expiration</th>
+            <th style={{ padding: '12px', textAlign: 'left' }}>Facturation dès le</th>
             <th style={{ padding: '12px', textAlign: 'left' }}>Statut</th>
           </tr>
         </thead>
@@ -457,9 +461,15 @@ export function SaaSAdminModule() {
             <tr key={abo.id} style={{ borderBottom: '1px solid #dee2e6' }}>
               <td style={{ padding: '12px' }}>{abo.entreprise}</td>
               <td style={{ padding: '12px' }}>{abo.plan}</td>
-              <td style={{ padding: '12px' }}>{Number(abo.montantMensuel || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td>
+              <td style={{ padding: '12px' }}>
+                {Number(abo.montantMensuel || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF
+                {abo.moisGratuits > 0 && (
+                  <div style={{ fontSize: '11px', color: '#27ae60' }}>dont {abo.moisGratuits} mois gratuits</div>
+                )}
+              </td>
               <td style={{ padding: '12px' }}>{new Date(abo.dateDebut).toLocaleDateString('fr-FR')}</td>
               <td style={{ padding: '12px' }}>{new Date(abo.dateExpiration).toLocaleDateString('fr-FR')}</td>
+              <td style={{ padding: '12px' }}>{abo.dateDebutFacturation ? new Date(abo.dateDebutFacturation).toLocaleDateString('fr-FR') : '—'}</td>
               <td style={{ padding: '12px' }}>
                 <span style={{
                   padding: '4px 8px',
@@ -572,6 +582,7 @@ export function SaaSAdminModule() {
               <th style={{ padding: '12px', textAlign: 'left' }}>Client</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Montant</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Commission</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Commission due le</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Statut</th>
             </tr>
           </thead>
@@ -601,6 +612,7 @@ export function SaaSAdminModule() {
                     `${Number(vente.commission || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`
                   )}
                 </td>
+                <td style={{ padding: '12px' }}>{vente.dateEcheanceCommission ? new Date(vente.dateEcheanceCommission).toLocaleDateString('fr-FR') : '—'}</td>
                 <td style={{ padding: '12px' }}>
                   <span style={{
                     padding: '4px 8px',
@@ -902,6 +914,30 @@ export function SaaSAdminModule() {
                   <option value="12">12 mois (1 an)</option>
                   <option value="24">24 mois (2 ans)</option>
                 </select>
+
+                {!formData.id && (() => {
+                  const plan = plans.find(p => String(p.id) === String(formData.planId));
+                  if (!plan) return null;
+                  const duree = parseInt(formData.dureeEnMois || 1, 10);
+                  const moisPayes = Math.max(0, duree - 2);
+                  const montant = parseFloat(plan.prix || 0) * moisPayes;
+                  let facturation = '';
+                  if (formData.dateDebut) {
+                    const d = new Date(formData.dateDebut);
+                    if (!isNaN(d.getTime())) {
+                      d.setMonth(d.getMonth() + 2);
+                      facturation = d.toLocaleDateString('fr-FR');
+                    }
+                  }
+                  return (
+                    <div style={{ backgroundColor: '#e8f5e9', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontSize: '13px', color: '#2e7d32' }}>
+                      🎁 <strong>Offre de lancement : 2 mois gratuits.</strong> Montant de la vente : {montant.toLocaleString('fr-FR')} XOF ({moisPayes} mois payés sur {duree})
+                      {moisPayes === 0
+                        ? ' — durée entièrement couverte par les 2 mois gratuits : aucun paiement sur cet abonnement.'
+                        : ` — facturation dès le ${facturation}.`}
+                    </div>
+                  );
+                })()}
               </>
             )}
 

@@ -1493,6 +1493,16 @@ export const abonnements = pgTable('abonnements', {
   prochainRenouvellement: date('prochain_renouvellement'),
   nombreUtilisateurs: integer('nombre_utilisateurs').default(1),
   montantMensuel: decimal('montant_mensuel', { precision: 10, scale: 2 }).notNull(),
+  // Offre de lancement (décision ORIONEXA, 20 nov. 2026) : chaque nouvel abonnement
+  // payant inclut 2 mois gratuits. Les mois gratuits font partie de la durée :
+  // le client paie prix × (durée − 2), la facturation commence au 3e mois.
+  // 0 pour l'essai (30 jours, inchangé) et pour les lignes anciennes.
+  moisGratuits: integer('mois_gratuits').default(0),
+  // Date de début de facturation = date de début + mois gratuits.
+  // NULL pour les lignes anciennes : facturation dès le début.
+  dateDebutFacturation: date('date_debut_facturation'),
+  // Durée choisie à la création (mois) ; sert à calculer les mois payés.
+  dureeEnMois: integer('duree_en_mois'),
   modeRenouvellement: varchar('mode_renouvellement', { length: 50 }).default('automatique'), // automatique, manuel
   remarques: text('remarques'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -1557,6 +1567,9 @@ export const saasVentes = pgTable('saas_ventes', {
   abonnementId: integer('abonnement_id').references(() => abonnements.id),
   montantVente: decimal('montant_vente', { precision: 15, scale: 2 }).notNull(),
   commission: decimal('commission', { precision: 15, scale: 2 }).default('0'), // 0 pour ventes web
+  // Commission due seulement à partir de cette date : fin des mois gratuits
+  // (début de facturation de l'abonnement). NULL pour les ventes anciennes.
+  dateEcheanceCommission: date('date_echeance_commission'),
   dateVente: timestamp('date_vente').defaultNow(),
   statut: varchar('statut', { length: 50 }).default('confirmée'), // confirmée, annulée
   source: varchar('source', { length: 50 }).default('commercial'), // commercial, web, api
