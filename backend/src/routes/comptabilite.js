@@ -586,7 +586,8 @@ router.get('/rapports/resultat', async (req, res) => {
       if (compte.numero.startsWith('6')) {
         compteData.montant = solde.debit - solde.credit;
         if (compteData.montant === 0) return;
-        if (compte.numero.startsWith('66') || compte.numero.startsWith('67')) {
+        // SYSCOHADA : 66 = charges de personnel (exploitation), 67 = charges financières
+        if (compte.numero.startsWith('67')) {
           charges.financieres.push(compteData);
         } else {
           charges.exploitation.push(compteData);
@@ -2088,6 +2089,8 @@ router.get('/ecritures', async (req, res) => {
         dateEcriture: ecritures.dateEcriture,
         reference: ecritures.numeroPiece,
         description: ecritures.libelle,
+        libelle: ecritures.libelle,
+        numeroPiece: ecritures.numeroPiece,
         valide: ecritures.valide,
         journalId: ecritures.journalId,
         journalCode: journaux.code,
@@ -2885,12 +2888,12 @@ router.get('/bilan', async (req, res) => {
       where: eq(comptesComptables.entrepriseId, entrepriseId)
     });
 
-    // Calculer les soldes basés sur les écritures validées
+    // Soldes du bilan : cumulatifs jusqu'à dateFin (aligné sur /rapports/bilan).
+    // Un filtre dateDebut exclurait les soldes d'ouverture antérieurs à la période.
     const conditions = [
       eq(lignesEcritures.entrepriseId, entrepriseId),
       eq(ecritures.valide, true),
     ];
-    if (dateDebut) conditions.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
     if (dateFin) conditions.push(lte(ecritures.dateEcriture, new Date(dateFin)));
 
     const lignes = await db
@@ -2911,6 +2914,39 @@ router.get('/bilan', async (req, res) => {
       }
       soldesMap[ligne.compteId] += parseFloat(ligne.debit || 0) - parseFloat(ligne.credit || 0);
     });
+
+    // Résultat de la période (classe 6 / 7) — intégré au passif comme dans /rapports/bilan.
+    // Sans lui, le bilan ne s'équilibrait pas (écart = résultat net).
+    let totalCharges = 0;
+    let totalProduits = 0;
+    {
+      const conditionsResultat = [
+        eq(lignesEcritures.entrepriseId, entrepriseId),
+        eq(ecritures.valide, true),
+      ];
+      if (dateDebut) conditionsResultat.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
+      if (dateFin) conditionsResultat.push(lte(ecritures.dateEcriture, new Date(dateFin)));
+      const lignesResultat = await db
+        .select({
+          compteId: lignesEcritures.compteComptableId,
+          debit: lignesEcritures.debit,
+          credit: lignesEcritures.credit
+        })
+        .from(lignesEcritures)
+        .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
+        .innerJoin(comptesComptables, eq(lignesEcritures.compteComptableId, comptesComptables.id))
+        .where(and(...conditionsResultat));
+      const comptesById = new Map(comptesData.map(c => [c.id, c]));
+      lignesResultat.forEach(ligne => {
+        const compte = comptesById.get(ligne.compteId);
+        if (!compte) return;
+        const debit = parseFloat(ligne.debit || 0);
+        const credit = parseFloat(ligne.credit || 0);
+        if (compte.numero.startsWith('6')) totalCharges += debit - credit;
+        else if (compte.numero.startsWith('7')) totalProduits += credit - debit;
+      });
+    }
+    const resultatNet = totalProduits - totalCharges;
 
     // Classifier les comptes selon SYSCOHADA
     const bilan = {
@@ -2957,7 +2993,24 @@ router.get('/bilan', async (req, res) => {
       }
     });
 
-    res.json(bilan);
+    // Intégrer le résultat de l'exercice aux capitaux propres (compte 120 / 129)
+    if (Math.abs(resultatNet) > 0.01) {
+      const isPerte = resultatNet < 0;
+      bilan.passif.capitauxPropres.push({
+        compte: isPerte ? '129' : '120',
+        nom: isPerte ? "Résultat de l'exercice (Perte)" : "Résultat de l'exercice (Bénéfice)",
+        montant: Math.abs(resultatNet)
+      });
+      bilan.passif.total += isPerte ? -Math.abs(resultatNet) : Math.abs(resultatNet);
+    }
+
+    res.json({
+      ...bilan,
+      resultatNet,
+      totalCharges,
+      totalProduits,
+      equilibre: Math.abs(bilan.actif.total - bilan.passif.total) < 1
+    });
   } catch (error) {
     console.error('Erreur bilan:', error);
     res.status(500).json({ error: error.message });
@@ -2997,15 +3050,16 @@ router.get('/compte-resultat', async (req, res) => {
       .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
       .where(and(...conditions));
 
-    // Calculer les soldes par compte
+    // Soldes signés (débit − crédit) par compte.
+    // Le signe compte : une variation de stock créditrice (6031) réduit les charges,
+    // elle ne doit pas être ajoutée en valeur absolue (ancien bug : résultat 120 000
+    // au lieu de 320 000).
     const soldesMap = {};
     lignes.forEach(ligne => {
       if (!soldesMap[ligne.compteId]) {
         soldesMap[ligne.compteId] = 0;
       }
-      // Pour les produits (classe 7): crédit - débit = solde positif
-      // Pour les charges (classe 6): débit - crédit = solde positif
-      soldesMap[ligne.compteId] += parseFloat(ligne.credit || 0) - parseFloat(ligne.debit || 0);
+      soldesMap[ligne.compteId] += parseFloat(ligne.debit || 0) - parseFloat(ligne.credit || 0);
     });
 
     const resultat = {
@@ -3026,26 +3080,31 @@ router.get('/compte-resultat', async (req, res) => {
     };
 
     comptesData.forEach(compte => {
-      const solde = soldesMap[compte.id] || 0;
-      if (solde === 0) return;
-      
+      const soldeDebitCredit = soldesMap[compte.id] || 0;
       const classe = compte.numero.charAt(0);
-      const item = { compte: compte.numero, nom: compte.nom, montant: Math.abs(solde) };
+      // Montant signé : charges = débit − crédit (6031 créditrice = −100 000),
+      // produits = crédit − débit. Les totaux somment les montants signés.
+      const montant = classe === '6' ? soldeDebitCredit : -soldeDebitCredit;
+      if (montant === 0) return;
+
+      const item = { compte: compte.numero, nom: compte.nom, montant };
 
       // Classe 7 = Produits (solde créditeur)
       if (classe === '7') {
         if (compte.numero.startsWith('70')) resultat.produits.ventesMarchandises.push(item);
         else if (compte.numero.startsWith('71') || compte.numero.startsWith('72')) resultat.produits.prestationsServices.push(item);
         else resultat.produits.autresProduits.push(item);
-        resultat.produits.total += Math.abs(solde);
+        resultat.produits.total += montant;
       }
       // Classe 6 = Charges (solde débiteur)
       else if (classe === '6') {
         if (compte.numero.startsWith('60')) resultat.charges.achats.push(item);
         else if (compte.numero.startsWith('61') || compte.numero.startsWith('62')) resultat.charges.services.push(item);
-        else if (compte.numero.startsWith('63') || compte.numero.startsWith('64')) resultat.charges.personnel.push(item);
+        // SYSCOHADA : 64 et 66 = charges de personnel (64 : rémunérations et charges
+        // sociales de base, 66 : rémunérations du personnel)
+        else if (compte.numero.startsWith('64') || compte.numero.startsWith('66')) resultat.charges.personnel.push(item);
         else resultat.charges.autresCharges.push(item);
-        resultat.charges.total += Math.abs(solde);
+        resultat.charges.total += montant;
       }
     });
 

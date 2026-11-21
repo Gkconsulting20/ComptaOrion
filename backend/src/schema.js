@@ -28,7 +28,7 @@ export const entreprises = pgTable('entreprises', {
   numeroSiret: varchar('numero_siret', { length: 50 }),
   adresse: text('adresse'),
   ville: varchar('ville', { length: 100 }),
-  pays: varchar('pays', { length: 100 }).default('Côte d\'Ivoire'),
+  pays: varchar('pays', { length: 100 }).default('Togo'),
   telephone: varchar('telephone', { length: 50 }),
   email: varchar('email', { length: 255 }),
   
@@ -38,9 +38,10 @@ export const entreprises = pgTable('entreprises', {
   tauxTva: decimal('taux_tva', { precision: 5, scale: 2 }).default('18.00'),
   systemeComptable: systemeComptableEnum('systeme_comptable').default('SYSCOHADA'), // SYSCOHADA, IFRS, PCG
   
-  // Année fiscale
-  debutAnneeFiscale: date('debut_annee_fiscale').default('2025-01-01'),
-  finAnneeFiscale: date('fin_annee_fiscale').default('2025-12-31'),
+  // Année fiscale — défaut dynamique : l'année civile en cours à l'inscription
+  // (l'ancien défaut fixe 2025 affichait un tableau de bord à 0 pour les entreprises 2026)
+  debutAnneeFiscale: date('debut_annee_fiscale').default(sql`date_trunc('year', CURRENT_DATE)::date`),
+  finAnneeFiscale: date('fin_annee_fiscale').default(sql`(date_trunc('year', CURRENT_DATE) + interval '1 year' - interval '1 day')::date`),
   
   // Autres paramètres
   numeroTva: varchar('numero_tva', { length: 50 }),

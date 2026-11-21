@@ -279,6 +279,10 @@ router.post('/inscription', async (req, res) => {
 
     const now = new Date();
     const trialExpiration = getTrialExpirationDate(now);
+    // Année fiscale = année civile en cours (avant : défaut base 2025 → dashboard à 0)
+    const fiscalYear = now.getFullYear();
+    const debutAnneeFiscale = `${fiscalYear}-01-01`;
+    const finAnneeFiscale = `${fiscalYear}-12-31`;
     const usernameStem = normalizedEmail.split('@')[0].replace(/[^a-z0-9]/g, '').slice(0, 24) || 'client';
     const username = `${usernameStem}_${crypto.randomBytes(5).toString('hex')}`;
     const passwordHash = await bcrypt.hash(motDePasse, 10);
@@ -290,6 +294,8 @@ router.post('/inscription', async (req, res) => {
       pays: typeof pays === 'string' && pays.trim() ? pays.trim() : 'Togo',
       devise: 'XOF',
       systemeComptable: 'SYSCOHADA',
+      debutAnneeFiscale,
+      finAnneeFiscale,
       actif: true,
     }).returning();
     entrepriseIdCreated = newEntreprise.id;
@@ -553,14 +559,18 @@ router.post('/webhook/fedapay', async (req, res) => {
 
       // Nouveau client - Créer l'entreprise
       console.log('Traitement nouveau client en cours');
-      
+
+      // Année fiscale = année civile en cours (avant : défaut base 2025)
+      const fiscalYearFedaPay = new Date().getFullYear();
       const [newEntreprise] = await db.insert(entreprises).values({
         nom: inscriptionEnAttente.nomEntreprise,
         email: inscriptionEnAttente.email,
         telephone: inscriptionEnAttente.telephone,
-        pays: inscriptionEnAttente.pays || 'Bénin',
+        pays: inscriptionEnAttente.pays || 'Togo',
         devise: 'XOF',
-        systemeComptable: 'SYSCOHADA'
+        systemeComptable: 'SYSCOHADA',
+        debutAnneeFiscale: `${fiscalYearFedaPay}-01-01`,
+        finAnneeFiscale: `${fiscalYearFedaPay}-12-31`
       }).returning();
 
       // Générer un mot de passe temporaire

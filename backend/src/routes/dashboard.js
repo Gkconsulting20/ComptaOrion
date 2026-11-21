@@ -15,9 +15,8 @@ import {
   lignesEcritures,
   comptesComptables,
   valorisationsStock,
-  transactionsTresorerie,
 } from '../schema.js';
-import { eq, and, gte, lte, desc, sql, inArray, like } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, sql, inArray, like, or } from 'drizzle-orm';
 import {
   VALID_SALES_STATUSES,
   VALID_PURCHASE_STATUSES,
@@ -25,7 +24,6 @@ import {
   calculateCashConversionCycle,
   calculateCurrentInventoryValue,
   calculateGrossMargin,
-  calculateNetCashflow,
   buildMonthlySalesSeries,
   countInclusiveDays,
   dateOnly,
@@ -75,8 +73,10 @@ async function getDashboardPeriod(req, entrepriseId) {
     throw Object.assign(new Error('La période sélectionnée est invalide.'), { status: 400 });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const effectiveEnd = end < today ? end : today;
+  // La période demandée est utilisée telle quelle : plafonner à aujourd'hui
+  // excluait les écritures datées après le jour courant dans le mois en cours
+  // (ex. vente du 25, transport du 28 novembre) et faussait les KPI du mois.
+  const effectiveEnd = end;
   return {
     start,
     end,
@@ -210,6 +210,120 @@ async function getAccountedExpenseDetails(entrepriseId, period, numeroCompte = n
   }));
 }
 
+// ---- Lecture du grand livre pour le tableau de bord ----
+// Un commerçant qui saisit ses ventes au comptant par écritures manuelles
+// (sans facture) voyait un tableau de bord à 0 : les ventes étaient lues
+// dans la table factures, la trésorerie dans transactionsTresorerie (vide
+// sans compte bancaire lié) et le stock dans les produits. Le grand livre
+// est la source unique : les factures y passent aussi leurs écritures
+// (411 / 701 / 443), donc pas de double comptage.
+async function getLedgerSales(entrepriseId, period) {
+  const rows = await db.select({
+    numeroCompte: comptesComptables.numero,
+    montant: sql`COALESCE(SUM(${lignesEcritures.credit} - ${lignesEcritures.debit}), 0)`,
+  }).from(ecritures)
+    .innerJoin(lignesEcritures, and(
+      eq(lignesEcritures.ecritureId, ecritures.id),
+      eq(lignesEcritures.entrepriseId, ecritures.entrepriseId),
+    ))
+    .innerJoin(comptesComptables, and(
+      eq(comptesComptables.id, lignesEcritures.compteComptableId),
+      eq(comptesComptables.entrepriseId, lignesEcritures.entrepriseId),
+    ))
+    .where(and(
+      eq(ecritures.entrepriseId, Number(entrepriseId)),
+      eq(ecritures.valide, true),
+      gte(ecritures.dateEcriture, period.start),
+      lte(ecritures.dateEcriture, period.effectiveEnd),
+      or(like(comptesComptables.numero, '70%'), like(comptesComptables.numero, '443%')),
+    ))
+    .groupBy(comptesComptables.numero);
+  let ventesHT = 0;
+  let tvaCollectee = 0;
+  for (const row of rows) {
+    const montant = Number(row.montant || 0);
+    if (String(row.numeroCompte).startsWith('70')) ventesHT += montant;
+    else if (String(row.numeroCompte).startsWith('443')) tvaCollectee += montant;
+  }
+  return { ventesHT, tvaCollectee, ventesTTC: ventesHT + tvaCollectee };
+}
+
+async function getLedgerCostOfSales(entrepriseId, period) {
+  // CMV d'après le grand livre : achats de marchandises (601) + variations (603).
+  // Utilisé seulement quand aucune facture n'est comptabilisée sur la période
+  // (les factures ont leur propre calcul de CMV par pièce).
+  const rows = await db.select({
+    montant: sql`COALESCE(SUM(${lignesEcritures.debit} - ${lignesEcritures.credit}), 0)`,
+  }).from(ecritures)
+    .innerJoin(lignesEcritures, and(
+      eq(lignesEcritures.ecritureId, ecritures.id),
+      eq(lignesEcritures.entrepriseId, ecritures.entrepriseId),
+    ))
+    .innerJoin(comptesComptables, and(
+      eq(comptesComptables.id, lignesEcritures.compteComptableId),
+      eq(comptesComptables.entrepriseId, lignesEcritures.entrepriseId),
+    ))
+    .where(and(
+      eq(ecritures.entrepriseId, Number(entrepriseId)),
+      eq(ecritures.valide, true),
+      gte(ecritures.dateEcriture, period.start),
+      lte(ecritures.dateEcriture, period.effectiveEnd),
+      or(like(comptesComptables.numero, '601%'), like(comptesComptables.numero, '603%')),
+    ));
+  return Number(rows[0]?.montant || 0);
+}
+
+async function getLedgerCashflow(entrepriseId, period) {
+  // Variation nette des comptes de trésorerie (51, 52, 57) sur la période.
+  const rows = await db.select({
+    montant: sql`COALESCE(SUM(${lignesEcritures.debit} - ${lignesEcritures.credit}), 0)`,
+  }).from(ecritures)
+    .innerJoin(lignesEcritures, and(
+      eq(lignesEcritures.ecritureId, ecritures.id),
+      eq(lignesEcritures.entrepriseId, ecritures.entrepriseId),
+    ))
+    .innerJoin(comptesComptables, and(
+      eq(comptesComptables.id, lignesEcritures.compteComptableId),
+      eq(comptesComptables.entrepriseId, lignesEcritures.entrepriseId),
+    ))
+    .where(and(
+      eq(ecritures.entrepriseId, Number(entrepriseId)),
+      eq(ecritures.valide, true),
+      gte(ecritures.dateEcriture, period.start),
+      lte(ecritures.dateEcriture, period.effectiveEnd),
+      or(
+        like(comptesComptables.numero, '51%'),
+        like(comptesComptables.numero, '52%'),
+        like(comptesComptables.numero, '57%'),
+      ),
+    ));
+  return Number(rows[0]?.montant || 0);
+}
+
+async function getLedgerStockValue(entrepriseId, period) {
+  // Solde du compte 31 (stocks) à la fin de la période — un solde cumulé,
+  // pas un flux : on ne filtre que par la date de fin.
+  const rows = await db.select({
+    montant: sql`COALESCE(SUM(${lignesEcritures.debit} - ${lignesEcritures.credit}), 0)`,
+    lignes: sql`COUNT(*)`,
+  }).from(ecritures)
+    .innerJoin(lignesEcritures, and(
+      eq(lignesEcritures.ecritureId, ecritures.id),
+      eq(lignesEcritures.entrepriseId, ecritures.entrepriseId),
+    ))
+    .innerJoin(comptesComptables, and(
+      eq(comptesComptables.id, lignesEcritures.compteComptableId),
+      eq(comptesComptables.entrepriseId, lignesEcritures.entrepriseId),
+    ))
+    .where(and(
+      eq(ecritures.entrepriseId, Number(entrepriseId)),
+      eq(ecritures.valide, true),
+      lte(ecritures.dateEcriture, period.effectiveEnd),
+      like(comptesComptables.numero, '31%'),
+    ));
+  return { value: Number(rows[0]?.montant || 0), hasLines: Number(rows[0]?.lignes || 0) > 0 };
+}
+
 // Dashboard global - tous les KPIs
 router.get('/global', async (req, res) => {
   try {
@@ -220,7 +334,7 @@ router.get('/global', async (req, res) => {
     }
     
     const period = await getDashboardPeriod(req, eId);
-    const [salesHistory, purchasesHistory, clientPaymentHistory, supplierPaymentHistory, treasuryMovementHistory, allProducts, valuationLayers] = await Promise.all([
+    const [salesHistory, purchasesHistory, clientPaymentHistory, supplierPaymentHistory, allProducts, valuationLayers] = await Promise.all([
       db.select({
         id: factures.id,
         numeroFacture: factures.numeroFacture,
@@ -262,14 +376,6 @@ router.get('/global', async (req, res) => {
         eq(paiementsFournisseurs.entrepriseId, eId),
         lte(paiementsFournisseurs.datePaiement, period.effectiveEnd),
       )),
-      db.select({
-        type: transactionsTresorerie.type,
-        montant: transactionsTresorerie.montant,
-      }).from(transactionsTresorerie).where(and(
-        eq(transactionsTresorerie.entrepriseId, eId),
-        gte(transactionsTresorerie.dateTransaction, period.start),
-        lte(transactionsTresorerie.dateTransaction, period.effectiveEnd),
-      )),
       db.query.produits.findMany({ where: eq(produits.entrepriseId, eId) }),
       db.select({
         produitId: valorisationsStock.produitId,
@@ -283,9 +389,21 @@ router.get('/global', async (req, res) => {
     };
     const ventesData = salesHistory.filter((invoice) => inPeriod(invoice.dateFacture));
     const expenseAccounts = await getAccountedExpensesByAccount(eId, period);
-    const ventesMois = sumMoney(ventesData, 'totalTTC');
+    // Ventes : le grand livre fait foi. Quand aucune facture n'est comptabilisée
+    // sur la période (ventes saisies par écritures manuelles), les ventes sont
+    // lues dans le journal des ventes (comptes 70x + TVA 443) ; sinon on garde
+    // le calcul par factures pour rester cohérent avec le CMV par facture.
+    let ventesMois = sumMoney(ventesData, 'totalTTC');
+    let ventesHT = sumMoney(ventesData, 'totalHT');
+    let costOfSales = await getCostOfSalesForInvoices(eId, ventesData);
+    if (ventesData.length === 0) {
+      const ledgerSales = await getLedgerSales(eId, period);
+      ventesMois = Math.round(ledgerSales.ventesTTC * 100) / 100;
+      ventesHT = Math.round(ledgerSales.ventesHT * 100) / 100;
+      const ledgerCmv = await getLedgerCostOfSales(eId, period);
+      costOfSales = { cmv: Math.round(ledgerCmv * 100) / 100, complete: true };
+    }
     const depensesMois = expenseAccounts.reduce((sum, account) => sum + account.montant, 0);
-    const ventesHT = sumMoney(ventesData, 'totalHT');
 
     // Factures en retard (statut = 'retard') - dans la période sélectionnée
     const facturesRetard = ventesData.filter((invoice) => invoice.statut === 'retard');
@@ -297,15 +415,25 @@ router.get('/global', async (req, res) => {
       Number(product.quantite || 0) < Number(product.stockMinimum || 0)
     );
 
-    const costOfSales = await getCostOfSalesForInvoices(eId, ventesData);
     const grossMargin = calculateGrossMargin(ventesHT, costOfSales.cmv, costOfSales.complete);
-    const cashflow = calculateNetCashflow(treasuryMovementHistory);
+    // Trésorerie : variation nette des comptes 51/52/57 d'après le grand livre
+    // (remplace la lecture de transactionsTresorerie, vide sans compte bancaire lié
+    // et jamais synchronisée pour le journal de caisse).
+    const ledgerCashflow = await getLedgerCashflow(eId, period);
+    const cashflow = Math.round(ledgerCashflow * 100) / 100;
     const dso = calculateWeightedPaymentDelay(salesHistory, clientPaymentHistory);
     const dpo = calculateWeightedPaymentDelay(purchasesHistory, supplierPaymentHistory);
     const { automaticCosting } = await getPlanCapabilities(db, eId, { cache: false });
     const inventoryValue = calculateCurrentInventoryValue(allProducts, valuationLayers, {
       manualCosting: !automaticCosting,
     });
+    // Stock : solde du compte 31 d'après le grand livre quand il existe,
+    // sinon valorisation des produits (comportement historique).
+    const ledgerStock = await getLedgerStockValue(eId, period);
+    const valeurStock = ledgerStock.hasLines
+      ? Math.round(ledgerStock.value * 100) / 100
+      : inventoryValue.value;
+    const valeurStockDisponible = ledgerStock.hasLines ? true : inventoryValue.complete;
 
     // Il n'existe pas encore d'instantanés historiques permettant d'obtenir le stock moyen de la période.
     const dio = null;
@@ -327,14 +455,14 @@ router.get('/global', async (req, res) => {
       cmvDisponible: costOfSales.complete,
       ventesHT: Math.round(ventesHT * 100) / 100,
       cashflow: cashflow.toFixed(2),
-      cashflowDefinition: 'Encaissements moins décaissements enregistrés en trésorerie sur la période',
+      cashflowDefinition: 'Variation nette des comptes de trésorerie (51, 52, 57) sur la période, d’après le grand livre',
       dateRange: { debut: period.start, fin: period.end },
       dso,
       dpo,
       dio,
       ccc,
-      valeurStock: inventoryValue.value,
-      valeurStockDisponible: inventoryValue.complete,
+      valeurStock,
+      valeurStockDisponible,
       dioIndisponibleRaison: 'L’application ne conserve pas encore de valorisations historiques du stock.',
     });
   } catch (error) {

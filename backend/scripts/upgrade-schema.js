@@ -33,6 +33,7 @@ const migrationScopes = new Map([
     'budgets_projets_associatifs', 'financements_projets_associatifs',
     'versements_financements_projets', 'paiements_depenses_projets',
   ])],
+  ['syscohada-labels', new Set(['entreprises', 'comptes_comptables'])],
 ]);
 const scopedTables = scope ? migrationScopes.get(scope) : null;
 if (scope && !scopedTables) throw new Error(`Périmètre de migration inconnu: ${scope}`);
@@ -448,6 +449,35 @@ try {
           WITH CHECK (current_setting('app.current_tenant', true) = '*' OR
             entreprise_id = NULLIF(NULLIF(current_setting('app.current_tenant', true), ''), '*')::integer);
       `);
+    }
+  }
+  // Correctifs issus du test d'exercice complet de novembre 2026 (21 nov. 2026) :
+  // libellés SYSCOHADA, comptes 571/31 manquants, défauts année fiscale et pays.
+  // Données uniquement, idempotent (gardé par l'ancien libellé / NOT EXISTS).
+  if (!scopedTables || scope === 'syscohada-labels') {
+    console.log(`Correctifs SYSCOHADA novembre 2026 (${apply ? 'application' : 'simulation'})`);
+    const syscohadaFixes = [
+      // Année fiscale par défaut = année civile en cours (avant : 2025 fixe)
+      `ALTER TABLE entreprises ALTER COLUMN debut_annee_fiscale SET DEFAULT date_trunc('year', CURRENT_DATE)::date`,
+      `ALTER TABLE entreprises ALTER COLUMN fin_annee_fiscale SET DEFAULT (date_trunc('year', CURRENT_DATE) + interval '1 year' - interval '1 day')::date`,
+      // Pays par défaut = Togo (avant : Côte d'Ivoire)
+      `ALTER TABLE entreprises ALTER COLUMN pays SET DEFAULT 'Togo'`,
+      // Libellés SYSCOHADA (renommés seulement s'ils portent encore l'ancien libellé)
+      `UPDATE comptes_comptables SET nom = 'Banques' WHERE numero = '521' AND nom = 'Crédits de trésorerie'`,
+      `UPDATE comptes_comptables SET nom = 'Locations et charges locatives' WHERE numero = '622' AND nom = 'Rémunérations d''intermédiaires et honoraires'`,
+      `UPDATE comptes_comptables SET nom = 'Déplacements, missions et réceptions' WHERE numero = '625' AND nom = 'Frais de télécommunication'`,
+      `UPDATE comptes_comptables SET nom = 'Rémunérations du personnel' WHERE numero = '661' AND nom = 'Intérêts des emprunts'`,
+      // Comptes 571 (Caisse) et 31 (Stock) manquants dans les plans existants
+      `INSERT INTO comptes_comptables (entreprise_id, numero, nom, type, classe, actif)
+        SELECT DISTINCT entreprise_id, '571', 'Caisse', 'actif', '5', true FROM comptes_comptables
+        WHERE NOT EXISTS (SELECT 1 FROM comptes_comptables c2 WHERE c2.entreprise_id = comptes_comptables.entreprise_id AND c2.numero = '571')`,
+      `INSERT INTO comptes_comptables (entreprise_id, numero, nom, type, classe, actif)
+        SELECT DISTINCT entreprise_id, '31', 'Stock', 'actif', '3', true FROM comptes_comptables
+        WHERE NOT EXISTS (SELECT 1 FROM comptes_comptables c2 WHERE c2.entreprise_id = comptes_comptables.entreprise_id AND c2.numero = '31')`,
+    ];
+    for (const statement of syscohadaFixes) {
+      console.log(statement.split('\n')[0].slice(0, 150));
+      if (apply) await client.query(statement);
     }
   }
   await client.query(apply ? 'COMMIT' : 'ROLLBACK');
