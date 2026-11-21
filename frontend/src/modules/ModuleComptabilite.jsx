@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DownloadReportButton from '../components/DownloadReportButton';
 import { Modal } from '../components/Modal';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
@@ -1402,33 +1403,7 @@ export function ModuleComptabilite() {
                 >
                   🖨️ Imprimer
                 </button>
-                <button 
-                  onClick={() => {
-                    const content = document.getElementById('grandlivre-content');
-                    const htmlContent = `
-                      <html>
-                        <head><meta charset="utf-8"><title>Grand Livre</title>
-                          <style>body { font-family: Arial; margin: 20px; font-size: 11px; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 6px; } th { background: #f5f5f5; }</style>
-                        </head>
-                        <body>
-                          <h2>${entrepriseInfo?.nom || ''}</h2>
-                          <h3>Grand Livre - ${periode.dateDebut} au ${periode.dateFin}</h3>
-                          ${content.innerHTML}
-                        </body>
-                      </html>
-                    `;
-                    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `Grand_Livre_${periode.dateDebut}_${periode.dateFin}.html`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                  ⬇️ Télécharger
-                </button>
+                                <DownloadReportButton elementId="grandlivre-content" baseName={`Grand_Livre_${periode.dateDebut}_${periode.dateFin}`} title={`Grand Livre - ${periode.dateDebut} au ${periode.dateFin}`} />
               </div>
               <div id="grandlivre-content">
               {data.grandLivreComptes.map(compte => (
@@ -1534,33 +1509,7 @@ export function ModuleComptabilite() {
                 >
                   🖨️ Imprimer
                 </button>
-                <button 
-                  onClick={() => {
-                    const content = document.getElementById('balance-content');
-                    const htmlContent = `
-                      <html>
-                        <head><meta charset="utf-8"><title>Balance Générale</title>
-                          <style>body { font-family: Arial; margin: 20px; font-size: 11px; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 6px; } th { background: #f5f5f5; }</style>
-                        </head>
-                        <body>
-                          <h2>${entrepriseInfo?.nom || ''}</h2>
-                          <h3>Balance Générale - ${periode.dateDebut} au ${periode.dateFin}</h3>
-                          ${content.innerHTML}
-                        </body>
-                      </html>
-                    `;
-                    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `Balance_Generale_${periode.dateDebut}_${periode.dateFin}.html`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                  ⬇️ Télécharger
-                </button>
+                                <DownloadReportButton elementId="balance-content" baseName={`Balance_Generale_${periode.dateDebut}_${periode.dateFin}`} title={`Balance Générale - ${periode.dateDebut} au ${periode.dateFin}`} />
               </div>
               <div id="balance-content">
               <Table
@@ -3105,43 +3054,7 @@ export function ModuleComptabilite() {
                 >
                   🖨️ Imprimer
                 </button>
-                <button 
-                  onClick={() => {
-                    const content = document.getElementById('rapport-content');
-                    const reportTitle = rapportModal.type === 'bilan' ? 'Bilan_Comptable' : rapportModal.type === 'resultat' ? 'Compte_Resultat' : rapportModal.type === 'journaux' ? 'Rapport_Journaux' : rapportModal.type === 'flux' ? 'Flux_Tresorerie' : 'Journal_General';
-                    const htmlContent = `
-                      <html>
-                        <head>
-                          <meta charset="utf-8">
-                          <title>${reportTitle}</title>
-                          <style>
-                            body { font-family: Arial, sans-serif; margin: 20px; font-size: 12px; }
-                            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-                            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                            th { background-color: #f5f5f5; }
-                          </style>
-                        </head>
-                        <body>
-                          <h2>${rapportModal.data?.entreprise?.nom || 'ComptaOrion'}</h2>
-                          <p>${rapportModal.data?.entreprise?.adresse || ''} | ${rapportModal.data?.entreprise?.telephone || ''}</p>
-                          <h3>${reportTitle.replace(/_/g, ' ')}</h3>
-                          <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
-                          ${content.innerHTML}
-                        </body>
-                      </html>
-                    `;
-                    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${reportTitle}_${rapportModal.data?.entreprise?.nom?.replace(/\s+/g, '_') || 'rapport'}_${periode.dateDebut}_${periode.dateFin}.html`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
-                >
-                  ⬇️ Télécharger
-                </button>
+                                <DownloadReportButton elementId="rapport-content" baseName={`${reportTitle}_${rapportModal.data?.entreprise?.nom?.replace(/\s+/g, '_') || 'rapport'}_${periode.dateDebut}_${periode.dateFin}`} title={reportTitle.replace(/_/g, ' ')} style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }} />
               </div>
               <Button variant="secondary" onClick={() => setRapportModal({ open: false, type: null, data: null, loading: false })}>
                 Fermer

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DownloadReportButton from '../components/DownloadReportButton';
 import api from '../api';
 import { readApiList, readAutomaticCosting } from '../utils/apiList.js';
 import { Table } from '../components/Table';
@@ -967,33 +968,7 @@ export function StockInventaire() {
               >
                 🖨️ Imprimer
               </button>
-              <button 
-                onClick={() => {
-                  const content = document.getElementById('stock-rapport-content');
-                  const htmlContent = `
-                    <html>
-                      <head><meta charset="utf-8"><title>Rapport Inventaire</title>
-                        <style>body { font-family: Arial; margin: 20px; font-size: 11px; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 6px; } th { background: #f5f5f5; }</style>
-                      </head>
-                      <body>
-                        <h2>Rapport d'Inventaire</h2>
-                        <p>Situation actuelle du stock au ${new Date().toLocaleDateString('fr-FR')}</p>
-                        ${content.innerHTML}
-                      </body>
-                    </html>
-                  `;
-                  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `Rapport_Inventaire_Actuel_${new Date().toISOString().slice(0, 10)}.html`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-                style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-              >
-                ⬇️ Télécharger
-              </button>
+                            <DownloadReportButton elementId="stock-rapport-content" baseName={`Rapport_Inventaire_Actuel_${new Date().toISOString().slice(0, 10)}`} title="Rapport d'Inventaire" />
             </div>}
           >
             <p style={{ margin: 0, color: '#64748b' }}>

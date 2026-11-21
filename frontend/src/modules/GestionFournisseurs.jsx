@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DownloadReportButton from '../components/DownloadReportButton';
 import { Modal } from '../components/Modal';
 import { Table } from '../components/Table';
 import { Button } from '../components/Button';
@@ -2425,34 +2426,7 @@ export function GestionFournisseurs() {
               >
                 🖨️ Imprimer
               </button>
-              <button 
-                disabled={supplierReport.loading || Boolean(supplierReport.error)}
-                onClick={() => {
-                  const content = document.getElementById('fournisseur-rapport-content');
-                  const htmlContent = `
-                    <html>
-                      <head><meta charset="utf-8"><title>Rapport Fournisseurs</title>
-                        <style>body { font-family: Arial; margin: 20px; font-size: 11px; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 6px; } th { background: #f5f5f5; }</style>
-                      </head>
-                      <body>
-                        <h2>Rapport Fournisseurs</h2>
-                        <p>Période: ${periode.dateDebut} au ${periode.dateFin}</p>
-                        ${content.innerHTML}
-                      </body>
-                    </html>
-                  `;
-                  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `Rapport_Fournisseurs_${periode.dateDebut}_${periode.dateFin}.html`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-                style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-              >
-                ⬇️ Télécharger
-              </button>
+                            <DownloadReportButton elementId="fournisseur-rapport-content" baseName={`Rapport_Fournisseurs_${periode.dateDebut}_${periode.dateFin}`} title={`Rapport Fournisseurs - ${periode.dateDebut} au ${periode.dateFin}`} />
             </div>
           </ReportPageHeader>
           

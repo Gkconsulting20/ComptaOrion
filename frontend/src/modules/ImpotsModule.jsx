@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DownloadReportButton from '../components/DownloadReportButton';
 import PeriodFilter, { getPeriodeDates } from '../components/PeriodFilter';
 import ReportPageHeader from '../components/ReportPageHeader';
 import api from '../api';
@@ -346,37 +347,7 @@ export function ImpotsModule() {
           >
             🖨️ Imprimer
           </button>
-          <button 
-            onClick={() => {
-              const htmlContent = `
-                <html>
-                  <head><meta charset="utf-8"><title>Résumé TVA</title>
-                    <style>body { font-family: Arial; margin: 20px; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 10px; } th { background: #f5f5f5; }</style>
-                  </head>
-                  <body>
-                    <h2>Résumé TVA</h2>
-                    <p>Période: ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}</p>
-                    <table>
-                      <tr><th>Type</th><th>Montant</th></tr>
-                      <tr><td>TVA facturée (comptes 443*, hors 4434)</td><td>${tvaResume.tvaCollectee.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td></tr>
-                      <tr><td>TVA récupérable (comptes 445*)</td><td>${tvaResume.tvaDeductible.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</td></tr>
-                      <tr><td><strong>${tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA'}</strong></td><td><strong>${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF</strong></td></tr>
-                    </table>
-                  </body>
-                </html>
-              `;
-              const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `Resume_TVA_${periodeTVA.dateDebut}_${periodeTVA.dateFin}.html`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            style={{ padding: '8px 16px', backgroundColor: '#27ae60', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            ⬇️ Télécharger
-          </button>
+                    <DownloadReportButton rows={[['Type', 'Montant'], ['TVA facturée (comptes 443*, hors 4434)', `${tvaResume.tvaCollectee.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`], ['TVA récupérable (comptes 445*)', `${tvaResume.tvaDeductible.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`], [tvaResume.tvaADecaisser >= 0 ? 'TVA à Décaisser' : 'Crédit de TVA', `${Math.abs(tvaResume.tvaADecaisser).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF`]]} baseName={`Resume_TVA_${periodeTVA.dateDebut}_${periodeTVA.dateFin}`} title={`Résumé TVA - ${periodeTVA.dateDebut} au ${periodeTVA.dateFin}`} />
         </div>
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
