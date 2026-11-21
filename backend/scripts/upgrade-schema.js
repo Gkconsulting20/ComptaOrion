@@ -468,11 +468,11 @@ try {
       `UPDATE comptes_comptables SET nom = 'Déplacements, missions et réceptions' WHERE numero = '625' AND nom = 'Frais de télécommunication'`,
       `UPDATE comptes_comptables SET nom = 'Rémunérations du personnel' WHERE numero = '661' AND nom = 'Intérêts des emprunts'`,
       // Comptes 571 (Caisse) et 31 (Stock) manquants dans les plans existants
-      `INSERT INTO comptes_comptables (entreprise_id, numero, nom, type, classe, actif)
-        SELECT DISTINCT entreprise_id, '571', 'Caisse', 'actif', '5', true FROM comptes_comptables
+      `INSERT INTO comptes_comptables (entreprise_id, numero, nom, type, actif)
+        SELECT DISTINCT entreprise_id, '571', 'Caisse', 'actif', true FROM comptes_comptables
         WHERE NOT EXISTS (SELECT 1 FROM comptes_comptables c2 WHERE c2.entreprise_id = comptes_comptables.entreprise_id AND c2.numero = '571')`,
-      `INSERT INTO comptes_comptables (entreprise_id, numero, nom, type, classe, actif)
-        SELECT DISTINCT entreprise_id, '31', 'Stock', 'actif', '3', true FROM comptes_comptables
+      `INSERT INTO comptes_comptables (entreprise_id, numero, nom, type, actif)
+        SELECT DISTINCT entreprise_id, '31', 'Stock', 'actif', true FROM comptes_comptables
         WHERE NOT EXISTS (SELECT 1 FROM comptes_comptables c2 WHERE c2.entreprise_id = comptes_comptables.entreprise_id AND c2.numero = '31')`,
     ];
     for (const statement of syscohadaFixes) {
