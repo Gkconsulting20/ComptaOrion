@@ -47,8 +47,6 @@ Tu aides les utilisateurs avec:
 - La gestion des clients et fournisseurs
 - La gestion des stocks et inventaires
 - La trésorerie et les paiements
-- Les immobilisations et amortissements
-- Les ressources humaines et la paie
 
 Réponds en français de manière claire, concise et professionnelle.
 Si tu ne connais pas la réponse, dis-le honnêtement.`;
@@ -88,10 +86,8 @@ router.get('/suggestions', async (req, res) => {
     const suggestions = [
       "Comment créer une facture client ?",
       "Explique-moi le système SYSCOHADA",
-      "Comment gérer les immobilisations ?",
       "Quelle est la différence entre débit et crédit ?",
-      "Comment faire un rapprochement bancaire ?",
-      "Comment calculer l'amortissement linéaire ?"
+      "Comment faire un rapprochement bancaire ?"
     ];
 
     res.json({ success: true, suggestions });

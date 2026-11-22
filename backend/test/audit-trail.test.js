@@ -111,7 +111,6 @@ test('les modules financiers modifiés journalisent les changements dans la tran
     '../src/routes/receptions.js',
     '../src/routes/ecritures-recurrentes.js',
     '../src/routes/devises.js',
-    '../src/routes/immobilisations.js',
     '../src/routes/impots.js',
     '../src/routes/upload.js'
   ];
@@ -124,18 +123,12 @@ test('les modules financiers modifiés journalisent les changements dans la tran
   }
 });
 
-test('les réceptions et actifs utilisent le tenant et l’auteur de la session', async () => {
+test('les réceptions utilisent le tenant et l’auteur de la session', async () => {
   const reception = await read('../src/routes/receptions.js');
-  const assets = await read('../src/routes/immobilisations.js');
 
   assert.match(reception, /eq\(commandesAchat\.entrepriseId, req\.entrepriseId\)/);
   assert.match(reception, /userId:\s*req\.user\.id/);
   assert.doesNotMatch(reception, /req\.body\.userId/);
-
-  assert.match(assets, /entrepriseId:\s*req\.entrepriseId/);
-  assert.match(assets, /extractAuditInfo\(req\)/);
-  assert.doesNotMatch(assets, /const \{[^}]*userId[^}]*\}\s*=\s*req\.body/);
-  assert.doesNotMatch(assets, /const \{[^}]*entrepriseId[^}]*\}\s*=\s*req\.body/);
 });
 
 test('les anciennes routes de consultation d’audit restent isolées par entreprise', async () => {

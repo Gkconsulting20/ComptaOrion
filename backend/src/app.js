@@ -18,7 +18,6 @@ import dépensesRoutes from './routes/dépenses.js';
 import comptabiliteRoutes from './routes/comptabilite.js';
 import tresorerieRoutes from './routes/tresorerie.js';
 import auditLogsRoutes from './routes/audit-logs.js';
-import paieRoutes from './routes/paie.js';
 import bonsLivraisonRoutes from './routes/bons-livraison.js';
 import uploadRoutes from './routes/upload.js';
 import ecrituresRecurrentesRoutes from './routes/ecritures-recurrentes.js';
@@ -142,9 +141,6 @@ app.use('/api/ecritures-recurrentes', ecrituresRecurrentesRoutes);
 // Module Trésorerie
 app.use('/api/tresorerie', tresorerieRoutes);
 app.use('/api/audit-logs', auditLogsRoutes);
-
-// Module Paie & RH (MASQUÉ - structure créée mais non visible dans menu)
-app.use('/api/paie', paieRoutes);
 
 // Module Fournisseurs & Achats
 app.use('/api/fournisseurs', fournisseursRoutes);

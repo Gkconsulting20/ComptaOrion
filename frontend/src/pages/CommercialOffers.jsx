@@ -108,7 +108,7 @@ export default function CommercialOffers() {
       <aside className="commercial-offers__internal-note">
         <strong>Repères pour l’équipe commerciale</strong>
         <span>
-          Paie &amp; RH, Assistant IA et Immobilisations sont exclus de l’offre actuelle.
+          Assistant IA est exclu de l’offre actuelle.
           Un utilisateur supplémentaire est proposé à 2 500,00 XOF par mois.
           Le calcul automatique du coût est contrôlé côté serveur pour Premium et l’essai; les autres différences
           Standard/Premium doivent encore être vérifiées côté serveur avant de promettre une restriction par forfait.

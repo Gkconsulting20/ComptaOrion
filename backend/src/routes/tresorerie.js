@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, employes, comptesComptables, rapprochementsBancaires } from '../schema.js';
+import { transactionsTresorerie, comptesBancaires, factures, facturesAchat, comptesComptables, rapprochementsBancaires } from '../schema.js';
 import { eq, and, like, inArray, or, ne, notInArray, between, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { synchroniserTransactionDepuisEcriture } from '../services/treasuryJournalSync.js';

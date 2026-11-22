@@ -16,7 +16,7 @@ import { markClosedFiscalPeriodConflict } from './fiscalPeriodErrors.js';
 import { buildCashSettlementEntryLines } from './cashDiscountAccounting.js';
 import { ACCOUNTING_ACCOUNT_ROLES, isPriceVarianceAccount } from './accountingAccountMappings.js';
 
-export const JOURNAL_CODES = {
+const JOURNAL_CODES = {
   ACHATS: 'AC',
   VENTES: 'VT',
   BANQUE: 'BQ',
@@ -26,7 +26,7 @@ export const JOURNAL_CODES = {
 
 const VALID_JOURNAL_TYPES = new Set(['achats', 'ventes', 'banque', 'caisse', 'od']);
 
-export const COMPTES_SYSCOHADA = {
+const COMPTES_SYSCOHADA = {
   STOCK_MARCHANDISES: '31',
   CAPITAL_SOCIAL: '101',
   FOURNISSEURS: '401',
@@ -35,9 +35,6 @@ export const COMPTES_SYSCOHADA = {
   CHEQUES_A_ENCAISSER: '5112',
   ACHATS_RETOUR: '609',
   PERSONNEL_AVANCES: '421',
-  PERSONNEL_REMUNERATIONS_DUES: '421',
-  ORGANISMES_SOCIAUX: '431',
-  AVANCES_SALAIRES: '422',
   ETAT_TVA_DUE: '4434',
   ETAT_IMPOTS: '44',
   BANQUE: '52',
