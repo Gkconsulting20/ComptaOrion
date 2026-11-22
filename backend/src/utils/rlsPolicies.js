@@ -12,7 +12,7 @@ import { runtimeContext } from '../runtime-context.js';
 const RLS_EXCLUDED_TABLES = new Set([
   'users',
   'saas_clients',
-  'lite_idempotency',
+  'idempotency',
   'accountant_invitations',
 ]);
 

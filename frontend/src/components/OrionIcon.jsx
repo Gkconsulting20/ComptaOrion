@@ -7,6 +7,7 @@ const ICONS = {
   fournisseurs: <><path d="M3 6.5h11v11H3z" /><path d="M14 10h4l3 3v4h-7z" /><circle cx="7" cy="18" r="1.7" /><circle cx="18" cy="18" r="1.7" /></>,
   tresorerie: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18M15.5 14h2" /><path d="M6 5V3.5h12V5" /></>,
   stock: <><path d="m12 3 8.5 4.6v8.8L12 21l-8.5-4.6V7.6L12 3Z" /><path d="m3.8 7.8 8.2 4.5 8.2-4.5M12 12.3V21M8 5.2l8.4 4.7" /></>,
+  depenses: <><path d="M6 3.5h12V20l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 20V3.5Z" /><path d="M9.5 8h5M9.5 12h5" /></>,
   comptabilite: <><path d="M6 3.5h8l4 4v13H6z" /><path d="M14 3.5v4h4M9 12h6M9 16h6" /></>,
   associations: <><circle cx="8" cy="8" r="2.6" /><circle cx="16" cy="8" r="2.6" /><path d="M3.5 19c.3-2.8 1.8-4.2 4.5-4.2 1.7 0 3 .6 3.8 1.8M20.5 19c-.3-2.8-1.8-4.2-4.5-4.2-1.7 0-3 .6-3.8 1.8" /><path d="m10 12 2 2 2-2" /></>,
   impots: <><path d="M3 9h18L12 4 3 9ZM5 10v8M9 10v8M15 10v8M19 10v8M3 20h18" /></>,

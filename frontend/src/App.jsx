@@ -34,6 +34,7 @@ const AssociationAccountingModule = loadNamed(
   () => import('./modules/AssociationAccountingModule'),
   'AssociationAccountingModule'
 );
+const DepensesModule = loadNamed(() => import('./modules/DepensesModule'), 'DepensesModule');
 
 function LazyModuleFallback() {
   return (
@@ -54,6 +55,7 @@ const ALL_MODULES = [
   { id: 'fournisseurs', label: 'Fournisseurs', requiresSuperAdmin: false },
   { id: 'tresorerie', label: 'Trésorerie', requiresSuperAdmin: false },
   { id: 'stock', label: 'Stock', requiresSuperAdmin: false },
+  { id: 'depenses', label: 'Dépenses', requiresSuperAdmin: false },
   { id: 'comptabilite', label: 'Comptabilité', requiresSuperAdmin: false },
   { id: 'associations', label: 'Comptabilité associations' },
   { id: 'impots', label: 'Impôts', requiresSuperAdmin: false },
@@ -68,7 +70,7 @@ const ALL_MODULES = [
 const NAVIGATION_GROUPS = [
   { title: 'Pilotage', moduleIds: ['dashboard'] },
   { title: 'Tiers', moduleIds: ['clients', 'fournisseurs'] },
-  { title: 'Opérations', moduleIds: ['tresorerie', 'stock'] },
+  { title: 'Opérations', moduleIds: ['tresorerie', 'stock', 'depenses'] },
   { title: 'Comptabilité', moduleIds: ['comptabilite', 'associations', 'impots'] },
   { title: 'Configuration', moduleIds: ['integrations', 'parametres'] },
   { title: 'Administration', moduleIds: ['saas-admin', 'authentication'] },
@@ -261,6 +263,7 @@ export default function App() {
       case 'fournisseurs': return <GestionFournisseurs />;
       case 'tresorerie': return <TresorerieModule />;
       case 'stock': return <StockInventaire />;
+      case 'depenses': return <DepensesModule />;
       case 'comptabilite': return <ModuleComptabilite />;
       case 'associations': return <AssociationAccountingModule />;
       case 'impots': return <ImpotsModule />;

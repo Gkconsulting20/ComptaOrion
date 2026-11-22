@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import app from '../src/app.js';
 import { pool } from '../src/db.js';
 
-test('contrat HTTP ERP sans session et retrait de Lite', async t => {
+test('contrat HTTP ERP sans session', async t => {
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(async () => {
@@ -20,8 +20,6 @@ test('contrat HTTP ERP sans session et retrait de Lite', async t => {
     const response = await fetch(`${origin}${path}`);
     assert.equal(response.status, 401, `API privée : ${path}`);
   }
-  const retired = await fetch(`${origin}/lite`);
-  assert.equal(retired.status, 410);
 });
 
 test('le serveur ne crée plus de compte à mot de passe prédéfini', async () => {

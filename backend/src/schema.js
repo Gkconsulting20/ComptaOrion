@@ -83,7 +83,7 @@ export const projetsAssociatifs = pgTable('projets_associatifs', {
   codeEntrepriseIdx: uniqueIndex('projets_associatifs_entreprise_code_idx').on(table.entrepriseId, table.code),
 }));
 
-export const liteIdempotency = pgTable('lite_idempotency', {
+export const idempotency = pgTable('idempotency', {
   entrepriseId: integer('entreprise_id').notNull(),
   idempotencyKey: varchar('idempotency_key', { length: 128 }).notNull(),
   status: varchar('status', { length: 16 }).notNull().default('processing'),
@@ -93,7 +93,7 @@ export const liteIdempotency = pgTable('lite_idempotency', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   pk: primaryKey({ columns: [table.entrepriseId, table.idempotencyKey] }),
-  keyUnique: uniqueIndex('lite_idempotency_key_unique').on(table.idempotencyKey),
+  keyUnique: uniqueIndex('idempotency_key_unique').on(table.idempotencyKey),
 }));
 
 export const users = pgTable('users', {
@@ -881,7 +881,7 @@ export const remboursementsEmployes = pgTable('remboursements_employes', {
 });
 
 // ==========================================
-// MODULE 7: EMPLOYÉS (ORION HR LITE)
+// MODULE 7: EMPLOYÉS (annuaire)
 // ==========================================
 
 // Table employés (annuaire, utilisée par les notes de frais et l'import)

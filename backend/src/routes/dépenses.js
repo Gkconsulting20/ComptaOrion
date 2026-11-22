@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, employes, liteIdempotency, projetsAssociatifs, comptesComptables } from '../schema.js';
+import { depenses, categoriesDepenses, approvalsDepenses, remboursementsEmployes, employes, idempotency, projetsAssociatifs, comptesComptables } from '../schema.js';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import { createEcritureDepense, createEcritureChargeNoteFrais } from '../services/comptabiliteService.js';
 import { claimIdempotentOperation } from '../middleware/idempotency.js';
@@ -157,15 +157,15 @@ router.post('/create', async (req, res) => {
       entrepriseId: req.entrepriseId,
       idempotencyKey: req.idempotencyKey,
       insertClaim: async () => {
-        const [claim] = await tx.insert(liteIdempotency).values({
+        const [claim] = await tx.insert(idempotency).values({
           entrepriseId: req.entrepriseId,
           idempotencyKey: req.idempotencyKey,
         }).onConflictDoNothing().returning();
         return claim;
       },
       findByKey: async () => {
-        const [existing] = await tx.select().from(liteIdempotency)
-          .where(eq(liteIdempotency.idempotencyKey, req.idempotencyKey))
+        const [existing] = await tx.select().from(idempotency)
+          .where(eq(idempotency.idempotencyKey, req.idempotencyKey))
           .limit(1);
         return existing;
       },
@@ -185,7 +185,7 @@ router.post('/create', async (req, res) => {
       [categorie] = await tx.insert(categoriesDepenses).values({
         entrepriseId: req.entrepriseId,
         nom: 'Divers',
-        description: 'Dépenses courantes enregistrées depuis ComptaOrion Lite'
+        description: 'Dépenses courantes enregistrées depuis ComptaOrion'
       }).returning();
       await logAudit({
         ...extractAuditInfo(req),
@@ -245,7 +245,7 @@ router.post('/create', async (req, res) => {
     });
 
     const body = depense[0];
-    if (req.idempotencyKey) await tx.update(liteIdempotency).set({ status: 'completed', responseStatus: 200, responseBody: body, updatedAt: new Date() }).where(and(eq(liteIdempotency.entrepriseId, req.entrepriseId), eq(liteIdempotency.idempotencyKey, req.idempotencyKey)));
+    if (req.idempotencyKey) await tx.update(idempotency).set({ status: 'completed', responseStatus: 200, responseBody: body, updatedAt: new Date() }).where(and(eq(idempotency.entrepriseId, req.entrepriseId), eq(idempotency.idempotencyKey, req.idempotencyKey)));
     return { replay: false, status: 200, body };
     });
     return res.status(result.status).json(result.body);
@@ -266,6 +266,127 @@ router.get('/list', async (req, res) => {
     res.json(depensesList);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// MODIFICATION / SUPPRESSION DÉPENSE
+// Une dépense approuvée a déjà une écriture comptable : elle ne peut plus
+// être modifiée ni supprimée (passer par une contre-passation en OD).
+// ==========================================
+
+router.put('/:id', async (req, res) => {
+  try {
+    const depenseId = Number(req.params.id);
+    if (!Number.isSafeInteger(depenseId) || depenseId <= 0) {
+      return res.status(400).json({ error: 'Identifiant de dépense invalide.' });
+    }
+    const { description, montant, dateDepense, categorieId, projetId } = req.body;
+    const numericAmount = Number(montant);
+    const parsedDate = dateDepense ? new Date(dateDepense) : null;
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0 ||
+        !parsedDate || Number.isNaN(parsedDate.getTime()) || !String(description || '').trim()) {
+      return res.status(400).json({ error: 'Montant, date et description sont obligatoires et doivent être valides.' });
+    }
+    const rawProjectId = projetId;
+    const parsedProjectId = rawProjectId ? Number(rawProjectId) : null;
+    if (rawProjectId && (!Number.isSafeInteger(parsedProjectId) || parsedProjectId <= 0)) {
+      return res.status(400).json({ error: 'Projet associatif invalide.' });
+    }
+    const updated = await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(depenses).where(and(
+        eq(depenses.id, depenseId),
+        eq(depenses.entrepriseId, req.entrepriseId),
+      )).for('update').limit(1);
+      if (!previous) throw Object.assign(new Error('Dépense introuvable.'), { status: 404 });
+      if (previous.statut !== 'en_attente') {
+        throw Object.assign(new Error('Seule une dépense en attente peut être modifiée.'), { status: 409 });
+      }
+      if (categorieId) {
+        const [category] = await tx.select().from(categoriesDepenses).where(and(
+          eq(categoriesDepenses.id, Number(categorieId)),
+          eq(categoriesDepenses.entrepriseId, req.entrepriseId),
+        )).limit(1);
+        if (!category) throw Object.assign(new Error('Catégorie introuvable.'), { status: 404 });
+      }
+      if (parsedProjectId) {
+        const [project] = await tx.select().from(projetsAssociatifs).where(and(
+          eq(projetsAssociatifs.id, parsedProjectId),
+          eq(projetsAssociatifs.entrepriseId, req.entrepriseId),
+          eq(projetsAssociatifs.statut, 'actif'),
+        )).limit(1);
+        if (!project) throw Object.assign(new Error('Projet associatif introuvable ou inactif.'), { status: 404 });
+      }
+      const [depense] = await tx.update(depenses).set({
+        description: String(description).trim(),
+        montant: numericAmount,
+        dateDepense: parsedDate,
+        categorieId: categorieId ? Number(categorieId) : previous.categorieId,
+        projetId: parsedProjectId,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(depenses.id, depenseId),
+        eq(depenses.entrepriseId, req.entrepriseId),
+      )).returning();
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'UPDATE',
+        table: 'depenses',
+        recordId: depense.id,
+        ancienneValeur: previous,
+        nouvelleValeur: depense,
+        description: `Dépense ${depense.id} modifiée: ${depense.description} (${numericAmount} XOF)`,
+        executor: tx,
+        required: true,
+      });
+      return depense;
+    });
+    res.json(updated);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const depenseId = Number(req.params.id);
+    if (!Number.isSafeInteger(depenseId) || depenseId <= 0) {
+      return res.status(400).json({ error: 'Identifiant de dépense invalide.' });
+    }
+    const deleted = await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(depenses).where(and(
+        eq(depenses.id, depenseId),
+        eq(depenses.entrepriseId, req.entrepriseId),
+      )).for('update').limit(1);
+      if (!previous) throw Object.assign(new Error('Dépense introuvable.'), { status: 404 });
+      if (previous.statut !== 'en_attente') {
+        throw Object.assign(new Error('Seule une dépense en attente peut être supprimée : une dépense approuvée a déjà une écriture comptable.'), { status: 409 });
+      }
+      // La demande d'approbation initiale référence la dépense (sans cascade) :
+      // la supprimer d'abord, dans la même transaction.
+      await tx.delete(approvalsDepenses).where(and(
+        eq(approvalsDepenses.depenseId, depenseId),
+        eq(approvalsDepenses.entrepriseId, req.entrepriseId),
+      ));
+      await tx.delete(depenses).where(and(
+        eq(depenses.id, depenseId),
+        eq(depenses.entrepriseId, req.entrepriseId),
+      ));
+      await logAudit({
+        ...extractAuditInfo(req),
+        action: 'DELETE',
+        table: 'depenses',
+        recordId: previous.id,
+        ancienneValeur: previous,
+        description: `Dépense ${previous.id} supprimée: ${previous.description} (${previous.montant} XOF)`,
+        executor: tx,
+        required: true,
+      });
+      return previous;
+    });
+    res.json({ success: true, id: deleted.id });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 

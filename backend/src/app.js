@@ -187,9 +187,6 @@ app.get('/api', (req, res) => {
 // ===============================================
 // Servir les fichiers statiques du frontend buildé
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
-app.use('/lite', (_req, res) => {
-  res.status(410).type('text').send('ComptaOrion Lite a été transféré dans un projet indépendant.');
-});
 if (process.env.RUNTIME_CLOUDFLARE !== 'true') {
   app.use(express.static(frontendDistPath));
 }

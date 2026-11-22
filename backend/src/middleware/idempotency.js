@@ -5,7 +5,7 @@ let tableReady;
 async function ensureTable() {
   if (!tableReady) {
     tableReady = pool.query(`
-      CREATE TABLE IF NOT EXISTS lite_idempotency (
+      CREATE TABLE IF NOT EXISTS idempotency (
         entreprise_id INTEGER NOT NULL,
         idempotency_key VARCHAR(128) NOT NULL,
         status VARCHAR(16) NOT NULL DEFAULT 'processing',
@@ -15,8 +15,8 @@ async function ensureTable() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (entreprise_id, idempotency_key)
       );
-      CREATE UNIQUE INDEX IF NOT EXISTS lite_idempotency_key_unique
-        ON lite_idempotency (idempotency_key)
+      CREATE UNIQUE INDEX IF NOT EXISTS idempotency_key_unique
+        ON idempotency (idempotency_key)
     `);
   }
   await tableReady;
@@ -65,8 +65,7 @@ export async function idempotencyMiddleware(req, res, next) {
     return res.status(400).json({ success: false, message: 'Clé d’idempotence invalide' });
   }
   req.idempotencyKey = rawKey;
-  if ((req.method === 'POST' && req.path === '/factures/lite-sale') ||
-      (req.method === 'POST' && req.path === '/depenses/create')) {
+  if (req.method === 'POST' && req.path === '/depenses/create') {
     try {
       await ensureTable();
       return next();
@@ -78,7 +77,7 @@ export async function idempotencyMiddleware(req, res, next) {
   try {
     await ensureTable();
     const claim = await pool.query(
-      `INSERT INTO lite_idempotency (entreprise_id, idempotency_key)
+      `INSERT INTO idempotency (entreprise_id, idempotency_key)
        VALUES ($1, $2)
        ON CONFLICT (entreprise_id, idempotency_key) DO NOTHING
        RETURNING status`,
@@ -87,7 +86,7 @@ export async function idempotencyMiddleware(req, res, next) {
     if (claim.rowCount === 0) {
       const existing = await pool.query(
         `SELECT entreprise_id, status, response_status, response_body
-         FROM lite_idempotency WHERE idempotency_key = $1`,
+         FROM idempotency WHERE idempotency_key = $1`,
         [rawKey]
       );
       const row = existing.rows[0];
@@ -108,14 +107,14 @@ export async function idempotencyMiddleware(req, res, next) {
       const status = res.statusCode;
       if (status >= 200 && status < 400) {
         pool.query(
-          `UPDATE lite_idempotency SET status = 'completed', response_status = $3,
+          `UPDATE idempotency SET status = 'completed', response_status = $3,
            response_body = $4::jsonb, updated_at = NOW()
            WHERE entreprise_id = $1 AND idempotency_key = $2`,
           [req.entrepriseId, rawKey, status, JSON.stringify(body)]
         ).catch(() => {});
       } else {
         pool.query(
-          `DELETE FROM lite_idempotency WHERE entreprise_id = $1 AND idempotency_key = $2`,
+          `DELETE FROM idempotency WHERE entreprise_id = $1 AND idempotency_key = $2`,
           [req.entrepriseId, rawKey]
         ).catch(() => {});
       }
