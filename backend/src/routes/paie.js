@@ -1,9 +1,10 @@
 import express from 'express';
 import { db } from '../db.js';
-import { employes, fichesPaie, avancesSalaire, ecritures, lignesEcritures } from '../schema.js';
+import { employes, fichesPaie, avancesSalaire } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 import { markClosedFiscalPeriodConflict } from '../services/fiscalPeriodErrors.js';
+import { getCompteByNumero, createEcritureComptable, COMPTES_SYSCOHADA, JOURNAL_CODES } from '../services/comptabiliteService.js';
 
 const router = express.Router();
 
@@ -188,41 +189,71 @@ router.post('/fiches-paie', async (req, res) => {
     let ecritureId = null;
 
     if (genererEcriture) {
-      const [ecriture] = await db.insert(ecritures).values({
-        entrepriseId,
-        journalId: 1,
-        reference: `PAIE-${mois}-${employeId}`,
-        dateEcriture: new Date(),
-        libelle: `Salaire ${mois} - Employé #${employeId}`,
-        statut: 'validée',
-      }).returning();
+      // Les comptes de paie ne sont JAMAIS imposés par le logiciel : chaque
+      // entreprise les définit dans son paramétrage (rôles « charges de
+      // personnel », « rémunérations dues », « organismes sociaux »,
+      // « avances sur salaires »). En SYSCOHADA (défaut) : 64 / 421 / 431 /
+      // 422. Remplace l'ancien code qui écrivait des IDs de comptes en dur
+      // (1, 2, 3) et des champs inexistants (reference, statut, compteId) :
+      // l'écriture n'était jamais comptabilisée correctement.
+      const avancesSalaireMontant = parseFloat(req.body.avancesSalaire || 0);
+      let compteCharge;
+      let compteDette;
+      let compteCotisations;
+      let compteAvances;
+      try {
+        compteCharge = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CHARGES_PERSONNEL, db, 'personnel_expenses');
+        compteDette = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.PERSONNEL_REMUNERATIONS_DUES, db, 'salary_payable');
+        compteCotisations = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ORGANISMES_SOCIAUX, db, 'social_contributions');
+        if (avancesSalaireMontant > 0) {
+          compteAvances = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.AVANCES_SALAIRES, db, 'salary_advances');
+        }
+      } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+      if (!compteCharge || !compteDette || !compteCotisations || (avancesSalaireMontant > 0 && !compteAvances)) {
+        return res.status(400).json({ success: false, message: 'Comptes de paie non configurés pour cette entreprise (charges de personnel, rémunérations dues, organismes sociaux, avances sur salaires). Vérifiez le paramétrage comptable.' });
+      }
 
-      await db.insert(lignesEcritures).values([
+      const lignesPaie = [
         {
-          entrepriseId,
-          ecritureId: ecriture.id,
-          compteId: 1,
+          compteComptableId: compteCharge.id,
           libelle: `Charge de personnel - Salaire ${mois}`,
           debit: salaireBrut,
           credit: 0
         },
         {
-          entrepriseId,
-          ecritureId: ecriture.id,
-          compteId: 2,
+          compteComptableId: compteDette.id,
           libelle: `Dette salariale - Salaire ${mois}`,
           debit: 0,
           credit: salaireNet
         },
         {
-          entrepriseId,
-          ecritureId: ecriture.id,
-          compteId: 3,
+          compteComptableId: compteCotisations.id,
           libelle: `Cotisations sociales - ${mois}`,
           debit: 0,
-          credit: totalRetenues - parseFloat(req.body.avancesSalaire || 0)
+          credit: totalRetenues - avancesSalaireMontant
         }
-      ]);
+      ];
+      if (avancesSalaireMontant > 0) {
+        lignesPaie.push({
+          compteComptableId: compteAvances.id,
+          libelle: `Avances sur salaire déduites - ${mois}`,
+          debit: 0,
+          credit: avancesSalaireMontant
+        });
+      }
+
+      const ecriture = await createEcritureComptable({
+        entrepriseId,
+        journalCode: JOURNAL_CODES.OD,
+        journalNom: 'Journal des Opérations Diverses',
+        journalType: 'od',
+        dateEcriture: new Date().toISOString().slice(0, 10),
+        libelle: `Salaire ${mois} - Employé #${employeId}`,
+        numeroPiece: `PAIE-${mois}-${employeId}`,
+        lignes: lignesPaie,
+      });
 
       ecritureId = ecriture.id;
     }

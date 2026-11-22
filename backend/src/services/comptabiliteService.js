@@ -16,7 +16,7 @@ import { markClosedFiscalPeriodConflict } from './fiscalPeriodErrors.js';
 import { buildCashSettlementEntryLines } from './cashDiscountAccounting.js';
 import { ACCOUNTING_ACCOUNT_ROLES, isPriceVarianceAccount } from './accountingAccountMappings.js';
 
-const JOURNAL_CODES = {
+export const JOURNAL_CODES = {
   ACHATS: 'AC',
   VENTES: 'VT',
   BANQUE: 'BQ',
@@ -26,7 +26,7 @@ const JOURNAL_CODES = {
 
 const VALID_JOURNAL_TYPES = new Set(['achats', 'ventes', 'banque', 'caisse', 'od']);
 
-const COMPTES_SYSCOHADA = {
+export const COMPTES_SYSCOHADA = {
   STOCK_MARCHANDISES: '31',
   CAPITAL_SOCIAL: '101',
   FOURNISSEURS: '401',
@@ -35,6 +35,9 @@ const COMPTES_SYSCOHADA = {
   CHEQUES_A_ENCAISSER: '5112',
   ACHATS_RETOUR: '609',
   PERSONNEL_AVANCES: '421',
+  PERSONNEL_REMUNERATIONS_DUES: '421',
+  ORGANISMES_SOCIAUX: '431',
+  AVANCES_SALAIRES: '422',
   ETAT_TVA_DUE: '4434',
   ETAT_IMPOTS: '44',
   BANQUE: '52',
@@ -44,7 +47,10 @@ const COMPTES_SYSCOHADA = {
   ACHATS_SERVICES: '61',
   AUTRES_CHARGES_EXTERNES: '62',
   CHARGES_PERSONNEL: '64',
-  IMPOTS_TAXES: '64',
+  // Impôts et taxes : 63 en SYSCOHADA (le 64 est les charges de personnel).
+  // Aucune écriture automatique ne l'utilise pour l'instant : les impôts et
+  // taxes sont saisis comme dépenses, avec le compte choisi par catégorie.
+  IMPOTS_TAXES: '63',
   VENTES_MARCHANDISES: '701',
   TVA_DEDUCTIBLE: '445',
   TVA_COLLECTEE: '443',
