@@ -10,6 +10,12 @@ import { synchroniserTransactionDepuisEcriture } from '../services/treasuryJourn
 import { generateNumeroEcriture } from '../services/comptabiliteService.js';
 import { ACCOUNTING_ACCOUNT_ROLES } from '../services/accountingAccountMappings.js';
 import { markClosedFiscalPeriodConflict } from '../services/fiscalPeriodErrors.js';
+import {
+  calculerBilan,
+  contributionCapitauxPropres,
+  findLatestActiveOpening,
+  toDateOnly,
+} from '../services/bilanService.js';
 import fiscalYearClosingRouter from './fiscal-year-closing.js';
 
 const router = express.Router();
@@ -274,9 +280,14 @@ router.get('/rapports/bilan', async (req, res) => {
     const allComptes = await db.query.comptesComptables.findMany({
       where: eq(comptesComptables.entrepriseId, eId)
     });
-    
+
+    // Base à nouveaux : après une clôture, les soldes repartent de la
+    // dernière ouverture active (statut 'ferme'). Sans ouverture active,
+    // comportement inchangé : toutes les lignes valides jusqu'à dateFin.
+    const opening = await findLatestActiveOpening(db, eId, dateFin);
+
     const ecrituresData = await db.execute(sql`
-      SELECT le.compte_comptable_id, 
+      SELECT le.compte_comptable_id,
              SUM(COALESCE(le.debit, 0)) as total_debit,
              SUM(COALESCE(le.credit, 0)) as total_credit
       FROM lignes_ecriture le
@@ -287,6 +298,7 @@ router.get('/rapports/bilan', async (req, res) => {
         AND le.entreprise_id = ${eId}
         AND cc.entreprise_id = ${eId}
       ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
+      ${opening ? sql`AND (e.id = ${opening.ecritureOuvertureId} OR e.date_ecriture > ${toDateOnly(opening.dateEcriture)})` : sql``}
       GROUP BY le.compte_comptable_id
     `);
     
@@ -367,6 +379,9 @@ router.get('/rapports/bilan', async (req, res) => {
       const numero = compte.numero;
       
       // CLASSE 1 - Capitaux propres et dettes financières (solde créditeur = passif)
+      // La contribution au passif est signée (−solde) : un compte 129
+      // débiteur (perte reportée) diminue les capitaux propres au lieu de
+      // les augmenter. Le montant affiché reste la valeur absolue.
       if (numero.startsWith('1')) {
         const montant = Math.abs(soldeBrut);
         passif.capitaux.push({
@@ -375,7 +390,7 @@ router.get('/rapports/bilan', async (req, res) => {
           nom: compte.nom,
           solde: montant
         });
-        passif.total += montant;
+        passif.total += contributionCapitauxPropres(soldeBrut);
       }
       // CLASSE 2 - Immobilisations
       else if (numero.startsWith('2')) {
@@ -2888,8 +2903,12 @@ router.get('/bilan', async (req, res) => {
       where: eq(comptesComptables.entrepriseId, entrepriseId)
     });
 
-    // Soldes du bilan : cumulatifs jusqu'à dateFin (aligné sur /rapports/bilan).
-    // Un filtre dateDebut exclurait les soldes d'ouverture antérieurs à la période.
+    // Soldes du bilan : base à nouveaux (dernière ouverture active) ou,
+    // sans ouverture active, cumulatifs jusqu'à dateFin (comportement
+    // historique). Le calcul (soldes, résultat net, classification) est
+    // dans services/bilanService.js — voir calculerBilan.
+    const opening = await findLatestActiveOpening(db, entrepriseId, dateFin);
+
     const conditions = [
       eq(lignesEcritures.entrepriseId, entrepriseId),
       eq(ecritures.valide, true),
@@ -2898,6 +2917,8 @@ router.get('/bilan', async (req, res) => {
 
     const lignes = await db
       .select({
+        ecritureId: ecritures.id,
+        dateEcriture: ecritures.dateEcriture,
         compteId: lignesEcritures.compteComptableId,
         debit: lignesEcritures.debit,
         credit: lignesEcritures.credit
@@ -2906,111 +2927,15 @@ router.get('/bilan', async (req, res) => {
       .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
       .where(and(...conditions));
 
-    // Calculer les soldes par compte (débit - crédit)
-    const soldesMap = {};
-    lignes.forEach(ligne => {
-      if (!soldesMap[ligne.compteId]) {
-        soldesMap[ligne.compteId] = 0;
-      }
-      soldesMap[ligne.compteId] += parseFloat(ligne.debit || 0) - parseFloat(ligne.credit || 0);
+    const bilan = calculerBilan({
+      comptes: comptesData,
+      lignes,
+      opening,
+      dateDebut,
+      dateFin,
     });
 
-    // Résultat de la période (classe 6 / 7) — intégré au passif comme dans /rapports/bilan.
-    // Sans lui, le bilan ne s'équilibrait pas (écart = résultat net).
-    let totalCharges = 0;
-    let totalProduits = 0;
-    {
-      const conditionsResultat = [
-        eq(lignesEcritures.entrepriseId, entrepriseId),
-        eq(ecritures.valide, true),
-      ];
-      if (dateDebut) conditionsResultat.push(gte(ecritures.dateEcriture, new Date(dateDebut)));
-      if (dateFin) conditionsResultat.push(lte(ecritures.dateEcriture, new Date(dateFin)));
-      const lignesResultat = await db
-        .select({
-          compteId: lignesEcritures.compteComptableId,
-          debit: lignesEcritures.debit,
-          credit: lignesEcritures.credit
-        })
-        .from(lignesEcritures)
-        .innerJoin(ecritures, eq(lignesEcritures.ecritureId, ecritures.id))
-        .innerJoin(comptesComptables, eq(lignesEcritures.compteComptableId, comptesComptables.id))
-        .where(and(...conditionsResultat));
-      const comptesById = new Map(comptesData.map(c => [c.id, c]));
-      lignesResultat.forEach(ligne => {
-        const compte = comptesById.get(ligne.compteId);
-        if (!compte) return;
-        const debit = parseFloat(ligne.debit || 0);
-        const credit = parseFloat(ligne.credit || 0);
-        if (compte.numero.startsWith('6')) totalCharges += debit - credit;
-        else if (compte.numero.startsWith('7')) totalProduits += credit - debit;
-      });
-    }
-    const resultatNet = totalProduits - totalCharges;
-
-    // Classifier les comptes selon SYSCOHADA
-    const bilan = {
-      actif: {
-        immobilisations: [],
-        stocksCreances: [],
-        tresorerie: [],
-        total: 0
-      },
-      passif: {
-        capitauxPropres: [],
-        dettes: [],
-        total: 0
-      }
-    };
-
-    comptesData.forEach(compte => {
-      const solde = soldesMap[compte.id] || 0;
-      if (solde === 0) return;
-      
-      const item = { compte: compte.numero, nom: compte.nom, montant: Math.abs(solde) };
-
-      // Classes SYSCOHADA: 1=Capitaux, 2=Immob, 3=Stocks, 4=Tiers, 5=Trésorerie, 6=Charges, 7=Produits
-      const classe = compte.numero.charAt(0);
-      
-      if (['2'].includes(classe)) {
-        bilan.actif.immobilisations.push(item);
-        bilan.actif.total += Math.abs(solde);
-      } else if (['3'].includes(classe)) {
-        bilan.actif.stocksCreances.push(item);
-        bilan.actif.total += Math.abs(solde);
-      } else if (['4'].includes(classe) && solde > 0) {
-        bilan.actif.stocksCreances.push(item);
-        bilan.actif.total += solde;
-      } else if (['4'].includes(classe) && solde < 0) {
-        bilan.passif.dettes.push(item);
-        bilan.passif.total += Math.abs(solde);
-      } else if (['5'].includes(classe)) {
-        bilan.actif.tresorerie.push(item);
-        bilan.actif.total += Math.abs(solde);
-      } else if (['1'].includes(classe)) {
-        bilan.passif.capitauxPropres.push(item);
-        bilan.passif.total += Math.abs(solde);
-      }
-    });
-
-    // Intégrer le résultat de l'exercice aux capitaux propres (compte 120 / 129)
-    if (Math.abs(resultatNet) > 0.01) {
-      const isPerte = resultatNet < 0;
-      bilan.passif.capitauxPropres.push({
-        compte: isPerte ? '129' : '120',
-        nom: isPerte ? "Résultat de l'exercice (Perte)" : "Résultat de l'exercice (Bénéfice)",
-        montant: Math.abs(resultatNet)
-      });
-      bilan.passif.total += isPerte ? -Math.abs(resultatNet) : Math.abs(resultatNet);
-    }
-
-    res.json({
-      ...bilan,
-      resultatNet,
-      totalCharges,
-      totalProduits,
-      equilibre: Math.abs(bilan.actif.total - bilan.passif.total) < 1
-    });
+    res.json(bilan);
   } catch (error) {
     console.error('Erreur bilan:', error);
     res.status(500).json({ error: error.message });
