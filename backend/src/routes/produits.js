@@ -8,7 +8,9 @@ import {
   convertWeightToKg,
   createStockValuationLayer,
   ensureOpeningValuationLayer,
+  updateProductAverageCost,
 } from '../services/stockValuation.js';
+import { createEcritureOuvertureStock } from '../services/comptabiliteService.js';
 import { getPlanCapabilities } from '../services/planEntitlements.js';
 
 const router = express.Router();
@@ -255,6 +257,31 @@ router.post('/', async (req, res) => {
         executor: tx,
         required: true
       });
+      // Stock initial : écriture d'ouverture (D 31 / C 101) et couche
+      // d'ouverture, dans la même transaction que la création du produit.
+      // Uniquement si la quantité ET le coût sont positifs (sinon le stock
+      // est sans coût : le garde de vente refuse déjà sa vente).
+      // Pour le forfait Premium/essai, coutMoyen est forcé à 0 à la création
+      // (coût établi par la première réception) : rien n'est créé ici.
+      const initialQuantity = Number(product.quantite || 0);
+      const initialUnitCost = Number(product.coutMoyen || 0);
+      if (initialQuantity > 0 && initialUnitCost > 0) {
+        await ensureOpeningValuationLayer(tx, {
+          entrepriseId: req.entrepriseId,
+          produitId: product.id,
+          productSnapshot: product,
+          force: true,
+        });
+        await createEcritureOuvertureStock({
+          entrepriseId: req.entrepriseId,
+          produitId: product.id,
+          produitNom: product.nom,
+          reference: product.reference,
+          montant: initialQuantity * initialUnitCost,
+          executor: tx,
+        });
+        await updateProductAverageCost(tx, req.entrepriseId, product.id);
+      }
       return product;
     });
 

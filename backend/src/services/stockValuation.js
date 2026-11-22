@@ -291,9 +291,13 @@ export async function updateProductAverageCost(executor, entrepriseId, produitId
   return true;
 }
 
-export async function ensureOpeningValuationLayer(executor, { entrepriseId, produitId, productSnapshot }) {
+export async function ensureOpeningValuationLayer(executor, { entrepriseId, produitId, productSnapshot, force = false }) {
   const { automaticCosting } = await getPlanCapabilities(executor, entrepriseId);
-  if (!automaticCosting) return false;
+  // La couche d'ouverture est créée pour tous les forfaits quand force est
+  // vrai (création du produit) : le coût initial doit entrer dans la
+  // valorisation même hors Premium/essai. Les autres appels (achats,
+  // réceptions, ventes) gardent le gating automaticCosting.
+  if (!automaticCosting && !force) return false;
   let [product] = await executor.select().from(produits).where(and(
     eq(produits.id, produitId),
     eq(produits.entrepriseId, entrepriseId)
@@ -380,6 +384,19 @@ export async function createStockValuationLayer(executor, {
 
   await updateProductAverageCost(executor, entrepriseId, produitId);
   return layer;
+}
+
+/**
+ * Choix du coût unitaire consommé en CMP : la moyenne calculée depuis les
+ * couches (valeur réelle du stock) prime sur le coutMoyen stocké, qui peut
+ * être périmé (forfait changé, couche créée sans recalcul). Repli sur le
+ * coutMoyen stocké si les couches n'ont pas de coût.
+ */
+export function selectConsumptionUnitCost({ layerAverageUnitCost, storedCoutMoyen }) {
+  const layerAverage = Number(layerAverageUnitCost) || 0;
+  if (layerAverage > 0) return layerAverage;
+  const stored = Number(storedCoutMoyen) || 0;
+  return stored > 0 ? stored : 0;
 }
 
 export async function consumeStockValuation(executor, { entrepriseId, produitId, quantity }) {
@@ -470,9 +487,15 @@ export async function consumeStockValuation(executor, { entrepriseId, produitId,
 
   if (method !== 'FIFO') {
     const oldTotalCents = oldCostCentsByLayer.reduce((sum, amount) => sum + amount, 0);
-    const averageUnitCost = Number(product?.coutMoyen) > 0
-      ? Number(product.coutMoyen)
-      : fromCents(oldTotalCents) / fromMilliUnits(availableMilli);
+    // Le coût consommé est calculé depuis les couches (moyenne réelle du
+    // stock), pas depuis le coutMoyen stocké qui peut être périmé.
+    const layerAverageUnitCost = availableMilli > 0
+      ? fromCents(oldTotalCents) / fromMilliUnits(availableMilli)
+      : 0;
+    const averageUnitCost = selectConsumptionUnitCost({
+      layerAverageUnitCost,
+      storedCoutMoyen: product?.coutMoyen,
+    });
     consumedCostCents = consumedMilli === availableMilli
       ? oldTotalCents
       : toCents(calculateWeightedAverageSaleCost(averageUnitCost, fromMilliUnits(consumedMilli)));

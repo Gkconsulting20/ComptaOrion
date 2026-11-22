@@ -9,6 +9,7 @@ import {
   convertQuantityToBase,
   convertUnitPriceToBase,
   convertWeightToKg,
+  selectConsumptionUnitCost,
   splitCostVariance,
 } from '../src/services/stockValuation.js';
 
@@ -97,4 +98,14 @@ test('calcule le prix catalogue en ajoutant la majoration au CMV', () => {
 test('valorise une vente au CMV pondéré sans recalculer le coût unitaire', () => {
   assert.equal(calculateWeightedAverageSaleCost(125, 3), 375);
   assert.equal(calculateWeightedAverageSaleCost(125, 0.125), 15.63);
+});
+
+test('la consommation CMP préfère la moyenne des couches au coutMoyen stocké', () => {
+  assert.equal(selectConsumptionUnitCost({ layerAverageUnitCost: 6000, storedCoutMoyen: 5000 }), 6000,
+    'Un coutMoyen périmé ne doit pas écraser la moyenne réelle des couches');
+  assert.equal(selectConsumptionUnitCost({ layerAverageUnitCost: 6000, storedCoutMoyen: 0 }), 6000);
+  assert.equal(selectConsumptionUnitCost({ layerAverageUnitCost: 0, storedCoutMoyen: 5000 }), 5000,
+    'Sans coût dans les couches, on replie sur le coutMoyen stocké');
+  assert.equal(selectConsumptionUnitCost({ layerAverageUnitCost: 0, storedCoutMoyen: 0 }), 0);
+  assert.equal(selectConsumptionUnitCost({ layerAverageUnitCost: 0, storedCoutMoyen: null }), 0);
 });

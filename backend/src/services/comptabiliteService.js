@@ -28,6 +28,7 @@ const VALID_JOURNAL_TYPES = new Set(['achats', 'ventes', 'banque', 'caisse', 'od
 
 const COMPTES_SYSCOHADA = {
   STOCK_MARCHANDISES: '31',
+  CAPITAL_SOCIAL: '101',
   FOURNISSEURS: '401',
   FOURNISSEURS_FACTURES_NON_PARVENUES: '408',
   CLIENTS: '4111',
@@ -709,6 +710,68 @@ export async function createEcritureCoutVente({
         debit: 0,
         credit: amount,
         libelle: `Sortie du stock - ${numeroFacture}`,
+      },
+    ],
+    valide: true,
+    executor,
+  });
+}
+
+/**
+ * Écriture d'ouverture de stock à la création d'un produit.
+ * Débit 31 (stock) / Crédit 101 (capital) pour quantité × coût unitaire.
+ * La contrepartie 101 est un choix produit : le stock initial est traité
+ * comme un apport en nature au capital. Si les comptes 31 ou 101 sont
+ * absents du plan comptable, l'écriture est ignorée (avertissement) et la
+ * création du produit n'échoue pas.
+ */
+export async function createEcritureOuvertureStock({
+  entrepriseId,
+  produitId,
+  produitNom,
+  reference,
+  montant,
+  executor = db,
+}) {
+  const amount = Math.round((Number(montant) || 0) * 100) / 100;
+  if (amount <= 0) return null;
+
+  const compteStock = await getCompteByNumero(
+    entrepriseId,
+    COMPTES_SYSCOHADA.STOCK_MARCHANDISES,
+    executor
+  );
+  const compteCapital = await getCompteByNumero(
+    entrepriseId,
+    COMPTES_SYSCOHADA.CAPITAL_SOCIAL,
+    executor
+  );
+  if (!compteStock || !compteCapital) {
+    console.warn('Comptes comptables (31 ou 101) non configurés pour entreprise', entrepriseId);
+    return null;
+  }
+
+  const numeroPiece = `OUV-STOCK-${reference || `PROD-${produitId}`}`;
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode: JOURNAL_CODES.OD,
+    journalNom: 'Journal des Opérations Diverses',
+    journalType: 'od',
+    dateEcriture: new Date().toISOString().slice(0, 10),
+    libelle: `Stock d'ouverture - ${produitNom}`,
+    numeroPiece,
+    lignes: [
+      {
+        compteComptableId: compteStock.id,
+        debit: amount,
+        credit: 0,
+        libelle: `Stock d'ouverture - ${produitNom}`,
+      },
+      {
+        compteComptableId: compteCapital.id,
+        debit: 0,
+        credit: amount,
+        libelle: `Apport en stock - ${produitNom}`,
       },
     ],
     valide: true,

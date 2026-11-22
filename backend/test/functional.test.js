@@ -362,6 +362,97 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       'UPDATE produits SET quantite = 0 WHERE entreprise_id = $1 AND id = $2',
       [signup.user.entrepriseId, manualProduct.data.id],
     );
+    // (a) Stock initial avec coût : écriture d'ouverture D 31 / C 101 et
+    // couche d'ouverture à la création du produit.
+    const openingProduct = await api('/produits', 'POST', {
+      reference: 'OUV-STOCK-A',
+      nom: 'Produit stock ouverture',
+      quantite: 10,
+      prixAchat: 5000,
+      coutMoyen: 5000,
+      prixVente: 7000,
+    }, 201);
+    assert.equal(Number(openingProduct.data.coutMoyen), 5000);
+    const openingLayers = await adminSchemaPool.query(
+      `SELECT quantite, cout_unitaire, cout_total FROM "${schema}".valorisations_stock
+       WHERE entreprise_id = $1 AND produit_id = $2`,
+      [signup.user.entrepriseId, openingProduct.data.id],
+    );
+    assert.equal(openingLayers.rows.length, 1,
+      'La création doit poser une couche d’ouverture pour le stock initial');
+    assert.equal(Number(openingLayers.rows[0].quantite), 10);
+    assert.equal(Number(openingLayers.rows[0].cout_unitaire), 5000);
+    assert.equal(Number(openingLayers.rows[0].cout_total), 50000);
+    const openingEntry = await adminSchemaPool.query(
+      `SELECT e.id, e.libelle FROM "${schema}".ecritures e
+       WHERE e.entreprise_id = $1 AND e.numero_piece = $2`,
+      [signup.user.entrepriseId, 'OUV-STOCK-OUV-STOCK-A'],
+    );
+    assert.equal(openingEntry.rows.length, 1,
+      'La création doit passer une écriture d’ouverture de stock');
+    assert.match(openingEntry.rows[0].libelle, /Stock d'ouverture/);
+    const openingLines = await adminSchemaPool.query(
+      `SELECT c.numero, l.debit, l.credit FROM "${schema}".lignes_ecriture l
+       JOIN "${schema}".comptes_comptables c ON c.id = l.compte_comptable_id
+       WHERE l.entreprise_id = $1 AND l.ecriture_id = $2`,
+      [signup.user.entrepriseId, openingEntry.rows[0].id],
+    );
+    assert.equal(openingLines.rows.length, 2,
+      'L’écriture d’ouverture doit avoir deux lignes (31 et 101)');
+    const openingDebit = openingLines.rows.find((row) => row.numero.startsWith('31'));
+    const openingCredit = openingLines.rows.find((row) => row.numero.startsWith('101'));
+    assert.ok(openingDebit && Number(openingDebit.debit) === 50000 && Number(openingDebit.credit) === 0,
+      'L’écriture d’ouverture doit débiter le 31 de quantité × coût (50000)');
+    assert.ok(openingCredit && Number(openingCredit.debit) === 0 && Number(openingCredit.credit) === 50000,
+      'L’écriture d’ouverture doit créditer le 101 de quantité × coût (50000)');
+    // (b) Vente de tout le stock initial : le compte 31 ne part pas en
+    // négatif (il ne contient plus que le stock du produit manuel, 250).
+    const openingClient = await api('/clients', 'POST', {
+      nom: 'Client stock ouverture',
+      compteComptableId: 999999,
+    }, 201);
+    const openingInvoice = await api('/factures', 'POST', {
+      clientId: openingClient.data.id,
+      dateFacture: `${testYear}-01-16`,
+      items: [{ produitId: openingProduct.data.id, quantite: 10, prixUnitaire: 7000 }],
+    }, 201);
+    await api(`/factures/${openingInvoice.data.id}`, 'PUT', { statut: 'envoyee' }, 200);
+    const stockBalanceAfterSale = await adminSchemaPool.query(
+      `SELECT COALESCE(SUM(l.debit - l.credit), 0) AS solde
+       FROM "${schema}".lignes_ecriture l
+       JOIN "${schema}".comptes_comptables c ON c.id = l.compte_comptable_id
+       WHERE l.entreprise_id = $1 AND c.numero LIKE '31%'`,
+      [signup.user.entrepriseId],
+    );
+    assert.equal(Number(stockBalanceAfterSale.rows[0].solde), 250,
+      'Après vente de tout le stock initial, le 31 ne doit contenir que le stock du produit manuel');
+    const soldProduct = await adminSchemaPool.query(
+      'SELECT quantite FROM produits WHERE entreprise_id = $1 AND id = $2',
+      [signup.user.entrepriseId, openingProduct.data.id],
+    );
+    assert.equal(Number(soldProduct.rows[0].quantite), 0,
+      'La vente doit décrémenter la quantité du produit vendu');
+    // (c) Stock initial sans coût : aucune écriture, aucune couche, pas de crash.
+    const noCostProduct = await api('/produits', 'POST', {
+      reference: 'OUV-STOCK-C',
+      nom: 'Produit sans coût',
+      quantite: 5,
+      prixAchat: 0,
+      coutMoyen: 0,
+      prixVente: 1000,
+    }, 201);
+    const noCostLayers = await adminSchemaPool.query(
+      `SELECT id FROM "${schema}".valorisations_stock WHERE entreprise_id = $1 AND produit_id = $2`,
+      [signup.user.entrepriseId, noCostProduct.data.id],
+    );
+    assert.equal(noCostLayers.rows.length, 0,
+      'Un stock initial sans coût ne doit créer aucune couche');
+    const noCostEntries = await adminSchemaPool.query(
+      `SELECT id FROM "${schema}".ecritures WHERE entreprise_id = $1 AND numero_piece = $2`,
+      [signup.user.entrepriseId, 'OUV-STOCK-OUV-STOCK-C'],
+    );
+    assert.equal(noCostEntries.rows.length, 0,
+      'Un stock initial sans coût ne doit passer aucune écriture');
     await adminSchemaPool.query(
       'UPDATE abonnements SET plan_id = $1 WHERE entreprise_id = $2',
       [freeTrialPlan.id, signup.user.entrepriseId],
@@ -369,6 +460,36 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     clearPlanCapabilitiesCache();
     assert.equal((await api('/produits/capacites')).automaticCosting, true,
       'Le retour à l’essai doit réactiver le calcul automatique');
+    // R5 (CMP) : la consommation doit utiliser la moyenne calculée depuis
+    // les couches, pas le coutMoyen stocké quand il est périmé.
+    const staleCostProduct = await api('/produits', 'POST', {
+      reference: 'COUT-PERIME',
+      nom: 'Produit coût périmé',
+      quantite: 10,
+      prixAchat: 6000,
+    }, 201);
+    await adminSchemaDb.insert(databaseSchema.valorisationsStock).values({
+      entrepriseId: signup.user.entrepriseId,
+      produitId: staleCostProduct.data.id,
+      mouvementId: null,
+      methode: 'CMP',
+      coutUnitaire: '6000.00',
+      coutTotal: '60000.00',
+      quantite: '10.000',
+    });
+    await adminSchemaPool.query(
+      'UPDATE produits SET cout_moyen = $1 WHERE entreprise_id = $2 AND id = $3',
+      ['5000.00', signup.user.entrepriseId, staleCostProduct.data.id],
+    );
+    const staleSaleCost = await adminSchemaDb.transaction((tx) =>
+      consumeStockValuation(tx, {
+        entrepriseId: signup.user.entrepriseId,
+        produitId: staleCostProduct.data.id,
+        quantity: 2,
+      }));
+    assert.equal(staleSaleCost.trackedQuantity, 2);
+    assert.equal(staleSaleCost.coutConsomme, 12000,
+      'La consommation CMP doit valoriser au coût moyen des couches (6000), pas au coutMoyen périmé (5000)');
     const importEntityTypes = await api('/import/entity-types');
     assert.deepEqual(importEntityTypes.data.map(item => item.id), [
       'clients', 'fournisseurs', 'plan_comptable', 'produits',
