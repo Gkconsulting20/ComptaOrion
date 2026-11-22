@@ -736,18 +736,34 @@ export async function createEcritureOuvertureStock({
   const amount = Math.round((Number(montant) || 0) * 100) / 100;
   if (amount <= 0) return null;
 
-  const compteStock = await getCompteByNumero(
-    entrepriseId,
-    COMPTES_SYSCOHADA.STOCK_MARCHANDISES,
-    executor
-  );
-  const compteCapital = await getCompteByNumero(
-    entrepriseId,
-    COMPTES_SYSCOHADA.CAPITAL_SOCIAL,
-    executor
-  );
+  // Les comptes ne sont JAMAIS imposés par le logiciel : chaque entreprise
+  // définit ses propres comptes dans le paramétrage (rôles « stock » et
+  // « contrepartie du stock d'ouverture »). En SYSCOHADA (défaut), on
+  // retombe sur les numéros 31 et 101 ; en plan personnalisé, on utilise
+  // le compte associé à chaque rôle. Une correspondance manquante ne doit
+  // pas bloquer la création du produit : on avertit et on ne passe pas
+  // l'écriture.
+  let compteStock;
+  let compteCapital;
+  try {
+    compteStock = await getCompteByNumero(
+      entrepriseId,
+      COMPTES_SYSCOHADA.STOCK_MARCHANDISES,
+      executor,
+      'stock',
+    );
+    compteCapital = await getCompteByNumero(
+      entrepriseId,
+      COMPTES_SYSCOHADA.CAPITAL_SOCIAL,
+      executor,
+      'opening_stock_counterpart',
+    );
+  } catch (error) {
+    console.warn('Écriture d’ouverture de stock ignorée :', error.message, 'entreprise', entrepriseId);
+    return null;
+  }
   if (!compteStock || !compteCapital) {
-    console.warn('Comptes comptables (31 ou 101) non configurés pour entreprise', entrepriseId);
+    console.warn('Comptes du stock d’ouverture non configurés pour entreprise', entrepriseId);
     return null;
   }
 

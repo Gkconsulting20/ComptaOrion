@@ -1,5 +1,6 @@
 export const ACCOUNTING_ACCOUNT_ROLES = [
   { key: 'stock', label: 'Stock de marchandises', defaultNumber: '31' },
+  { key: 'opening_stock_counterpart', label: 'Contrepartie du stock d’ouverture', defaultNumber: '101' },
   { key: 'supplier', label: 'Fournisseurs', defaultNumber: '401' },
   { key: 'supplier_pending', label: 'Factures fournisseurs non parvenues', defaultNumber: '408' },
   { key: 'customer', label: 'Clients', defaultNumber: '4111' },
