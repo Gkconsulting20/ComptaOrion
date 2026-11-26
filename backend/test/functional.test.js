@@ -43,11 +43,18 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const quotedRole = `"${rlsRole}"`;
     await admin.query(`CREATE ROLE ${quotedRole} LOGIN PASSWORD '${rlsPassword}' NOSUPERUSER NOBYPASSRLS`);
     roleCreated = true;
+    // Neon : neondb_owner n'est pas superuser et n'est pas membre du rôle
+    // qu'il vient de créer — sans cette appartenance, ALTER TABLE ... OWNER TO,
+    // SET ROLE et DROP OWNED BY échouent en 42501. On s'ajoute comme membre
+    // (le créateur est administrateur du rôle) ; l'appartenance est révoquée
+    // au nettoyage, avant DROP ROLE. Cela ne change pas les privilèges du
+    // rôle lui-même (le test vérifie rolsuper/rolbypassrls = false).
+    await admin.query(`GRANT ${quotedRole} TO CURRENT_USER`);
     await admin.query(`GRANT CONNECT ON DATABASE "${databaseName.replaceAll('"', '""')}" TO ${quotedRole}`);
     await admin.query(`GRANT USAGE, CREATE ON SCHEMA "${schema}" TO ${quotedRole}`);
     await admin.query(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "${schema}" TO ${quotedRole}`);
     await admin.query(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "${schema}" TO ${quotedRole}`);
-    await admin.query(`ALTER TABLE "${schema}"."lite_idempotency" OWNER TO ${quotedRole}`);
+    await admin.query(`ALTER TABLE "${schema}"."idempotency" OWNER TO ${quotedRole}`);
 
     const roleStatus = await admin.query(
       'SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = $1',
@@ -1841,6 +1848,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     if(adminSchemaPool) await adminSchemaPool.end();
     await admin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
     if(roleCreated) {
+      await admin.query(`REVOKE ${quotedRole} FROM CURRENT_USER`);
       await admin.query(`DROP OWNED BY "${rlsRole}"`);
       await admin.query(`DROP ROLE "${rlsRole}"`);
     }
