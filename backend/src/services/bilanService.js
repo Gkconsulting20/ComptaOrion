@@ -178,9 +178,17 @@ export function calculerBilan({ comptes, lignes, opening, dateDebut, dateFin }) 
     } else if (classe === '4' && solde < 0) {
       bilan.passif.dettes.push(item);
       bilan.passif.total += Math.abs(solde);
-    } else if (classe === '5') {
+    } else if (classe === '5' && solde > 0) {
+      // Solde débiteur : disponibilités à l'actif.
       bilan.actif.tresorerie.push(item);
-      bilan.actif.total += Math.abs(solde);
+      bilan.actif.total += solde;
+    } else if (classe === '5' && solde < 0) {
+      // Solde créditeur (banque à découvert) : dette au passif, comme
+      // le fait déjà /rapports/bilan. L'ancien code reprenait le
+      // découvert en positif à l'actif (écart = 2 × le découvert :
+      // exercice 2026, actif 6 730 900 au lieu de 3 858 700).
+      bilan.passif.dettes.push(item);
+      bilan.passif.total += Math.abs(solde);
     } else if (classe === '1') {
       bilan.passif.capitauxPropres.push(item);
       bilan.passif.total += contributionCapitauxPropres(solde);

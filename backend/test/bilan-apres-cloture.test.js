@@ -241,3 +241,105 @@ test('findLatestActiveOpening : retourne la ligne, null sinon, et refuse un iden
   assert.equal(await findLatestActiveOpening(throwingExecutor, 0, '2026-12-31'), null);
   assert.equal(await findLatestActiveOpening(throwingExecutor, Number.NaN, '2026-12-31'), null);
 });
+
+// ---------------------------------------------------------------------
+// Banque à découvert (exercice 2026, erreur E4) : l'ancien endpoint
+// /comptabilite/bilan reprenait le solde créditeur du compte 521 en
+// positif à l'actif (actif 6 730 900 vs passif 986 500, écart =
+// 2 × 2 872 200). Le découvert doit être classé en dettes au passif,
+// comme le fait déjà /rapports/bilan.
+//
+// Soldes finaux du rapport (§2) : 101 −2 400 000, 31 +1 450 000,
+// 401 −400 000, 411 +300 000, 4112 +88 500, 443 −391 500,
+// 445 +538 200, 521 −2 872 200 (découvert), 571 +1 482 000,
+// charges 4 380 000, produits 2 175 000, résultat −2 205 000.
+// Bilan attendu : actif 3 858 700 = passif 3 858 700.
+
+const comptesDecouvert = [
+  { id: 1, numero: '101', nom: 'Capital social' },
+  { id: 2, numero: '31', nom: 'Stock' },
+  { id: 3, numero: '401', nom: 'Fournisseurs' },
+  { id: 4, numero: '411', nom: 'Clients' },
+  { id: 5, numero: '4112', nom: 'Clients - Ventes de services' },
+  { id: 6, numero: '443', nom: 'État - TVA facturée' },
+  { id: 7, numero: '445', nom: 'État - TVA récupérable' },
+  { id: 8, numero: '521', nom: 'Banques' },
+  { id: 9, numero: '571', nom: 'Caisse' },
+  { id: 10, numero: '603', nom: 'Variation des stocks' },
+  { id: 11, numero: '605', nom: 'Autres achats' },
+  { id: 12, numero: '622', nom: 'Locations et charges locatives' },
+  { id: 13, numero: '625', nom: 'Déplacements, missions et réceptions' },
+  { id: 14, numero: '661', nom: 'Rémunérations du personnel' },
+  { id: 15, numero: '701', nom: 'Ventes de marchandises' },
+];
+
+// Lignes choisies pour produire exactement les soldes finaux du rapport
+// (la fonction pure somme les lignes par compte ; les écritures
+// complètes de l'exercice sont dans le rapport).
+const lignesDecouvert = [
+  ligne(1, '2026-01-01', 1, 0, 2400000),
+  ligne(1, '2026-12-31', 2, 1450000, 0),
+  ligne(1, '2026-12-31', 3, 0, 400000),
+  ligne(1, '2026-12-31', 4, 300000, 0),
+  ligne(1, '2026-12-31', 5, 88500, 0),
+  ligne(1, '2026-12-31', 6, 0, 391500),
+  ligne(1, '2026-12-31', 7, 538200, 0),
+  ligne(1, '2026-12-31', 8, 0, 2872200),
+  ligne(1, '2026-12-31', 9, 1482000, 0),
+  ligne(1, '2026-06-30', 10, 1420000, 0),
+  ligne(1, '2026-06-30', 11, 120000, 0),
+  ligne(1, '2026-06-30', 12, 960000, 0),
+  ligne(1, '2026-06-30', 13, 80000, 0),
+  ligne(1, '2026-06-30', 14, 1800000, 0),
+  ligne(1, '2026-06-30', 15, 0, 2175000),
+];
+
+test('(d) banque à découvert : bilan équilibré, 521 en dettes au passif', () => {
+  const resultat = calculerBilan({
+    comptes: comptesDecouvert,
+    lignes: lignesDecouvert,
+    opening: null,
+    dateDebut: '2026-01-01',
+    dateFin: '2026-12-31',
+  });
+  // Les valeurs du bug : actif 6 730 900, passif 986 500, equilibre false.
+  assert.equal(resultat.actif.total, 3858700);
+  assert.equal(resultat.passif.total, 3858700);
+  assert.equal(resultat.resultatNet, -2205000);
+  assert.equal(resultat.equilibre, true);
+  const dettes521 = resultat.passif.dettes.find((item) => item.compte === '521');
+  assert.ok(dettes521, 'le compte 521 doit être classé en dettes');
+  assert.equal(dettes521.montant, 2872200);
+  assert.equal(
+    resultat.actif.tresorerie.find((item) => item.compte === '521'),
+    undefined,
+  );
+  // La caisse positive reste à l'actif.
+  const caisse = resultat.actif.tresorerie.find((item) => item.compte === '571');
+  assert.ok(caisse);
+  assert.equal(caisse.montant, 1482000);
+});
+
+test('(d) banque positive : 521 reste à l’actif, bilan équilibré', () => {
+  const lignes = lignesDecouvert.map((l) =>
+    l.compteId === 8 ? ligne(l.ecritureId, l.dateEcriture, 8, 500000, 0) : l,
+  );
+  const resultat = calculerBilan({
+    comptes: comptesDecouvert,
+    lignes,
+    opening: null,
+    dateDebut: '2026-01-01',
+    dateFin: '2026-12-31',
+  });
+  const banque = resultat.actif.tresorerie.find((item) => item.compte === '521');
+  assert.ok(banque);
+  assert.equal(banque.montant, 500000);
+  assert.equal(
+    resultat.passif.dettes.find((item) => item.compte === '521'),
+    undefined,
+  );
+  // Solde modifié sans contrepartie : le bilan n'est plus équilibré, mais
+  // la classification est vérifiée (actif +500 000, passif −2 872 200).
+  assert.equal(resultat.actif.total, 4358700);
+  assert.equal(resultat.passif.total, 986500);
+});
