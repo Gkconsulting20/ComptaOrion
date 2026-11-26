@@ -8,6 +8,8 @@ import {
   convertWeightToKg,
   createStockValuationLayer,
   ensureOpeningValuationLayer,
+  isValidValorisationMethod,
+  normalizeValorisationMethod,
   updateProductAverageCost,
 } from '../services/stockValuation.js';
 import { createEcritureOuvertureStock } from '../services/comptabiliteService.js';
@@ -153,6 +155,7 @@ router.post('/', async (req, res) => {
       prixAchat,
       prixVente,
       coutMoyen,
+      valorisationMethod,
       fournisseurId,
       emplacement,
       actif,
@@ -163,6 +166,13 @@ router.post('/', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Le nom du produit est obligatoire',
+      });
+    }
+
+    if (valorisationMethod !== undefined && !isValidValorisationMethod(valorisationMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'La méthode de valorisation doit être CMP (coût moyen pondéré) ou FIFO.',
       });
     }
 
@@ -243,6 +253,9 @@ router.post('/', async (req, res) => {
         prixAchat: prixAchat || '0', // Coût standard : devis fournisseur, non utilisé comme CMV.
         coutMoyen: automaticCosting ? '0' : String(coutMoyen || '0'),
         prixVente: automaticCosting ? '0' : String(prixVente || '0'),
+        // CMP par défaut : le coût des ventes est valorisé au coût moyen
+        // pondéré (exercice 2026). FIFO uniquement sur choix explicite.
+        valorisationMethod: normalizeValorisationMethod(valorisationMethod),
         fournisseurId: fournisseurId || null,
         emplacement: emplacement || null,
         actif: actif !== undefined ? actif : true,
@@ -329,6 +342,7 @@ router.put('/:id', async (req, res) => {
       prixAchat,
       prixVente,
       coutMoyen,
+      valorisationMethod,
       fournisseurId,
       emplacement,
       actif,
@@ -392,6 +406,12 @@ router.put('/:id', async (req, res) => {
         message: 'Le coût de revient manuel doit être un nombre positif ou nul.',
       });
     }
+    if (valorisationMethod !== undefined && !isValidValorisationMethod(valorisationMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'La méthode de valorisation doit être CMP (coût moyen pondéré) ou FIFO.',
+      });
+    }
     const normalizedWeight = poidsParUnite === undefined
       ? undefined
       : (poidsParUnite === null || poidsParUnite === '' ? null : Number(poidsParUnite));
@@ -429,6 +449,7 @@ router.put('/:id', async (req, res) => {
     if (prixAchat !== undefined) updateData.prixAchat = prixAchat;
     if (coutMoyen !== undefined) updateData.coutMoyen = Number(coutMoyen).toFixed(2);
     if (prixVente !== undefined) updateData.prixVente = Number(prixVente).toFixed(2);
+    if (valorisationMethod !== undefined) updateData.valorisationMethod = normalizeValorisationMethod(valorisationMethod);
     if (fournisseurId !== undefined) updateData.fournisseurId = fournisseurId;
     if (emplacement !== undefined) updateData.emplacement = emplacement;
     if (actif !== undefined) updateData.actif = actif;

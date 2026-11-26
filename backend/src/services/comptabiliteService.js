@@ -706,7 +706,7 @@ export async function createEcritureCoutVente({
         compteComptableId: compteCMV.id,
         debit: amount,
         credit: 0,
-        libelle: `CMV au coût moyen pondéré - ${numeroFacture}`,
+        libelle: `Coût des marchandises vendues - ${numeroFacture}`,
       },
       {
         compteComptableId: compteStock.id,

@@ -323,7 +323,7 @@ export async function ensureOpeningValuationLayer(executor, { entrepriseId, prod
     entrepriseId,
     produitId,
     mouvementId: null,
-    methode: product.valorisationMethod || 'CMP',
+    methode: normalizeValorisationMethod(product.valorisationMethod),
     coutUnitaire: unitCost.toFixed(2),
     coutTotal: fromCents(toCents(quantity * unitCost)).toFixed(2),
     quantite: quantity.toFixed(3),
@@ -376,7 +376,7 @@ export async function createStockValuationLayer(executor, {
     entrepriseId,
     produitId,
     mouvementId: mouvementId || null,
-    methode: productSnapshot?.valorisationMethod || 'CMP',
+    methode: normalizeValorisationMethod(productSnapshot?.valorisationMethod),
     coutUnitaire: calculatedUnitCost.toFixed(2),
     coutTotal: roundedTotal.toFixed(2),
     quantite: quantityValue.toFixed(3),
@@ -392,6 +392,151 @@ export async function createStockValuationLayer(executor, {
  * être périmé (forfait changé, couche créée sans recalcul). Repli sur le
  * coutMoyen stocké si les couches n'ont pas de coût.
  */
+/**
+ * Méthode de valorisation du stock d'un produit.
+ * Règle produit (exercice 2026) : le coût des ventes est valorisé au coût
+ * moyen pondéré (CMP/CMUP) par défaut. FIFO reste disponible sur choix
+ * explicite de l'entreprise. 'CMUP' est un alias accepté de 'CMP'.
+ * Toute valeur inconnue retombe sur CMP : on ne valorise jamais une vente
+ * en FIFO par défaut ou par erreur de saisie.
+ */
+const VALORISATION_METHODS = Object.freeze({ CMP: 'CMP', CMUP: 'CMP', FIFO: 'FIFO' });
+
+export function normalizeValorisationMethod(value) {
+  const key = String(value || '').trim().toUpperCase();
+  return VALORISATION_METHODS[key] || 'CMP';
+}
+
+export function isValidValorisationMethod(value) {
+  return Object.prototype.hasOwnProperty.call(
+    VALORISATION_METHODS,
+    String(value || '').trim().toUpperCase(),
+  );
+}
+
+/**
+ * Mathématiques pures de la consommation de stock (sans accès base) :
+ * à partir des couches restantes [{ id, quantite, coutTotal }] et de la
+ * quantité vendue, calcule le coût consommé et les couches restantes.
+ * - CMP : coût unitaire moyen du stock (valeur totale / quantité totale),
+ *   appliqué à la quantité vendue ; le coût restant est réparti sur les
+ *   couches au prorata des quantités restantes.
+ * - FIFO : consommation des couches les plus anciennes d'abord, coût
+ *   proportionnel à la quantité prélevée dans chaque couche.
+ * Testée par le rejeu complet des 24 ventes de l'exercice 2026
+ * (test/stock-cmup-replay.test.js).
+ */
+export function calculerConsommationStock({ couches, quantite, methode, coutMoyenStocke }) {
+  const layers = (couches || []).map((layer) => ({
+    id: layer.id,
+    quantite: Number(layer.quantite || 0),
+    coutTotal: Number(layer.coutTotal || 0),
+  })).filter((layer) => layer.quantite > 0);
+  const requestedMilli = toMilliUnits(quantite);
+  const unchanged = layers.map((layer) => ({
+    id: layer.id, quantite: layer.quantite, coutTotal: layer.coutTotal,
+  }));
+  if (requestedMilli <= 0) {
+    return {
+      coutConsomme: 0,
+      quantiteConsommee: 0,
+      quantiteNonSuivie: fromMilliUnits(requestedMilli),
+      couchesRestantes: unchanged,
+    };
+  }
+
+  const layerMilli = layers.map((layer) => Math.max(0, toMilliUnits(layer.quantite)));
+  const availableMilli = layerMilli.reduce((sum, value) => sum + value, 0);
+  const consumedMilli = Math.min(requestedMilli, availableMilli);
+  if (consumedMilli <= 0) {
+    return {
+      coutConsomme: 0,
+      quantiteConsommee: 0,
+      quantiteNonSuivie: fromMilliUnits(requestedMilli),
+      couchesRestantes: unchanged,
+    };
+  }
+
+  const method = normalizeValorisationMethod(methode);
+  const remainingByLayer = layerMilli.slice();
+
+  if (method === 'FIFO') {
+    let toConsume = consumedMilli;
+    for (let i = 0; i < remainingByLayer.length && toConsume > 0; i += 1) {
+      const amount = Math.min(remainingByLayer[i], toConsume);
+      remainingByLayer[i] -= amount;
+      toConsume -= amount;
+    }
+  } else {
+    let assigned = 0;
+    const shares = layerMilli.map((value, index) => {
+      const exact = consumedMilli * (value / availableMilli);
+      const floor = Math.floor(exact);
+      assigned += floor;
+      return { index, floor, fraction: exact - floor };
+    });
+    let remainder = consumedMilli - assigned;
+    shares.sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+    for (let i = 0; remainder > 0 && shares.length; i = (i + 1) % shares.length) {
+      shares[i].floor += 1;
+      remainder -= 1;
+    }
+    for (const share of shares) {
+      remainingByLayer[share.index] = Math.max(0, layerMilli[share.index] - share.floor);
+    }
+  }
+
+  let consumedCostCents = 0;
+  const oldCostCentsByLayer = layers.map((layer) => toCents(layer.coutTotal));
+  let newCostCentsByLayer = oldCostCentsByLayer.slice();
+
+  if (method !== 'FIFO') {
+    const oldTotalCents = oldCostCentsByLayer.reduce((sum, amount) => sum + amount, 0);
+    // Le coût consommé est calculé depuis les couches (moyenne réelle du
+    // stock), pas depuis le coutMoyen stocké qui peut être périmé.
+    const layerAverageUnitCost = availableMilli > 0
+      ? fromCents(oldTotalCents) / fromMilliUnits(availableMilli)
+      : 0;
+    const averageUnitCost = selectConsumptionUnitCost({
+      layerAverageUnitCost,
+      storedCoutMoyen: coutMoyenStocke,
+    });
+    consumedCostCents = consumedMilli === availableMilli
+      ? oldTotalCents
+      : toCents(calculateWeightedAverageSaleCost(averageUnitCost, fromMilliUnits(consumedMilli)));
+    const remainingTotalCents = Math.max(0, oldTotalCents - consumedCostCents);
+    const remainingCostAllocations = allocateMoneyByWeight(
+      fromCents(remainingTotalCents),
+      remainingByLayer.map(fromMilliUnits)
+    ).allocations;
+    newCostCentsByLayer = remainingCostAllocations.map(toCents);
+  }
+
+  const couchesRestantes = layers.map((layer, i) => {
+    const oldQuantityMilli = layerMilli[i];
+    const newQuantityMilli = remainingByLayer[i];
+    const oldCostCents = oldCostCentsByLayer[i];
+    const newCostCents = method === 'FIFO'
+      ? oldQuantityMilli > 0
+        ? Math.round(oldCostCents * newQuantityMilli / oldQuantityMilli)
+        : 0
+      : newCostCentsByLayer[i];
+    if (method === 'FIFO') consumedCostCents += oldCostCents - newCostCents;
+    return {
+      id: layer.id,
+      quantite: fromMilliUnits(newQuantityMilli),
+      coutTotal: fromCents(newCostCents),
+    };
+  });
+
+  return {
+    coutConsomme: fromCents(consumedCostCents),
+    quantiteConsommee: fromMilliUnits(consumedMilli),
+    quantiteNonSuivie: fromMilliUnits(requestedMilli - consumedMilli),
+    couchesRestantes,
+  };
+}
+
 export function selectConsumptionUnitCost({ layerAverageUnitCost, storedCoutMoyen }) {
   const layerAverage = Number(layerAverageUnitCost) || 0;
   if (layerAverage > 0) return layerAverage;
@@ -441,83 +586,24 @@ export async function consumeStockValuation(executor, { entrepriseId, produitId,
     sql`${valorisationsStock.quantite} > 0`
   )).orderBy(asc(valorisationsStock.createdAt), asc(valorisationsStock.id)).for('update');
 
-  const layerMilli = layers.map((layer) => Math.max(0, toMilliUnits(layer.quantite)));
-  const availableMilli = layerMilli.reduce((sum, value) => sum + value, 0);
-  const consumedMilli = Math.min(requestedMilli, availableMilli);
-  if (consumedMilli <= 0) {
-    return {
-      trackedQuantity: 0,
-      untrackedQuantity: fromMilliUnits(requestedMilli),
-      coutConsomme: 0,
-    };
-  }
-
-  const method = String(product?.valorisationMethod || 'CMP').toUpperCase();
-  const remainingByLayer = layerMilli.slice();
-
-  if (method === 'FIFO') {
-    let toConsume = consumedMilli;
-    for (let i = 0; i < remainingByLayer.length && toConsume > 0; i += 1) {
-      const amount = Math.min(remainingByLayer[i], toConsume);
-      remainingByLayer[i] -= amount;
-      toConsume -= amount;
-    }
-  } else {
-    let assigned = 0;
-    const shares = layerMilli.map((value, index) => {
-      const exact = consumedMilli * (value / availableMilli);
-      const floor = Math.floor(exact);
-      assigned += floor;
-      return { index, floor, fraction: exact - floor };
-    });
-    let remainder = consumedMilli - assigned;
-    shares.sort((a, b) => b.fraction - a.fraction || a.index - b.index);
-    for (let i = 0; remainder > 0 && shares.length; i = (i + 1) % shares.length) {
-      shares[i].floor += 1;
-      remainder -= 1;
-    }
-    for (const share of shares) {
-      remainingByLayer[share.index] = Math.max(0, layerMilli[share.index] - share.floor);
-    }
-  }
-
-  let consumedCostCents = 0;
-  const oldCostCentsByLayer = layers.map((layer) => toCents(layer.coutTotal));
-  let newCostCentsByLayer = oldCostCentsByLayer.slice();
-
-  if (method !== 'FIFO') {
-    const oldTotalCents = oldCostCentsByLayer.reduce((sum, amount) => sum + amount, 0);
-    // Le coût consommé est calculé depuis les couches (moyenne réelle du
-    // stock), pas depuis le coutMoyen stocké qui peut être périmé.
-    const layerAverageUnitCost = availableMilli > 0
-      ? fromCents(oldTotalCents) / fromMilliUnits(availableMilli)
-      : 0;
-    const averageUnitCost = selectConsumptionUnitCost({
-      layerAverageUnitCost,
-      storedCoutMoyen: product?.coutMoyen,
-    });
-    consumedCostCents = consumedMilli === availableMilli
-      ? oldTotalCents
-      : toCents(calculateWeightedAverageSaleCost(averageUnitCost, fromMilliUnits(consumedMilli)));
-    const remainingTotalCents = Math.max(0, oldTotalCents - consumedCostCents);
-    const remainingCostAllocations = allocateMoneyByWeight(
-      fromCents(remainingTotalCents),
-      remainingByLayer.map(fromMilliUnits)
-    ).allocations;
-    newCostCentsByLayer = remainingCostAllocations.map(toCents);
-  }
+  // Les mathématiques de la consommation (FIFO ou CMP) sont pures et
+  // testées par rejeu : calculerConsommationStock. Ici, on ne fait que
+  // persister les couches restantes qu'elle retourne.
+  const result = calculerConsommationStock({
+    couches: layers,
+    quantite: quantity,
+    methode: product?.valorisationMethod,
+    coutMoyenStocke: product?.coutMoyen,
+  });
+  const method = normalizeValorisationMethod(product?.valorisationMethod);
 
   for (let i = 0; i < layers.length; i += 1) {
-    const oldQuantityMilli = layerMilli[i];
-    const newQuantityMilli = remainingByLayer[i];
-    const oldCostCents = oldCostCentsByLayer[i];
-    const newCostCents = method === 'FIFO'
-      ? oldQuantityMilli > 0
-        ? Math.round(oldCostCents * newQuantityMilli / oldQuantityMilli)
-        : 0
-      : newCostCentsByLayer[i];
+    const remaining = result.couchesRestantes[i];
+    const oldQuantityMilli = toMilliUnits(layers[i].quantite);
+    const newQuantityMilli = toMilliUnits(remaining.quantite);
+    const oldCostCents = toCents(layers[i].coutTotal);
+    const newCostCents = toCents(remaining.coutTotal);
     if (newQuantityMilli === oldQuantityMilli && newCostCents === oldCostCents) continue;
-    if (method === 'FIFO') consumedCostCents += oldCostCents - newCostCents;
     await executor.update(valorisationsStock).set({
       quantite: fromMilliUnits(newQuantityMilli).toFixed(3),
       coutTotal: fromCents(newCostCents).toFixed(2),
@@ -527,13 +613,13 @@ export async function consumeStockValuation(executor, { entrepriseId, produitId,
     ));
   }
 
-  if (method === 'FIFO') {
+  if (method === 'FIFO' && result.quantiteConsommee > 0) {
     await updateProductAverageCost(executor, entrepriseId, produitId);
   }
   return {
-    trackedQuantity: fromMilliUnits(consumedMilli),
-    untrackedQuantity: fromMilliUnits(requestedMilli - consumedMilli),
-    coutConsomme: fromCents(consumedCostCents),
+    trackedQuantity: result.quantiteConsommee,
+    untrackedQuantity: result.quantiteNonSuivie,
+    coutConsomme: result.coutConsomme,
   };
 }
 

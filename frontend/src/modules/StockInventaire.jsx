@@ -305,7 +305,7 @@ export function StockInventaire() {
         uniteMesure: 'pièce',
         poidsParUnite: '',
         unitePoids: 'kg',
-        valorisationMethod: 'FIFO',
+        valorisationMethod: 'CMP',
       });
     } else if (type === 'categorie') {
       setForm(item || { nom: '', description: '' });
@@ -1159,7 +1159,7 @@ export function StockInventaire() {
               )}
               <FormField label="Stock Min" type="number" value={form.stockMinimum || 10} onChange={(e) => setForm({...form, stockMinimum: parseFloat(e.target.value) || 0})} />
               {automaticCosting && (
-                <FormField label="Méthode de Valorisation" type="select" value={form.valorisationMethod || 'FIFO'}
+                <FormField label="Méthode de Valorisation" type="select" value={form.valorisationMethod || 'CMP'}
                   onChange={(e) => setForm({...form, valorisationMethod: e.target.value})}
                   options={[
                     { value: 'FIFO', label: 'FIFO (Premier Entré, Premier Sorti)' },
@@ -1621,7 +1621,7 @@ export function StockInventaire() {
               fields: [
                 { label: 'Stock Actuel', value: `${selectedProduit.quantite || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
                 { label: 'Stock Minimum', value: `${selectedProduit.stockMinimum || 0} ${selectedProduit.uniteMesure || 'pièce'}` },
-                ...(automaticCosting ? [{ label: 'Méthode de Valorisation', value: selectedProduit.valorisationMethod || 'FIFO' }] : []),
+                ...(automaticCosting ? [{ label: 'Méthode de Valorisation', value: selectedProduit.valorisationMethod || 'CMP' }] : []),
                 { label: 'Coût standard (devis)', value: `${Number(selectedProduit.prixAchat || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` },
                 { label: automaticCosting ? 'Coût calculé (CMV)' : 'Coût de revient manuel', value: Number(selectedProduit.coutMoyen || 0) > 0 ? `${Number(selectedProduit.coutMoyen).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : automaticCosting ? 'En attente de réception fournisseur' : 'À saisir' },
                 { label: automaticCosting ? 'Prix de vente calculé' : 'Prix de vente manuel', value: Number(selectedProduit.prixVente || 0) > 0 ? `${Number(selectedProduit.prixVente).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XOF` : automaticCosting ? 'Non calculé' : 'À saisir' },

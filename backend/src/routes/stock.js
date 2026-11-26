@@ -11,6 +11,8 @@ import {
   convertUnitPriceToBase,
   createStockValuationLayer,
   ensureOpeningValuationLayer,
+  isValidValorisationMethod,
+  normalizeValorisationMethod,
 } from '../services/stockValuation.js';
 import { getPlanCapabilities } from '../services/planEntitlements.js';
 import { markClosedFiscalPeriodConflict } from '../services/fiscalPeriodErrors.js';
@@ -164,6 +166,9 @@ router.post('/produits', async (req, res) => {
   try {
     const { reference, nom, categoriId, prixAchat, prixVente, coutMoyen, valorisationMethod } = req.body;
     const { automaticCosting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    if (valorisationMethod !== undefined && !isValidValorisationMethod(valorisationMethod)) {
+      return res.status(400).json({ error: 'La méthode de valorisation doit être CMP (coût moyen pondéré) ou FIFO.' });
+    }
     if (automaticCosting && Number(prixVente || 0) > 0) {
       return res.status(409).json({
         error: 'Le prix de vente sera calculé après une réception fournisseur, à partir du coût réel du système.',
@@ -180,7 +185,9 @@ router.post('/produits', async (req, res) => {
       prixAchat: parseFloat(prixAchat) || 0,
       coutMoyen: automaticCosting ? '0' : String(Number(coutMoyen) || 0),
       prixVente: automaticCosting ? '0' : String(Number(prixVente) || 0),
-      valorisationMethod: valorisationMethod || 'FIFO'
+      // CMP par défaut : le coût des ventes est valorisé au coût moyen
+      // pondéré (exercice 2026). FIFO uniquement sur choix explicite.
+      valorisationMethod: normalizeValorisationMethod(valorisationMethod)
     }).returning();
 
     // Audit log
