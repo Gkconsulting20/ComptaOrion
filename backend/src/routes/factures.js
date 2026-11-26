@@ -450,7 +450,7 @@ router.post('/:id/paiement', async (req, res) => {
       await tx.insert(transactionsTresorerie).values({
         entrepriseId: req.entrepriseId,
         compteBancaireId: parseInt(compteBancaireId),
-        type: 'entree',
+        type: 'encaissement',
         montant: montantPaiement.toFixed(2),
         dateTransaction: datePaiement || new Date().toISOString().split('T')[0],
         categorie: 'Vente',
@@ -1115,7 +1115,7 @@ router.post('/notes-debit/:id/paiement', async (req, res) => {
         await tx.insert(transactionsTresorerie).values({
           entrepriseId: req.entrepriseId,
           compteBancaireId: bank.id,
-          type: 'entree',
+          type: 'encaissement',
           montant: amount.toFixed(2),
           dateTransaction: datePaiement,
           categorie: 'Vente',
@@ -1434,7 +1434,7 @@ router.post('/paiements/:id/encaisser-cheque', async (req, res) => {
       await tx.insert(transactionsTresorerie).values({
         entrepriseId: req.entrepriseId,
         compteBancaireId: bankAccountId,
-        type: 'entree',
+        type: 'encaissement',
         montant: payment.montant,
         dateTransaction: dateEncaissement,
         categorie: 'Encaissement chèque client',
