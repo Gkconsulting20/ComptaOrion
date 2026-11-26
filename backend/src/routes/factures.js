@@ -6,6 +6,7 @@ import emailService from '../services/emailService.js';
 import {
   createEcritureCoutVente,
   createEcritureFactureVente,
+  createEcritureAnnulationFactureVente,
   createEcriturePaiementClient,
   createEcritureAvoirClient,
   createEcritureNoteDebitClient,
@@ -585,6 +586,18 @@ router.put('/:id', async (req, res) => {
         message: 'Une facture déjà validée ne peut pas être remise en brouillon ou annulée directement; créez un avoir pour conserver le stock et la comptabilité cohérents.',
       });
     }
+    // Une facture brouillon déjà (partiellement) payée ne peut pas être
+    // annulée directement : le paiement doit être remboursé via un avoir.
+    if (
+      statut === 'annulee' &&
+      existingFacture.statut === 'brouillon' &&
+      Number(existingFacture.montantPaye || 0) > 0
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: 'Une facture déjà payée ne peut pas être annulée directement; créez un avoir pour rembourser le client.',
+      });
+    }
     const existingItems = await db.select().from(factureItems)
       .where(and(
         eq(factureItems.factureId, parseInt(id)),
@@ -683,6 +696,53 @@ router.put('/:id', async (req, res) => {
     // *** INTÉGRATION STOCK AUTOMATIQUE ***
     // Si le statut change vers 'envoyee' ou 'payee', générer mouvements SORTIE
     let montantCMVFacture = null;
+    let ecritureAnnulation = null;
+    // Annulation d'une facture brouillon : la création avait déjà passé
+    // l'écriture de vente (D 411 / C 701 + C 443) ; on la contre-passe
+    // exactement (D 701 / D 443 / C 411) pour que 701, 443 et le solde
+    // client reviennent à leur valeur d'avant la facture. Sans cette
+    // écriture, le résultat et la TVA restaient surévalués (exercice
+    // 2026 : 701 +75 000, 443 +13 500, 4112 soldé 88 500).
+    // Une facture validée ne passe pas ici : l'annulation directe est
+    // refusée plus haut, il faut créer un avoir.
+    const isAnnulation = statut === 'annulee' && existingFacture.statut === 'brouillon';
+    // Une facture à 0 n'a pas d'écriture de vente à contre-passer.
+    if (isAnnulation && Number(existingFacture.totalTTC || 0) > 0) {
+      try {
+        const [clientAnnulation] = await db.select().from(clients).where(and(
+          eq(clients.id, existingFacture.clientId),
+          eq(clients.entrepriseId, req.entrepriseId)
+        )).limit(1);
+        ecritureAnnulation = await db.transaction(async (tx) => {
+          const entry = await createEcritureAnnulationFactureVente({
+            entrepriseId: req.entrepriseId,
+            clientId: existingFacture.clientId,
+            numeroFacture: existingFacture.numeroFacture,
+            dateFacture: existingFacture.dateFacture,
+            clientNom: clientAnnulation?.nom || '',
+            totalHT: Number(existingFacture.totalHT || 0),
+            totalTVA: Number(existingFacture.totalTVA || 0),
+            totalTTC: Number(existingFacture.totalTTC || 0),
+            executor: tx,
+          });
+          if (!entry) {
+            throw new Error('Configurez le compte collectif client 4111/4112, les ventes et la TVA avant d’annuler la facture.');
+          }
+          return entry;
+        });
+      } catch (annulationError) {
+        // La contrepassation a échoué : on remet la facture en brouillon
+        // plutôt que de la laisser annulée avec sa vente en comptabilité.
+        await db.update(factures).set({
+          statut: existingFacture.statut,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(factures.id, parseInt(id)),
+          eq(factures.entrepriseId, req.entrepriseId)
+        ));
+        throw annulationError;
+      }
+    }
     if (isFulfillmentTransition) {
       const factureItemsList = await db.select().from(factureItems).where(and(
         eq(factureItems.factureId, parseInt(id)),
@@ -775,8 +835,8 @@ router.put('/:id', async (req, res) => {
       table: 'factures',
       recordId: parseInt(id),
       ancienneValeur: { facture: existingFacture, items: existingItems },
-      nouvelleValeur: { facture: updatedFacture, items: updatedItems, montantCMV: montantCMVFacture },
-      description: `Facture modifiée: ${updatedFacture.numeroFacture}`,
+      nouvelleValeur: { facture: updatedFacture, items: updatedItems, montantCMV: montantCMVFacture, ecritureAnnulationId: ecritureAnnulation?.id || null },
+      description: `Facture modifiée: ${updatedFacture.numeroFacture}${ecritureAnnulation ? ` (annulation contre-passée, écriture ${ecritureAnnulation.id})` : ''}`,
       required: false
     });
 
@@ -785,6 +845,7 @@ router.put('/:id', async (req, res) => {
       message: 'Facture mise à jour avec succès',
       data: updatedFacture,
       ...(montantCMVFacture !== null ? { montantCMV: montantCMVFacture } : {}),
+      ...(ecritureAnnulation ? { ecritureAnnulation } : {}),
     });
   } catch (error) {
     console.error('Erreur PUT /api/factures/:id:', error);
@@ -827,6 +888,33 @@ router.delete('/:id', async (req, res) => {
         eq(factureItems.factureId, parseInt(id)),
         eq(factureItems.entrepriseId, req.entrepriseId)
       ));
+      // La création avait passé l'écriture de vente (D 411 / C 701 +
+      // C 443) : supprimer la facture sans la contre-passer laisserait
+      // la vente en comptabilité, comme l'annulation avant correction.
+      // Une facture à 0 n'a pas d'écriture à contre-passer.
+      if (Number(existingFacture.totalTTC || 0) > 0) {
+        const [clientSuppression] = await tx.select().from(clients).where(and(
+          eq(clients.id, existingFacture.clientId),
+          eq(clients.entrepriseId, req.entrepriseId)
+        )).limit(1);
+        const ecritureAnnulation = await createEcritureAnnulationFactureVente({
+          entrepriseId: req.entrepriseId,
+          clientId: existingFacture.clientId,
+          numeroFacture: existingFacture.numeroFacture,
+          dateFacture: existingFacture.dateFacture,
+          clientNom: clientSuppression?.nom || '',
+          totalHT: Number(existingFacture.totalHT || 0),
+          totalTVA: Number(existingFacture.totalTVA || 0),
+          totalTTC: Number(existingFacture.totalTTC || 0),
+          executor: tx,
+        });
+        if (!ecritureAnnulation) {
+          throw Object.assign(
+            new Error('Configurez le compte collectif client 4111/4112, les ventes et la TVA avant de supprimer la facture.'),
+            { status: 409 },
+          );
+        }
+      }
       await logAudit({
         ...extractAuditInfo(req),
         action: 'DELETE',

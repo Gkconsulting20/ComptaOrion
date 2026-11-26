@@ -669,6 +669,101 @@ export async function createEcritureFactureVente(params) {
   });
 }
 
+/**
+ * Lignes de la contrepassation d'une facture de vente annulée à l'état
+ * brouillon (exercice 2026, erreur E2). La création de la facture passe
+ * l'écriture D 411 / C 701 + C 443 ; l'annulation doit l'effacer
+ * exactement : D 701 / D 443 / C 411, pour les mêmes montants. Après
+ * annulation, 701 et 443 reviennent à leur valeur d'avant la facture
+ * (résultat et TVA non pollués). Fonction pure (sans base), testée dans
+ * test/annulation-facture.test.js. Ce n'est pas un avoir (compte 709) :
+ * une facture brouillon annulée n'a jamais existé commercialement, on
+ * l'extourne au lieu de constater un retour de marchandises.
+ */
+export function lignesAnnulationFactureVente({
+  compteClientId, compteVentesId, compteTvaId,
+  totalHT, totalTVA, totalTTC, numeroFacture, clientNom,
+}) {
+  const lignes = [];
+  if (Number(totalHT) > 0) {
+    lignes.push({
+      compteComptableId: compteVentesId,
+      debit: Number(totalHT),
+      credit: 0,
+      libelle: `Annulation vente - ${numeroFacture}`,
+    });
+  }
+  if (Number(totalTVA) > 0 && compteTvaId) {
+    lignes.push({
+      compteComptableId: compteTvaId,
+      debit: Number(totalTVA),
+      credit: 0,
+      libelle: `Annulation TVA collectée - ${numeroFacture}`,
+    });
+  }
+  lignes.push({
+    compteComptableId: compteClientId,
+    debit: 0,
+    credit: Number(totalTTC),
+    libelle: `Annulation facture client ${clientNom || ''} - ${numeroFacture}`,
+  });
+  return lignes;
+}
+
+/**
+ * Écriture de contrepassation d'une facture de vente annulée (brouillon).
+ * Mêmes comptes que l'écriture d'origine (collectif client du client,
+ * 701, 443), même date que la facture pour corriger la TVA dans la même
+ * période. Retourne null si un compte requis est absent : l'appelant
+ * doit alors refuser l'annulation plutôt que de laisser la vente en
+ * comptabilité. Le stock n'est pas touché : une facture brouillon n'a
+ * jamais déclenché de sortie de stock (elle part à 'envoyee').
+ */
+export async function createEcritureAnnulationFactureVente({
+  entrepriseId, clientId, numeroFacture, dateFacture, clientNom,
+  totalHT, totalTVA = 0, totalTTC, executor = db,
+}) {
+  const compte411 = await getCompteCollectifClient(entrepriseId, clientId, executor);
+  const compteVentes = await getCompteByNumero(
+    entrepriseId, COMPTES_SYSCOHADA.VENTES_MARCHANDISES, executor,
+  );
+  const compteTVA = Number(totalTVA) > 0
+    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.TVA_COLLECTEE, executor)
+    : null;
+  if (!compte411 || !compteVentes || (Number(totalTVA) > 0 && !compteTVA)) {
+    console.warn('Comptes requis manquants pour contre-passer une facture annulée');
+    return null;
+  }
+
+  const lignes = lignesAnnulationFactureVente({
+    compteClientId: compte411.id,
+    compteVentesId: compteVentes.id,
+    compteTvaId: compteTVA?.id,
+    totalHT,
+    totalTVA,
+    totalTTC,
+    numeroFacture,
+    clientNom,
+  });
+  if (lignes.length < 2) {
+    console.warn('Pas assez de lignes pour contre-passer une facture annulée');
+    return null;
+  }
+
+  return createEcritureComptable({
+    entrepriseId,
+    journalCode: JOURNAL_CODES.VENTES,
+    journalNom: 'Journal des Ventes',
+    journalType: 'ventes',
+    dateEcriture: dateFacture,
+    libelle: `Annulation facture ${numeroFacture} - ${clientNom || ''}`,
+    numeroPiece: `${numeroFacture}-ANNUL`,
+    lignes,
+    valide: true,
+    executor,
+  });
+}
+
 export async function createEcritureCoutVente({
   entrepriseId,
   numeroFacture,
