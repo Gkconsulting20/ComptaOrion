@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db.js';
-import { parametresFiscaux, declarationsFiscales } from '../schema.js';
+import { entreprises, parametresFiscaux, declarationsFiscales } from '../schema.js';
 import { and, eq, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
@@ -30,9 +30,27 @@ function isValidISODate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+/**
+ * Pays fiscal applicable à une déclaration : les paramètres du module
+ * Impôts priment, sinon on retombe sur le pays de l'entreprise
+ * (exercice 2026, erreur E3 couche 1 : la déclaration exigeait le pays
+ * Togo dans les paramètres fiscaux alors que l'entreprise déclare
+ * déjà pays = Togo — le module ne doit pas exiger une configuration
+ * en double). Retourne le pays normalisé, ou null si aucun n'est connu.
+ */
+export function resolvePaysFiscal(paysParametres, paysEntreprise) {
+  const normaliser = (value) => String(value || '').trim().toLowerCase();
+  return normaliser(paysParametres) || normaliser(paysEntreprise) || null;
+}
+
 export async function calculerTva(entrepriseId, dateDebut, dateFin, executor = db) {
-  const [collecteeData, deductibleData] = await Promise.all([
-    executor.execute(sql`
+  // Les deux requêtes sont exécutées SÉQUENTIELLEMENT, pas en Promise.all :
+  // calculerTva est aussi appelée avec une transaction (déclaration TVA),
+  // qui ne tient qu'une seule connexion — deux requêtes concurrentes sur
+  // le même client sont un risque inutile, et l'échec éventuel se
+  // localise alors sur la requête fautive au lieu d'avorter toute la
+  // transaction. Le résumé TVA (exécuteur = pool) n'en est pas affecté.
+  const collecteeData = await executor.execute(sql`
     SELECT cc.numero AS "numero", cc.nom AS "nom",
       COALESCE(SUM(le.credit), 0) - COALESCE(SUM(le.debit), 0) AS "montant",
       COUNT(DISTINCT e.id)::int AS "nombreEcritures"
@@ -47,8 +65,8 @@ export async function calculerTva(entrepriseId, dateDebut, dateFin, executor = d
       ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
     GROUP BY cc.numero, cc.nom
     ORDER BY cc.numero
-  `),
-    executor.execute(sql`
+  `);
+  const deductibleData = await executor.execute(sql`
     SELECT cc.numero AS "numero", cc.nom AS "nom",
       COALESCE(SUM(le.debit), 0) - COALESCE(SUM(le.credit), 0) AS "montant",
       COUNT(DISTINCT e.id)::int AS "nombreEcritures"
@@ -62,8 +80,7 @@ export async function calculerTva(entrepriseId, dateDebut, dateFin, executor = d
       ${dateFin ? sql`AND e.date_ecriture <= ${dateFin}` : sql``}
     GROUP BY cc.numero, cc.nom
     ORDER BY cc.numero
-  `)
-  ]);
+  `);
 
   const comptesCollectee = collecteeData.rows || collecteeData || [];
   const comptesDeductible = deductibleData.rows || deductibleData || [];
@@ -369,10 +386,22 @@ router.post('/declarations/tva', async (req, res) => {
       .from(parametresFiscaux)
       .where(eq(parametresFiscaux.entrepriseId, req.entrepriseId))
       .limit(1);
-    if (taxProfile?.pays?.toLowerCase() !== 'togo') {
+    // Le pays fiscal vient des paramètres du module, ou à défaut du pays
+    // déclaré par l'entreprise (évite l'erreur 400 alors que l'entreprise
+    // est déjà au Togo).
+    let paysFiscal = resolvePaysFiscal(taxProfile?.pays, null);
+    if (!paysFiscal) {
+      const [entreprise] = await db
+        .select({ pays: entreprises.pays })
+        .from(entreprises)
+        .where(eq(entreprises.id, req.entrepriseId))
+        .limit(1);
+      paysFiscal = resolvePaysFiscal(null, entreprise?.pays);
+    }
+    if (paysFiscal !== 'togo') {
       return res.status(400).json({
         success: false,
-        message: 'Configurez d’abord le pays Togo dans les paramètres fiscaux. Le calcul ne couvre actuellement que le Togo.'
+        message: 'Configurez d’abord le pays Togo dans les paramètres de l’entreprise ou dans les paramètres fiscaux. Le calcul ne couvre actuellement que le Togo.'
       });
     }
 
@@ -446,10 +475,15 @@ router.post('/declarations/tva', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur POST /api/impots/declarations/tva:', error);
+    // La cause Postgres sous-jacente (Drizzle ne la met que dans
+    // error.cause) est exposée : sans elle, le 500 ne disait que
+    // « Failed query: insert into declarations_fiscales... » sans
+    // jamais nommer l'erreur réelle (exercice 2026).
     return res.status(500).json({
       success: false,
       message: 'Erreur lors de la création du brouillon TVA',
-      error: error.message
+      error: error.message,
+      ...(error.cause?.message ? { detail: error.cause.message } : {}),
     });
   }
 });
