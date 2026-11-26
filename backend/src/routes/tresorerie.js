@@ -311,6 +311,7 @@ router.post('/transactions/synchroniser-ecriture/:ecritureId', async (req, res) 
     if (result.skipped) return res.status(409).json({ error: result.skipped });
     return res.status(result.created ? 201 : 200).json({
       transaction: result.transaction,
+      transactions: result.transactions || [],
       alreadySynchronized: Boolean(result.alreadySynchronized),
     });
   } catch (err) {

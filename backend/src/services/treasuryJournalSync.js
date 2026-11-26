@@ -13,6 +13,39 @@ import {
 } from '../schema.js';
 import { logAudit } from '../utils/auditLogger.js';
 
+/**
+ * Mouvements nets de trésorerie d'une écriture, par compte bancaire ou
+ * de caisse lié (fonction pure, sans base).
+ * lignes : [{ compteComptableId, debit, credit }] ; comptesBancaires :
+ * [{ id, compteComptableId }] (banque comme caisse : la table
+ * comptes_bancaires porte les deux). Retourne un mouvement par compte
+ * lié dont le net (débit − crédit) est non nul : > 0 encaissement,
+ * < 0 décaissement. Une écriture peut toucher plusieurs comptes
+ * (ex. ouverture AN : D 521 + D 571) : chacun est synchronisé.
+ * Testée dans test/tresorerie-synchronisation.test.js (scénario 2026).
+ */
+export function mouvementsTresorerieParCompte({ lignes, comptesBancaires }) {
+  const nets = new Map();
+  for (const ligne of lignes || []) {
+    const compteId = Number(ligne.compteComptableId);
+    if (!Number.isSafeInteger(compteId)) continue;
+    const net = Number(ligne.debit || 0) - Number(ligne.credit || 0);
+    nets.set(compteId, (nets.get(compteId) || 0) + net);
+  }
+  const mouvements = [];
+  for (const compte of comptesBancaires || []) {
+    const net = nets.get(Number(compte.compteComptableId));
+    if (net === undefined || Math.abs(net) < 0.005) continue;
+    mouvements.push({
+      compteBancaireId: compte.id,
+      compteComptableId: compte.compteComptableId,
+      mouvementNet: net,
+      type: net > 0 ? 'encaissement' : 'decaissement',
+    });
+  }
+  return mouvements;
+}
+
 export async function synchroniserTransactionDepuisEcriture({
   entrepriseId,
   ecritureId,
@@ -33,9 +66,6 @@ export async function synchroniserTransactionDepuisEcriture({
     eq(journaux.id, entry.journalId),
     eq(journaux.entrepriseId, tenantId),
   )).limit(1);
-  if (journal?.code !== 'BQ') {
-    return { skipped: 'L’écriture n’appartient pas au journal de banque.' };
-  }
 
   const lines = await executor.select().from(lignesEcritures).where(and(
     eq(lignesEcritures.ecritureId, entryId),
@@ -52,70 +82,98 @@ export async function synchroniserTransactionDepuisEcriture({
   if (linkedBankAccounts.length === 0) {
     return { skipped: 'Aucun compte bancaire actif n’est lié aux comptes de cette écriture.' };
   }
-  if (linkedBankAccounts.length > 1) {
-    throw Object.assign(new Error('Plusieurs comptes bancaires utilisent le même compte comptable; synchronisation ambiguë.'), { status: 409 });
-  }
 
-  const bankAccount = linkedBankAccounts[0];
-  const netMovement = lines
-    .filter((line) => Number(line.compteComptableId) === Number(bankAccount.compteComptableId))
-    .reduce((sum, line) => sum + Number(line.debit || 0) - Number(line.credit || 0), 0);
-  if (Math.abs(netMovement) < 0.005) {
-    return { skipped: 'Aucun mouvement net sur le compte bancaire lié.' };
+  // Avant correction, seuls les journaux BQ étaient synchronisés : les
+  // écritures d'ouverture (AN, +2 000 000 en banque) et de salaires
+  // (SA, −1 800 000) ne l'étaient pas, et la caisse (journal CA) jamais
+  // — d'où l'écart module/comptabilité de l'exercice 2026 (banque
+  // −3 072 200 au lieu de −2 872 200, caisse 0 au lieu de +1 482 000).
+  // Règle désormais : tout journal dont une ligne touche un compte de
+  // trésorerie lié est synchronisé, un mouvement par compte lié.
+  const mouvements = mouvementsTresorerieParCompte({
+    lignes: lines,
+    comptesBancaires: linkedBankAccounts,
+  });
+  if (mouvements.length === 0) {
+    return { skipped: 'Aucun mouvement net sur les comptes de trésorerie liés.' };
   }
 
   const reference = String(entry.numeroPiece || `ECR-${entry.id}`).trim().slice(0, 100);
-  const [existing] = await executor.select().from(transactionsTresorerie).where(and(
-    eq(transactionsTresorerie.entrepriseId, tenantId),
-    eq(transactionsTresorerie.compteBancaireId, bankAccount.id),
-    eq(transactionsTresorerie.numeroPiece, reference),
-  )).limit(1);
-  if (existing) return { transaction: existing, alreadySynchronized: true };
+  const modePaiement = journal?.code === 'CA' ? 'especes' : 'virement';
+  const transactions = [];
+  let created = false;
+  let alreadySynchronized = false;
+  for (const mouvement of mouvements) {
+    const bankAccount = linkedBankAccounts.find(
+      (compte) => Number(compte.id) === Number(mouvement.compteBancaireId),
+    );
+    const [existing] = await executor.select().from(transactionsTresorerie).where(and(
+      eq(transactionsTresorerie.entrepriseId, tenantId),
+      eq(transactionsTresorerie.compteBancaireId, bankAccount.id),
+      eq(transactionsTresorerie.numeroPiece, reference),
+    )).limit(1);
+    if (existing) {
+      transactions.push(existing);
+      alreadySynchronized = true;
+      continue;
+    }
 
-  const movementType = netMovement > 0 ? 'encaissement' : 'decaissement';
-  const paymentMatch = await findExistingPaymentMovement({
-    executor,
-    tenantId,
-    reference,
-    bankAccountId: bankAccount.id,
-    movementType,
-  });
-  if (paymentMatch) return { transaction: paymentMatch, alreadySynchronized: true };
+    const paymentMatch = await findExistingPaymentMovement({
+      executor,
+      tenantId,
+      reference,
+      bankAccountId: bankAccount.id,
+      movementType: mouvement.type,
+    });
+    if (paymentMatch) {
+      transactions.push(paymentMatch);
+      alreadySynchronized = true;
+      continue;
+    }
 
-  const [created] = await executor.insert(transactionsTresorerie).values({
-    entrepriseId: tenantId,
-    compteBancaireId: bankAccount.id,
-    type: movementType,
-    montant: Math.abs(netMovement).toFixed(2),
-    dateTransaction: entry.dateEcriture,
-    categorie: 'Écriture comptable',
-    description: entry.libelle || `Écriture ${entry.numeroEcriture || entry.id}`,
-    numeroPiece: reference,
-    modePaiement: 'virement',
-    userId: auditInfo.userId || null,
-  }).returning();
+    const [createdTransaction] = await executor.insert(transactionsTresorerie).values({
+      entrepriseId: tenantId,
+      compteBancaireId: bankAccount.id,
+      type: mouvement.type,
+      montant: Math.abs(mouvement.mouvementNet).toFixed(2),
+      dateTransaction: entry.dateEcriture,
+      categorie: 'Écriture comptable',
+      description: entry.libelle || `Écriture ${entry.numeroEcriture || entry.id}`,
+      numeroPiece: reference,
+      modePaiement,
+      userId: auditInfo.userId || null,
+    }).returning();
 
-  await executor.update(comptesBancaires).set({
-    soldeActuel: sql`COALESCE(${comptesBancaires.soldeActuel}, 0) + ${netMovement}`,
-    updatedAt: new Date(),
-  }).where(and(
-    eq(comptesBancaires.id, bankAccount.id),
-    eq(comptesBancaires.entrepriseId, tenantId),
-  ));
+    await executor.update(comptesBancaires).set({
+      soldeActuel: sql`COALESCE(${comptesBancaires.soldeActuel}, 0) + ${mouvement.mouvementNet}`,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(comptesBancaires.id, bankAccount.id),
+      eq(comptesBancaires.entrepriseId, tenantId),
+    ));
 
-  await logAudit({
-    ...auditInfo,
-    entrepriseId: tenantId,
-    action: 'CREATE',
-    table: 'transactions_tresorerie',
-    recordId: created.id,
-    nouvelleValeur: created,
-    description: `Mouvement bancaire synchronisé depuis l’écriture ${entry.numeroEcriture || entry.id}`,
-    executor,
-    required: true,
-  });
+    await logAudit({
+      ...auditInfo,
+      entrepriseId: tenantId,
+      action: 'CREATE',
+      table: 'transactions_tresorerie',
+      recordId: createdTransaction.id,
+      nouvelleValeur: createdTransaction,
+      description: `Mouvement de trésorerie synchronisé depuis l’écriture ${entry.numeroEcriture || entry.id}`,
+      executor,
+      required: true,
+    });
 
-  return { transaction: created, created: true };
+    transactions.push(createdTransaction);
+    created = true;
+  }
+
+  return {
+    transactions,
+    transaction: transactions[0] || null,
+    created,
+    alreadySynchronized,
+  };
 }
 
 async function findExistingPaymentMovement({ executor, tenantId, reference, bankAccountId, movementType }) {
