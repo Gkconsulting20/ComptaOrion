@@ -1405,7 +1405,9 @@ export async function createEcriturePaiementImpot(params) {
     typeImpot,
     montant,
     periode,
-    modePaiement = 'virement'
+    modePaiement = 'virement',
+    compteBancaireId,
+    executor = db
   } = params;
 
   const journalCode = modePaiement === 'especes' ? JOURNAL_CODES.CAISSE : JOURNAL_CODES.BANQUE;
@@ -1413,13 +1415,21 @@ export async function createEcriturePaiementImpot(params) {
 
   // Pour TVA: débiter le compte 4434 (TVA due à l'État) pour solder la dette fiscale
   // Pour autres impôts: débiter le compte 44 (État et collectivités)
-  const compteImpot = typeImpot === 'tva' 
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ETAT_TVA_DUE)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.ETAT_IMPOTS);
-  
-  const compteTresorerie = modePaiement === 'especes' 
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE);
+  // Résolution EXACTE (compte mappé au rôle pour un plan PERSONNALISE,
+  // sinon 4434 / 44 SYSCOHADA) : le LIKE '44%' sans ORDER BY dépendait
+  // de l'ordre d'insertion du plan — le même piège que le 52 / 57.
+  const compteImpot = typeImpot === 'tva'
+    ? await getCompteByNumeroExact(entrepriseId, COMPTES_SYSCOHADA.ETAT_TVA_DUE, executor, 'vat_payable')
+    : await getCompteByNumeroExact(entrepriseId, COMPTES_SYSCOHADA.ETAT_IMPOTS, executor, 'tax_payable');
+
+  // La trésorerie passe par getCompteTresorerie, comme le remboursement
+  // de dépense (anomalie B, f71de5c) : compte bancaire configuré quand un
+  // compteBancaireId est fourni, sinon le compte précis 521 (virement) /
+  // 571 (espèces) — jamais le compte générique 52 / 57, que le LIKE
+  // '52%' sans ORDER BY retournait et qui faussait le bilan (52
+  // créditeur visible en dettes). Le préfixe ne reste qu'un repli pour
+  // les plans sans compte 521 / 571.
+  const compteTresorerie = await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
 
   const ecrituresLignes = [];
 
@@ -1455,7 +1465,8 @@ export async function createEcriturePaiementImpot(params) {
     libelle: `Paiement ${typeImpot.toUpperCase()} - ${periode}`,
     numeroPiece: reference,
     lignes: ecrituresLignes,
-    valide: true
+    valide: true,
+    executor
   });
 }
 
