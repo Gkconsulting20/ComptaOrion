@@ -21,7 +21,10 @@ async function genererNumeroDevis(entrepriseId) {
       eq(devis.entrepriseId, entrepriseId),
       sql`EXTRACT(YEAR FROM ${devis.dateDevis}::date) = ${annee}`
     ))
-    .orderBy(desc(devis.createdAt))
+    // Tri par id, pas par createdAt : now() est figé par transaction en
+    // Postgres — des devis créés ensemble partagent le même created_at
+    // (même cause que la collision de numéros de factures, nov. 2026).
+    .orderBy(desc(devis.id))
     .limit(1);
 
   return nextDevisNumber(entrepriseId, lastDevis?.numeroDevis, annee);

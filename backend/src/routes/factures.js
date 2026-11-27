@@ -35,7 +35,11 @@ export async function genererNumeroFacture(entrepriseId, executor = db) {
       eq(factures.entrepriseId, entrepriseId),
       sql`EXTRACT(YEAR FROM ${factures.dateFacture}::date) = ${annee}`
     ))
-    .orderBy(desc(factures.createdAt))
+    // Tri par id, pas par createdAt : dans Postgres, now() (défaut de
+    // created_at) est figé pour toute la transaction — des factures créées
+    // ensemble partagent le même created_at et le tri devenait arbitraire,
+    // ce qui régénérait un numéro déjà pris (collision 500 en démo).
+    .orderBy(desc(factures.id))
     .limit(1);
 
   let numero = 1;
