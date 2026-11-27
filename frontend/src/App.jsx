@@ -201,13 +201,46 @@ export default function App() {
 
   const handleLogout = async () => {
     const sessionId = localStorage.getItem('sessionId');
-    
+
     try {
       await api.post('/auth-security/logout', { sessionId: sessionId ? parseInt(sessionId) : null });
     } catch (error) {
       console.error('Logout error:', error);
     }
-    
+
+    ['user', 'entreprise', 'entrepriseId', 'sessionId'].forEach(key => localStorage.removeItem(key));
+    setIsAuthenticated(false);
+    setUser(null);
+    setEntreprise(null);
+    setCurrentView('dashboard');
+  };
+
+  // --- Mode démo (27 nov. 2026) ---------------------------------------------
+  const isDemo = entreprise?.isDemo === true;
+
+  const handleResetDemo = async () => {
+    if (!window.confirm('Réinitialiser la démonstration ? Toutes les données de cette démo seront remplacées par des données fictives neuves.')) return;
+    try {
+      const response = await fetch('/api/public/demo/reset', { method: 'POST', credentials: 'include' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || data.error || 'Réinitialisation impossible.');
+      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('entrepriseId', data.user.entrepriseId);
+      localStorage.setItem('entreprise', JSON.stringify({ ...data.entreprise, isDemo: true }));
+      setUser(data.user);
+      setEntreprise({ ...data.entreprise, isDemo: true });
+      setCurrentView('dashboard');
+    } catch (error) {
+      window.alert(error.message);
+    }
+  };
+
+  const handleQuitDemo = async () => {
+    try {
+      await fetch('/api/public/demo/quit', { method: 'POST', credentials: 'include' });
+    } catch {
+      // La démo sera purgée automatiquement ; on quitte quand même.
+    }
     ['user', 'entreprise', 'entrepriseId', 'sessionId'].forEach(key => localStorage.removeItem(key));
     setIsAuthenticated(false);
     setUser(null);
@@ -332,6 +365,50 @@ export default function App() {
       </aside>
 
       <div className="app-main">
+        {isDemo && (
+          <div
+            role="status"
+            style={{
+              backgroundColor: '#f39c12',
+              color: '#fff',
+              padding: '10px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              flexWrap: 'wrap',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              position: 'sticky',
+              top: 0,
+              zIndex: 50,
+            }}
+          >
+            <span>Démonstration — Données fictives, ne saisissez aucune donnée réelle.</span>
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => window.location.assign('/inscription')}
+                style={{ padding: '6px 14px', backgroundColor: '#27ae60', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                Créer mon compte
+              </button>
+              <button
+                type="button"
+                onClick={handleResetDemo}
+                style={{ padding: '6px 14px', backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff', border: '1px solid #fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                Réinitialiser la démo
+              </button>
+              <button
+                type="button"
+                onClick={handleQuitDemo}
+                style={{ padding: '6px 14px', backgroundColor: 'transparent', color: '#fff', border: '1px solid #fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                Quitter la démo
+              </button>
+            </span>
+          </div>
+        )}
         <header className="app-topbar">
           <div className="app-topbar-heading">
             <button

@@ -2,6 +2,7 @@ import sgMail from '@sendgrid/mail';
 import { db } from '../db.js';
 import { historiqueEmails, factures } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
+import { isDemoEmail, isDemoEntreprise, DEMO_BLOCKED_MESSAGE } from './demoGuard.js';
 
 class EmailService {
   constructor() {
@@ -24,6 +25,16 @@ class EmailService {
    * Envoie un email via SendGrid
    */
   async sendEmail({ to, subject, html, attachments = [], entrepriseId, factureId, userId, typeEmail = 'facture' }) {
+    // Blocage démo (R8 / §4.6) : aucun e-mail ne part d'une entreprise démo
+    // ni vers une adresse factice (demo.comptaorion.com / *.demo.invalid),
+    // et rien n'est inscrit dans l'historique des e-mails.
+    if (isDemoEmail(to) || (entrepriseId && await isDemoEntreprise(entrepriseId))) {
+      return {
+        success: false,
+        message: DEMO_BLOCKED_MESSAGE,
+        error: 'Envoi d’e-mail indisponible en démonstration.',
+      };
+    }
     try {
       const [historyRecord] = await db.insert(historiqueEmails).values({
         entrepriseId,

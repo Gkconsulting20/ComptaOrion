@@ -1,3 +1,13 @@
+// Essai expiré : la page de connexion lit ce drapeau dans localStorage et
+// affiche le message avec un appel à l'action vers les abonnements.
+function flagTrialExpired(data) {
+  const message = data?.error || data?.message
+    || 'Votre période d’essai gratuit de 30 jours est terminée. Passez à un abonnement pour continuer.';
+  localStorage.setItem('trialExpired', message);
+  ['user', 'entreprise', 'entrepriseId', 'sessionId'].forEach(key => localStorage.removeItem(key));
+  window.location.href = '/';
+}
+
 class ApiClient {
   constructor(baseURL = '/api') {
     this.baseURL = baseURL;
@@ -16,6 +26,12 @@ class ApiClient {
         credentials: 'include'
       });
       if (response.ok) return true;
+      let data = null;
+      try { data = await response.json(); } catch { /* corps non JSON */ }
+      if (data?.code === 'TRIAL_EXPIRED') {
+        flagTrialExpired(data);
+        return false;
+      }
     } catch (error) {
       console.error('Refresh token failed:', error);
     }
@@ -57,6 +73,7 @@ class ApiClient {
           const retryData = await retryResponse.json();
           
           if (!retryResponse.ok) {
+            if (retryData?.code === 'TRIAL_EXPIRED') flagTrialExpired(retryData);
             const error = new Error(retryData.message || retryData.error || 'Erreur API');
             error.status = retryResponse.status;
             throw error;
@@ -68,8 +85,9 @@ class ApiClient {
       }
       
       const data = await response.json();
-      
+
       if (!response.ok) {
+        if (data?.code === 'TRIAL_EXPIRED') flagTrialExpired(data);
         const error = new Error(data.message || data.error || 'Erreur API');
         error.status = response.status;
         throw error;

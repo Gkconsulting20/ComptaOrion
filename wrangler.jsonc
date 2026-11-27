@@ -26,6 +26,9 @@
     "binding": "UPLOADS",
     "bucket_name": "comptaorion-uploads"
   }],
+  "triggers": {
+    "crons": ["0 3 * * *"]
+  },
   "vars": {
     "NODE_ENV": "production",
     "RUNTIME_CLOUDFLARE": "true",

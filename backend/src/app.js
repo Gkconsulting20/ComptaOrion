@@ -23,6 +23,7 @@ import uploadRoutes from './routes/upload.js';
 import ecrituresRecurrentesRoutes from './routes/ecritures-recurrentes.js';
 import iaAssistantRoutes from './routes/ia-assistant.js';
 import publicInscriptionRoutes from './routes/public-inscription.js';
+import publicDemoRoutes from './routes/public-demo.js';
 import commercialPortalRoutes from './routes/commercial-portal.js';
 import impotsRoutes from './routes/impots.js';
 import integrationsRoutes from './routes/integrations.js';
@@ -70,6 +71,9 @@ app.use('/api/auth-security', authSecurityRoutes);
 // Routes publiques d'inscription (pas d'authentification requise)
 app.use('/api/public', publicInscriptionRoutes);
 app.use('/api/public', publicAccountantInvitationRoutes);
+// Démonstration publique : POST /api/public/demo (sans auth) ; reset/quit
+// protégés par authMiddleware dans le routeur lui-même.
+app.use('/api/public', publicDemoRoutes);
 
 // Espace commercial (authentification séparée via JWT commercial)
 app.use('/api/commercial', commercialPortalRoutes);

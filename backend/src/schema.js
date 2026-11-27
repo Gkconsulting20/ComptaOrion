@@ -58,8 +58,45 @@ export const entreprises = pgTable('entreprises', {
   factureAfficherLogo: boolean('facture_afficher_logo').default(true),
   
   actif: boolean('actif').default(true),
+  // Entreprise de démonstration publique (mode démo, 27 nov. 2026) :
+  // tenant jetable, exclu des statistiques SaaS, purgé automatiquement.
+  isDemo: boolean('is_demo').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Journal des suppressions d'entreprises (cycle de vie essai → blocage →
+// suppression, 27 nov. 2026). SANS foreign key vers entreprises : la ligne
+// survit à l'entreprise supprimée. Voir services/trialLifecycle.js.
+export const suppressionsEntreprises = pgTable('suppressions_entreprises', {
+  id: serial('id').primaryKey(),
+  application: varchar('application', { length: 20 }).notNull(),
+  // Nom de colonne volontairement distinct de `entreprise_id` : le journal
+  // n'est PAS une table tenant (il survit à l'entreprise) et ne doit pas
+  // être classé dans MULTI_TENANT_TABLES ni purgé avec elle.
+  entrepriseId: integer('entreprise_supprimee_id').notNull(),
+  entrepriseNom: text('entreprise_nom').notNull(),
+  entrepriseEmail: text('entreprise_email'),
+  motif: varchar('motif', { length: 50 }).notNull(),
+  dateInscription: timestamp('date_inscription'),
+  dateFinEssai: timestamp('date_fin_essai'),
+  dateBlocage: timestamp('date_blocage'),
+  dateSuppressionEligible: timestamp('date_suppression_eligible'),
+  dateSuppression: timestamp('date_suppression').notNull().defaultNow(),
+  delaiJoursApplique: integer('delai_jours_applique').notNull(),
+  supprimePar: text('supprime_par').notNull(),
+  details: jsonb('details'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Paramètres plateforme (clé/valeur) lus par le job de purge à chaque
+// exécution. Repli : variable d'environnement, puis défaut codé en dur.
+export const parametresPlateforme = pgTable('parametres_plateforme', {
+  cle: varchar('cle', { length: 100 }).primaryKey(),
+  valeur: text('valeur').notNull(),
+  description: text('description'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  updatedBy: text('updated_by'),
 });
 
 // Suivi des projets et des financements d'associations, isolés par entreprise.

@@ -317,7 +317,13 @@ router.get('/session', authMiddleware, async (req, res) => {
     user.modulePermissions = resolveModulePermissions(user.role, user.modulePermissions);
     const [entreprise] = await db.select().from(entreprises)
       .where(eq(entreprises.id, user.entrepriseId)).limit(1);
-    return res.json({ user, entreprise: entreprise || null });
+    // Mode démo : le frontend affiche le bandeau démo et les actions associées.
+    const isDemo = entreprise?.isDemo === true;
+    return res.json({
+      user,
+      entreprise: entreprise ? { ...entreprise, isDemo } : null,
+      isDemo,
+    });
   } catch (error) {
     return res.status(500).json({ error: 'Impossible de vérifier la session' });
   }
@@ -340,6 +346,14 @@ router.post('/forgot-password', async (req, res) => {
 
     if (!user) {
       return res.status(200).json({ message: 'Si l\'email existe, un lien de réinitialisation a été envoyé' });
+    }
+
+    // Mot de passe oublié indisponible en démonstration : le compte démo est
+    // jetable, l'utilisateur recrée une démo ou s'inscrit (R8 / §4.6).
+    const [userEntreprise] = await db.select({ isDemo: entreprises.isDemo })
+      .from(entreprises).where(eq(entreprises.id, user.entrepriseId)).limit(1);
+    if (userEntreprise?.isDemo === true) {
+      return res.status(403).json({ message: 'Cette action est indisponible en démonstration.' });
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');

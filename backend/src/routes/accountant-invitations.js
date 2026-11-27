@@ -27,6 +27,7 @@ import {
 } from '../services/accountantInvitationPolicy.js';
 import { logAudit } from '../utils/auditLogger.js';
 import { withTenantTransaction } from '../utils/rlsPolicies.js';
+import { assertNotDemoEntreprise, DEMO_BLOCKED_MESSAGE } from '../services/demoGuard.js';
 
 export const companyAccountantInvitationRoutes = express.Router();
 export const publicAccountantInvitationRoutes = express.Router();
@@ -233,6 +234,12 @@ companyAccountantInvitationRoutes.post('/', async (req, res) => {
   if (!isValidEmail(email)) {
     return res.status(400).json({ error: 'Saisissez une adresse courriel valide.' });
   }
+  // Invitations comptable indisponibles en démonstration (§4.6).
+  try {
+    await assertNotDemoEntreprise(req.entrepriseId);
+  } catch (error) {
+    return res.status(error.status || 403).json({ error: DEMO_BLOCKED_MESSAGE });
+  }
   if (!emailService.enabled) {
     return res.status(503).json({ error: 'L’envoi des invitations est indisponible. Contactez l’administrateur.' });
   }
@@ -408,6 +415,13 @@ publicAccountantInvitationRoutes.post('/accountant-invitations/accept', async (r
       entrepriseId: accountantInvitations.entrepriseId,
     }).from(accountantInvitations).where(eq(accountantInvitations.tokenHash, tokenHash)).limit(1);
     if (!candidate) return res.status(404).json({ error: 'Invitation invalide ou expirée.' });
+
+    // Aucune acceptation d'invitation comptable dans une démonstration (§4.6).
+    try {
+      await assertNotDemoEntreprise(candidate.entrepriseId);
+    } catch (error) {
+      return res.status(error.status || 403).json({ error: DEMO_BLOCKED_MESSAGE });
+    }
 
     const passwordHash = await hashPassword(password);
     const result = await withTenantTransaction(candidate.entrepriseId, async (tx) => {

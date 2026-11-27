@@ -6,6 +6,7 @@ import { entreprises } from '../schema.js';
 import { eq } from 'drizzle-orm';
 import { putFile, deleteFile } from '../services/fileStorage.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { assertNotDemoEntreprise, DEMO_BLOCKED_MESSAGE } from '../services/demoGuard.js';
 
 const router = express.Router();
 // No writes to /bundle or /tmp in Workers. R2 is the durable file store.
@@ -26,6 +27,8 @@ router.post('/logo', (req, res, next) => {
 }, async (req, res) => {
   let logoUrl;
   try {
+    // Téléversement de logo indisponible en démonstration (§4.6).
+    await assertNotDemoEntreprise(req.entrepriseId);
     if (!req.file) return res.status(400).json({ error: 'Aucun fichier reçu' });
     const type = imageType(req.file.buffer);
     if (!type) return res.status(400).json({ error: 'Utilisez une image PNG, JPEG ou GIF valide (SVG non accepté).' });
@@ -56,12 +59,14 @@ router.post('/logo', (req, res, next) => {
     res.json({ message: 'Logo enregistré', logoUrl });
   } catch (error) {
     if (logoUrl) await deleteFile(logoUrl).catch(() => {});
-    res.status(error.status || 500).json({ error: error.status === 404 ? error.message : 'Impossible d’enregistrer le logo' });
+    res.status(error.status || 500).json({ error: error.status === 403 ? error.message : error.status === 404 ? error.message : 'Impossible d’enregistrer le logo' });
   }
 });
 
 router.delete('/logo', async (req, res) => {
   try {
+    // Suppression de logo indisponible en démonstration (§4.6).
+    await assertNotDemoEntreprise(req.entrepriseId);
     const entreprise = await db.transaction(async (tx) => {
       const [previous] = await tx.select().from(entreprises).where(eq(entreprises.id, req.entrepriseId))
         .for('update').limit(1);
@@ -85,7 +90,7 @@ router.delete('/logo', async (req, res) => {
     if (entreprise.logoUrl) await deleteFile(entreprise.logoUrl).catch(() => console.warn('Logo privé non supprimé du stockage'));
     res.json({ message: 'Logo supprimé' });
   } catch (error) {
-    res.status(500).json({ error: 'Impossible de supprimer le logo' });
+    res.status(error.status || 500).json({ error: error.status === 403 ? error.message : 'Impossible de supprimer le logo' });
   }
 });
 export default router;

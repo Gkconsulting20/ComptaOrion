@@ -24,6 +24,43 @@ export function Login({ onLoginSuccess }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
+  // Message d'essai expiré posé par api.js (code TRIAL_EXPIRED) : affiché une
+  // fois, avec un appel à l'action vers les abonnements.
+  const [trialExpiredMessage] = useState(() => {
+    try {
+      const message = localStorage.getItem('trialExpired');
+      if (message) localStorage.removeItem('trialExpired');
+      return message || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const handleStartDemo = async () => {
+    setError('');
+    setDemoLoading(true);
+    try {
+      const response = await fetch('/api/public/demo', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'La démonstration n’a pas pu démarrer.');
+      }
+      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('entrepriseId', data.user.entrepriseId);
+      if (data.entreprise) {
+        localStorage.setItem('entreprise', JSON.stringify({ ...data.entreprise, isDemo: true }));
+      }
+      onLoginSuccess(data.user, { ...data.entreprise, isDemo: true });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDemoLoading(false);
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -152,7 +189,38 @@ export function Login({ onLoginSuccess }) {
         {mode === 'login' && (
           <form onSubmit={handleLogin}>
             <h2 style={{ marginTop: 0, color: '#2c3e50' }}>Connexion</h2>
-            
+
+            {trialExpiredMessage && (
+              <div style={{
+                padding: '12px',
+                backgroundColor: '#fff3e0',
+                color: '#7a4a00',
+                borderRadius: '6px',
+                marginBottom: '20px',
+                border: '1px solid #ffb74d'
+              }}>
+                {trialExpiredMessage}
+                <div style={{ marginTop: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => window.location.assign('/inscription')}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#27ae60',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Voir les abonnements
+                  </button>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div style={{
                 padding: '12px',
@@ -253,22 +321,45 @@ export function Login({ onLoginSuccess }) {
 
             <div style={{ marginTop: '20px', textAlign: 'center', paddingTop: '20px', borderTop: '1px solid #e0e0e0' }}>
               <p style={{ color: '#7f8c8d', margin: '0 0 10px 0' }}>Pas encore de compte?</p>
-              <button
-                type="button"
-                onClick={() => window.location.assign('/inscription')}
-                style={{
-                  padding: '10px 24px',
-                  backgroundColor: '#27ae60',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 'bold'
-                }}
-              >
-                Essai gratuit 30 jours
-              </button>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => window.location.assign('/inscription')}
+                  style={{
+                    padding: '10px 24px',
+                    backgroundColor: '#27ae60',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Essai gratuit 30 jours
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartDemo}
+                  disabled={demoLoading}
+                  style={{
+                    padding: '10px 24px',
+                    backgroundColor: '#f39c12',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: demoLoading ? 'wait' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    opacity: demoLoading ? 0.7 : 1
+                  }}
+                >
+                  {demoLoading ? 'Préparation de la démo…' : 'Essayer la démo'}
+                </button>
+              </div>
+              <p style={{ color: '#95a5a6', fontSize: '12px', margin: '10px 0 0 0' }}>
+                Démonstration sans inscription, avec des données fictives.
+              </p>
             </div>
           </form>
         )}

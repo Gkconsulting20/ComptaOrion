@@ -1,7 +1,12 @@
 import express from 'express';
 import { db } from '../db.js';
-import { saasCommerciaux, saasClients, saasVentes, plansAbonnement, abonnements, facturesAbonnement, entreprises } from '../schema.js';
+import { saasCommerciaux, saasClients, saasVentes, plansAbonnement, abonnements, facturesAbonnement, entreprises, suppressionsEntreprises } from '../schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
+import {
+  listPurgeCandidates,
+  purgeExpiredTrials,
+} from '../services/trialLifecycle.js';
+import { runtimeContext } from '../runtime-context.js';
 import bcrypt from 'bcryptjs';
 import {
   addMonths,
@@ -18,13 +23,17 @@ const router = express.Router();
 router.get('/dashboard', async (req, res) => {
   try {
     const stats = await db.execute(sql`
-      WITH 
+      -- Les entreprises de démonstration (is_demo) sont exclues de tous les
+      -- agrégats : elles ne sont ni des clients ni du chiffre d'affaires.
+      WITH
         client_counts AS (
-          SELECT 
+          SELECT
             COUNT(*) as total_clients,
-            COUNT(CASE WHEN statut = 'actif' THEN 1 END) as clients_actifs,
-            COUNT(CASE WHEN statut = 'trial' THEN 1 END) as clients_trial
-          FROM saas_clients
+            COUNT(CASE WHEN sc.statut = 'actif' THEN 1 END) as clients_actifs,
+            COUNT(CASE WHEN sc.statut = 'trial' THEN 1 END) as clients_trial
+          FROM saas_clients sc
+          JOIN entreprises e ON e.id = sc.entreprise_id
+          WHERE e.is_demo IS DISTINCT FROM true
         ),
         commercial_counts AS (
           SELECT COUNT(*) as total_commerciaux
@@ -32,25 +41,30 @@ router.get('/dashboard', async (req, res) => {
           WHERE actif = true
         ),
         abonnement_stats AS (
-          SELECT 
+          SELECT
             COUNT(*) as total_abonnements,
             -- MRR = somme des prix mensuels des abonnements actifs EN FACTURATION.
             -- Une entreprise en période gratuite (avant date_debut_facturation)
             -- ne contribue pas au MRR ; un abonnement sans mois payé
             -- (durée ≤ mois gratuits) ne contribue jamais. Les lignes anciennes
             -- (date_debut_facturation et duree_en_mois NULL) contribuent normalement.
-            COALESCE(SUM(CASE WHEN statut = 'actif'
-              AND (date_debut_facturation IS NULL OR date_debut_facturation <= CURRENT_DATE)
-              AND (duree_en_mois IS NULL OR duree_en_mois > COALESCE(mois_gratuits, 0))
-              THEN montant_mensuel ELSE 0 END), 0) as mrr_total
-          FROM abonnements
+            COALESCE(SUM(CASE WHEN a.statut = 'actif'
+              AND (a.date_debut_facturation IS NULL OR a.date_debut_facturation <= CURRENT_DATE)
+              AND (a.duree_en_mois IS NULL OR a.duree_en_mois > COALESCE(a.mois_gratuits, 0))
+              THEN a.montant_mensuel ELSE 0 END), 0) as mrr_total
+          FROM abonnements a
+          JOIN entreprises e ON e.id = a.entreprise_id
+          WHERE e.is_demo IS DISTINCT FROM true
         ),
         vente_stats AS (
-          SELECT 
-            COALESCE(SUM(montant_vente), 0) as ca_total,
-            COALESCE(SUM(commission), 0) as commissions_total
-          FROM saas_ventes
-          WHERE statut = 'confirmée'
+          SELECT
+            COALESCE(SUM(v.montant_vente), 0) as ca_total,
+            COALESCE(SUM(v.commission), 0) as commissions_total
+          FROM saas_ventes v
+          JOIN saas_clients sc ON sc.id = v.client_id
+          JOIN entreprises e ON e.id = sc.entreprise_id
+          WHERE v.statut = 'confirmée'
+            AND e.is_demo IS DISTINCT FROM true
         )
       SELECT 
         cc.total_clients,
@@ -72,11 +86,13 @@ router.get('/dashboard', async (req, res) => {
       entrepriseNom: entreprises.nom,
       statut: saasClients.statut,
       dateInscription: saasClients.dateInscription,
+      isDemo: entreprises.isDemo,
       commercial: sql`${saasCommerciaux.nom} || ' ' || ${saasCommerciaux.prenom}`,
     })
     .from(saasClients)
     .leftJoin(entreprises, eq(saasClients.entrepriseId, entreprises.id))
     .leftJoin(saasCommerciaux, eq(saasClients.commercialId, saasCommerciaux.id))
+    .where(sql`${entreprises.isDemo} IS DISTINCT FROM true`)
     .orderBy(desc(saasClients.dateInscription))
     .limit(10);
 
@@ -175,6 +191,7 @@ router.get('/clients', async (req, res) => {
       entrepriseId: saasClients.entrepriseId,
       entrepriseNom: entreprises.nom,
       entrepriseEmail: entreprises.email,
+      isDemo: entreprises.isDemo,
       statut: saasClients.statut,
       dateInscription: saasClients.dateInscription,
       dateDerniereConnexion: saasClients.dateDerniereConnexion,
@@ -193,6 +210,8 @@ router.get('/clients', async (req, res) => {
     .leftJoin(saasCommerciaux, eq(saasClients.commercialId, saasCommerciaux.id))
     .leftJoin(abonnements, eq(saasClients.entrepriseId, abonnements.entrepriseId))
     .leftJoin(plansAbonnement, eq(abonnements.planId, plansAbonnement.id))
+    // Les démonstrations sont exclues de la liste clients (voir GET /demos).
+    .where(sql`${entreprises.isDemo} IS DISTINCT FROM true`)
     .orderBy(desc(saasClients.dateInscription));
 
     res.json(clients);
@@ -240,6 +259,76 @@ router.delete('/clients/:id', async (req, res) => {
     const { id } = req.params;
     await db.delete(saasClients).where(eq(saasClients.id, parseInt(id)));
     res.json({ message: 'Client SaaS supprimé' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===========================================
+// DÉMOS ET CYCLE DE VIE (27 nov. 2026)
+// ===========================================
+// Les démonstrations sont des entreprises jetables : elles n'apparaissent
+// ni dans le dashboard ni dans la liste clients, mais dans l'onglet « Démos »
+// (lecture seule). La purge (essais expirés + démos) est en dry-run tant que
+// trial_purge_enabled = false en base.
+
+router.get('/demos', async (req, res) => {
+  try {
+    const demos = await db.select({
+      id: entreprises.id,
+      nom: entreprises.nom,
+      email: entreprises.email,
+      ville: entreprises.ville,
+      dateInscription: entreprises.createdAt,
+      isDemo: entreprises.isDemo,
+      saasClientId: saasClients.id,
+    })
+    .from(entreprises)
+    .leftJoin(saasClients, eq(saasClients.entrepriseId, entreprises.id))
+    .where(eq(entreprises.isDemo, true))
+    .orderBy(desc(entreprises.createdAt));
+    res.json(demos);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/suppressions', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page || '1', 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize || '50', 10) || 50));
+    const rows = await db.select().from(suppressionsEntreprises)
+      .orderBy(desc(suppressionsEntreprises.createdAt))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+    const [{ total }] = await db.select({ total: sql`COUNT(*)::int` })
+      .from(suppressionsEntreprises);
+    res.json({ page, pageSize, total: Number(total), suppressions: rows });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/purge-essais-expires', async (req, res) => {
+  try {
+    const candidates = await listPurgeCandidates(db);
+    res.json(candidates);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/purge-essais-expires', async (req, res) => {
+  try {
+    const { dryRun, ids } = req.body || {};
+    const summary = await purgeExpiredTrials({
+      executor: db,
+      dryRun: dryRun === undefined ? undefined : Boolean(dryRun),
+      ids: Array.isArray(ids) ? ids : undefined,
+      deletedBy: `admin:${req.user?.id ?? 'inconnu'}`,
+      uploads: runtimeContext.getStore()?.uploads || null,
+    });
+    res.json(summary);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

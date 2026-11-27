@@ -534,6 +534,34 @@ export function ProspectDemo() {
             <div className="prospect-demo-top-actions">
               <span>Environnement de présentation</span>
               <a href="/inscription">Créer un espace</a>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/public/demo', { method: 'POST', credentials: 'include' });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.message || data.error || 'La démonstration n’a pas pu démarrer.');
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    localStorage.setItem('entrepriseId', data.user.entrepriseId);
+                    if (data.entreprise) localStorage.setItem('entreprise', JSON.stringify({ ...data.entreprise, isDemo: true }));
+                    window.location.assign('/');
+                  } catch (error) {
+                    window.alert(error.message);
+                  }
+                }}
+                style={{
+                  padding: '9px 18px',
+                  backgroundColor: '#f39c12',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                }}
+              >
+                Essayer la vraie démo
+              </button>
             </div>
           </header>
           <main className="prospect-demo-content">
