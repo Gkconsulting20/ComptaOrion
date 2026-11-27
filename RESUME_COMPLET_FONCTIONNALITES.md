@@ -185,12 +185,8 @@ ComptaOrion est un ERP léger et complet spécialement conçu pour le marché af
 - ✅ Calculs automatiques
 - ✅ Conformité SYSCOHADA/IFRS
 
-#### Immobilisations (Actifs Fixes)
-- ✅ Enregistrement des immobilisations
-- ✅ **Amortissement automatique mensuel**
-- ✅ Méthodes : Linéaire, Dégressif
-- ✅ Génération automatique des écritures d'amortissement
-- ✅ Suivi de la valeur nette comptable
+#### Immobilisations (Actifs Fixes) — ❌ SUPPRIMÉ le 22 novembre 2026
+- ❌ Module supprimé : enregistrement des immobilisations, amortissements (linéaire, dégressif) et suivi de la valeur nette comptable ne font plus partie de ComptaOrion. Ne pas présenter cette fonction aux prospects.
 
 #### Écritures Récurrentes
 - ✅ Définition d'écritures répétitives
@@ -203,7 +199,7 @@ ComptaOrion est un ERP léger et complet spécialement conçu pour le marché af
 - ✅ Actions : CREATE, UPDATE, DELETE, LOGIN
 - ✅ Consultation et filtrage
 
-**API Backend:** `/api/comptabilite`, `/api/ecritures`, `/api/grand-livre`, `/api/balance`, `/api/rapports-financiers`, `/api/immobilisations`, `/api/audit-logs`
+**API Backend:** `/api/comptabilite`, `/api/ecritures`, `/api/grand-livre`, `/api/balance`, `/api/rapports-financiers`, `/api/audit-logs` (l'API `/api/immobilisations` a été supprimée avec le module le 22 nov. 2026)
 
 ---
 
@@ -519,9 +515,9 @@ ComptaOrion est un ERP léger et complet spécialement conçu pour le marché af
    - En-têtes/pieds de page
 
 ### Moyen Terme (1-2 mois)
-1. **Module RH Complet**
-   - Gestion employés
-   - Paie et bulletins
+1. **Module RH Complet** — ❌ RETIRÉ le 22 nov. 2026 (module Paie supprimé ; ne pas replanifier sans décision de Cap)
+   - ~~Gestion employés~~
+   - ~~Paie et bulletins~~
    - Congés et absences
    - Contrats et documents
 

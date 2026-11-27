@@ -8,10 +8,13 @@ const CORE_FEATURES = [
   'Commandes fournisseur, réceptions de stock et factures directes pour les services sans stock',
   'Trésorerie : banque, caisse, prévisions, réception et dépôt des chèques clients',
   'Stock, entrepôts, unités et conversions',
-  'Dépenses et import de fichiers compatibles',
+  'Dépenses : création, approbations manager puis comptable, remboursement sur le compte bancaire exact (521 virement / 571 espèces) ; aucune TVA déductible automatique',
+  'TVA au taux de l’entreprise choisi à l’inscription (0 %, 18 % ou personnalisé), avec aperçu TVA sur les ventes',
+  'Clôture et réouverture d’exercice, avec protection des périodes clôturées',
+  'Import de fichiers compatibles',
   'Comptabilité générale, journaux, balance, grand livre et états financiers',
   'SYSCOHADA par défaut, avec plan comptable personnalisé facultatif',
-  'Impôts : relevés et brouillons indicatifs, sans dépôt auprès de l’OTR',
+  'Impôts : relevés TVA et brouillons de déclarations indicatifs, sans dépôt auprès de l’OTR ; aucun paiement d’impôt depuis le logiciel',
   'Gestion des utilisateurs et des droits par module',
   'Tableau de bord de suivi'
 ];
@@ -71,6 +74,7 @@ export default function CommercialOffers() {
           <h2 id="commercial-offers-title">Les forfaits ComptaOrion</h2>
           <p>Une gestion comptable et opérationnelle adaptée à la taille de l’activité.</p>
           <p>Essai gratuit de 30 jours avec accès au calcul automatique Premium pour évaluer le logiciel.</p>
+          <p>Offre de lancement : 2 mois gratuits sur chaque nouvel abonnement payant — la facturation commence au 3e mois ; sur 12 mois, le client paie 10 mois. La commission du commercial n’est due qu’à partir du premier paiement du client.</p>
         </div>
         <span className="commercial-offers__status">Tarifs proposés</span>
       </div>
@@ -110,11 +114,10 @@ export default function CommercialOffers() {
         <span>
           Assistant IA est exclu de l’offre actuelle.
           Un utilisateur supplémentaire est proposé à 2 500,00 XOF par mois.
-          Le calcul automatique du coût est contrôlé côté serveur pour Premium et l’essai; les autres différences
-          Standard/Premium doivent encore être vérifiées côté serveur avant de promettre une restriction par forfait.
-          L’accès gratuit d’un comptable invité reste un avantage prévu, mais son parcours de connexion, notamment le lien WhatsApp,
-          doit être validé avant de le présenter comme opérationnel. Le traitement HT/TTC doit être confirmé avant facturation.
-          Ne pas présenter la préparation fiscale comme un dépôt officiel.
+          Le calcul automatique du coût est contrôlé côté serveur pour Premium et l’essai. TVA : taux de l’entreprise
+          choisi à l’inscription, aperçu sur les ventes, déclarations (brouillons) fonctionnelles. L’accès gratuit d’un
+          comptable invité reste un avantage prévu, mais son parcours de connexion, notamment le lien WhatsApp,
+          doit être validé avant de le présenter comme opérationnel. Ne pas présenter la préparation fiscale comme un dépôt officiel.
         </span>
       </aside>
     </section>

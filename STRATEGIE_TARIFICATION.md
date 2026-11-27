@@ -25,101 +25,77 @@
 
 ---
 
-## 🎯 Grille Tarifaire ComptaOrion
+## 🎯 Grille Tarifaire ComptaOrion — prix décidés (20 nov. 2026, actualisé 27 nov. 2026)
 
-### Plan 1 : Essai Gratuit ✨
-**Prix :** 0 XOF/mois
+> ⚠️ Les prix ci-dessous sont les prix de lancement DÉCIDÉS par Cap (20 nov. 2026).
+> L'ancienne grille (Starter 29 900, Professional 69 900, Entreprise 149 900 XOF/mois)
+> est ABANDONNÉE : elle promettait des modules Paie & RH et Immobilisations qui ont
+> été supprimés le 22 nov. 2026 et ne font pas partie de l'offre. Les noms de plans
+> en base (Essai Gratuit, Starter, Professional, Entreprise + annuels) ne correspondent
+> pas encore à ces noms commerciaux (Base / Standard / Premium) : l'alignement des
+> noms en base attend une décision de Cap — ne pas renommer seul.
 
-**Caractéristiques :**
-- ✅ Comptabilité de base SYSCOHADA
-- ✅ 1 utilisateur
-- ✅ 50 factures/mois maximum
-- ✅ 5 GB de stockage
-- ✅ Support email
-- ❌ Pas de CRM
-- ❌ Pas de RH
-
-**Cible :** Indépendants, micro-entreprises, période d'essai
-
----
-
-### Plan 2 : Starter 🚀
-**Prix :** 29,900 XOF/mois (≈ 45.60 €)
+### Essai Gratuit ✨
+**Prix :** 0 XOF — 30 jours, sans paiement
 
 **Caractéristiques :**
-- ✅ Comptabilité complète SYSCOHADA
-- ✅ Gestion clients & fournisseurs
-- ✅ Facturation illimitée
-- ✅ CRM de base
-- ✅ Stock simple
+- ✅ Socle ERP complet (ventes, achats, trésorerie, stock, comptabilité, rapports)
+- ✅ Module Dépenses, TVA au taux de l'entreprise, clôture d'exercice
+- ✅ Calcul automatique des coûts (CMUP/FIFO) inclus pour tester la fonction Premium
 - ✅ 3 utilisateurs
-- ✅ 20 GB de stockage
-- ✅ Support email
-- ❌ Pas de RH
+- ❌ Pas de Paie & RH, pas d'Immobilisations (modules supprimés, hors offre)
 
-**Cible :** TPE, petites entreprises (3-10 employés)
-
-**Positionnement :** 10% moins cher que la moyenne du marché
+**Cible :** Toute entreprise qui teste le logiciel avant de s'abonner.
 
 ---
 
-### Plan 3 : Professional 💼
-**Prix :** 69,900 XOF/mois (≈ 106.50 €)
+### Plan Base
+**Prix :** 9 900 XOF/mois — 99 000 XOF/an (12 mois dont 2 offerts)
 
 **Caractéristiques :**
-- ✅ Tout du plan Starter
-- ✅ **Module RH & Paie**
-- ✅ Gestion multi-entrepôts
-- ✅ Tableau de bord avancé
-- ✅ Exports comptables
-- ✅ Rapports personnalisés
-- ✅ 10 utilisateurs
-- ✅ 100 GB de stockage
-- ✅ Support prioritaire
-- ✅ 3 entreprises max
+- ✅ Socle ERP : ventes, achats, trésorerie, stock, comptabilité SYSCOHADA et rapports
+- ✅ Module Dépenses (création → approbations manager/comptable → remboursement 521/571)
+- ✅ TVA au taux de l'entreprise choisi à l'inscription (0 %, 18 % ou personnalisé)
+- ✅ Clôture et réouverture d'exercice, déclarations TVA (brouillons)
+- ✅ 3 utilisateurs
+- ❌ Coût de revient et prix de vente saisis manuellement (pas de calcul automatique)
+- ❌ Pas d'OCR, pas de comptabilité associative
 
-**Cible :** PME (10-50 employés)
-
-**Positionnement :** Prix moyen du marché, très complet
+**Cible :** TPE qui démarrent une gestion centralisée.
 
 ---
 
-### Plan 4 : Entreprise 🏢
-**Prix :** 149,900 XOF/mois (≈ 228.50 €)
+### Plan Standard
+**Prix :** 17 900 XOF/mois — 179 000 XOF/an (12 mois dont 2 offerts)
 
 **Caractéristiques :**
-- ✅ Tout du plan Professional
-- ✅ **Multi-entreprises (10 max)**
-- ✅ Immobilisations & Amortissements
-- ✅ API & Intégrations
-- ✅ **Assistant IA inclus**
-- ✅ Audit complet
-- ✅ 50 utilisateurs
-- ✅ 500 GB de stockage
-- ✅ Support dédié 24/7
-- ✅ Formation incluse
+- ✅ Tout du plan Base
+- ✅ Lecture OCR des factures fournisseurs par photo (français)
+- ❌ Coût de revient et prix de vente saisis manuellement (pas de calcul automatique)
+- ❌ Pas de comptabilité associative
 
-**Cible :** Grandes entreprises, groupes, holdings
-
-**Positionnement :** Premium, marché haut de gamme
+**Cible :** PME qui veulent mieux maîtriser leurs achats et leurs marges.
 
 ---
 
-### Plan 5 : Professional Annuel 💎
-**Prix :** 55,920 XOF/mois (670,000 XOF/an)
+### Plan Premium
+**Prix :** 29 900 XOF/mois — 299 000 XOF/an (12 mois dont 2 offerts)
 
-**Économie :** **-20%** (vs 839,000 XOF/an en mensuel)
+**Caractéristiques :**
+- ✅ Tout du plan Standard
+- ✅ Calcul automatique du coût réel (CMUP par défaut, FIFO sur choix explicite), frais logistiques répartis selon le poids, prix de vente calculé depuis le coût réel et la majoration choisie
+- ✅ Comptabilité associative : budgets, financements et dépenses par projet
+- ✅ Détail des montants des états financiers et accès aux opérations
 
-**Avantage :** 2 mois offerts !
+**Cible :** Organisations et activités par projet (associations, ONG, PME multi-projets).
 
 ---
 
-### Plan 6 : Entreprise Annuel 👑
-**Prix :** 112,425 XOF/mois (1,349,000 XOF/an)
-
-**Économie :** **-25%** (vs 1,799,000 XOF/an en mensuel)
-
-**Avantage :** 3 mois offerts !
+### Offre de lancement : 2 mois gratuits sur l'abonnement (décision Cap, 20 nov. 2026)
+- Essai gratuit : 30 jours, inchangé.
+- Quand une entreprise s'abonne, les 2 premiers mois sont gratuits et la facturation commence au 3e mois.
+- Les 2 mois gratuits font partie de la durée : sur 12 mois, l'entreprise paie 10 mois (Base 99 000 XOF au lieu de 118 800 XOF).
+- Commission des commerciaux : 10 %, due uniquement quand le client paie vraiment, donc à partir du début de facturation (3e mois).
 
 ---
 
