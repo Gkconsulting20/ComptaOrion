@@ -15,7 +15,11 @@ import {
 
 test('parcours ERP dans un schéma jetable sans accès aux données existantes', {
   skip: process.env.ERP_FUNCTIONAL_TEST !== '1',
-  timeout: 120000,
+  // Le parcours complet fait des centaines d'appels API séquentiels
+  // contre Neon : depuis ce bac à sable, il prend ~10 min (latence
+  // réseau, et fichiers de test exécutés en parallèle). 900 s laisse
+  // la marge sans masquer un vrai blocage.
+  timeout: 900000,
 }, async () => {
   const schema = `erp_test_${randomUUID().replaceAll('-', '')}`;
   const adminConnectionString = process.env.DATABASE_URL;
@@ -78,9 +82,9 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       descriptionFeatures: '1 utilisateur • 50 factures par mois',
       actif: true,
     }).returning();
-    const [legacyPaidPlan] = await adminSchemaDb.insert(databaseSchema.plansAbonnement).values({
-      nom: 'Standard',
-      prix: '29900.00',
+    const [basePlan] = await adminSchemaDb.insert(databaseSchema.plansAbonnement).values({
+      nom: 'Base',
+      prix: '9900.00',
       devise: 'XOF',
       periode: 'mensuel',
       actif: true,
@@ -230,8 +234,14 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const testYear=new Date().getFullYear();
     const password=randomUUID()+'Aa9!';
     const publicPlans = await api('/public/plans');
-    assert.deepEqual(publicPlans.map(plan => Number(plan.prix)), [0],
-      'L’inscription publique ne doit présenter que l’essai gratuit');
+    // Fusion des plans (27 nov. 2026) : l'endpoint public liste les
+    // forfaits mensuels actifs — essai gratuit + plans payants — tandis
+    // que l'inscription elle-même reste limitée à l'essai (POST vérifie
+    // prix = 0 ; cas « forfait payant refusé » ci-dessous).
+    assert.deepEqual(publicPlans.map(plan => Number(plan.prix)), [0, 9900],
+      'Les plans publics doivent être l’essai gratuit puis Base');
+    assert.deepEqual(publicPlans.map(plan => plan.nom), ['Essai Gratuit', 'Base'],
+      'Les plans publics doivent être nommés Essai Gratuit puis Base');
     assert.equal(
       publicPlans[0].descriptionFeatures,
       'Essai de 30 jours dès la création de votre organisation, sans paiement.',
@@ -286,7 +296,7 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       email:'payant@example.invalid',
       motDePasse:password,
       confirmationMotDePasse:password,
-      planId:legacyPaidPlan.id,
+      planId:basePlan.id,
     },404);
     await api('/public/inscription','POST',{
       nomEntreprise:'Adresse déjà utilisée',
@@ -311,15 +321,25 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const trialCapabilities = await api('/produits/capacites');
     assert.equal(trialCapabilities.automaticCosting, true,
       'L’essai gratuit doit inclure le calcul Premium pour permettre aux prospects de le tester');
+    assert.equal(trialCapabilities.ocr, true,
+      'L’essai gratuit doit inclure la lecture OCR pour permettre aux prospects de la tester');
+    assert.equal(trialCapabilities.associationAccounting, true,
+      'L’essai gratuit doit inclure la comptabilité associative pour permettre aux prospects de la tester');
 
     await adminSchemaPool.query(
       'UPDATE abonnements SET plan_id = $1 WHERE entreprise_id = $2',
-      [legacyPaidPlan.id, signup.user.entrepriseId],
+      [basePlan.id, signup.user.entrepriseId],
     );
     clearPlanCapabilitiesCache();
     const standardCapabilities = await api('/produits/capacites');
     assert.equal(standardCapabilities.automaticCosting, false,
-      'Le forfait Standard doit rester en saisie manuelle');
+      'Le forfait Base doit rester en saisie manuelle');
+    assert.equal(standardCapabilities.ocr, false,
+      'La lecture OCR est réservée au Premium (fusion des plans, 27 nov. 2026)');
+    assert.equal(standardCapabilities.associationAccounting, false,
+      'La comptabilité associative est réservée au Premium (fusion des plans, 27 nov. 2026)');
+    // Le garde du routeur associatif doit refuser le forfait Base.
+    await api('/associations/projects', 'GET', null, 403);
     const manualProduct = await api('/produits', 'POST', {
       reference: 'MANUEL-PLAN',
       nom: 'Produit coût manuel',
@@ -362,9 +382,9 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       [signup.user.entrepriseId, manualProduct.data.id],
     );
     assert.equal(Number(manualProductAfterReceipt.rows[0].cout_moyen), 125,
-      'Une réception ne doit pas écraser le coût saisi pour Standard');
+      'Une réception ne doit pas écraser le coût saisi pour Base');
     assert.equal(Number(manualProductAfterReceipt.rows[0].prix_vente), 180,
-      'Une réception ne doit pas recalculer le prix saisi pour Standard');
+      'Une réception ne doit pas recalculer le prix saisi pour Base');
     await adminSchemaPool.query(
       'UPDATE produits SET quantite = 0 WHERE entreprise_id = $1 AND id = $2',
       [signup.user.entrepriseId, manualProduct.data.id],
@@ -1195,12 +1215,18 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     const another=await api('/factures','POST',{
       clientId,items:[{produitId:productId,quantite:1,prixUnitaire:658.67}],
     },201);
-    const monthlySales=await api(`/dashboard/ventes-mensuelles?dateDebut=${testYear}-01-01&dateFin=${testYear}-12-31`);
+    // La série couvre toute la période demandée : l'endpoint ne plafonne
+    // plus la fin à aujourd'hui (choix délibéré dans getDashboardPeriod :
+    // plafonner excluait les écritures datées après le jour courant dans
+    // le mois en cours et faussait les KPI). Pour ne compter que les mois
+    // écoulés, on demande donc la période jusqu'à la fin du mois en cours.
+    const finMoisEnCours = new Date(testYear, new Date().getMonth() + 1, 0).toISOString().slice(0, 10);
+    const monthlySales=await api(`/dashboard/ventes-mensuelles?dateDebut=${testYear}-01-01&dateFin=${finMoisEnCours}`);
     assert.equal(monthlySales.length,new Date().getMonth()+1,'Une entrée doit exister pour chaque mois écoulé');
-    assert.equal(monthlySales.reduce((total,row)=>total+Number(row.ventes),0),1554.46,
-      'La série mensuelle doit inclure les ventes valides et exclure le brouillon');
-    assert.equal(Number(monthlySales[0].ventes),1554.46,
-      'La première facture doit rester comptée dans le bon mois');
+    assert.equal(monthlySales.reduce((total,row)=>total+Number(row.ventes),0),84154.46,
+      'La série mensuelle doit inclure les ventes valides et exclure le brouillon (janv. : ouverture de stock 82 600 + première facture 1 554,46)');
+    assert.equal(Number(monthlySales[0].ventes),84154.46,
+      'Les factures de janvier (ouverture de stock 82 600 + première facture 1 554,46) doivent rester comptées dans le bon mois');
     if(new Date().getMonth()>0) {
       assert.equal(Number(monthlySales.at(-1).ventes),0,'La facture brouillon ne doit pas apparaître dans les ventes');
     }
@@ -1524,8 +1550,13 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       fournisseurId: secondSupplier.data.id,
       items: [{ produitId: secondProduct.data.id, description: 'Achat B', quantite: 1, prixUnitaire: 50 }],
     }, 201);
-    assert.equal(secondOrder.data.numeroCommande, purchaseOrder.data.numeroCommande,
-      'Deux entreprises peuvent créer leur première commande avec le même numéro');
+    // Numérotation cloisonnée à l'entreprise (27 nov. 2026) : le numéro
+    // porte l'id entreprise (CMD-AAAA-{eid}-NNNN) — la 2e entreprise
+    // repart donc à 0001, mais son numéro diffère de celui de la 1re.
+    assert.match(secondOrder.data.numeroCommande, /^CMD-\d{4}-\d+-0001$/,
+      'La première commande de la 2e entreprise repart à 0001 (séquence par entreprise)');
+    assert.notEqual(secondOrder.data.numeroCommande, purchaseOrder.data.numeroCommande,
+      'La numérotation cloisonnée porte l’id entreprise : les numéros diffèrent');
     await api(`/commandes-achat/${secondOrder.data.id}/confirmer`, 'PUT', {});
     await api('/receptions', 'POST', {
       commandeId: secondOrder.data.id, entrepotId: secondWarehouse.id,
@@ -1539,8 +1570,10 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
       lignes: [{ produitId: secondProduct.data.id, quantite: 1, uniteSaisie: 'pièce', prixUnitaireReel: 50, description: 'Achat B' }],
       coutsLogistiques: [],
     }, 201);
-    assert.match(secondMatchedInvoice.data.numero_facture, /^FACT-ACH-\d{4}-\d+$/);
-    assert.equal(secondMatchedInvoice.data.numero_facture, matchedInvoice.data.numero_facture,
+    // Numérotation cloisonnée à l'entreprise (27 nov. 2026) : FACT-ACH
+    // porte l'id entreprise — même séquence (0001), numéros distincts.
+    assert.match(secondMatchedInvoice.data.numero_facture, /^FACT-ACH-\d{4}-\d+-000001$/);
+    assert.notEqual(secondMatchedInvoice.data.numero_facture, matchedInvoice.data.numero_facture,
       'Le numéro de facture de la première entreprise ne bloque pas la facture d’une autre entreprise');
     await api('/factures','POST',{clientId:secondClient.data.id,items:[{description:'Service',quantite:1,prixUnitaire:500}]},201);
     const isolatedAssociationProjects=await api('/associations/projects');
@@ -1848,8 +1881,16 @@ test('parcours ERP dans un schéma jetable sans accès aux données existantes',
     if(adminSchemaPool) await adminSchemaPool.end();
     await admin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
     if(roleCreated) {
-      await admin.query(`REVOKE ${quotedRole} FROM CURRENT_USER`);
-      await admin.query(`DROP OWNED BY "${rlsRole}"`);
+      // Ordre imposé par Neon : DROP OWNED BY échoue en 42501 (l'unique
+      // objet restant du rôle est son CONNECT sur la base, et la
+      // révocation de l'appartenance ne suffit pas) — on révoque le
+      // CONNECT sur la base, puis l'appartenance, puis le rôle. Le
+      // schéma jetable (et tout ce que le rôle y possédait) est déjà
+      // supprimé par DROP SCHEMA CASCADE ci-dessus. databaseName est
+      // déclaré dans le try : on le recalcule ici depuis l'URL.
+      const cleanupDbName = decodeURIComponent(new URL(adminConnectionString).pathname.slice(1));
+      await admin.query(`REVOKE ALL ON DATABASE "${cleanupDbName}" FROM "${rlsRole}"`);
+      await admin.query(`REVOKE "${rlsRole}" FROM CURRENT_USER`);
       await admin.query(`DROP ROLE "${rlsRole}"`);
     }
     await admin.end();

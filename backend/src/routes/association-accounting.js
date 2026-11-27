@@ -13,9 +13,29 @@ import {
   versementsFinancementsProjets,
 } from '../schema.js';
 import { createEcritureComptable } from '../services/comptabiliteService.js';
+import { getPlanCapabilities } from '../services/planEntitlements.js';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
+
+// Comptabilité associative réservée au forfait Premium (incluse pendant
+// l'essai gratuit de 30 jours). Sans abonnement actif, l'entreprise est
+// traitée comme un forfait de base : la lecture comme l'écriture sont
+// refusées, sans jamais exposer les projets d'une autre entreprise.
+router.use(async (req, res, next) => {
+  try {
+    const { associationAccounting } = await getPlanCapabilities(db, req.entrepriseId, { cache: false });
+    if (!associationAccounting) {
+      return res.status(403).json({
+        error: 'La comptabilité associative est réservée au forfait Premium (incluse pendant l’essai gratuit de 30 jours).',
+      });
+    }
+    return next();
+  } catch (error) {
+    console.error('Erreur contrôle forfait associatif:', error.message);
+    return res.status(500).json({ error: 'Impossible de vérifier votre forfait.' });
+  }
+});
 const positiveAmount = (value) => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 999999999999999.99;
 const safeId = (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0;
 const isoDate = (value) => {

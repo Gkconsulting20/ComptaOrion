@@ -317,7 +317,7 @@ ComptaOrion est un ERP léger et complet spécialement conçu pour le marché af
 - ✅ Historique des interactions
 
 #### Plans d'Abonnement
-- ✅ Plans : Basic, Pro, Enterprise
+- ✅ Plans : Essai Gratuit, Base, Premium (+ annuels Base / Premium)
 - ✅ Facturation mensuelle/annuelle
 - ✅ Gestion des fonctionnalités par plan
 

@@ -33,23 +33,9 @@ const OFFERS = [
     accent: 'base'
   },
   {
-    name: 'Standard',
-    audience: 'Pour mieux maîtriser les achats et les marges',
-    description: 'Le socle Base avec la lecture OCR des factures fournisseurs.',
-    features: [
-      ...CORE_FEATURES,
-      'Coût de revient et prix de vente définis manuellement',
-      'Lecture OCR des factures fournisseurs par photo (français)'
-    ],
-    monthlyPrice: '17 900,00 XOF',
-    annualPrice: '179 000,00 XOF',
-    accent: 'standard',
-    featured: true
-  },
-  {
     name: 'Premium',
     audience: 'Pour les organisations et activités par projet',
-    description: 'Le socle Standard, avec le calcul automatique du coût réel et du prix de vente.',
+    description: 'Le socle Base, avec la lecture OCR des factures fournisseurs et le calcul automatique du coût réel et du prix de vente.',
     features: [
       ...CORE_FEATURES,
       'Lecture OCR des factures fournisseurs par photo (français)',
@@ -61,7 +47,8 @@ const OFFERS = [
     ],
     monthlyPrice: '29 900,00 XOF',
     annualPrice: '299 000,00 XOF',
-    accent: 'premium'
+    accent: 'premium',
+    featured: true
   }
 ];
 
@@ -114,7 +101,8 @@ export default function CommercialOffers() {
         <span>
           Assistant IA est exclu de l’offre actuelle.
           Un utilisateur supplémentaire est proposé à 2 500,00 XOF par mois.
-          Le calcul automatique du coût est contrôlé côté serveur pour Premium et l’essai. TVA : taux de l’entreprise
+          Le calcul automatique du coût, la lecture OCR des factures fournisseurs et la
+          comptabilité associative sont contrôlés côté serveur pour Premium et l’essai. TVA : taux de l’entreprise
           choisi à l’inscription, aperçu sur les ventes, déclarations (brouillons) fonctionnelles. L’accès gratuit d’un
           comptable invité reste un avantage prévu, mais son parcours de connexion, notamment le lien WhatsApp,
           doit être validé avant de le présenter comme opérationnel. Ne pas présenter la préparation fiscale comme un dépôt officiel.

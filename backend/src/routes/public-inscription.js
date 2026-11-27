@@ -182,6 +182,11 @@ router.get('/commercial/:id', async (req, res) => {
 });
 
 // GET /api/public/plans - Récupérer les plans tarifaires publics
+// Forfaits mensuels actifs : essai gratuit (30 jours, sans paiement) +
+// plans payants Base et Premium. Les forfaits annuels ne sont pas vendus
+// ici : les abonnements payants sont créés à la main par l'admin (décision
+// Cap, 20 nov. 2026). L'inscription publique, elle, reste limitée à
+// l'essai gratuit (vérification prix = 0 dans POST /inscription).
 router.get('/plans', async (req, res) => {
   try {
     const plans = await db.select({
@@ -189,18 +194,23 @@ router.get('/plans', async (req, res) => {
       nom: plansAbonnement.nom,
       prix: plansAbonnement.prix,
       devise: plansAbonnement.devise,
+      periode: plansAbonnement.periode,
+      descriptionFeatures: plansAbonnement.descriptionFeatures,
     })
     .from(plansAbonnement)
     .where(and(
       eq(plansAbonnement.actif, true),
-      sql`${plansAbonnement.prix} = 0`,
+      eq(plansAbonnement.periode, 'mensuel'),
     ))
     .orderBy(plansAbonnement.prix);
 
-    res.json(plans.map(plan => ({
+    res.json(plans.map(plan => (Number(plan.prix) === 0 ? {
       ...plan,
       periode: '30 jours',
       descriptionFeatures: 'Essai de 30 jours dès la création de votre organisation, sans paiement.',
+    } : {
+      ...plan,
+      descriptionFeatures: plan.descriptionFeatures || 'Plan complet',
     })));
   } catch (error) {
     console.error('Erreur récupération plans:', error);

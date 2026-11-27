@@ -14,13 +14,15 @@ function normalizePlanName(name) {
 }
 
 /**
- * Premium et l’essai gratuit de 30 jours activent le coût automatique pour
- * que les prospects puissent tester cette fonction. Les autres forfaits
- * restent en saisie manuelle.
+ * Premium et l’essai gratuit de 30 jours activent les fonctions Premium
+ * (calcul automatique du coût, lecture OCR des factures fournisseurs,
+ * comptabilité associative) pour que les prospects puissent les tester.
+ * Les autres forfaits restent en saisie manuelle, sans OCR ni projets
+ * associatifs.
  */
 export async function getPlanCapabilities(executor, entrepriseId, { cache = true } = {}) {
   if (!Number.isSafeInteger(Number(entrepriseId)) || Number(entrepriseId) <= 0) {
-    return { planName: null, automaticCosting: false, isTrial: false };
+    return { planName: null, automaticCosting: false, ocr: false, associationAccounting: false, isTrial: false };
   }
 
   const cacheKey = String(entrepriseId);
@@ -51,9 +53,12 @@ export async function getPlanCapabilities(executor, entrepriseId, { cache = true
   const normalizedName = normalizePlanName(plan?.name);
   const isTrial = Number(plan?.price) === 0 &&
     /essai|trial|demo|test/.test(normalizedName);
+  const isPremium = normalizedName.includes('premium') || isTrial;
   const value = {
     planName: plan?.name || null,
-    automaticCosting: normalizedName.includes('premium') || isTrial,
+    automaticCosting: isPremium,
+    ocr: isPremium,
+    associationAccounting: isPremium,
     isTrial,
   };
 

@@ -30,10 +30,12 @@
 > ⚠️ Les prix ci-dessous sont les prix de lancement DÉCIDÉS par Cap (20 nov. 2026).
 > L'ancienne grille (Starter 29 900, Professional 69 900, Entreprise 149 900 XOF/mois)
 > est ABANDONNÉE : elle promettait des modules Paie & RH et Immobilisations qui ont
-> été supprimés le 22 nov. 2026 et ne font pas partie de l'offre. Les noms de plans
-> en base (Essai Gratuit, Starter, Professional, Entreprise + annuels) ne correspondent
-> pas encore à ces noms commerciaux (Base / Standard / Premium) : l'alignement des
-> noms en base attend une décision de Cap — ne pas renommer seul.
+> été supprimés le 22 nov. 2026 et ne font pas partie de l'offre.
+> FUSION VALIDÉE PAR CAP LE 27 NOV. 2026 : 2 plans payants seulement —
+> Base 9 900 et Premium 29 900 XOF/mois (annuels 99 000 / 299 000, soit
+> 10 mois payés pour 12). Le plan Standard (17 900) disparaît ; la lecture
+> OCR des factures fournisseurs passe dans le Premium. Les noms en base
+> ont été alignés le 27 nov. 2026 (migration 20261127_fusion_plans_base_premium).
 
 ### Essai Gratuit ✨
 **Prix :** 0 XOF — 30 jours, sans paiement
@@ -65,24 +67,12 @@
 
 ---
 
-### Plan Standard
-**Prix :** 17 900 XOF/mois — 179 000 XOF/an (12 mois dont 2 offerts)
-
-**Caractéristiques :**
-- ✅ Tout du plan Base
-- ✅ Lecture OCR des factures fournisseurs par photo (français)
-- ❌ Coût de revient et prix de vente saisis manuellement (pas de calcul automatique)
-- ❌ Pas de comptabilité associative
-
-**Cible :** PME qui veulent mieux maîtriser leurs achats et leurs marges.
-
----
-
 ### Plan Premium
 **Prix :** 29 900 XOF/mois — 299 000 XOF/an (12 mois dont 2 offerts)
 
 **Caractéristiques :**
-- ✅ Tout du plan Standard
+- ✅ Tout du plan Base
+- ✅ Lecture OCR des factures fournisseurs par photo (français)
 - ✅ Calcul automatique du coût réel (CMUP par défaut, FIFO sur choix explicite), frais logistiques répartis selon le poids, prix de vente calculé depuis le coût réel et la majoration choisie
 - ✅ Comptabilité associative : budgets, financements et dépenses par projet
 - ✅ Détail des montants des états financiers et accès aux opérations
@@ -104,7 +94,7 @@
 ### 1. Freemium pour l'Acquisition
 - Plan gratuit sans limite de durée
 - Limite de 50 factures/mois pour inciter à upgrader
-- Conversion cible : 10-15% vers Starter
+- Conversion cible : 10-15% vers Base
 
 ### 2. Positionnement Compétitif
 - **20-30% moins cher** que Sage Africa
@@ -112,14 +102,13 @@
 - **Meilleur rapport qualité/prix** grâce aux fonctionnalités IA
 
 ### 3. Incitation au Prépaiement
-- **-20% sur Professional** en paiement annuel
-- **-25% sur Entreprise** en paiement annuel
+- **Paiement annuel : 10 mois payés pour 12** (Base 99 000 XOF/an, Premium 299 000 XOF/an)
 - Améliore la trésorerie et la rétention
 
 ### 4. Valeur Ajoutée Unique
 - ✅ **Conformité SYSCOHADA native**
 - ✅ **Multi-devises (20+ monnaies)**
-- ✅ **Assistant IA** (plan Entreprise)
+- ✅ **Comptabilité associative** (plan Premium)
 - ✅ **Hors-ligne compatible** (zones à faible connexion)
 - ✅ **Support en français**
 
@@ -132,32 +121,30 @@
 | Plan | Clients | Prix/Mois | MRR | ARR |
 |------|---------|-----------|-----|-----|
 | Gratuit | 500 | 0 | 0 | 0 |
-| Starter | 50 | 29,900 | 1,495,000 | 17,940,000 |
-| Professional | 20 | 69,900 | 1,398,000 | 16,776,000 |
-| Entreprise | 5 | 149,900 | 749,500 | 8,994,000 |
-| **TOTAL** | **575** | - | **3,642,500 XOF** | **43,710,000 XOF** |
+| Base | 50 | 9,900 | 495,000 | 5,940,000 |
+| Premium | 20 | 29,900 | 598,000 | 7,176,000 |
+| **TOTAL** | **570** | - | **1,093,000 XOF** | **13,116,000 XOF** |
 
-**MRR (Monthly Recurring Revenue) :** 3,642,500 XOF (≈ 5,550 €)  
-**ARR (Annual Recurring Revenue) :** 43,710,000 XOF (≈ 66,600 €)
+**MRR (Monthly Recurring Revenue) :** 1,093,000 XOF (≈ 1,666 €)  
+**ARR (Annual Recurring Revenue) :** 13,116,000 XOF (≈ 20,000 €)
 
 ### Scénario Optimiste (Année 2)
 
 | Plan | Clients | MRR | ARR |
 |------|---------|-----|-----|
 | Gratuit | 2,000 | 0 | 0 |
-| Starter | 200 | 5,980,000 | 71,760,000 |
-| Professional | 100 | 6,990,000 | 83,880,000 |
-| Entreprise | 30 | 4,497,000 | 53,964,000 |
-| **TOTAL** | **2,330** | **17,467,000 XOF** | **209,604,000 XOF** |
+| Base | 200 | 1,980,000 | 23,760,000 |
+| Premium | 100 | 2,990,000 | 35,880,000 |
+| **TOTAL** | **2,300** | **4,970,000 XOF** | **59,640,000 XOF** |
 
-**MRR :** 17,467,000 XOF (≈ 26,630 €)  
-**ARR :** 209,604,000 XOF (≈ 319,560 €)
+**MRR :** 4,970,000 XOF (≈ 7,577 €)  
+**ARR :** 59,640,000 XOF (≈ 90,914 €)
 
 ---
 
 ## ✅ Avantages Concurrentiels
 
-1. **Prix Accessible :** Starter à 29,900 XOF = accessible aux TPE africaines
+1. **Prix Accessible :** Base à 9,900 XOF = accessible aux TPE africaines
 2. **Conformité Locale :** SYSCOHADA natif (vs adaptations de solutions étrangères)
 3. **Multidevise :** 20+ devises africaines supportées
 4. **IA Intégrée :** Assistant intelligent (rare sur le marché africain)
@@ -170,16 +157,16 @@
 
 ### Phase 1 (Mois 1-3) : Acquisition
 - Communiquer massivement sur le plan **Gratuit**
-- Offre de lancement : **1er mois gratuit** sur Starter
+- Offre de lancement : **2 mois gratuits** sur chaque nouvel abonnement (facturation dès le 3e mois)
 - Cibler les cabinets comptables (prescripteurs)
 
 ### Phase 2 (Mois 4-6) : Conversion
-- Campagne email : Gratuit → Starter (offre -30%)
+- Campagne email : Gratuit → Base
 - Webinaires de formation SYSCOHADA
 - Témoignages clients early adopters
 
 ### Phase 3 (Mois 7-12) : Expansion
-- Upsell Starter → Professional (RH)
+- Upsell Base → Premium (OCR, coût automatique, comptabilité associative)
 - Partenariats avec associations d'entrepreneurs
 - Programme de parrainage (1 mois offert)
 

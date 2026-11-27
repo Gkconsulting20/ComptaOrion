@@ -1174,6 +1174,13 @@ export function GestionFournisseurs() {
   });
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState({ open: false, type: null, item: null });
+  // Lecture OCR des factures fournisseurs : forfait Premium (incluse
+  // pendant l'essai gratuit). Vrai par défaut : si /produits/capacites
+  // est indisponible, on ne bloque pas la saisie ; le serveur ne fait
+  // pas foi ici car l'OCR tourne entièrement dans le navigateur
+  // (tesseract.js) — ce contrôle est une présentation de l'offre, pas
+  // une barrière de sécurité.
+  const [ocrAllowed, setOcrAllowed] = useState(true);
   const [form, setForm] = useState({});
   const [selectedFournisseur, setSelectedFournisseur] = useState(null);
   const [selectedCommande, setSelectedCommande] = useState(null);
@@ -1531,7 +1538,7 @@ export function GestionFournisseurs() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [fournisseursRes, commandesRes, facturesRes, accountsRes, paramsRes] = await Promise.all([
+      const [fournisseursRes, commandesRes, facturesRes, accountsRes, paramsRes, capacitesRes] = await Promise.all([
         api.get('/fournisseurs', { limit: 500 }).catch((error) => {
           console.error('Erreur chargement fournisseurs:', error);
           return null;
@@ -1543,7 +1550,9 @@ export function GestionFournisseurs() {
         api.get('/achats/factures').catch(() => ({ data: [] })),
         api.get('/tresorerie/comptes').catch(() => ({ data: [] })),
         api.get('/parametres/entreprise').catch(() => null),
+        api.get('/produits/capacites').catch(() => null),
       ]);
+      if (capacitesRes && typeof capacitesRes.ocr === 'boolean') setOcrAllowed(capacitesRes.ocr);
       setComptesBancaires(readApiList(accountsRes, 'data'));
       setData({
         fournisseurs: readApiList(fournisseursRes, 'data'),
@@ -2691,7 +2700,7 @@ export function GestionFournisseurs() {
               <div style={{ marginBottom: 16, padding: 12, color: '#315f78', background: '#eef6fa', borderRadius: 8 }}>
                 Saisie directe réservée aux services et achats sans stock. Pour une marchandise, créez un bon de commande, réceptionnez-la, puis rapprochez sa facture avec les réceptions.
               </div>
-              {!modal.item && (
+              {!modal.item && (ocrAllowed ? (
                 <SupplierInvoiceOcr
                   onExtract={(extracted) => setForm(current => {
                     const montantHT = extracted.montantHT == null ? current.montantHT : String(extracted.montantHT);
@@ -2708,7 +2717,11 @@ export function GestionFournisseurs() {
                     };
                   })}
                 />
-              )}
+              ) : (
+                <div style={{ marginBottom: 16, padding: 12, color: '#7a5a12', background: '#fdf3d7', borderRadius: 8 }}>
+                  Lecture OCR des factures fournisseurs réservée au forfait Premium (incluse pendant l’essai gratuit de 30 jours). Saisissez les montants manuellement ou passez au Premium.
+                </div>
+              ))}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <FormField label="Fournisseur" name="fournisseurId" type="select" value={form.fournisseurId}
                   onChange={(e) => setForm({...form, fournisseurId: e.target.value})}

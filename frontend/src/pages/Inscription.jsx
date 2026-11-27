@@ -59,9 +59,13 @@ export function Inscription() {
       })
       .then(data => {
         if (!Array.isArray(data)) throw new Error('Réponse des forfaits invalide');
-        setPlans(data);
-        if (data.length > 0) {
-          setFormData(prev => ({ ...prev, planId: data[0].id }));
+        // L'inscription publique ne vend que l'essai gratuit (30 jours) :
+        // /api/public/plans liste aussi Base et Premium à titre informatif,
+        // mais POST /inscription refuse tout plan payant (prix = 0 exigé).
+        const trialPlans = data.filter(plan => Number(plan.prix) === 0);
+        setPlans(trialPlans);
+        if (trialPlans.length > 0) {
+          setFormData(prev => ({ ...prev, planId: trialPlans[0].id }));
         }
       })
       .catch(err => {

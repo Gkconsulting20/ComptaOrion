@@ -239,6 +239,8 @@ test('création de 2 démos consécutives, seed cohérent, purge dry-run', {
       const capabilities = await getPlanCapabilities(schemaDb, demo1.entreprise.id);
       assert.equal(capabilities.isTrial, true, 'plan démo reconnu comme essai (prix 0)');
       assert.equal(capabilities.automaticCosting, true, 'CMUP automatique en démo');
+      assert.equal(capabilities.ocr, true, 'lecture OCR en démo (fonctions Premium incluses)');
+      assert.equal(capabilities.associationAccounting, true, 'comptabilité associative en démo (fonctions Premium incluses)');
 
       // --- Seed cohérent ----------------------------------------------------
       const comptes = await schemaDb.select().from(databaseSchema.comptesComptables)
