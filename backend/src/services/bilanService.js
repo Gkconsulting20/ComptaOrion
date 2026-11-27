@@ -148,6 +148,7 @@ export function calculerBilan({ comptes, lignes, opening, dateDebut, dateFin }) 
   const bilan = {
     actif: {
       immobilisations: [],
+      amortissements: [],
       stocksCreances: [],
       tresorerie: [],
       total: 0,
@@ -167,11 +168,32 @@ export function calculerBilan({ comptes, lignes, opening, dateDebut, dateFin }) 
     const classe = compte.numero.charAt(0);
 
     if (classe === '2') {
-      bilan.actif.immobilisations.push(item);
-      bilan.actif.total += Math.abs(solde);
+      // Comptes 28x / 29x = amortissements et provisions pour dépréciation
+      // des immobilisations (solde créditeur) : ce sont des corrections
+      // d'actif, à DÉDUIRE du total — comme le fait déjà /rapports/bilan.
+      // L'ancien code les additionnait à l'actif (écart = 2 × le montant).
+      if (compte.numero.startsWith('28') || compte.numero.startsWith('29')) {
+        bilan.actif.amortissements.push(item);
+        bilan.actif.total -= Math.abs(solde);
+      } else {
+        bilan.actif.immobilisations.push(item);
+        bilan.actif.total += Math.abs(solde);
+      }
     } else if (classe === '3') {
-      bilan.actif.stocksCreances.push(item);
-      bilan.actif.total += Math.abs(solde);
+      // Compte 39x = dépréciation des stocks (solde créditeur) : à déduire
+      // de l'actif, pas à additionner.
+      if (compte.numero.startsWith('39')) {
+        bilan.actif.total -= Math.abs(solde);
+      } else {
+        bilan.actif.stocksCreances.push(item);
+        bilan.actif.total += Math.abs(solde);
+      }
+    } else if (classe === '4' && compte.numero.startsWith('49')) {
+      // Compte 49x = dépréciation des comptes de tiers (solde créditeur) :
+      // correction d'actif à déduire — l'ancien code le classait en
+      // dettes au passif, ce qui gonflait le passif au lieu de réduire
+      // l'actif (écart = 2 × le montant sur la différence actif−passif).
+      bilan.actif.total -= Math.abs(solde);
     } else if (classe === '4' && solde > 0) {
       bilan.actif.stocksCreances.push(item);
       bilan.actif.total += solde;

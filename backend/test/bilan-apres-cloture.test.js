@@ -343,3 +343,105 @@ test('(d) banque positive : 521 reste à l’actif, bilan équilibré', () => {
   assert.equal(resultat.actif.total, 4358700);
   assert.equal(resultat.passif.total, 986500);
 });
+
+// ==========================================
+// PROVISIONS 28 / 29 / 39 / 49 (27 nov. 2026)
+// ==========================================
+//
+// L'ancien endpoint GET /comptabilite/bilan (calculerBilan) traitait les
+// comptes de provisions comme des soldes ordinaires : les 28/29 (amortis-
+// sements et provisions sur immobilisations) et le 39 (dépréciation des
+// stocks) étaient ADDITIONNÉS à l'actif au lieu d'en être déduits, et le
+// 49 (dépréciation des comptes de tiers) était classé en DETTES au passif
+// au lieu d'être déduit de l'actif. Le nouvel endpoint /rapports/bilan
+// les traitait déjà correctement. Écart sur ce scénario : actif 625 000
+// au lieu de 491 000, passif 495 000 au lieu de 491 000 (déséquilibre
+// 130 000 = 2 × (28 + 29 + 39) ; le 49 faussait les deux totaux de
+// 4 000 sans changer l'écart).
+//
+// Scénario équilibré (toutes écritures en partie double) :
+//   e1 — apport : D 521 / C 101 = 500 000
+//   e2 — achat immobilisation : D 21 / C 521 = 200 000
+//   e3 — achat stock : D 31 / C 521 = 80 000
+//   e4 — vente à crédit : D 411 / C 701 = 60 000
+//   e5 — dotation amortissement : D 681 / C 28 = 50 000
+//   e6 — dotation provision immo : D 687 / C 29 = 10 000
+//   e7 — dépréciation stocks : D 681 / C 39 = 5 000
+//   e8 — dépréciation tiers : D 686 / C 49 = 4 000
+// Soldes : actif = 200 000 − 50 000 − 10 000 + 80 000 − 5 000 + 60 000
+//   − 4 000 + 220 000 (banque) = 491 000 ; résultat net = 60 000 − 69 000
+//   = −9 000 (perte) ; passif = 500 000 − 9 000 = 491 000, équilibre true.
+
+const comptesProvisions = [
+  { id: 1, numero: '101', nom: 'Capital social' },
+  { id: 10, numero: '21', nom: 'Immobilisations corporelles' },
+  { id: 11, numero: '28', nom: 'Amortissements des immobilisations' },
+  { id: 12, numero: '29', nom: 'Provisions pour dépréciation des immobilisations' },
+  { id: 13, numero: '31', nom: 'Stock de marchandises' },
+  { id: 14, numero: '39', nom: 'Dépréciations des stocks' },
+  { id: 15, numero: '411', nom: 'Clients' },
+  { id: 16, numero: '49', nom: 'Dépréciations des comptes de tiers' },
+  { id: 17, numero: '521', nom: 'Banques' },
+  { id: 18, numero: '681', nom: 'Dotations aux amortissements' },
+  { id: 19, numero: '686', nom: 'Dotations aux provisions financières' },
+  { id: 20, numero: '687', nom: 'Dotations aux provisions exceptionnelles' },
+  { id: 21, numero: '701', nom: 'Ventes de marchandises' },
+];
+
+const lignesProvisions = [
+  ligne(1, '2026-01-05', 17, 500000, 0),
+  ligne(1, '2026-01-05', 1, 0, 500000),
+  ligne(2, '2026-02-01', 10, 200000, 0),
+  ligne(2, '2026-02-01', 17, 0, 200000),
+  ligne(3, '2026-02-02', 13, 80000, 0),
+  ligne(3, '2026-02-02', 17, 0, 80000),
+  ligne(4, '2026-03-01', 15, 60000, 0),
+  ligne(4, '2026-03-01', 21, 0, 60000),
+  ligne(5, '2026-12-31', 18, 50000, 0),
+  ligne(5, '2026-12-31', 11, 0, 50000),
+  ligne(6, '2026-12-31', 20, 10000, 0),
+  ligne(6, '2026-12-31', 12, 0, 10000),
+  ligne(7, '2026-12-31', 18, 5000, 0),
+  ligne(7, '2026-12-31', 14, 0, 5000),
+  ligne(8, '2026-12-31', 19, 4000, 0),
+  ligne(8, '2026-12-31', 16, 0, 4000),
+];
+
+test('provisions 28/29/39/49 : déduites de l’actif, bilan équilibré (ancien /bilan)', () => {
+  const resultat = calculerBilan({
+    comptes: comptesProvisions,
+    lignes: lignesProvisions,
+    opening: null,
+    dateDebut: '2026-01-01',
+    dateFin: '2026-12-31',
+  });
+
+  assert.equal(resultat.resultatNet, -9000);
+  assert.equal(resultat.actif.total, 491000);
+  assert.equal(resultat.passif.total, 491000);
+  assert.equal(resultat.equilibre, true);
+
+  // 28/29 listés en amortissements (déduits), pas en immobilisations.
+  assert.deepEqual(
+    resultat.actif.amortissements.map((item) => [item.compte, item.montant]),
+    [['28', 50000], ['29', 10000]],
+  );
+  assert.deepEqual(
+    resultat.actif.immobilisations.map((item) => [item.compte, item.montant]),
+    [['21', 200000]],
+  );
+
+  // 39 et 49 ne sont ni à l'actif brut ni en dettes : ce sont des
+  // corrections d'actif, visibles uniquement via les totaux.
+  assert.equal(resultat.actif.stocksCreances.find((item) => item.compte === '39'), undefined);
+  assert.equal(resultat.actif.stocksCreances.find((item) => item.compte === '49'), undefined);
+  assert.equal(resultat.passif.dettes.find((item) => item.compte === '49'), undefined);
+  assert.deepEqual(
+    resultat.actif.stocksCreances.map((item) => [item.compte, item.montant]),
+    [['31', 80000], ['411', 60000]],
+  );
+  assert.deepEqual(
+    resultat.actif.tresorerie.map((item) => [item.compte, item.montant]),
+    [['521', 220000]],
+  );
+});
