@@ -38,7 +38,14 @@ const COMPTES_SYSCOHADA = {
   ETAT_TVA_DUE: '4434',
   ETAT_IMPOTS: '44',
   BANQUE: '52',
+  // Compte bancaire précis du plan SYSCOHADA par défaut : la résolution par
+  // préfixe '52' retournait le compte générique 52 (inséré avant 521),
+  // donc les remboursements créditaient le 52 au lieu du 521.
+  BANQUE_LOCALE: '521',
   CAISSE: '57',
+  // Même piège côté caisse : le préfixe '57' retournait le compte
+  // générique 57 avant le 571.
+  CAISSE_PRINCIPALE: '571',
   ACHATS_MARCHANDISES: '601',
   COUT_VENTES_MARCHANDISES: '603',
   ACHATS_SERVICES: '61',
@@ -211,12 +218,20 @@ async function getCompteCollectifClient(entrepriseId, clientId, executor = db) {
 }
 
 async function getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor = db) {
+  // Sans compte bancaire configuré, on résout d'abord le compte précis du
+  // plan (521 / 571, ou le compte mappé au rôle « bank » / « cash » pour un
+  // plan personnalisé) : la résolution par préfixe ('52%' / '57%') sans
+  // ORDER BY retournait le compte générique 52 / 57, qui ne doit jamais
+  // porter d'écriture — le préfixe ne reste qu'un repli pour les plans
+  // sans compte 521 / 571.
   if (modePaiement === 'especes') {
-    return getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE, executor);
+    return (await getCompteByNumeroExact(entrepriseId, COMPTES_SYSCOHADA.CAISSE_PRINCIPALE, executor, 'cash'))
+      || getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE, executor);
   }
 
   if (!compteBancaireId) {
-    return getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE, executor);
+    return (await getCompteByNumeroExact(entrepriseId, COMPTES_SYSCOHADA.BANQUE_LOCALE, executor, 'bank'))
+      || getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE, executor);
   }
 
   const [bankAccount] = await executor.select({
@@ -1325,6 +1340,7 @@ export async function createEcritureDepense(params) {
     montant,
     modePaiement,
     categorieCompte,
+    compteBancaireId,
     executor = db
   } = params;
 
@@ -1333,12 +1349,14 @@ export async function createEcritureDepense(params) {
 
   // Pour le remboursement d'une dépense employé:
   // - On débite le compte Personnel - Avances (421) pour solder l'avance faite par l'employé
-  // - On crédite la trésorerie (52 ou 57) pour le décaissement
+  // - On crédite la trésorerie (521 ou 571) pour le décaissement
   // Note: La charge a déjà été comptabilisée lors de l'approbation de la dépense
   const compteAvance = await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.PERSONNEL_AVANCES, executor);
-  const compteTresorerie = modePaiement === 'especes' 
-    ? await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.CAISSE, executor)
-    : await getCompteByNumero(entrepriseId, COMPTES_SYSCOHADA.BANQUE, executor);
+  // La trésorerie passe par getCompteTresorerie : compte bancaire configuré
+  // de l'entreprise quand un compteBancaireId est fourni, sinon le compte
+  // précis 521 (virement) / 571 (espèces) — jamais le compte générique
+  // 52 / 57, qui faussait le bilan (52 créditeur visible en dettes).
+  const compteTresorerie = await getCompteTresorerie(entrepriseId, modePaiement, compteBancaireId, executor);
 
   const ecrituresLignes = [];
 

@@ -253,3 +253,110 @@ test('A — une charge de montant nul ou invalide ne crée aucune écriture', as
     assert.equal(insertedLignes.length, 0);
   }
 });
+
+// ==========================================
+// ANOMALIE B — remboursement sur le compte de trésorerie précis
+// ==========================================
+
+test('B — remboursement par virement : D 421 soldé / C 521 (jamais le 52 générique)', async () => {
+  // Cas vécu : le remboursement créditait le compte générique 52 (visible
+  // en dettes dans les deux bilans, 421 débiteur 50 000, banque 521
+  // inchangée). L'exécuteur simulé reproduit le piège : un LIKE '52%'
+  // y retourne le 52 (plus petit id du préfixe) — ce test échouerait
+  // avec l'ancienne résolution par préfixe.
+  const { executor, insertedEcritures, insertedLignes } = createFakeExecutor();
+  const ecriture = await createEcritureDepense({
+    entrepriseId: 1,
+    reference: 'RMB-1',
+    dateRemboursement: new Date('2026-11-27'),
+    employeNom: 'Employé Test',
+    description: 'Déplacement client',
+    montant: '25000.00',
+    modePaiement: 'virement',
+    executor,
+  });
+
+  assert.equal(ecriture.numeroPiece, 'RMB-1');
+  assert.equal(ecriture.journalId, JOURNAL_BQ.id);
+  assert.equal(ecriture.totalDebit, '25000.00');
+  assert.equal(ecriture.totalCredit, '25000.00');
+  assert.equal(insertedEcritures.length, 1);
+  assert.deepEqual(
+    insertedLignes.map(({ compteComptableId, debit, credit }) => ({ compteComptableId, debit, credit })),
+    [
+      { compteComptableId: COMPTE_421.id, debit: '25000.00', credit: '0.00' },
+      { compteComptableId: COMPTE_521.id, debit: '0.00', credit: '25000.00' },
+    ],
+  );
+});
+
+test('B — remboursement en espèces : D 421 soldé / C 571 (jamais le 57 générique)', async () => {
+  const { executor, insertedLignes } = createFakeExecutor();
+  await createEcritureDepense({
+    entrepriseId: 1,
+    reference: 'RMB-2',
+    dateRemboursement: new Date('2026-11-27'),
+    employeNom: 'Employé Test',
+    description: 'Déplacement client',
+    montant: '15000.00',
+    modePaiement: 'especes',
+    executor,
+  });
+
+  assert.deepEqual(
+    insertedLignes.map(({ compteComptableId, debit, credit }) => ({ compteComptableId, debit, credit })),
+    [
+      { compteComptableId: COMPTE_421.id, debit: '15000.00', credit: '0.00' },
+      { compteComptableId: COMPTE_571.id, debit: '0.00', credit: '15000.00' },
+    ],
+  );
+});
+
+test('B — avec un compte bancaire configuré, le remboursement utilise son compte comptable', async () => {
+  const { executor, insertedLignes } = createFakeExecutor({
+    bankLinks: [{ id: 7, compteComptableId: COMPTE_5121.id, entrepriseId: 1, actif: true }],
+  });
+  await createEcritureDepense({
+    entrepriseId: 1,
+    reference: 'RMB-3',
+    dateRemboursement: new Date('2026-11-27'),
+    employeNom: 'Employé Test',
+    description: 'Déplacement client',
+    montant: '25000.00',
+    modePaiement: 'virement',
+    compteBancaireId: 7,
+    executor,
+  });
+
+  assert.deepEqual(
+    insertedLignes.map(({ compteComptableId, debit, credit }) => ({ compteComptableId, debit, credit })),
+    [
+      { compteComptableId: COMPTE_421.id, debit: '25000.00', credit: '0.00' },
+      { compteComptableId: COMPTE_5121.id, debit: '0.00', credit: '25000.00' },
+    ],
+  );
+});
+
+test('B — plan sans compte 521 : repli sur le 52 sans planter (dégradation gracieuse)', async () => {
+  const { executor, insertedLignes } = createFakeExecutor({
+    accounts: defaultAccounts().filter((a) => a.numero !== '521' && a.numero !== '5121'),
+  });
+  await createEcritureDepense({
+    entrepriseId: 1,
+    reference: 'RMB-4',
+    dateRemboursement: new Date('2026-11-27'),
+    employeNom: 'Employé Test',
+    description: 'Déplacement client',
+    montant: '25000.00',
+    modePaiement: 'virement',
+    executor,
+  });
+
+  assert.deepEqual(
+    insertedLignes.map(({ compteComptableId, debit, credit }) => ({ compteComptableId, debit, credit })),
+    [
+      { compteComptableId: COMPTE_421.id, debit: '25000.00', credit: '0.00' },
+      { compteComptableId: COMPTE_52_GENERIQUE.id, debit: '0.00', credit: '25000.00' },
+    ],
+  );
+});

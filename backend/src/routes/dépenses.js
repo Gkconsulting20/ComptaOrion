@@ -567,8 +567,14 @@ router.post('/remboursement', async (req, res) => {
     const montantRembourse = Number(req.body.montantRembourse);
     const dateRemboursement = req.body.dateRemboursement;
     const methodePaiement = String(req.body.methodePaiement || '').trim();
+    // Compte bancaire configuré de l'entreprise (optionnel) : quand il est
+    // fourni, le remboursement est imputé sur son compte comptable ; sinon
+    // le service résout le compte précis 521 (virement) / 571 (espèces).
+    const rawCompteBancaireId = req.body.compteBancaireId;
+    const compteBancaireId = rawCompteBancaireId ? Number(rawCompteBancaireId) : null;
     if (!Number.isSafeInteger(depenseId) || depenseId <= 0 || !Number.isFinite(montantRembourse) ||
-        montantRembourse <= 0 || !dateRemboursement || Number.isNaN(new Date(dateRemboursement).getTime())) {
+        montantRembourse <= 0 || !dateRemboursement || Number.isNaN(new Date(dateRemboursement).getTime()) ||
+        (rawCompteBancaireId && (!Number.isSafeInteger(compteBancaireId) || compteBancaireId <= 0))) {
       return res.status(400).json({ error: 'Dépense, montant et date de remboursement invalides.' });
     }
 
@@ -629,6 +635,7 @@ router.post('/remboursement', async (req, res) => {
           description: depense.description || 'Dépense',
           montant: montantRembourse.toFixed(2),
           modePaiement: methodePaiement === 'especes' ? 'especes' : 'virement',
+          compteBancaireId,
           categorieCompte: '62',
           executor: tx
         });
