@@ -8,6 +8,19 @@ import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
 
 const router = express.Router();
 
+export function resolveMontantApprouve(depense) {
+  // Postgres renvoie les décimales en chaîne : « 0.00 » est truthy, donc
+  // `montantApprouve || montant` ne basculait jamais sur le montant de la
+  // dépense. À la création, montantApprouve vaut 0 : l'écriture de charge
+  // créée à l'approbation comptable était donc à zéro (D 625 0 / C 421 0).
+  // On compare numériquement : un montant approuvé nul ou absent signifie
+  // que la dépense est approuvée pour son montant déclaré ; un montant
+  // approuvé strictement positif (approbation partielle) est respecté.
+  const approuve = Number(depense?.montantApprouve);
+  if (Number.isFinite(approuve) && approuve > 0) return approuve;
+  return Number(depense?.montant);
+}
+
 async function getChargeAccount(executor, entrepriseId, rawAccountId) {
   const accountId = Number(rawAccountId);
   if (!Number.isSafeInteger(accountId) || accountId <= 0) {
@@ -467,12 +480,21 @@ router.post('/approve/:depenseId/:etape', async (req, res) => {
           throw Object.assign(new Error('Associez un compte de charge à cette catégorie avant l’approbation comptable.'), { status: 400 });
         }
 
+        // Le montant approuvé est résolu numériquement (voir
+        // resolveMontantApprouve) : à ce stade il vaut encore le défaut de
+        // création (« 0.00 » en chaîne), qui ne doit pas écraser le montant
+        // réel de la dépense dans l'écriture de charge.
+        const montantApprouve = resolveMontantApprouve(expense);
+        if (!Number.isFinite(montantApprouve) || montantApprouve <= 0) {
+          throw Object.assign(new Error('Le montant de la dépense est invalide.'), { status: 400 });
+        }
+
         const charge = await createEcritureChargeNoteFrais({
           entrepriseId: req.entrepriseId,
           depenseId: expense.id,
           dateDepense: expense.dateDepense,
           description: expense.description || `Dépense #${expense.id}`,
-          montant: expense.montantApprouve || expense.montant,
+          montant: montantApprouve,
           compteChargeId: category.compteComptableId,
           executor: tx,
         });
@@ -490,7 +512,7 @@ router.post('/approve/:depenseId/:etape', async (req, res) => {
 
         [updatedExpense] = await tx.update(depenses).set({
           statut: 'approuvée',
-          montantApprouve: expense.montant,
+          montantApprouve: montantApprouve.toFixed(2),
           updatedAt: new Date()
         }).where(and(eq(depenses.id, expense.id), eq(depenses.entrepriseId, req.entrepriseId))).returning();
       }

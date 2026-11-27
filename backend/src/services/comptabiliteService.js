@@ -1246,6 +1246,15 @@ export async function createEcritureChargeNoteFrais({
   compteChargeId,
   executor = db,
 }) {
+  // Garde : une charge de montant nul ou invalide ne doit jamais produire
+  // d'écriture (cas vécu : D 625 0 / C 421 0, charge jamais comptabilisée).
+  // Vérifié avant tout accès base, pour que l'appelant reçoive une erreur
+  // explicite au lieu d'une écriture silencieusement à zéro.
+  const amount = Number(montant);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw Object.assign(new Error('Le montant de la charge doit être strictement positif.'), { status: 400 });
+  }
+
   const tenantId = Number(entrepriseId);
   const [chargeAccount] = await executor.select().from(comptesComptables).where(and(
     eq(comptesComptables.id, Number(compteChargeId)),
@@ -1276,7 +1285,6 @@ export async function createEcritureChargeNoteFrais({
     throw Object.assign(new Error('Une écriture existe déjà pour cette dépense; vérifiez son historique avant de poursuivre.'), { status: 409 });
   }
 
-  const amount = Number(montant);
   const lignes = [
     {
       compteComptableId: chargeAccount.id,
