@@ -1,0 +1,13 @@
+-- 20261127_bons_reception_numero_unique.sql
+-- Aligner bons_reception avec schema.js (drift base live <-> schema) :
+-- le numero de bon de reception est genere PAR ENTREPRISE dans
+-- backend/src/routes/stock.js (generateReceptionNumber : COUNT(*) + 1
+-- WHERE entreprise_id = ..., format BR-AAAA-000NN), et schema.js declare
+-- l'unicite composite bons_reception_entreprise_numero_unique
+-- (entreprise_id, numero). Mais la base live conservait en plus l'ancienne
+-- contrainte globale UNIQUE(numero) (bons_reception_numero_key) : la 2e
+-- entreprise creee dans la meme annee ne pouvait plus receptionner de
+-- stock (INSERT -> 500), donc ne pouvait plus vendre (garde CMV -> 409).
+-- L'index composite existe deja en base live ; il suffit de supprimer
+-- l'ancienne contrainte globale. Idempotent.
+ALTER TABLE bons_reception DROP CONSTRAINT IF EXISTS bons_reception_numero_key;
