@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import guideUrl from '../../../docs/Guide-demarrage-ComptaOrion.html?url';
+import { NumberInput } from '../components/NumberInput';
 import { resolveTauxTvaInscription } from '../utils/tauxTva';
 
 export function Inscription() {
@@ -577,13 +578,13 @@ export function Inscription() {
                         </span>
                         {option.value === 'custom' && choixTva === 'custom' && (
                           <span style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
+                            <NumberInput
+                              name="tauxTvaPersonnalise"
                               value={tauxTvaPersonnalise}
                               onChange={(e) => setTauxTvaPersonnalise(e.target.value)}
+                              min={0}
+                              max={100}
+                              step="0.01"
                               placeholder="Ex. 19,25"
                               aria-label="Taux de TVA personnalisé en pourcent"
                               style={{
