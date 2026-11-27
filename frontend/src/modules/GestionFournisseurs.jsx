@@ -18,6 +18,7 @@ import {
   getMeasurementUnitOptions,
 } from '../utils/measurementUnits';
 import { readApiList } from '../utils/apiList';
+import { buildTaxPresets } from '../utils/tauxTva';
 import SupplierInvoiceOcr from './SupplierInvoiceOcr';
 
 function FacturationTab({ fournisseurs }) {
@@ -1530,7 +1531,7 @@ export function GestionFournisseurs() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [fournisseursRes, commandesRes, facturesRes, accountsRes] = await Promise.all([
+      const [fournisseursRes, commandesRes, facturesRes, accountsRes, paramsRes] = await Promise.all([
         api.get('/fournisseurs', { limit: 500 }).catch((error) => {
           console.error('Erreur chargement fournisseurs:', error);
           return null;
@@ -1541,6 +1542,7 @@ export function GestionFournisseurs() {
         }),
         api.get('/achats/factures').catch(() => ({ data: [] })),
         api.get('/tresorerie/comptes').catch(() => ({ data: [] })),
+        api.get('/parametres/entreprise').catch(() => null),
       ]);
       setComptesBancaires(readApiList(accountsRes, 'data'));
       setData({
@@ -1549,10 +1551,9 @@ export function GestionFournisseurs() {
         receptions: [],
         factures: readApiList(facturesRes, 'data'),
         paiements: [],
-        taxes: [
-          { id: 1, nom: 'TVA 18%', taux: 18, codeComptable: '4431' },
-          { id: 2, nom: 'TVA 9%', taux: 9, codeComptable: '4432' }
-        ],
+        // Presets TVA : le taux de l'entreprise en tête, puis les taux
+        // usuels. La liste reste modifiable ensuite (ajout / édition).
+        taxes: buildTaxPresets(paramsRes?.data?.tauxTva),
         codesComptables: [
           { id: 1, code: '401', libelle: 'Fournisseurs' },
           { id: 2, code: '4011', libelle: 'Fournisseurs - Achats de biens' },

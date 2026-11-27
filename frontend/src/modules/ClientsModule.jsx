@@ -13,6 +13,7 @@ import { getInvoiceStatusDisplay, InvoiceStatusBadge } from '../utils/invoiceSta
 import { addDaysToIsoDate, formatPeriodeFR } from '../utils/dateUtils';
 import { getCashDiscountPreview } from '../utils/cashDiscount';
 import { readApiList } from '../utils/apiList';
+import { buildTaxPresets } from '../utils/tauxTva';
 
 export function ClientsModule() {
   const [activeTab, setActiveTab] = useState('devis');
@@ -100,6 +101,11 @@ function DevisTab() {
     notesInternes: '',
     conditionsPaiement: '',
   });
+  // Taux de TVA de l'entreprise (paramètres) : il sert de taux initial aux
+  // devis et factures, au lieu du 18 % en dur — l'aperçu mentait pour les
+  // entreprises à 0 % ou à taux personnalisé (le backend recalculait déjà
+  // avec le bon taux). Modifiable par document dans l'assistant.
+  const [tauxTvaEntreprise, setTauxTvaEntreprise] = useState(18);
 
   useEffect(() => {
     loadData();
@@ -107,14 +113,22 @@ function DevisTab() {
 
   const loadData = async () => {
     try {
-      const [devisRes, clientsRes, produitsRes] = await Promise.all([
+      const [devisRes, clientsRes, produitsRes, paramsRes] = await Promise.all([
         api.get('/devis'),
         api.get('/clients'),
-        api.get('/produits')
+        api.get('/produits'),
+        api.get('/parametres/entreprise').catch(() => null)
       ]);
       setDevisList(devisRes.data || []);
       setClients(clientsRes.data || []);
       setProduits(produitsRes.data || []);
+      const taux = Number(paramsRes?.data?.tauxTva);
+      if (Number.isFinite(taux)) {
+        setTauxTvaEntreprise(taux);
+        // Le formulaire est vierge à ce stade (chargement ou après envoi) :
+        // on y applique le taux de l'entreprise.
+        setDevisData((prev) => ({ ...prev, tauxTVA: taux }));
+      }
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -189,7 +203,7 @@ function DevisTab() {
       dateDevis: new Date().toISOString().split('T')[0],
       dateValidite: '',
       items: [{ produitId: null, description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
-      tauxTVA: 18,
+      tauxTVA: tauxTvaEntreprise,
       notesInternes: '',
       conditionsPaiement: '',
     });
@@ -764,6 +778,9 @@ function FacturesClientTab() {
     conditionsPaiement: '',
     statut: 'brouillon',
   });
+  // Taux de TVA de l'entreprise (paramètres) : taux initial des factures,
+  // au lieu du 18 % en dur (même raison que pour les devis ci-dessus).
+  const [tauxTvaEntreprise, setTauxTvaEntreprise] = useState(18);
 
   const getClientDueDate = (clientId, dateFacture) => {
     const client = clients.find((item) => Number(item.id) === Number(clientId));
@@ -776,10 +793,11 @@ function FacturesClientTab() {
 
   const loadData = async () => {
     try {
-      const [facturesRes, clientsRes, produitsRes] = await Promise.all([
+      const [facturesRes, clientsRes, produitsRes, paramsRes] = await Promise.all([
         api.get('/factures'),
         api.get('/clients'),
-        api.get('/produits')
+        api.get('/produits'),
+        api.get('/parametres/entreprise').catch(() => null)
       ]);
       const normalized = (facturesRes.data || []).map(f => ({
         ...f.facture,
@@ -788,6 +806,13 @@ function FacturesClientTab() {
       setFacturesList(normalized);
       setClients(clientsRes.data || []);
       setProduits(produitsRes.data || []);
+      const taux = Number(paramsRes?.data?.tauxTva);
+      if (Number.isFinite(taux)) {
+        setTauxTvaEntreprise(taux);
+        // Le formulaire est vierge à ce stade (chargement ou après envoi) :
+        // on y applique le taux de l'entreprise.
+        setFactureData((prev) => ({ ...prev, tauxTVA: taux }));
+      }
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
@@ -874,7 +899,7 @@ function FacturesClientTab() {
       dateFacture: new Date().toISOString().split('T')[0],
       dateEcheance: '',
       items: [{ produitId: null, description: '', quantite: 1, prixUnitaire: 0, remise: 0, type: 'produit' }],
-      tauxTVA: 18,
+      tauxTVA: tauxTvaEntreprise,
       notesInternes: '',
       conditionsPaiement: '',
       statut: 'brouillon',
@@ -2550,18 +2575,17 @@ function ParametresTab() {
       } catch (error) {
         console.error('Impossible de vérifier les comptes collectifs clients:', error);
       }
-      const [clientsRes, accountsRes] = await Promise.all([
+      const [clientsRes, accountsRes, paramsRes] = await Promise.all([
         api.get('/clients'),
         api.get('/comptabilite/comptes'),
+        api.get('/parametres/entreprise').catch(() => null),
       ]);
       setClients(readApiList(clientsRes, 'data'));
       setComptesCollectifs(readApiList(accountsRes)
         .filter((account) => account.actif !== false && ['4111', '4112'].includes(String(account.numero))));
-      setTaxes([
-        { id: 1, nom: 'TVA 18%', taux: 18, codeComptable: '4431' },
-        { id: 2, nom: 'TVA 9%', taux: 9, codeComptable: '4432' },
-        { id: 3, nom: 'Exonéré', taux: 0, codeComptable: '-' }
-      ]);
+      // Presets TVA : le taux de l'entreprise en tête, puis les taux usuels.
+      // La liste reste modifiable ensuite (ajout / édition de taxes).
+      setTaxes(buildTaxPresets(paramsRes?.data?.tauxTva));
       setCodesComptables([
         { id: 1, code: '411', libelle: 'Clients' },
         { id: 2, code: '4111', libelle: 'Clients - Ventes de biens' },
