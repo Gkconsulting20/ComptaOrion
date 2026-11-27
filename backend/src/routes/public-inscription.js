@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import emailService from '../services/emailService.js';
 import { initializeSyscohadaForEnterprise } from '../services/syscohadaService.js';
 import { getTrialExpirationDate, TRIAL_SUBSCRIPTION_NOTE } from '../services/trialSubscription.js';
+import { parseTauxTva } from '../utils/tauxTva.js';
 
 const FedaPay = fedapayModule.FedaPay;
 const Transaction = fedapayModule.Transaction;
@@ -221,7 +222,17 @@ router.post('/inscription', async (req, res) => {
       motDePasse,
       confirmationMotDePasse,
       commercialId,
+      tauxTva,
     } = req.body;
+
+    // Taux de TVA choisi à l'inscription (18 % par défaut, 0 % exonéré,
+    // ou taux personnalisé 0–100) : validé avant stockage, jamais inventé.
+    let tauxTvaEntreprise;
+    try {
+      tauxTvaEntreprise = parseTauxTva(tauxTva);
+    } catch (tauxError) {
+      return res.status(400).json({ error: tauxError.message });
+    }
 
     const normalizedName = typeof nomEntreprise === 'string' ? nomEntreprise.trim() : '';
     const normalizedAdminName = typeof nomAdministrateur === 'string' ? nomAdministrateur.trim() : '';
@@ -293,6 +304,7 @@ router.post('/inscription', async (req, res) => {
       telephone: typeof telephone === 'string' ? telephone.trim() : null,
       pays: typeof pays === 'string' && pays.trim() ? pays.trim() : 'Togo',
       devise: 'XOF',
+      tauxTva: tauxTvaEntreprise.toString(),
       systemeComptable: 'SYSCOHADA',
       debutAnneeFiscale,
       finAnneeFiscale,
@@ -560,6 +572,16 @@ router.post('/webhook/fedapay', async (req, res) => {
       // Nouveau client - Créer l'entreprise
       console.log('Traitement nouveau client en cours');
 
+      // Taux de TVA choisi à l'inscription payante (stocké dans
+      // inscriptions_en_attente) ; absent ou invalide → 18 % par défaut.
+      // Un taux invalide ne doit jamais faire échouer le webhook.
+      let tauxTvaFedaPay = 18;
+      try {
+        tauxTvaFedaPay = parseTauxTva(inscriptionEnAttente.tauxTva);
+      } catch (tauxError) {
+        console.warn('Taux de TVA FedaPay invalide, 18 % appliqué:', tauxError.message);
+      }
+
       // Année fiscale = année civile en cours (avant : défaut base 2025)
       const fiscalYearFedaPay = new Date().getFullYear();
       const [newEntreprise] = await db.insert(entreprises).values({
@@ -568,6 +590,7 @@ router.post('/webhook/fedapay', async (req, res) => {
         telephone: inscriptionEnAttente.telephone,
         pays: inscriptionEnAttente.pays || 'Togo',
         devise: 'XOF',
+        tauxTva: tauxTvaFedaPay.toString(),
         systemeComptable: 'SYSCOHADA',
         debutAnneeFiscale: `${fiscalYearFedaPay}-01-01`,
         finAnneeFiscale: `${fiscalYearFedaPay}-12-31`

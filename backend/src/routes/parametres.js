@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { entreprises, comptesAutomatiques } from '../schema.js';
 import { eq } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { parseTauxTva } from '../utils/tauxTva.js';
 import { ACCOUNTING_ACCOUNT_ROLES } from '../services/accountingAccountMappings.js';
 
 const router = express.Router();
@@ -217,12 +218,15 @@ router.put('/entreprise', async (req, res) => {
       }
     }
 
+    // Taux de TVA : même validation qu'à l'inscription (0–100).
+    let tauxTvaValide;
     if (tauxTva !== undefined) {
-      const taux = parseFloat(tauxTva);
-      if (isNaN(taux) || taux < 0 || taux > 100) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Le taux de TVA doit être entre 0 et 100' 
+      try {
+        tauxTvaValide = parseTauxTva(tauxTva);
+      } catch (tauxError) {
+        return res.status(400).json({
+          success: false,
+          message: tauxError.message
         });
       }
     }
@@ -273,7 +277,7 @@ router.put('/entreprise', async (req, res) => {
     if (email !== undefined) updateData.email = email;
     if (devise !== undefined) updateData.devise = devise;
     if (symboleDevise !== undefined) updateData.symboleDevise = symboleDevise;
-    if (tauxTva !== undefined) updateData.tauxTva = tauxTva.toString();
+    if (tauxTva !== undefined) updateData.tauxTva = tauxTvaValide.toString();
     if (systemeComptable !== undefined) updateData.systemeComptable = systemeComptable;
     if (debutAnneeFiscale !== undefined) updateData.debutAnneeFiscale = debutAnneeFiscale;
     if (finAnneeFiscale !== undefined) updateData.finAnneeFiscale = finAnneeFiscale;

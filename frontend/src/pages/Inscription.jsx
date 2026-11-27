@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import guideUrl from '../../../docs/Guide-demarrage-ComptaOrion.html?url';
+import { resolveTauxTvaInscription } from '../utils/tauxTva';
 
 export function Inscription() {
   const [plans, setPlans] = useState([]);
@@ -19,6 +20,10 @@ export function Inscription() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Taux de TVA de l'entreprise : 18 % (Togo, défaut), 0 % (exonéré) ou
+  // taux personnalisé 0–100. Il sera appliqué aux factures, devis et achats.
+  const [choixTva, setChoixTva] = useState('18');
+  const [tauxTvaPersonnalise, setTauxTvaPersonnalise] = useState('');
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -89,13 +94,18 @@ export function Inscription() {
       setError('Les mots de passe ne correspondent pas.');
       return;
     }
+    const tauxTva = resolveTauxTvaInscription(choixTva, tauxTvaPersonnalise);
+    if (tauxTva === null) {
+      setError('Choisissez un taux de TVA personnalisé entre 0 et 100 %.');
+      return;
+    }
     setSubmitting(true);
 
     try {
       const response = await fetch('/api/public/inscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...formData, tauxTva })
       });
 
       const data = await response.json();
@@ -525,6 +535,73 @@ export function Inscription() {
                 color: '#256b48',
               }}>
                 Les 30 jours commencent à la création de votre organisation. Aucun paiement n’est demandé.
+              </div>
+
+              <div style={{ marginTop: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#333' }}>
+                  Taux de TVA de votre entreprise *
+                </label>
+                <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#666' }}>
+                  Il sera appliqué à vos factures, devis et achats. Vous pourrez le modifier ensuite dans les paramètres.
+                </p>
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  {[
+                    { value: '18', label: '18 % — taux normal (Togo)', hint: 'Le taux en vigueur au Togo.' },
+                    { value: '0', label: '0 % — exonéré', hint: 'Aucune TVA ne sera ajoutée à vos factures.' },
+                    { value: 'custom', label: 'Taux personnalisé', hint: 'Un autre taux, entre 0 et 100 %.' },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        padding: '12px 14px',
+                        border: choixTva === option.value ? '2px solid #667eea' : '1px solid #ddd',
+                        borderRadius: '8px',
+                        backgroundColor: choixTva === option.value ? '#f0f4ff' : 'white',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="choixTva"
+                        value={option.value}
+                        checked={choixTva === option.value}
+                        onChange={(e) => setChoixTva(e.target.value)}
+                        style={{ marginRight: '12px', marginTop: '3px' }}
+                      />
+                      <span style={{ flex: 1 }}>
+                        <strong style={{ fontSize: '15px', color: '#333' }}>{option.label}</strong>
+                        <span style={{ display: 'block', fontSize: '13px', color: '#666', marginTop: '2px' }}>
+                          {option.hint}
+                        </span>
+                        {option.value === 'custom' && choixTva === 'custom' && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={tauxTvaPersonnalise}
+                              onChange={(e) => setTauxTvaPersonnalise(e.target.value)}
+                              placeholder="Ex. 19,25"
+                              aria-label="Taux de TVA personnalisé en pourcent"
+                              style={{
+                                width: '140px',
+                                padding: '8px 10px',
+                                border: '1px solid #ddd',
+                                borderRadius: '6px',
+                                fontSize: '15px',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                            <span style={{ fontSize: '15px', color: '#333' }}>%</span>
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
 

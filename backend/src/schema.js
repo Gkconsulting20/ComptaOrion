@@ -1515,6 +1515,9 @@ export const inscriptionsEnAttente = pgTable('inscriptions_en_attente', {
   montantTotal: decimal('montant_total', { precision: 15, scale: 2 }).notNull(),
   methodePaiement: varchar('methode_paiement', { length: 50 }), // fedapay, stripe, paypal
   typeInscription: varchar('type_inscription', { length: 50 }).notNull(), // 'nouveau' ou 'renouvellement'
+  // Taux de TVA choisi à l'inscription payante (18 % / 0 % / personnalisé) ;
+  // NULL = non choisi, le webhook applique alors 18 % par défaut.
+  tauxTva: decimal('taux_tva', { precision: 5, scale: 2 }),
   entrepriseIdPourRenouvellement: integer('entreprise_id_pour_renouvellement'), // Si renouvellement
   commercialId: integer('commercial_id'), // ID du commercial référent (lien parrainage)
   createdAt: timestamp('created_at').defaultNow().notNull(),
