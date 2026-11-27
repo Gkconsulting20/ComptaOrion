@@ -23,8 +23,10 @@ const router = express.Router();
 
 /**
  * Génère le prochain numéro de facture
+ * (cloisonné à l'entreprise : FACT-AAAA-{id entreprise}-NNNN ;
+ * exporté pour la conversion devis→facture dans routes/devis.js)
  */
-async function genererNumeroFacture(entrepriseId, executor = db) {
+export async function genererNumeroFacture(entrepriseId, executor = db) {
   const annee = new Date().getFullYear();
   const [lastFacture] = await executor
     .select({ numeroFacture: factures.numeroFacture })

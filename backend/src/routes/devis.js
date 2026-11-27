@@ -3,11 +3,14 @@ import { db } from '../db.js';
 import { devis, devisItems, factures, factureItems, clients } from '../schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { nextDevisNumber } from '../services/documentNumbering.js';
+import { genererNumeroFacture } from './factures.js';
 
 const router = express.Router();
 
 /**
  * Génère le prochain numéro de devis
+ * (cloisonné à l'entreprise : DEV-AAAA-{id entreprise}-NNNN)
  */
 async function genererNumeroDevis(entrepriseId) {
   const annee = new Date().getFullYear();
@@ -21,15 +24,7 @@ async function genererNumeroDevis(entrepriseId) {
     .orderBy(desc(devis.createdAt))
     .limit(1);
 
-  let numero = 1;
-  if (lastDevis?.numeroDevis) {
-    const match = lastDevis.numeroDevis.match(/DEV-(\d{4})-(\d+)/);
-    if (match) {
-      numero = parseInt(match[2]) + 1;
-    }
-  }
-
-  return `DEV-${annee}-${numero.toString().padStart(4, '0')}`;
+  return nextDevisNumber(entrepriseId, lastDevis?.numeroDevis, annee);
 }
 
 /**
@@ -406,16 +401,7 @@ router.post('/:id/transformer-facture', async (req, res) => {
         eq(devisItems.devisId, devisData.id),
         eq(devisItems.entrepriseId, req.entrepriseId)
       ));
-      const annee = new Date().getFullYear();
-      const [lastFacture] = await tx.select({ numeroFacture: factures.numeroFacture })
-        .from(factures).where(and(
-          eq(factures.entrepriseId, req.entrepriseId),
-          sql`EXTRACT(YEAR FROM ${factures.dateFacture}::date) = ${annee}`
-        )).orderBy(desc(factures.createdAt)).limit(1);
-      let numero = 1;
-      const match = lastFacture?.numeroFacture?.match(/FACT-(\d{4})-(\d+)/);
-      if (match) numero = parseInt(match[2]) + 1;
-      const numeroFacture = `FACT-${annee}-${numero.toString().padStart(4, '0')}`;
+      const numeroFacture = await genererNumeroFacture(req.entrepriseId, tx);
 
       const [newFacture] = await tx.insert(factures).values({
         entrepriseId: req.entrepriseId,

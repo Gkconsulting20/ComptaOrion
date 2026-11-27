@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { bonsLivraison, bonLivraisonItems, factures, factureItems, clients } from '../schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { nextBonLivraisonNumber } from '../services/documentNumbering.js';
 
 const router = Router();
 
@@ -78,8 +79,8 @@ router.post('/generer-depuis-facture/:factureId', async (req, res) => {
       const [lastBon] = await tx.select().from(bonsLivraison)
         .where(eq(bonsLivraison.entrepriseId, req.entrepriseId))
         .orderBy(desc(bonsLivraison.id)).limit(1);
-      const lastNumber = lastBon?.numeroBL ? parseInt(lastBon.numeroBL.replace(/\D/g, '')) || 0 : 0;
-      const numeroBL = `BL-${String(lastNumber + 1).padStart(6, '0')}`;
+      // Numéro cloisonné à l'entreprise : BL-{id entreprise}-NNNNNN
+      const numeroBL = nextBonLivraisonNumber(req.entrepriseId, lastBon?.numeroBL);
       const [created] = await tx.insert(bonsLivraison).values({
         entrepriseId: req.entrepriseId,
         numeroBL,
@@ -133,8 +134,8 @@ router.post('/', async (req, res) => {
       const [lastBon] = await tx.select().from(bonsLivraison)
         .where(eq(bonsLivraison.entrepriseId, req.entrepriseId))
         .orderBy(desc(bonsLivraison.id)).limit(1);
-      const lastNumber = lastBon?.numeroBL ? parseInt(lastBon.numeroBL.replace(/\D/g, '')) || 0 : 0;
-      const numeroBL = `BL-${String(lastNumber + 1).padStart(6, '0')}`;
+      // Numéro cloisonné à l'entreprise : BL-{id entreprise}-NNNNNN
+      const numeroBL = nextBonLivraisonNumber(req.entrepriseId, lastBon?.numeroBL);
       const [created] = await tx.insert(bonsLivraison).values({
         entrepriseId: req.entrepriseId,
         numeroBL,

@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { commandesAchat, commandesAchatItems, produits, fournisseurs, mouvementsStock, coutsLogistiquesCommande, bonsReception, entreprises } from '../schema.js';
 import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import { logAudit, extractAuditInfo } from '../utils/auditLogger.js';
+import { nextCommandeAchatNumber } from '../services/documentNumbering.js';
 
 const router = express.Router();
 
@@ -17,6 +18,7 @@ async function purchaseTaxRate(executor, entrepriseId) {
 }
 
 // Génération automatique du numéro de commande
+// (cloisonné à l'entreprise : CMD-AAAA-{id entreprise}-NNNN)
 async function genererNumeroCommande(entrepriseId, executor = db) {
   const annee = new Date().getFullYear();
   const [lastCommande] = await executor
@@ -26,15 +28,7 @@ async function genererNumeroCommande(entrepriseId, executor = db) {
     .orderBy(desc(commandesAchat.id))
     .limit(1);
 
-  let numero = 1;
-  if (lastCommande && lastCommande.numeroCommande) {
-    const match = lastCommande.numeroCommande.match(/CMD-(\d{4})-(\d+)/);
-    if (match && parseInt(match[1]) === annee) {
-      numero = parseInt(match[2]) + 1;
-    }
-  }
-
-  return `CMD-${annee}-${numero.toString().padStart(4, '0')}`;
+  return nextCommandeAchatNumber(entrepriseId, lastCommande?.numeroCommande, annee);
 }
 
 // GET /api/commandes-achat - Liste des commandes d'achat

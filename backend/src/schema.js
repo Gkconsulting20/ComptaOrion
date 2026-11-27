@@ -581,7 +581,7 @@ export const commandeItems = pgTable('commande_items', {
 export const bonsLivraison = pgTable('bons_livraison', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  numeroBL: varchar('numero_bl', { length: 100 }).unique(),
+  numeroBL: varchar('numero_bl', { length: 100 }),
   commandeId: integer('commande_id').references(() => commandes.id),
   clientId: integer('client_id').references(() => clients.id).notNull(),
   dateLivraison: date('date_livraison').defaultNow(),
@@ -589,7 +589,12 @@ export const bonsLivraison = pgTable('bons_livraison', {
   notes: text('notes'),
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  // Numéro cloisonné à l'entreprise (27 nov. 2026) : un même numéro est toléré
+  // pour 2 entreprises différentes ; l'ancienne contrainte globale UNIQUE(numero_bl)
+  // faisait échouer la 2e entreprise en 500.
+  entrepriseNumeroUnique: uniqueIndex('bons_livraison_entreprise_numero_unique').on(table.entrepriseId, table.numeroBL),
+}));
 
 export const bonLivraisonItems = pgTable('bon_livraison_items', {
   id: serial('id').primaryKey(),
@@ -607,7 +612,7 @@ export const bonLivraisonItems = pgTable('bon_livraison_items', {
 export const devis = pgTable('devis', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  numeroDevis: varchar('numero_devis', { length: 100 }).unique(),
+  numeroDevis: varchar('numero_devis', { length: 100 }),
   clientId: integer('client_id').references(() => clients.id).notNull(),
   statut: quoteStatusEnum('statut').default('brouillon'),
   dateDevis: date('date_devis').defaultNow(),
@@ -620,7 +625,12 @@ export const devis = pgTable('devis', {
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  // Numéro cloisonné à l'entreprise (27 nov. 2026) : un même numéro est toléré
+  // pour 2 entreprises différentes ; l'ancienne contrainte globale UNIQUE(numero_devis)
+  // faisait échouer la 2e entreprise en 500.
+  entrepriseNumeroUnique: uniqueIndex('devis_entreprise_numero_unique').on(table.entrepriseId, table.numeroDevis),
+}));
 
 export const devisItems = pgTable('devis_items', {
   id: serial('id').primaryKey(),
@@ -638,7 +648,7 @@ export const devisItems = pgTable('devis_items', {
 export const factures = pgTable('factures', {
   id: serial('id').primaryKey(),
   entrepriseId: integer('entreprise_id').references(() => entreprises.id).notNull(),
-  numeroFacture: varchar('numero_facture', { length: 100 }).unique(),
+  numeroFacture: varchar('numero_facture', { length: 100 }),
   clientId: integer('client_id').references(() => clients.id).notNull(),
   commandeId: integer('commande_id').references(() => commandes.id),
   statut: invoiceStatusEnum('statut').default('brouillon'),
@@ -656,7 +666,13 @@ export const factures = pgTable('factures', {
   userId: integer('user_id').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  // Numéro cloisonné à l'entreprise (27 nov. 2026) : un même numéro est toléré
+  // pour 2 entreprises différentes ; l'ancienne contrainte globale UNIQUE(numero_facture)
+  // faisait échouer la 2e entreprise en 500 (notamment via la conversion devis→facture,
+  // qui générait FACT-AAAA-NNNN sans id entreprise).
+  entrepriseNumeroUnique: uniqueIndex('factures_entreprise_numero_unique').on(table.entrepriseId, table.numeroFacture),
+}));
 
 export const factureItems = pgTable('facture_items', {
   id: serial('id').primaryKey(),

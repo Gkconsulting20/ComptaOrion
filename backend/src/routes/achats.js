@@ -97,19 +97,15 @@ router.get('/comptes-ecarts', async (req, res) => {
 // Génération automatique du numéro de facture achat
 async function genererNumeroFactureAchat(entrepriseId) {
   const annee = new Date().getFullYear();
-  const prefix = `FACT-ACH-${annee}-`;
-  const [companyInvoices, globallyUsedInvoices] = await Promise.all([
-    db.select({ numeroFacture: facturesAchat.numeroFacture })
-      .from(facturesAchat)
-      .where(eq(facturesAchat.entrepriseId, entrepriseId)),
-    db.select({ numeroFacture: facturesAchat.numeroFacture })
-      .from(facturesAchat)
-      .where(sql`${facturesAchat.numeroFacture} LIKE ${`${prefix}%`}`),
-  ]);
+  // Séquence strictement par entreprise (cloisonnée : FACT-ACH-AAAA-{id}-NNNNNN).
+  // Les numéros des autres entreprises sont ignorés — plus de déduplication globale.
+  const companyInvoices = await db.select({ numeroFacture: facturesAchat.numeroFacture })
+    .from(facturesAchat)
+    .where(eq(facturesAchat.entrepriseId, entrepriseId));
   return getNextPurchaseInvoiceNumber(
     annee,
+    entrepriseId,
     companyInvoices.map((invoice) => invoice.numeroFacture),
-    globallyUsedInvoices.map((invoice) => invoice.numeroFacture),
   );
 }
 
