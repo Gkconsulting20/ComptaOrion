@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import api from '../api';
 import OrionLogo from '../components/OrionLogo';
+import guideUrl from '../../../docs/Guide-demarrage-ComptaOrion.html?url';
 
 export function Login({ onLoginSuccess }) {
   const [mode, setMode] = useState('login');
@@ -359,6 +360,25 @@ export function Login({ onLoginSuccess }) {
               </div>
               <p style={{ color: '#95a5a6', fontSize: '12px', margin: '10px 0 0 0' }}>
                 Démonstration sans inscription, avec des données fictives.
+              </p>
+              <p style={{ margin: '16px 0 0 0', fontSize: '14px' }}>
+                Besoin d’aide pour commencer ?{' '}
+                <a
+                  href={guideUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#667eea', fontWeight: 'bold' }}
+                >
+                  Consulter le guide de démarrage
+                </a>
+              </p>
+              <p style={{ margin: '10px 0 0 0', fontSize: '14px' }}>
+                <a
+                  href="/commercial"
+                  style={{ color: '#667eea', fontWeight: 'bold' }}
+                >
+                  Voir les forfaits ComptaOrion
+                </a>
               </p>
             </div>
           </form>

@@ -97,13 +97,29 @@ export function CommercialPortal() {
     );
   }
 
+  // Forfaits publics (27 nov. 2026, règle de Cap) : la page des offres est
+  // visible sans connexion, au-dessus du formulaire de connexion commercial.
+  // Seuls le tableau de bord, les clients et les ventes restent derrière login.
   if (!isAuthenticated) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', padding: '20px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <CommercialOffers />
+
+          <div style={{ textAlign: 'center', margin: '0 0 30px 0' }}>
+            <a
+              href="/inscription"
+              style={{ display: 'inline-block', padding: '14px 28px', backgroundColor: '#27ae60', color: 'white', borderRadius: '6px', fontSize: '16px', fontWeight: 'bold', textDecoration: 'none' }}
+            >
+              Créer mon compte — Essai gratuit 30 jours
+            </a>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
         <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px', overflow: 'hidden' }}>
           <div style={{ background: 'linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%)', padding: '30px', color: 'white', textAlign: 'center' }}>
             <h1 style={{ margin: '0 0 10px 0', fontSize: '24px' }}>Espace Commercial</h1>
-            <p style={{ margin: 0, opacity: 0.9 }}>ComptaOrion</p>
+            <p style={{ margin: 0, opacity: 0.9 }}>ComptaOrion — connexion commercial</p>
           </div>
           
           <form onSubmit={handleLogin} style={{ padding: '30px' }}>
@@ -141,6 +157,8 @@ export function CommercialPortal() {
               Se connecter
             </button>
           </form>
+        </div>
+          </div>
         </div>
       </div>
     );
